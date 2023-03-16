@@ -3,21 +3,27 @@ import { Model, Table } from "./src/SingleTableDesign";
 
 // See example.js for other functions
 
-@Table
+@Table({
+  tableName: "drews-brews",
+  primaryKey: "PK",
+  sortKey: "SK",
+  delimiter: "#"
+})
 class MockTableClass extends SingleTableDesign {
-  static readonly tableName = "drews-brews";
-  static readonly primaryKey = "PK";
-  static readonly sortKey = "SK";
-  static readonly delimiter = "#";
+  // static readonly tableName = "drews-brews";
+  // static readonly primaryKey = "PK";
+  // static readonly sortKey = "SK";
+  // static readonly delimiter = "#";
 }
 
 // TODO could I add a decorator @Model to provide methods for serializing object to a table
 // and using DI to pass to table?
-@Model
+@Model("Brewery")
 class MockModel extends MockTableClass {
-  static readonly type = "Brewery";
+  // static readonly type = "Brewery";
   // TODO could I do something like below to annotate attributes so I know the table value name?
   // TODO coul also usethe decorator to indicate required...
+  //    https://stackoverflow.com/questions/55117125/typescript-decorators-reflect-metadata
   // @Attribute("SomeAttr")
   // public string someAttr;
   // static bla() {
