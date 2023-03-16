@@ -3,12 +3,7 @@ import { Model, Table } from "./src/SingleTableDesign";
 
 // See example.js for other functions
 
-@Table({
-  tableName: "drews-brews",
-  primaryKey: "PK",
-  sortKey: "SK",
-  delimiter: "#"
-})
+@Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 class MockTableClass extends SingleTableDesign {
   // static readonly tableName = "drews-brews";
   // static readonly primaryKey = "PK";

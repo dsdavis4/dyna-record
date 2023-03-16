@@ -52,15 +52,19 @@ const SORT_KEY = Symbol();
 const DELIMITER = Symbol();
 
 interface TableProps {
-  tableName: string;
+  name: string;
   primaryKey: string;
   sortKey: string;
   delimiter: string;
 }
 
+// TODO could I make is so anything with this reflects single table design?
+// That way I only export Table and Model and Attribute decorators?
+// And all logic is encapsualted here?
+// low priority
 export function Table(props: TableProps) {
   return function (target: any) {
-    Reflect.defineMetadata(TABLE_NAME, props.tableName, target);
+    Reflect.defineMetadata(TABLE_NAME, props.name, target);
     Reflect.defineMetadata(PRIMARY_KEY, props.primaryKey, target);
     Reflect.defineMetadata(SORT_KEY, props.sortKey, target);
     Reflect.defineMetadata(DELIMITER, props.delimiter, target);
@@ -103,6 +107,11 @@ class SingleTableDesign {
     });
 
     // TODO start here. Just got this to work with reflection
+    // TODO work on serializing to model using attributes and decorators for attributes
+    // TODO return new model.
+    // this wash helpful https://stackoverflow.com/questions/59578083/javascript-access-metadata-of-child-class-inside-constructor-of-parent
+
+    // const test =
     debugger;
   }
 
