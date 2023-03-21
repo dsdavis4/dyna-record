@@ -1,4 +1,4 @@
-import SingleTableDesign, { Attribute } from "./src";
+import SingleTableDesign from "./src";
 import { Model, Table } from "./src/SingleTableDesign";
 
 // See example.js for other functions
@@ -19,6 +19,7 @@ class MockModel extends MockTableClass {
   // TODO could I do something like below to annotate attributes so I know the table value name?
   // TODO coul also usethe decorator to indicate required...
   //    https://stackoverflow.com/questions/55117125/typescript-decorators-reflect-metadata
+  // https://2ality.com/2022/10/javascript-decorators.html#example%3A-collecting-instances
   // @Attribute("SomeAttr")
   // public string someAttr;
   // static bla() {
@@ -29,7 +30,13 @@ class MockModel extends MockTableClass {
 (async () => {
   try {
     console.log("bla");
-    await MockModel.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    const bla = await MockModel.findById(
+      "103417f1-4c42-4b40-86a6-a8930be67c99"
+    );
+
+    console.log(bla);
+
+    debugger;
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {
     console.log("error", err);

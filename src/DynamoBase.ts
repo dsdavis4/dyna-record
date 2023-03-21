@@ -1,15 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  GetCommand,
-  DeleteCommand,
-  PutCommand,
-  UpdateCommand,
-  GetCommandInput
+  GetCommand
+  // DeleteCommand,
+  // PutCommand,
+  // UpdateCommand,
+  // GetCommandInput
 } from "@aws-sdk/lib-dynamodb";
 // import QueryParams from "./QueryParams";
 
-import { v4 as uuidv4 } from "uuid";
+// import { v4 as uuidv4 } from "uuid";
 
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })

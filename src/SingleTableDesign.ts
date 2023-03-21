@@ -41,7 +41,8 @@ import "reflect-metadata";
 
 const MODEL_TYPE = Symbol();
 export function Model(name: string) {
-  return function (target: any) {
+  // TODO make stricter
+  return function (target: any, _context: ClassDecoratorContext) {
     Reflect.defineMetadata(MODEL_TYPE, name, target);
   };
 }
@@ -62,8 +63,10 @@ interface TableProps {
 // That way I only export Table and Model and Attribute decorators?
 // And all logic is encapsualted here?
 // low priority
+// TODO are decorators and reflection the best thing to do? Or should I use static properties and reflection?
 export function Table(props: TableProps) {
-  return function (target: any) {
+  // TODO make stricter
+  return function (target: any, _context: ClassDecoratorContext) {
     Reflect.defineMetadata(TABLE_NAME, props.name, target);
     Reflect.defineMetadata(PRIMARY_KEY, props.primaryKey, target);
     Reflect.defineMetadata(SORT_KEY, props.sortKey, target);
@@ -82,6 +85,7 @@ class SingleTableDesign {
   // protected static readonly primaryKey: string;
   // protected static readonly sortKey: string;
 
+  // TODO change to this.table and this.model?
   constructor() {
     this.tableName = Reflect.getMetadata(TABLE_NAME, this.constructor);
     this.primaryKey = Reflect.getMetadata(PRIMARY_KEY, this.constructor);
@@ -95,7 +99,7 @@ class SingleTableDesign {
     const table = new this();
     // TODO should this be in constructor?
     const dynamo = new DynamoBase(table.tableName);
-    const a = { [table.primaryKey]: table.pk(id) };
+    // const a = { [table.primaryKey]: table.pk(id) };
     // debugger;
     // const key = {
     //   [table.primaryKey]: table.pk(id),
@@ -106,9 +110,17 @@ class SingleTableDesign {
       [table.sortKey]: table.modelType
     });
 
+    console.log(bla);
+
     // TODO start here. Just got this to work with reflection
+    // TODO first upgrade to typescript 5 https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/
+    // and change tsconfig to use new decroator pattern
+    // read extensivly and follow bet practices
+    // TODO replace experimental decorators in tsconfig with new field
+    // TODO there is an npm package @tsconfig/strictist I could use... look into that
     // TODO work on serializing to model using attributes and decorators for attributes
     // TODO return new model.
+    // TODO this could be helpful for attributes decorator:  https://stackoverflow.com/questions/55117125/typescript-decorators-reflect-metadata
     // this wash helpful https://stackoverflow.com/questions/59578083/javascript-access-metadata-of-child-class-inside-constructor-of-parent
 
     // const test =
