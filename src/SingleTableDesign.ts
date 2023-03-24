@@ -1,45 +1,8 @@
 import DynamoBase from "./DynamoBase";
 import "reflect-metadata";
 
-// https://stackoverflow.com/questions/66681411/how-to-implement-an-abstract-class-with-static-properties-in-typescript
-// interface SingleTableDesignConstructor {
-//   // cron: string; // A member of the uninstantiated class/constructor is static.
-//   readonly tableName: string;
-//   readonly primaryKey: string;
-//   readonly sortKey: string;
-//   // new (...args: any[]): any;
-// }
-
-// TODO move to own file
-// interface ModelProps {
-//   // readonly type: string; // A member of the uninstantiated class/constructor is static.
-//   // new (...args: any[]): any; // TODO is this used?
-// }
-
-// export function Model(constructor: ModelProps) {
-//   // decorator logic
-// }
-
-// // TODO move to own file
-// interface TableProps {
-//   readonly tableName: string;
-//   readonly primaryKey: string;
-//   readonly sortKey: string;
-//   readonly delimiter: string;
-//   // pk(id: string): string;
-//   // new (...args: any[]): any; // TODO is this used?
-// }
-
-// export function Table(constructor: TableProps) {
-//   // debugger;
-//   // constructor.pk = (id: string) => {
-//   //   // const bla = Rel
-//   //   return "bla";
-//   //   // return `${constructor.name}${constructor.delimiter}${id}`;
-//   // };
-// }
-
 const MODEL_TYPE = Symbol();
+const ATTRIBUTES = Symbol();
 export function Model(name: string) {
   // TODO make stricter
   return function (target: any, _context: ClassDecoratorContext) {
@@ -74,16 +37,27 @@ export function Table(props: TableProps) {
   };
 }
 
+// TODO below works
+// https://2ality.com/2022/10/javascript-decorators.html#read-only-fields
+export function Attribute(value: any, context: ClassFieldDecoratorContext) {
+  if (context.kind === "field") {
+    return function () {
+      const target = Object.getPrototypeOf(this);
+      this[ATTRIBUTES] = this[ATTRIBUTES] ?? [];
+      this[ATTRIBUTES].push(context.name);
+      Reflect.defineMetadata(ATTRIBUTES, this[ATTRIBUTES], target);
+    };
+  }
+  return value;
+}
+
+// TODO can I make this abstract?
 class SingleTableDesign {
   private readonly tableName: string;
   private readonly primaryKey: string;
   private readonly sortKey: string;
   private readonly delimiter: string;
   private readonly modelType: string;
-  // @second()
-  // protected static readonly tableName: string;
-  // protected static readonly primaryKey: string;
-  // protected static readonly sortKey: string;
 
   // TODO change to this.table and this.model?
   constructor() {
@@ -99,29 +73,17 @@ class SingleTableDesign {
     const table = new this();
     // TODO should this be in constructor?
     const dynamo = new DynamoBase(table.tableName);
-    // const a = { [table.primaryKey]: table.pk(id) };
-    // debugger;
-    // const key = {
-    //   [table.primaryKey]: table.pk(id),
-    //   [table.sortKey]: table.modelType
-    // };
     const bla = await dynamo.findById({
       [table.primaryKey]: table.pk(id),
       [table.sortKey]: table.modelType
     });
 
-    console.log(bla);
+    debugger;
 
-    // TODO start here. Just got this to work with reflection
-    // TODO first upgrade to typescript 5 https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/
-    // and change tsconfig to use new decroator pattern
-    // read extensivly and follow bet practices
-    // TODO replace experimental decorators in tsconfig with new field
-    // TODO there is an npm package @tsconfig/strictist I could use... look into that
-    // TODO work on serializing to model using attributes and decorators for attributes
-    // TODO return new model.
-    // TODO this could be helpful for attributes decorator:  https://stackoverflow.com/questions/55117125/typescript-decorators-reflect-metadata
-    // this wash helpful https://stackoverflow.com/questions/59578083/javascript-access-metadata-of-child-class-inside-constructor-of-parent
+    const attributes = table.getAttributes();
+
+    console.log(bla);
+    console.log(attributes);
 
     // const test =
     debugger;
@@ -129,6 +91,19 @@ class SingleTableDesign {
 
   private pk(id: string) {
     return `${this.modelType}${this.delimiter}${id}`;
+  }
+
+  // TODO could this be in the model decorator?
+  private getAttributes() {
+    let attributes = [];
+    let target = Object.getPrototypeOf(this);
+    while (target != Object.prototype) {
+      let childAttributes = Reflect.getOwnMetadata(ATTRIBUTES, target) || [];
+      attributes.push(...childAttributes);
+      target = Object.getPrototypeOf(target);
+    }
+    debugger;
+    return attributes;
   }
 }
 
