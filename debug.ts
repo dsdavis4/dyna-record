@@ -14,6 +14,12 @@ class MockTableClass extends SingleTableDesign {
 // and using DI to pass to table?
 @Model("Brewery")
 class MockModel extends MockTableClass {
+  // TODO START here. How do I do aliases?
+  // TODO I could make a TableAlias class/file?
+  // Or as an attribute on MockTableClass?
+  // and in a decorator validate that the alias exists?
+  // I could call if TableSchema?
+  // Or make it an attribute on the table...
   @Attribute
   public id!: string;
 
