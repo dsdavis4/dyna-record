@@ -20,16 +20,15 @@ class MockModel extends MockTableClass {
   // and in a decorator validate that the alias exists?
   // I could call if TableSchema?
   // Or make it an attribute on the table...
-  @Attribute
+  @Attribute({ alias: "Id" })
   public id!: string;
 
-  @Attribute
+  @Attribute({ alias: "UpdatedAt" })
   public updatedAt!: Date;
 }
 
 (async () => {
   try {
-    console.log("bla");
     const bla = await MockModel.findById(
       "103417f1-4c42-4b40-86a6-a8930be67c99"
     );

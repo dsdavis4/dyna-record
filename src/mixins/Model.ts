@@ -6,6 +6,8 @@ type GConstructor<T = {}> = new (...args: any[]) => T;
 function ModelMixin<TBase extends GConstructor>(Base: TBase) {
   return class Model extends Base {
     // TODO make private
+    // TODO change return type to reflect what the attribute initializer returns
+    // can the logic be shared?
     attributes(): string[] {
       let attributes = [];
       let target = Object.getPrototypeOf(this);
