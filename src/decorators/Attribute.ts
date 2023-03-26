@@ -11,7 +11,7 @@ function Attribute(value: any, context: ClassFieldDecoratorContext) {
       Reflect.defineMetadata(MODEL_ATTRIBUTES, this[MODEL_ATTRIBUTES], target);
     };
   }
-  return value;
+  return value; // TODO can I get rid of this?
 }
 
 export default Attribute;

@@ -11,6 +11,23 @@ interface TableProps {
 // That way I only export Table and Model and Attribute decorators?
 // And all logic is encapsualted here?
 // low priority
+
+// TODO should I follow a pattern of extending and returning a class like here
+// https://javascript.plainenglish.io/ts-5-0-beta-new-decorators-are-here-5b13a383e4ad
+
+// function Greeter(value, context) {
+//   if (context.kind === "class") {
+//     return class extends value {
+//       constructor(...args) {
+//         super(args);
+//       }
+//       greet(): void {
+//         console.log("Hello Bytefer!");
+//       }
+//     };
+//   }
+// }
+
 function Table(props: TableProps) {
   // TODO make stricter
   return function (target: any, _context: ClassDecoratorContext) {

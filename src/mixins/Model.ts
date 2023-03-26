@@ -3,6 +3,16 @@ import { MODEL_ATTRIBUTES } from "../symbols";
 // TODO make stricter and make sure this isnt duplicated
 type GConstructor<T = {}> = new (...args: any[]) => T;
 
+// TODO can I simplify by adding a prototype method instead of using mixin
+// https://javascript.plainenglish.io/ts-5-0-beta-new-decorators-are-here-5b13a383e4ad
+
+// function Greeter(value, context) {
+//   if (context.kind === "class") {
+//     value.prototype.greet = function () {
+//       console.log("Hello Bytefer!");
+//     };
+//   }
+// }
 function ModelMixin<TBase extends GConstructor>(Base: TBase) {
   return class Model extends Base {
     // TODO make private
