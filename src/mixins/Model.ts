@@ -8,6 +8,7 @@ function ModelMixin<TBase extends GConstructor>(Base: TBase) {
     // TODO make private
     // TODO change return type to reflect what the attribute initializer returns
     // can the logic be shared?
+    // TODO can I change to not use while loop?
     attributes(): string[] {
       let attributes = [];
       let target = Object.getPrototypeOf(this);
