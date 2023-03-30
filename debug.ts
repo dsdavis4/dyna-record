@@ -29,9 +29,11 @@ class MockModel extends MockTableClass {
 
 (async () => {
   try {
+    debugger;
     const bla = await MockModel.findById(
       "103417f1-4c42-4b40-86a6-a8930be67c99"
     );
+    debugger;
 
     const a = new MockModel();
 

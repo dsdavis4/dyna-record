@@ -6,6 +6,7 @@ interface AttributeProps {
 
 // TODO remove this link: https://2ality.com/2022/10/javascript-decorators.html#read-only-fields
 // TODO can I do this without metadata? Setting values on the class instead?
+// TODO start here!! make sure this would only run once when class is declared not for each object
 // TODO can I do this in a way where I dont set the metadata on every instance?
 // Maybe set on static property?
 function Attribute(props: AttributeProps) {
