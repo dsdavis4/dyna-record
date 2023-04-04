@@ -1,4 +1,4 @@
-import { MODEL_TYPE } from "../symbols";
+import { MODEL_TYPE, MODEL_ATTRIBUTES } from "../symbols";
 import ModelMixin from "../mixins/Model";
 
 // TODO can I simplify by adding a prototype method instead of using mixin
@@ -25,6 +25,7 @@ function Model(name: string) {
     target: T,
     _context: ClassDecoratorContext
   ) {
+    // TODO should this be changed /moved to Reflect.defineMetadata(MODEL_TYPE, name, ModelClass);
     Reflect.defineMetadata(MODEL_TYPE, name, target);
 
     // You can define other decorators here
@@ -40,5 +41,47 @@ function Model(name: string) {
     return ModelClass as T;
   };
 }
+
+// TODO example not using mixin
+// function Model(name: string) {
+//   const _this = this;
+
+//   return function <T extends GConstructor>(
+//     target: T,
+//     context: ClassDecoratorContext
+//   ) {
+//     if (context.kind === "class") {
+//       Reflect.defineMetadata(MODEL_TYPE, name, target);
+
+//       const ModelClass = class extends target {
+//         constructor(...args: any[]) {
+//           super(args);
+//         }
+//         serialize(tableItem: Record<string, any>): Record<string, any> {
+//           let target = Object.getPrototypeOf(this);
+//           const attrs: Record<string, string> = Reflect.getOwnMetadata(
+//             MODEL_ATTRIBUTES,
+//             target
+//           );
+
+//           const bla = _this;
+//           debugger;
+
+//           Object.entries(tableItem).forEach(([attr, value]) => {
+//             const modelKey = attrs[attr];
+//             target[`${modelKey}`] = value;
+//           }, {});
+
+//           debugger;
+//           return target;
+//         }
+//       };
+//       ModelClass.prototype = target.prototype; // (A)
+//       return ModelClass;
+//     }
+//     debugger;
+//     return target; // TODO is this needed?
+//   };
+// }
 
 export default Model;

@@ -33,9 +33,14 @@ class MockModel extends MockTableClass {
     const bla = await MockModel.findById(
       "103417f1-4c42-4b40-86a6-a8930be67c99"
     );
+    const test = bla instanceof MockModel;
+    // const typeTest = typeof bla?["updatedAt"];
+
+    // bla.id;
+
     debugger;
 
-    const a = new MockModel();
+    const a = await MockModel.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
     debugger;
 

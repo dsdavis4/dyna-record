@@ -29,17 +29,16 @@ class SingleTableDesign {
   // TODO add options
   public static async findById(id: string) {
     const Model = ModelMixin(this);
-    const table = new Model();
-    const abc = table.attributes();
+    const model = new Model();
 
     // TODO should this be in constructor?
-    const dynamo = new DynamoBase(table.tableName);
+    const dynamo = new DynamoBase(model.tableName);
     const res = await dynamo.findById({
-      [table.primaryKey]: table.pk(id),
-      [table.sortKey]: table.modelType
+      [model.primaryKey]: model.pk(id),
+      [model.sortKey]: model.modelType
     });
 
-    debugger;
+    return res ? model.serialize(res) : null;
   }
 
   private pk(id: string) {
