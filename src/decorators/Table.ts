@@ -28,6 +28,7 @@ interface TableProps {
 //   }
 // }
 
+// TODO should this leverage Attribute decorators? And this could be used to insure properties are set?
 function Table(props: TableProps) {
   // TODO make stricter
   // TODO set the type correctly
