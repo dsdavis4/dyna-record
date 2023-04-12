@@ -8,7 +8,6 @@ import {
   DELIMITER,
   MODEL_TYPE
 } from "./symbols";
-import BaseModel from "./baseClasses/BaseModel";
 
 // TODO can I make this abstract?
 class SingleTableDesign {
