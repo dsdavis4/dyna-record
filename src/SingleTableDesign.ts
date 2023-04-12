@@ -48,6 +48,7 @@ class SingleTableDesign {
     return `${this.modelType}${this.delimiter}${id}`;
   }
 
+  // TODO delete me
   public someMethod() {
     return "bla";
   }

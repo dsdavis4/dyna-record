@@ -13,6 +13,7 @@ type GConstructor<T = {}> = new (...args: any[]) => T;
 function ModelMixin<TBase extends GConstructor>(Base: TBase) {
   return class Model extends Base {
     // TODO make private
+    // TODO should this even be here or should it be on the SingleTableDesign base class?
     public serialize(tableItem: Record<string, any>): this {
       let target = Object.getPrototypeOf(this);
       const attrs: Record<string, string> = Reflect.getOwnMetadata(
