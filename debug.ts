@@ -38,6 +38,7 @@ class MockModel extends MockTableClass {
 
     if (bla) {
       bla.updatedAt;
+      bla.someMethod();
     }
 
     debugger;

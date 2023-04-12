@@ -49,6 +49,10 @@ class SingleTableDesign {
     return `${this.modelType}${this.delimiter}${id}`;
   }
 
+  public someMethod() {
+    return "bla";
+  }
+
   // TODO I could do this instead of using the mixing
   // private getAttributes() {
   //   let attributes = [];
