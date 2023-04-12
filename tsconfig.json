@@ -1,5 +1,6 @@
 {
-  "extends": "@tsconfig/strictest/tsconfig.json",
+  // TODO uninstall recommended or strictest if not used
+  "extends": "@tsconfig/recommended/tsconfig.json",
   "compilerOptions": {
     "ignoreDeprecations": "5.0",
     /* Visit https://aka.ms/tsconfig to read more about this file */

@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@aws-sdk/types": "^3.290.0",
+    "@tsconfig/recommended": "^1.0.2",
     "@tsconfig/strictest": "^1.0.2",
     "@types/node": "^18.15.2",
     "@types/uuid": "^9.0.1",

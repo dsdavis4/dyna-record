@@ -36,7 +36,9 @@ class MockModel extends MockTableClass {
     const test = bla instanceof MockModel;
     // const typeTest = typeof bla?["updatedAt"];
 
-    // bla.id;
+    if (bla) {
+      bla.updatedAt;
+    }
 
     debugger;
 

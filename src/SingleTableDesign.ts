@@ -8,6 +8,7 @@ import {
   DELIMITER,
   MODEL_TYPE
 } from "./symbols";
+import BaseModel from "./baseClasses/BaseModel";
 
 // TODO can I make this abstract?
 class SingleTableDesign {
@@ -27,7 +28,10 @@ class SingleTableDesign {
   }
 
   // TODO add options
-  public static async findById(id: string) {
+  public static async findById<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    id: string
+  ): Promise<T | null> {
     const Model = ModelMixin(this);
     const model = new Model();
 

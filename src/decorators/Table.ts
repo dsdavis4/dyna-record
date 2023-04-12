@@ -42,4 +42,31 @@ function Table(props: TableProps) {
   };
 }
 
+// class BaseTable {
+//   static tableName: string;
+//   static primaryKey: string;
+//   static soryKey: string;
+//   static delimiter: string;
+// }
+
+// type GConstructor<T = {}> = new (...args: any[]) => T;
+
+// function Table(props: TableProps) {
+//   // const _this = this;
+//   // The wrapper must be new-callable
+
+//   return function (target: Function, context: ClassDecoratorContext) {
+//     debugger;
+//     // return class extends target {
+//     //   // (A)
+//     //   // constructor(...args) {
+//     //   //   super(...args);
+//     //   //   instanceCount++;
+//     //   //   // Change the instance
+//     //   //   this.count = instanceCount;
+//     //   // }
+//     // };
+//   };
+// }
+
 export default Table;
