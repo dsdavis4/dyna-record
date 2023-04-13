@@ -7,28 +7,6 @@ interface TableProps {
   delimiter: string;
 }
 
-// TODO could I make is so anything with this reflects single table design?
-// That way I only export Table and Model and Attribute decorators?
-// And all logic is encapsualted here?
-// low priority
-
-// TODO should I follow a pattern of extending and returning a class like here
-// https://javascript.plainenglish.io/ts-5-0-beta-new-decorators-are-here-5b13a383e4ad
-
-// function Greeter(value, context) {
-//   if (context.kind === "class") {
-//     return class extends value {
-//       constructor(...args) {
-//         super(args);
-//       }
-//       greet(): void {
-//         console.log("Hello Bytefer!");
-//       }
-//     };
-//   }
-// }
-
-// TODO should this leverage Attribute decorators? And this could be used to insure properties are set?
 function Table(props: TableProps) {
   // TODO make stricter
   // TODO set the type correctly

@@ -29,9 +29,7 @@ import {
 class DynamoBase {
   private readonly tableName: string;
   private readonly dynamo: DynamoDBDocumentClient;
-  // TODO can this be protected? Maybe I should pass it to Query params?
 
-  // TODO make a model class that is deopdency injected that knows how to serialize?
   constructor(tableName: string) {
     this.tableName = tableName;
     this.dynamo = DynamoDBDocumentClient.from(

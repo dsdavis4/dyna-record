@@ -1,4 +1,4 @@
-import { MODEL_ATTRIBUTES } from "../symbols";
+import { ENTITY_ATTRIBUTES } from "../symbols";
 
 interface AttributeProps {
   alias: string;
@@ -11,11 +11,11 @@ function Attribute(props: AttributeProps) {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const target = Object.getPrototypeOf(this);
-        target[MODEL_ATTRIBUTES] = target[MODEL_ATTRIBUTES] ?? {};
-        target[MODEL_ATTRIBUTES][props.alias] = context.name;
+        target[ENTITY_ATTRIBUTES] = target[ENTITY_ATTRIBUTES] ?? {};
+        target[ENTITY_ATTRIBUTES][props.alias] = context.name;
         Reflect.defineMetadata(
-          MODEL_ATTRIBUTES,
-          target[MODEL_ATTRIBUTES],
+          ENTITY_ATTRIBUTES,
+          target[ENTITY_ATTRIBUTES],
           target
         );
       });

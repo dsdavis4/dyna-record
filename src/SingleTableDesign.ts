@@ -1,12 +1,12 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
-import ModelMixin from "./mixins/Model";
+import EntityMixin from "./mixins/Entity";
 import {
   TABLE_NAME,
   PRIMARY_KEY,
   SORT_KEY,
   DELIMITER,
-  MODEL_TYPE
+  ENTITY_TYPE
 } from "./symbols";
 
 // TODO can I make this abstract?
@@ -15,15 +15,24 @@ class SingleTableDesign {
   private readonly primaryKey: string;
   private readonly sortKey: string;
   private readonly delimiter: string;
-  private readonly modelType: string;
+  private readonly entityType: string;
 
-  // TODO change to this.table and this.model?
+  // TODO START HERE can I use global storage instad of storing on each instance? See typeorm
+  // So... instead of storing meta data for each table
+  /*
+  
+  1. Make a meta data class (Singleton??)
+     - Uses global storage
+  2. In table decorator store a map of tables 
+  3. In the initializer for atttributes see if the attribute has been added to global meta data class for the table and add it if not
+  
+  */
   constructor() {
     this.tableName = Reflect.getMetadata(TABLE_NAME, this.constructor);
     this.primaryKey = Reflect.getMetadata(PRIMARY_KEY, this.constructor);
     this.sortKey = Reflect.getMetadata(SORT_KEY, this.constructor);
     this.delimiter = Reflect.getMetadata(DELIMITER, this.constructor);
-    this.modelType = Reflect.getMetadata(MODEL_TYPE, this.constructor);
+    this.entityType = Reflect.getMetadata(ENTITY_TYPE, this.constructor);
   }
 
   // TODO add options
@@ -31,40 +40,27 @@ class SingleTableDesign {
     this: { new (): T } & typeof SingleTableDesign,
     id: string
   ): Promise<T | null> {
-    const Model = ModelMixin(this);
-    const model = new Model();
+    const Entity = EntityMixin(this);
+    const entity = new Entity();
 
     // TODO should this be in constructor?
-    const dynamo = new DynamoBase(model.tableName);
+    const dynamo = new DynamoBase(entity.tableName);
     const res = await dynamo.findById({
-      [model.primaryKey]: model.pk(id),
-      [model.sortKey]: model.modelType
+      [entity.primaryKey]: entity.pk(id),
+      [entity.sortKey]: entity.entityType
     });
 
-    return res ? model.serialize(res) : null;
+    return res ? entity.serialize(res) : null;
   }
 
   private pk(id: string) {
-    return `${this.modelType}${this.delimiter}${id}`;
+    return `${this.entityType}${this.delimiter}${id}`;
   }
 
   // TODO delete me
   public someMethod() {
     return "bla";
   }
-
-  // TODO I could do this instead of using the mixing
-  // private getAttributes() {
-  //   let attributes = [];
-  //   let target = Object.getPrototypeOf(this);
-  //   while (target != Object.prototype) {
-  //     let childAttributes = Reflect.getOwnMetadata(ATTRIBUTES, target) || [];
-  //     attributes.push(...childAttributes);
-  //     target = Object.getPrototypeOf(target);
-  //   }
-  //   debugger;
-  //   return attributes;
-  // }
 }
 
 export default SingleTableDesign;

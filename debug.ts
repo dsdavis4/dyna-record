@@ -1,5 +1,5 @@
 import SingleTableDesign from "./src";
-import { Table, Model, Attribute } from "./src/decorators";
+import { Table, Entity, Attribute } from "./src/decorators";
 // TODO get rid of all references to any
 
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
@@ -10,10 +10,8 @@ class MockTableClass extends SingleTableDesign {
   // static readonly delimiter = "#";
 }
 
-// TODO could I add a decorator @Model to provide methods for serializing object to a table
-// and using DI to pass to table?
-@Model("Brewery")
-class MockModel extends MockTableClass {
+@Entity("Brewery")
+class MockEntity extends MockTableClass {
   // TODO START here. How do I do aliases?
   // TODO I could make a TableAlias class/file?
   // Or as an attribute on MockTableClass?
@@ -29,12 +27,10 @@ class MockModel extends MockTableClass {
 
 (async () => {
   try {
-    debugger;
-    const bla = await MockModel.findById(
+    const bla = await MockEntity.findById(
       "103417f1-4c42-4b40-86a6-a8930be67c99"
     );
-    const test = bla instanceof MockModel;
-    // const typeTest = typeof bla?["updatedAt"];
+    const test = bla instanceof MockEntity;
 
     if (bla) {
       bla.updatedAt;
@@ -43,22 +39,8 @@ class MockModel extends MockTableClass {
 
     debugger;
 
-    const a = await MockModel.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    const a = await MockEntity.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
-    debugger;
-
-    // bla.attributes()
-
-    // MockModel.errors
-
-    // bla.errors;
-
-    debugger;
-
-    // bla.attributes;
-    console.log(bla);
-
-    debugger;
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {
     console.log("error", err);

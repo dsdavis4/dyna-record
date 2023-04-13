@@ -1,49 +1,37 @@
-import { MODEL_TYPE, MODEL_ATTRIBUTES } from "../symbols";
-import ModelMixin from "../mixins/Model";
+import { ENTITY_TYPE, ENTITY_ATTRIBUTES } from "../symbols";
+import EntityMixin from "../mixins/Entity";
 
-// TODO can I simplify by adding a prototype method instead of using mixin
-// https://javascript.plainenglish.io/ts-5-0-beta-new-decorators-are-here-5b13a383e4ad
-
-// function Greeter(value, context) {
-//   if (context.kind === "class") {
-//     value.prototype.greet = function () {
-//       console.log("Hello Bytefer!");
-//     };
-//   }
-// }
-
+// TODO  make stricter
 type GConstructor<T = {}> = new (...args: any[]) => T;
-// TODO try to make stricter
-// type Modelable = GConstructor<{ name: string }>;
 
-interface Model {
+interface Entity {
   attributes(): string[];
 }
 
-function Model(name: string) {
+function Entity(name: string) {
   return function <T extends GConstructor>(
     target: T,
     _context: ClassDecoratorContext
   ) {
-    // TODO should this be changed /moved to Reflect.defineMetadata(MODEL_TYPE, name, ModelClass);
-    Reflect.defineMetadata(MODEL_TYPE, name, target);
+    // TODO should this be changed /moved to Reflect.defineMetadata(ENTITY_TYPE, name, Entity);
+    Reflect.defineMetadata(ENTITY_TYPE, name, target);
 
     // You can define other decorators here
-    class ModelClass extends ModelMixin(target) {}
+    class Entity extends EntityMixin(target) {}
 
     // Apply original class descriptors to the new class
     const ownPropertyDescriptors = Object.getOwnPropertyDescriptors(target);
 
     const { prototype, ...descriptors } = ownPropertyDescriptors;
 
-    Object.defineProperties(ModelClass, descriptors);
+    Object.defineProperties(Entity, descriptors);
 
-    return ModelClass as T;
+    return Entity as T;
   };
 }
 
 // TODO example not using mixin
-// function Model(name: string) {
+// function Entity(name: string) {
 //   const _this = this;
 
 //   return function <T extends GConstructor>(
@@ -51,16 +39,16 @@ function Model(name: string) {
 //     context: ClassDecoratorContext
 //   ) {
 //     if (context.kind === "class") {
-//       Reflect.defineMetadata(MODEL_TYPE, name, target);
+//       Reflect.defineMetadata(ENTITY_TYPE, name, target);
 
-//       const ModelClass = class extends target {
+//       const Entity = class extends target {
 //         constructor(...args: any[]) {
 //           super(args);
 //         }
 //         serialize(tableItem: Record<string, any>): Record<string, any> {
 //           let target = Object.getPrototypeOf(this);
 //           const attrs: Record<string, string> = Reflect.getOwnMetadata(
-//             MODEL_ATTRIBUTES,
+//             ENTITY_ATTRIBUTES,
 //             target
 //           );
 
@@ -68,20 +56,20 @@ function Model(name: string) {
 //           debugger;
 
 //           Object.entries(tableItem).forEach(([attr, value]) => {
-//             const modelKey = attrs[attr];
-//             target[`${modelKey}`] = value;
+//             const entityKey = attrs[attr];
+//             target[`${entityKey}`] = value;
 //           }, {});
 
 //           debugger;
 //           return target;
 //         }
 //       };
-//       ModelClass.prototype = target.prototype; // (A)
-//       return ModelClass;
+//       Entity.prototype = target.prototype; // (A)
+//       return Entity;
 //     }
 //     debugger;
 //     return target; // TODO is this needed?
 //   };
 // }
 
-export default Model;
+export default Entity;
