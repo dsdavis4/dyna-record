@@ -8,12 +8,34 @@ interface TableProps {
   delimiter: string;
 }
 
+export interface TableConstructor {
+  readonly tableName: string;
+  readonly primaryKey: string;
+  readonly sortKey: string;
+  readonly delimiter: string;
+  new (...args: any[]): any; // TODO is this needed? Dont use any...
+}
+
+// function Table(target: TableConstructor, _context: ClassDecoratorContext) {
+//   // TODO make stricter
+//   // TODO set the type correctly
+//   // return function (target: Function, _context: ClassDecoratorContext) {
+//   //   // TODO find better way to init
+//   //   Metadata.tables[target.name] = { ...props };
+//   // };
+//   // debugger;
+//   // target.tableName;
+//   debugger;
+//   return this; // TODO is this needed?
+// }
+
 function Table(props: TableProps) {
   // TODO make stricter
   // TODO set the type correctly
   return function (target: Function, _context: ClassDecoratorContext) {
     // TODO find better way to init
     Metadata.tables[target.name] = { ...props };
+    return this;
   };
 }
 

@@ -5,7 +5,9 @@ import { Table, Entity, Attribute } from "./src/decorators";
 import Metadata from "./src/metadata";
 
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
-class MockTableClass extends SingleTableDesign {
+// @Table
+// TODO can this be abstract?
+abstract class DrewsBrewsTable extends SingleTableDesign {
   // static readonly tableName = "drews-brews";
   // static readonly primaryKey = "PK";
   // static readonly sortKey = "SK";
@@ -13,8 +15,8 @@ class MockTableClass extends SingleTableDesign {
 }
 
 // TODO I dont think I need the param for entity...
-@Entity("Brewery")
-class Brewery extends MockTableClass {
+@Entity
+class Brewery extends DrewsBrewsTable {
   // TODO START here. How do I do aliases?
   // TODO I could make a TableAlias class/file?
   // Or as an attribute on MockTableClass?

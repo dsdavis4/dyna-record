@@ -19,6 +19,7 @@ export interface TableMetadata {
 // TODO this is duplicated
 
 class Metadata {
+  // TODO delete if not used
   public readonly tables: Record<string, TableMetadata> = {};
   public readonly entities: Record<string, EntityMetadata> = {};
 }
