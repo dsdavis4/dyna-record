@@ -66,7 +66,7 @@ function Entity(target: Function, _context: ClassDecoratorContext) {
     tableName: Object.getPrototypeOf(target).name,
     attributes: {}
   };
-  debugger;
+
   return this;
 }
 

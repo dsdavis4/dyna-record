@@ -17,7 +17,6 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 // TODO I dont think I need the param for entity...
 @Entity
 class Brewery extends DrewsBrewsTable {
-  // TODO START here. How do I do aliases?
   // TODO I could make a TableAlias class/file?
   // Or as an attribute on MockTableClass?
   // and in a decorator validate that the alias exists?
@@ -34,16 +33,15 @@ class Brewery extends DrewsBrewsTable {
   }
 }
 
-// TODO START HERE
-// I was working on making my own meta data class. IS this what I want to do?
-// TODO is this a better way of using a mixin?
-// TODO IT works the same as before comitted chanes now... I think
+// TODO START HERE... I just finished getting the serialize method to return the actual class
+// do some cleanup....
 
 (async () => {
   try {
     const metadata = Metadata;
 
     debugger;
+
     const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
     const test = bla instanceof Brewery;
     console.log(`Type is correct: ${test}`);
@@ -54,9 +52,11 @@ class Brewery extends DrewsBrewsTable {
       console.log(bla.testing());
     }
 
+    console.log(bla);
+
     debugger;
 
-    const a = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // const a = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {

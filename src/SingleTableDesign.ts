@@ -42,7 +42,7 @@ abstract class SingleTableDesign {
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string
-  ): Promise<T | ObjectLiteral | null> {
+  ): Promise<T | null> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
@@ -52,21 +52,21 @@ abstract class SingleTableDesign {
       [tableMetadata.sortKey]: this.name
     });
 
-    return res ? this.serialize(res, entityMetadata.attributes) : null;
+    return res ? this.serialize<T>(res, entityMetadata.attributes) : null;
   }
 
   private static pk(id: string, delimiter: string) {
     return `${this.name}${delimiter}${id}`;
   }
 
-  private static serialize<Entity extends ObjectLiteral>(
+  private static serialize<Entity extends SingleTableDesign>(
     this: { new (): Entity },
-    tableItem: Record<keyof Entity, any>,
-    attrs: Record<keyof Entity, any>
+    tableItem: Record<string, any>,
+    attrs: Record<string, any>
   ) {
     const instance = new this();
 
-    (Object.keys(tableItem) as Array<keyof Entity>).forEach(attr => {
+    Object.keys(tableItem).forEach(attr => {
       if (attrs[attr]) {
         const entityKey: keyof Entity = attrs[attr].name;
         instance[entityKey] = tableItem[attr];
