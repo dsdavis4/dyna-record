@@ -14,8 +14,17 @@ import { TableConstructor } from "./decorators/Table";
 
 type GConstructor<T = {}> = new (...args: any[]) => T;
 
+interface ObjectLiteral {
+  [key: string]: any;
+}
+
+type ObjectType<T> = { new (): T } | Function;
+
+type EntityTarget<Entity> = ObjectType<Entity> | SingleTableDesign;
+// | { type: Entity; name: string };
+
 // TODO can I make this abstract?
-class SingleTableDesign {
+abstract class SingleTableDesign {
   // TODO are these instance methods needed?
   // private tableMetadata: TableMetadata;
   // private entityMetadata: EntityMetadata;
@@ -33,36 +42,7 @@ class SingleTableDesign {
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string
-  ): Promise<T | null> {
-    // TODO can I get better typing on this?
-
-    // const EntityClass = Object.getPrototypeOf(this);
-
-    // const EntityClass = SingleTableDesign.getEntityClass(this);
-    // const entity = new EntityClass();
-
-    // debugger;
-
-    // // const Entity = EntityMixin(this);
-    // // debugger;
-    // // const entity = new Entity();
-    // // debugger;
-
-    // const { name: tableName, primaryKey, sortKey } = entity.tableMetadata;
-
-    // debugger;
-
-    // // TODO should this be in constructor?
-    // const dynamo = new DynamoBase(tableName);
-    // const res = await dynamo.findById({
-    //   [primaryKey]: entity.pk(id),
-    //   [sortKey]: entity.entityType
-    // });
-
-    // debugger;
-
-    // return res ? entity.serialize(res) : null;
-
+  ): Promise<T | ObjectLiteral | null> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
@@ -72,48 +52,28 @@ class SingleTableDesign {
       [tableMetadata.sortKey]: this.name
     });
 
-    debugger;
-
-    const instance = new this();
-
-    return res ? instance.serialize(res, entityMetadata.attributes) : null;
+    return res ? this.serialize(res, entityMetadata.attributes) : null;
   }
 
-  // private static getEntityClass<TBase extends GConstructor>(Base: TBase) {
-  //   class Entity extends Base {}
-
-  //   // Apply original class descriptors to the new class
-  //   const ownPropertyDescriptors = Object.getOwnPropertyDescriptors(Base);
-
-  //   const { prototype, ...descriptors } = ownPropertyDescriptors;
-
-  //   Object.defineProperties(Entity, descriptors);
-
-  //   return Entity;
-  // }
-
-  // TODO make this show correctly
   private static pk(id: string, delimiter: string) {
     return `${this.name}${delimiter}${id}`;
   }
 
-  // TODO make this show correctly
-  private serialize(
-    tableItem: Record<string, unknown>,
-    attrs: Record<string, any>
+  private static serialize<Entity extends ObjectLiteral>(
+    this: { new (): Entity },
+    tableItem: Record<keyof Entity, any>,
+    attrs: Record<keyof Entity, any>
   ) {
-    // let target = Object.getPrototypeOf(this);
-    const target: Record<string, any> = {};
-    // const attrs = this.entityMetadata.attributes;
+    const instance = new this();
 
-    Object.entries(tableItem).forEach(([attr, value]) => {
+    (Object.keys(tableItem) as Array<keyof Entity>).forEach(attr => {
       if (attrs[attr]) {
-        const entityKey = attrs[attr].name;
-        target[`${entityKey}`] = value;
+        const entityKey: keyof Entity = attrs[attr].name;
+        instance[entityKey] = tableItem[attr];
       }
-    }, {});
+    });
 
-    return { ...this, ...target };
+    return instance;
   }
 
   // TODO delete me. this is not

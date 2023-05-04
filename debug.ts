@@ -28,6 +28,10 @@ class Brewery extends DrewsBrewsTable {
 
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt!: Date;
+
+  public testing() {
+    return "hi";
+  }
 }
 
 // TODO START HERE
@@ -46,8 +50,8 @@ class Brewery extends DrewsBrewsTable {
 
     if (bla) {
       bla.updatedAt;
-      // TODO how to get this to work?
-      // bla.someMethod();
+      console.log(bla.someMethod());
+      console.log(bla.testing());
     }
 
     debugger;
