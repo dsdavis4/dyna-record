@@ -8,31 +8,21 @@ import {
   DELIMITER,
   ENTITY_TYPE
 } from "./symbols";
+import Metadata, { TableMetadata, EntityMetadata } from "./metadata";
+
+type GConstructor<T = {}> = new (...args: any[]) => T;
 
 // TODO can I make this abstract?
 class SingleTableDesign {
-  private readonly tableName: string;
-  private readonly primaryKey: string;
-  private readonly sortKey: string;
-  private readonly delimiter: string;
+  // TODO are these instance methods needed?
+  private tableMetadata: TableMetadata;
+  private entityMetadata: EntityMetadata;
   private readonly entityType: string;
 
-  // TODO START HERE can I use global storage instad of storing on each instance? See typeorm
-  // So... instead of storing meta data for each table
-  /*
-  
-  1. Make a meta data class (Singleton??)
-     - Uses global storage
-  2. In table decorator store a map of tables 
-  3. In the initializer for atttributes see if the attribute has been added to global meta data class for the table and add it if not
-  
-  */
   constructor() {
-    this.tableName = Reflect.getMetadata(TABLE_NAME, this.constructor);
-    this.primaryKey = Reflect.getMetadata(PRIMARY_KEY, this.constructor);
-    this.sortKey = Reflect.getMetadata(SORT_KEY, this.constructor);
-    this.delimiter = Reflect.getMetadata(DELIMITER, this.constructor);
-    this.entityType = Reflect.getMetadata(ENTITY_TYPE, this.constructor);
+    this.entityType = this.constructor.name;
+    this.entityMetadata = Metadata.entities[this.entityType];
+    this.tableMetadata = Metadata.tables[this.entityMetadata.tableName];
   }
 
   // TODO add options
@@ -40,24 +30,72 @@ class SingleTableDesign {
     this: { new (): T } & typeof SingleTableDesign,
     id: string
   ): Promise<T | null> {
-    const Entity = EntityMixin(this);
-    const entity = new Entity();
+    // TODO can I get better typing on this?
+
+    // const EntityClass = Object.getPrototypeOf(this);
+
+    const EntityClass = SingleTableDesign.getEntityClass(this);
+    const entity = new EntityClass();
+
+    debugger;
+
+    // const Entity = EntityMixin(this);
+    // debugger;
+    // const entity = new Entity();
+    // debugger;
+
+    const { name: tableName, primaryKey, sortKey } = entity.tableMetadata;
+
+    debugger;
 
     // TODO should this be in constructor?
-    const dynamo = new DynamoBase(entity.tableName);
+    const dynamo = new DynamoBase(tableName);
     const res = await dynamo.findById({
-      [entity.primaryKey]: entity.pk(id),
-      [entity.sortKey]: entity.entityType
+      [primaryKey]: entity.pk(id),
+      [sortKey]: entity.entityType
     });
+
+    debugger;
 
     return res ? entity.serialize(res) : null;
   }
 
-  private pk(id: string) {
-    return `${this.entityType}${this.delimiter}${id}`;
+  private static getEntityClass<TBase extends GConstructor>(Base: TBase) {
+    class Entity extends Base {}
+
+    // Apply original class descriptors to the new class
+    const ownPropertyDescriptors = Object.getOwnPropertyDescriptors(Base);
+
+    const { prototype, ...descriptors } = ownPropertyDescriptors;
+
+    Object.defineProperties(Entity, descriptors);
+
+    return Entity;
   }
 
-  // TODO delete me
+  // TODO make this show correctly
+  private pk(id: string) {
+    const { delimiter } = this.tableMetadata;
+    return `${this.entityType}${delimiter}${id}`;
+  }
+
+  // TODO make this show correctly
+  private serialize(tableItem: Record<string, any>) {
+    // let target = Object.getPrototypeOf(this);
+    const target: Record<string, any> = {};
+    const attrs = this.entityMetadata.attributes;
+
+    Object.entries(tableItem).forEach(([attr, value]) => {
+      if (attrs[attr]) {
+        const entityKey = attrs[attr].name;
+        target[`${entityKey}`] = value;
+      }
+    }, {});
+
+    return { ...this, ...target };
+  }
+
+  // TODO delete me. this is not
   public someMethod() {
     return "bla";
   }

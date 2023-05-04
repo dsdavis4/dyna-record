@@ -6,12 +6,16 @@ import { ENTITY_ATTRIBUTES } from "../symbols";
 // import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO is ENTITY_ATTRIBUTES a good name? TABLE_ATTRIBUTES?
-
+// TODO delete if not used
 // TODO make stricter and make sure this isnt duplicated
 type GConstructor<T = {}> = new (...args: any[]) => T;
 
 function EntityMixin<TBase extends GConstructor>(Base: TBase) {
   return class Entity extends Base {
+    // constructor(...args: []) {
+    //   super(...args);
+    //   debugger;
+    // }
     // TODO make private
     // TODO should this even be here or should it be on the SingleTableDesign base class?
     public serialize(tableItem: Record<string, any>): this {

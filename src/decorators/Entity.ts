@@ -1,36 +1,52 @@
 import { ENTITY_TYPE, ENTITY_ATTRIBUTES } from "../symbols";
 import EntityMixin from "../mixins/Entity";
+import Metadata from "../metadata";
 
-// TODO  make stricter
+// TODO  make stricter, and this is duplicated
 type GConstructor<T = {}> = new (...args: any[]) => T;
 
 interface Entity {
   attributes(): string[];
 }
 
+// function Entity(name: string) {
+//   return function <T extends GConstructor>(
+//     target: T,
+//     _context: ClassDecoratorContext
+//   ) {
+//     const tableName = Object.getPrototypeOf(target).name;
+
+//     // TODO find better way to init
+//     Metadata.entities[name] = { tableName, attributes: {} };
+
+//     // You can define other decorators here
+//     class Entity extends EntityMixin(target) {}
+
+//     // Apply original class descriptors to the new class
+//     const ownPropertyDescriptors = Object.getOwnPropertyDescriptors(target);
+
+//     const { prototype, ...descriptors } = ownPropertyDescriptors;
+
+//     Object.defineProperties(Entity, descriptors);
+
+//     return Entity as T;
+//   };
+// }
+
+// TODO might not need name... should use class name
 function Entity(name: string) {
-  return function <T extends GConstructor>(
-    target: T,
-    _context: ClassDecoratorContext
-  ) {
-    // TODO should this be changed /moved to Reflect.defineMetadata(ENTITY_TYPE, name, Entity);
-    Reflect.defineMetadata(ENTITY_TYPE, name, target);
+  // TODO make stricter
+  // TODO set the type correctly
+  return function (target: Function, _context: ClassDecoratorContext) {
+    const tableName = Object.getPrototypeOf(target).name;
 
-    // You can define other decorators here
-    class Entity extends EntityMixin(target) {}
-
-    // Apply original class descriptors to the new class
-    const ownPropertyDescriptors = Object.getOwnPropertyDescriptors(target);
-
-    const { prototype, ...descriptors } = ownPropertyDescriptors;
-
-    Object.defineProperties(Entity, descriptors);
-
-    return Entity as T;
+    // TODO find better way to init
+    Metadata.entities[name] = { tableName, attributes: {} };
   };
 }
 
 // TODO example not using mixin
+// TODO might not need name... should use class name
 // function Entity(name: string) {
 //   const _this = this;
 
@@ -39,32 +55,38 @@ function Entity(name: string) {
 //     context: ClassDecoratorContext
 //   ) {
 //     if (context.kind === "class") {
-//       Reflect.defineMetadata(ENTITY_TYPE, name, target);
+//       const tableName = Object.getPrototypeOf(target).name;
 
+//       // TODO find better way to init
+//       Metadata.entities[name] = { tableName, attributes: {} };
+
+//       // TODO is any of this needed?
 //       const Entity = class extends target {
 //         constructor(...args: any[]) {
 //           super(args);
 //         }
-//         serialize(tableItem: Record<string, any>): Record<string, any> {
-//           let target = Object.getPrototypeOf(this);
-//           const attrs: Record<string, string> = Reflect.getOwnMetadata(
-//             ENTITY_ATTRIBUTES,
-//             target
-//           );
+//         // serialize(tableItem: Record<string, any>): Record<string, any> {
+//         //   let target = Object.getPrototypeOf(this);
+//         //   debugger;
+//         //   const attrs: Record<string, string> = Reflect.getOwnMetadata(
+//         //     ENTITY_ATTRIBUTES,
+//         //     target
+//         //   );
 
-//           const bla = _this;
-//           debugger;
+//         //   const bla = _this;
+//         //   debugger;
 
-//           Object.entries(tableItem).forEach(([attr, value]) => {
-//             const entityKey = attrs[attr];
-//             target[`${entityKey}`] = value;
-//           }, {});
+//         //   Object.entries(tableItem).forEach(([attr, value]) => {
+//         //     const entityKey = attrs[attr];
+//         //     target[`${entityKey}`] = value;
+//         //   }, {});
 
-//           debugger;
-//           return target;
-//         }
+//         //   debugger;
+//         //   return target;
+//         // }
 //       };
-//       Entity.prototype = target.prototype; // (A)
+//       debugger;
+//       // Entity.prototype = target.prototype; // (A)
 //       return Entity;
 //     }
 //     debugger;

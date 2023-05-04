@@ -1,4 +1,5 @@
 import { ENTITY_ATTRIBUTES } from "../symbols";
+import Metadata from "../metadata";
 
 interface AttributeProps {
   alias: string;
@@ -6,18 +7,17 @@ interface AttributeProps {
 
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
+// At least check if its not already initialized
 function Attribute(props: AttributeProps) {
-  return function (_value: undefined, context: ClassFieldDecoratorContext) {
+  return (_value: undefined, context: ClassFieldDecoratorContext) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const target = Object.getPrototypeOf(this);
-        target[ENTITY_ATTRIBUTES] = target[ENTITY_ATTRIBUTES] ?? {};
-        target[ENTITY_ATTRIBUTES][props.alias] = context.name;
-        Reflect.defineMetadata(
-          ENTITY_ATTRIBUTES,
-          target[ENTITY_ATTRIBUTES],
-          target
-        );
+        const entity = Object.getPrototypeOf(this);
+
+        const entityMetadata = Metadata.entities[entity.constructor.name];
+        entityMetadata.attributes[props.alias] = {
+          name: context.name.toString()
+        };
       });
     }
   };

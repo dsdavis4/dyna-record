@@ -1,4 +1,5 @@
 import { TABLE_NAME, PRIMARY_KEY, SORT_KEY, DELIMITER } from "../symbols";
+import Metadata from "../metadata";
 
 interface TableProps {
   name: string;
@@ -10,13 +11,9 @@ interface TableProps {
 function Table(props: TableProps) {
   // TODO make stricter
   // TODO set the type correctly
-  return function (target: any, _context: ClassDecoratorContext) {
-    Reflect.defineMetadata(TABLE_NAME, props.name, target);
-    Reflect.defineMetadata(PRIMARY_KEY, props.primaryKey, target);
-    Reflect.defineMetadata(SORT_KEY, props.sortKey, target);
-    Reflect.defineMetadata(DELIMITER, props.delimiter, target);
-
-    // return target; // Is this how it should be?
+  return function (target: Function, _context: ClassDecoratorContext) {
+    // TODO find better way to init
+    Metadata.tables[target.name] = { ...props };
   };
 }
 
