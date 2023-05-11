@@ -7,7 +7,6 @@ interface AttributeProps {
 
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
-// At least check if its not already initialized
 function Attribute(props: AttributeProps) {
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
     if (context.kind === "field") {
@@ -15,9 +14,12 @@ function Attribute(props: AttributeProps) {
         const entity = Object.getPrototypeOf(this);
 
         const entityMetadata = Metadata.entities[entity.constructor.name];
-        entityMetadata.attributes[props.alias] = {
-          name: context.name.toString()
-        };
+
+        if (!entityMetadata.attributes[props.alias]) {
+          entityMetadata.attributes[props.alias] = {
+            name: context.name.toString()
+          };
+        }
       });
     }
   };

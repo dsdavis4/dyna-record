@@ -45,6 +45,16 @@ class Brewery extends DrewsBrewsTable {
 
     debugger;
 
+    const bla0 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+
+    const bla2 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+
+    const bla3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+
+    const bla4 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+
+    debugger;
+
     // const a = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
     // console.log(JSON.stringify(results, null, 4));
