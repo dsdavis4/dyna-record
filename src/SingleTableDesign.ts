@@ -4,20 +4,6 @@ import DynamoBase from "./DynamoBase";
 import Metadata from "./metadata";
 
 abstract class SingleTableDesign {
-  // TODO are these instance methods needed?
-  // private tableMetadata: TableMetadata;
-  // private entityMetadata: EntityMetadata;
-  // private readonly entityType: string;
-
-  // constructor() {
-  //   this.entityType = this.constructor.name;
-  //   this.entityMetadata = Metadata.entities[this.entityType];
-  //   this.tableMetadata = Metadata.tables[this.entityMetadata.tableName];
-
-  //   debugger;
-  // }
-
-  // TODO add options
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string

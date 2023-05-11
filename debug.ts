@@ -12,14 +12,8 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   // static readonly delimiter = "#";
 }
 
-// TODO I dont think I need the param for entity...
 @Entity
 class Brewery extends DrewsBrewsTable {
-  // TODO I could make a TableAlias class/file?
-  // Or as an attribute on MockTableClass?
-  // and in a decorator validate that the alias exists?
-  // I could call if TableSchema?
-  // Or make it an attribute on the table...
   @Attribute({ alias: "Id" })
   public id!: string;
 
@@ -30,9 +24,6 @@ class Brewery extends DrewsBrewsTable {
     return "hi";
   }
 }
-
-// TODO START HERE... I just finished getting the serialize method to return the actual class
-// do some cleanup....
 
 (async () => {
   try {
