@@ -2,13 +2,11 @@ export interface AttributeMetadata {
   name: string;
 }
 
-// TODO this might be duplicated
 export interface EntityMetadata {
   tableName: string;
   attributes: Record<string, AttributeMetadata>;
 }
 
-// TODO this is duplicated from table class
 export interface TableMetadata {
   name: string;
   primaryKey: string;
@@ -16,10 +14,7 @@ export interface TableMetadata {
   delimiter: string;
 }
 
-// TODO this is duplicated
-
 class Metadata {
-  // TODO delete if not used
   public readonly tables: Record<string, TableMetadata> = {};
   public readonly entities: Record<string, EntityMetadata> = {};
 }
