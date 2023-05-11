@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
-
-import Metadata from "./metadata";
+import Metadata, { AttributeMetadata } from "./metadata";
+import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
 abstract class SingleTableDesign {
   public static async findById<T extends SingleTableDesign>(
@@ -26,16 +26,15 @@ abstract class SingleTableDesign {
 
   private static serialize<Entity extends SingleTableDesign>(
     this: { new (): Entity },
-    // TODO is any needed?
-    tableItem: Record<string, any>,
-    attrs: Record<string, any>
+    tableItem: Record<string, NativeAttributeValue>,
+    attrs: Record<string, AttributeMetadata>
   ) {
     const instance = new this();
 
     Object.keys(tableItem).forEach(attr => {
       if (attrs[attr]) {
-        const entityKey: keyof Entity = attrs[attr].name;
-        instance[entityKey] = tableItem[attr];
+        const entityKey = attrs[attr].name;
+        instance[entityKey as keyof Entity] = tableItem[attr];
       }
     });
 

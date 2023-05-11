@@ -1,4 +1,4 @@
-interface AttributeMetadata {
+export interface AttributeMetadata {
   name: string;
 }
 
