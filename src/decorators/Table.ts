@@ -16,9 +16,7 @@ export interface TableConstructor {
 
 function Table(props: TableProps) {
   return function (target: Function, _context: ClassDecoratorContext) {
-    // TODO find better way to init
-    Metadata.tables[target.name] = { ...props };
-    return this;
+    Metadata.tables[target.name] = props;
   };
 }
 
