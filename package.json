@@ -1,0 +1,36 @@
+{
+  "name": "no-orm",
+  "version": "1.0.0",
+  "description": "Typescript Object Relational Mapper (ORM) for Dynamo",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "debug-invoke": "npx ts-node debug.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsdavis4/no-orm.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dsdavis4/no-orm/issues"
+  },
+  "homepage": "https://github.com/dsdavis4/no-orm#readme",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.290.0",
+    "@aws-sdk/lib-dynamodb": "^3.290.0",
+    "reflect-metadata": "^0.1.13"
+  },
+  "devDependencies": {
+    "@aws-sdk/types": "^3.290.0",
+    "@tsconfig/recommended": "^1.0.2",
+    "@tsconfig/strictest": "^1.0.2",
+    "@types/node": "^18.15.2",
+    "@types/uuid": "^9.0.1",
+    "aws-sdk": "^2.1334.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.2"
+  }
+}
