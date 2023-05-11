@@ -1,13 +1,11 @@
 import SingleTableDesign from "./src";
 import { Table, Entity, Attribute } from "./src/decorators";
-// TODO get rid of all references to any
 
 import Metadata from "./src/metadata";
 
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
-// @Table
-// TODO can this be abstract?
 abstract class DrewsBrewsTable extends SingleTableDesign {
+  // https://stackoverflow.com/questions/66681411/how-to-implement-an-abstract-class-with-static-properties-in-typescript
   // static readonly tableName = "drews-brews";
   // static readonly primaryKey = "PK";
   // static readonly sortKey = "SK";

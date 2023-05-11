@@ -1,29 +1,8 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
-import EntityMixin from "./mixins/Entity";
-import {
-  TABLE_NAME,
-  PRIMARY_KEY,
-  SORT_KEY,
-  DELIMITER,
-  ENTITY_TYPE
-} from "./symbols";
-import Metadata, { TableMetadata, EntityMetadata } from "./metadata";
 
-import { TableConstructor } from "./decorators/Table";
+import Metadata from "./metadata";
 
-type GConstructor<T = {}> = new (...args: any[]) => T;
-
-interface ObjectLiteral {
-  [key: string]: any;
-}
-
-type ObjectType<T> = { new (): T } | Function;
-
-type EntityTarget<Entity> = ObjectType<Entity> | SingleTableDesign;
-// | { type: Entity; name: string };
-
-// TODO can I make this abstract?
 abstract class SingleTableDesign {
   // TODO are these instance methods needed?
   // private tableMetadata: TableMetadata;
@@ -61,6 +40,7 @@ abstract class SingleTableDesign {
 
   private static serialize<Entity extends SingleTableDesign>(
     this: { new (): Entity },
+    // TODO is any needed?
     tableItem: Record<string, any>,
     attrs: Record<string, any>
   ) {
