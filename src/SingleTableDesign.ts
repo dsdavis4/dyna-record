@@ -3,10 +3,17 @@ import DynamoBase from "./DynamoBase";
 import Metadata, { AttributeMetadata } from "./metadata";
 import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
+// TODO does this belong here
+interface FindByIdOptions {
+  // TODO can this be more type safe? Keyof has many of something?
+  include?: { association: string }[];
+}
+
 abstract class SingleTableDesign {
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
-    id: string
+    id: string,
+    options: FindByIdOptions = {}
   ): Promise<T | null> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
@@ -16,6 +23,10 @@ abstract class SingleTableDesign {
       [tableMetadata.primaryKey]: this.pk(id, tableMetadata.delimiter),
       [tableMetadata.sortKey]: this.name
     });
+
+    const bla = options;
+
+    debugger;
 
     return res ? this.serialize<T>(res, entityMetadata.attributes) : null;
   }

@@ -1,4 +1,3 @@
-import { ENTITY_ATTRIBUTES } from "../symbols";
 import Metadata from "../metadata";
 
 interface AttributeProps {
@@ -15,6 +14,7 @@ function Attribute(props: AttributeProps) {
 
         const entityMetadata = Metadata.entities[entity.constructor.name];
 
+        // TODO would I benefit from storing classes?
         if (!entityMetadata.attributes[props.alias]) {
           entityMetadata.attributes[props.alias] = {
             name: context.name.toString()

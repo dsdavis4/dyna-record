@@ -1,5 +1,5 @@
 import SingleTableDesign from "./src";
-import { Table, Entity, Attribute } from "./src/decorators";
+import { Table, Entity, Attribute, HasMany } from "./src/decorators";
 
 import Metadata from "./src/metadata";
 
@@ -13,17 +13,34 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 }
 
 @Entity
+class Scale extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id!: string;
+}
+
+@Entity
 class Brewery extends DrewsBrewsTable {
+  // TODO how to avoid the !
   @Attribute({ alias: "Id" })
   public id!: string;
 
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt!: Date;
 
+  @HasMany
+  public scales!: Scale[];
+
   public testing() {
     return "hi";
   }
 }
+
+// TODO start here. I am working on findByIncludes
+// First get queryFilter working then get data, then map...
+// 1. Get QueryParams class to compile
+// 2. Remember... I dont need all the doc (toModel, toDoc etc) stuff if I pull if tableName is a class then I can get all the metadata
+//     And I can make an attribute class if needed...
+//     In fact.... I could make classes for the stuff stored in MetaData...
 
 (async () => {
   try {
@@ -31,12 +48,15 @@ class Brewery extends DrewsBrewsTable {
 
     debugger;
 
-    const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
+      include: [{ association: "scales" }]
+    });
     const test = bla instanceof Brewery;
     console.log(`Type is correct: ${test}`);
 
     if (bla) {
       bla.updatedAt;
+      bla.scales;
       console.log(bla.someMethod());
       console.log(bla.testing());
     }
@@ -45,15 +65,15 @@ class Brewery extends DrewsBrewsTable {
 
     debugger;
 
-    const bla0 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // const bla0 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
-    const bla2 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // const bla2 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
-    const bla3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // const bla3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
-    const bla4 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // const bla4 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
-    debugger;
+    // debugger;
 
     // const a = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
 
