@@ -1,7 +1,10 @@
 import { QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
-type KeyConditions = Omit<QueryCommandInput["KeyConditions"], "undefined">;
+export type KeyConditions = Omit<
+  QueryCommandInput["KeyConditions"],
+  "undefined"
+>;
 
 interface FilterExpression {
   values: Record<string, NativeScalarAttributeValue>;
@@ -18,7 +21,7 @@ type FilterTypes =
 // Filter value that does not have an '$or' key
 type AndFilter = Record<string, FilterTypes>;
 type OrFilter = Record<"$or", AndFilter[]>;
-type FilterParams = AndFilter | OrFilter;
+export type FilterParams = AndFilter | OrFilter;
 
 type AndOrFilter = FilterParams & OrFilter;
 

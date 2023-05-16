@@ -2,9 +2,14 @@ export interface AttributeMetadata {
   name: string;
 }
 
+// TODO this is copied in multiple places
+type ObjectType<T> = { new (): T };
+
 export interface EntityMetadata {
   tableName: string;
   attributes: Record<string, AttributeMetadata>;
+  // TODO dont use any
+  hasManies?: [any];
 }
 
 export interface TableMetadata {

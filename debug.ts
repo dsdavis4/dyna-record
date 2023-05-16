@@ -1,5 +1,5 @@
 import SingleTableDesign from "./src";
-import { Table, Entity, Attribute, HasMany } from "./src/decorators";
+import { Table, Entity, Attribute, HasMany, BelongsTo } from "./src/decorators";
 
 import Metadata from "./src/metadata";
 
@@ -16,6 +16,12 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "Id" })
   public id!: string;
+
+  // TODO should this be {as: "scales"} WITH type safety?
+  // @BelongsTo(type => Brewery, brewery => brewery.scales)
+  @BelongsTo(type => Brewery, "scales")
+  // TODO is there a uuid type
+  public breweryId!: string;
 }
 
 @Entity
@@ -27,7 +33,8 @@ class Brewery extends DrewsBrewsTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt!: Date;
 
-  @HasMany
+  // TODO should this be an object : {foreignKey: "breweryId"} WITH type safety?
+  @HasMany(type => Scale, "breweryId")
   public scales!: Scale[];
 
   public testing() {
@@ -51,6 +58,8 @@ class Brewery extends DrewsBrewsTable {
     const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
       include: [{ association: "scales" }]
     });
+
+    debugger;
     const test = bla instanceof Brewery;
     console.log(`Type is correct: ${test}`);
 

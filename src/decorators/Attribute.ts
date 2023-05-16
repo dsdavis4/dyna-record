@@ -6,8 +6,8 @@ interface AttributeProps {
 
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
-function Attribute(props: AttributeProps) {
-  return function (_value: undefined, context: ClassFieldDecoratorContext) {
+function Attribute<T>(props: AttributeProps) {
+  return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);

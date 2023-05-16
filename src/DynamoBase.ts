@@ -1,12 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  GetCommand
+  GetCommand,
+  QueryCommand,
+  QueryCommandInput
   // DeleteCommand,
   // PutCommand,
   // UpdateCommand,
   // GetCommandInput
 } from "@aws-sdk/lib-dynamodb";
+import { KeyConditions } from "./QueryBuilder";
 // import QueryParams from "./QueryParams";
 
 // import { v4 as uuidv4 } from "uuid";
@@ -37,7 +40,7 @@ class DynamoBase {
     );
   }
 
-  public async findById(key: Record<string, string>) {
+  public async findById(key: KeyConditions) {
     console.log("findById", { key });
 
     const response = await this.dynamo.send(
@@ -48,6 +51,15 @@ class DynamoBase {
     );
 
     return response.Item ?? null;
+  }
+
+  public async query(params: QueryCommandInput, options = {}) {
+    console.log("query", { params, options });
+    // const params = new QueryParams(this, key, options).get();
+    // const response = await dynamo.query(params).promise();
+    // return response.Items.map(item => this.toModel(item));
+
+    const response = await this.dynamo.send(new QueryCommand(params));
   }
 }
 
