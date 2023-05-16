@@ -1,44 +1,48 @@
 import { QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import {
-  NativeAttributeValue, // TODO should this be used or the one below?...
-  NativeScalarAttributeValue // TODO I think I should use this...
-} from "@aws-sdk/util-dynamodb";
-
-// TODO should I make the types smart enough to be aware of $beginsWith?
-
-// TODO should some of these functions exlpdcitly set return type to Filter?
-// The reason is the auto compile thinks that values is Record<string, any>
+import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 type KeyConditions = Omit<QueryCommandInput["KeyConditions"], "undefined">;
 
-interface Filter {
-  values: Record<string, NativeScalarAttributeValue>; // TODO should this be FilterParams?
+interface FilterExpression {
+  values: Record<string, NativeScalarAttributeValue>;
   expression: string;
 }
 
-// type FilterValue =
-//   | Record<string, NativeScalarAttributeValue>
-//   | Record<string, NativeScalarAttributeValue[]>;
+type BeginsWithFilter = Record<"$beginsWith", NativeScalarAttributeValue>;
 
-type FilterValue = Record<
-  string,
-  NativeScalarAttributeValue | NativeScalarAttributeValue[]
->;
+type FilterTypes =
+  | BeginsWithFilter
+  | NativeScalarAttributeValue
+  | NativeScalarAttributeValue[];
 
 // Filter value that does not have an '$or' key
-type AndFilter = FilterValue & { $or?: never };
-type OrFilter = Record<"$or", FilterValue[]>;
+type AndFilter = Record<string, FilterTypes>;
+type OrFilter = Record<"$or", AndFilter[]>;
 type FilterParams = AndFilter | OrFilter;
 
-// TODO delete this, its just to show AndFilter type works
-// const bla: AndFilter = {
-//   $or: [
-//     { status: "active" },
-//     { name: "ReadKegData", status: ["complete", "canceled"] }
-//   ],
-//   type: "Process",
-//   status: ["complete", "canceled"]
-// };
+type AndOrFilter = FilterParams & OrFilter;
+
+const testing: AndOrFilter = {
+  $or: [
+    { createdAt: { $beginsWith: "2021-09-05" } },
+    { status: "active" },
+    { name: "ReadKegData", status: ["complete", "canceled"] }
+  ],
+  type: "Process",
+  createdAt: { $beginsWith: "2021-09-05" },
+  status: ["complete", "canceled"]
+};
+
+const bla: FilterParams = {
+  $or: [
+    { createdAt: { $beginsWith: "2021-09-05" } },
+    { status: "active" },
+    { name: "ReadKegData", status: ["complete", "canceled"] }
+  ],
+  type: "Process",
+  createdAt: { $beginsWith: "2021-09-05" },
+  status: ["complete", "canceled"]
+};
 
 interface QueryCommandProps {
   // entity: typeof DynamoBase;
@@ -49,9 +53,8 @@ interface QueryCommandProps {
   options: { indexName?: string; filter: FilterParams };
 }
 
-// TODO should this be called query builder?
 // TODO should I add explicit returns for all these functions?
-class QueryParams {
+class QueryBuilder {
   // private readonly doc: Record<string, NativeAttributeValue>;
   private attrCounter: number;
 
@@ -62,7 +65,7 @@ class QueryParams {
   }
 
   // TODO should this be called build?
-  public get(): QueryCommand {
+  public build(): QueryCommand {
     const { indexName, filter } = this.props.options;
     const filterParams = filter && this.filterParams(filter);
 
@@ -124,19 +127,19 @@ class QueryParams {
   // Supports 'AND' and 'OR'
   // Currently only works for '=', 'begins_with' or 'IN' operands
   // Does not support operations like 'contains' etc yet
-  private filterParams(filter: FilterParams): Filter {
-    const { $or: orFilters } = filter;
+  private filterParams(filter: FilterParams): FilterExpression {
+    const isOrFilter = this.isOrFilter(filter);
 
-    if (orFilters) {
-      const multipleFilters = Object.keys(filter).length > 1;
-      return multipleFilters ? this.andOrFilter(filter) : this.orFilter(filter);
+    if (isOrFilter) {
+      const isAndOrFilter = this.isAndOrFilter(filter);
+      return isAndOrFilter ? this.andOrFilter(filter) : this.orFilter(filter);
     } else {
       return this.andFilter(filter);
     }
   }
 
-  private andOrFilter(filter: FilterParams): Filter {
-    const { $or: orFilters, ...andFilters } = filter;
+  private andOrFilter(filter: AndOrFilter): FilterExpression {
+    const { $or: _orFilters, ...andFilters } = filter;
     const orFilterParams = this.orFilter(filter);
     const andFilterParams = this.andFilter(andFilters);
     const expression = `(${orFilterParams.expression}) AND (${andFilterParams.expression})`;
@@ -144,7 +147,7 @@ class QueryParams {
     return { expression, values };
   }
 
-  private andFilter(filter: KeyConditions | AndFilter): Filter {
+  private andFilter(filter: KeyConditions | AndFilter): FilterExpression {
     const params = Object.entries(filter).reduce(
       (obj, [attr, value]) => {
         const { expression, values } = this.andCondition(attr, value);
@@ -159,13 +162,13 @@ class QueryParams {
     return params;
   }
 
-  private andCondition(attr: string, value: NativeAttributeValue): Filter {
+  private andCondition(attr: string, value: FilterTypes): FilterExpression {
     // const doc = this.props.entity.toDocument({ [attr]: value });
     const doc = {}; // TODO reference metadata, annd/or store attribute classes on metadata...
     const docAttribute = Object.keys(doc)[0];
 
     let condition;
-    let values: Record<string, NativeAttributeValue> = {};
+    let values: Record<string, NativeScalarAttributeValue> = {};
     if (Array.isArray(value)) {
       const mappings = value.reduce((acc, value) => {
         const attr = `${docAttribute}${++this.attrCounter}`;
@@ -173,7 +176,7 @@ class QueryParams {
         return acc.concat(`:${attr}`);
       }, [] as string[]);
       condition = `#${docAttribute} IN (${mappings.join()})`;
-    } else if (value.$beginsWith) {
+    } else if (this.isBeginsWithFilter(value)) {
       const attr = `${docAttribute}${++this.attrCounter}`;
       condition = `begins_with(#${docAttribute}, :${attr})`;
       values = { [`${attr}`]: value.$beginsWith };
@@ -186,15 +189,20 @@ class QueryParams {
     return { expression: `${condition} AND `, values };
   }
 
-  // TODO should this type be OrFilter?
-  private orFilter(filter: FilterParams): Filter {
-    const { $or: orFilters = [] } = filter;
+  private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
+    return !!filter && (filter as BeginsWithFilter).$beginsWith !== undefined;
+  }
 
-    // TODO start here....
-    // NativeScalarAttributeValue or NativeAttributeValue
+  private isAndOrFilter(filter: FilterParams): filter is AndOrFilter {
+    return this.isOrFilter(filter) && Object.keys(filter).length > 1;
+  }
 
-    // https://github.com/microsoft/TypeScript/issues/44063
-    const orFilter = orFilters.reduce(
+  private isOrFilter(filter: FilterParams): filter is OrFilter {
+    return filter.$or !== undefined;
+  }
+
+  private orFilter(filter: OrFilter): FilterExpression {
+    const orFilter = filter.$or.reduce(
       (filterParams, filter) => {
         const { expression, values } = this.orCondition(filter);
         return {
@@ -202,13 +210,13 @@ class QueryParams {
           values: { ...filterParams.values, ...values }
         };
       },
-      { expression: "", values: {} } as Filter
+      { expression: "", values: {} } as FilterExpression
     );
     orFilter.expression = orFilter.expression.slice(0, -4); // trim off the trailing " OR "
     return orFilter;
   }
 
-  private orCondition(andFilter: Record<string, NativeAttributeValue>): Filter {
+  private orCondition(andFilter: AndFilter): FilterExpression {
     const andParams = this.filterParams(andFilter);
     const multipleVals = Object.keys(andParams.values).length > 1;
     const expression = multipleVals
@@ -216,20 +224,11 @@ class QueryParams {
       : `${andParams.expression} OR `;
 
     const values = Object.entries(andParams.values).reduce(
-      (obj, [key, val]) => {
-        const current = obj[key];
-        const currentExists = !!obj[key];
-        const isArray = Array.isArray(current);
-
-        const toArray = () => (isArray ? current.concat(val) : [current, val]);
-        const newVal = currentExists ? toArray() : val;
-
-        return { ...obj, [key]: newVal };
-      },
-      {} as Record<string, NativeAttributeValue>
+      (obj, [key, val]) => ({ ...obj, [key]: val }),
+      {} as FilterExpression["values"]
     );
     return { expression, values };
   }
 }
 
-export default QueryParams;
+export default QueryBuilder;
