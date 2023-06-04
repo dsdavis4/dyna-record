@@ -31,14 +31,7 @@ abstract class SingleTableDesign {
 
       debugger;
 
-      // TODO below is copied. Its just here to trigger the method inititlizers
-      const dynamo = new DynamoBase(tableMetadata.name);
-      const res = await dynamo.findById({
-        [tableMetadata.primaryKey]: this.pk(id, tableMetadata.delimiter),
-        [tableMetadata.sortKey]: this.name
-      });
-
-      return res ? this.serialize<T>(res, entityMetadata.attributes) : null;
+      return null;
       // return result[0] || null;
     } else {
       const dynamo = new DynamoBase(tableMetadata.name);
@@ -75,13 +68,23 @@ abstract class SingleTableDesign {
       const a = options;
       const b = key;
 
-      // TODO start here. I need to figure out how to track the hasMany instances... but to do so I have to instantiate the class
-      // I am trying to model after TypeOrm OneToMany, ManyToMany and ManyToOne decorators..
-      // TODO I get ReferenceError: Cannot access 'Brewery' before initialization
-      // and the error switches if I reverse the class def. Should I call the functions later?
-      // can I access to return type of the second param earlier?
+      const associationLookup = options.include.reduce(
+        (acc, included) => ({
+          ...acc,
+          [included.association]: true
+        }),
+        {} as Record<string, boolean>
+      );
 
-      // See TODO in has manyClass
+      // TODO is this better then adding an initializer in the decorator?
+      // const entityMetadata = Metadata.entities[this.name];
+      const includedRelationships = Metadata.relationships.filter(
+        rel =>
+          associationLookup[rel.propertyName] &&
+          Metadata.relationships.some(assocRel => assocRel.target() === this)
+      );
+
+      // TODO start here... just got this to find the correct relationships
 
       debugger;
     } else {

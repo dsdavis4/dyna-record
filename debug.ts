@@ -17,14 +17,13 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "Id" })
   public id: string;
 
-  // @BelongsTo(type => Brewery, brewery => brewery.scales)
-  // TODO this needs an "as": scale...
-  // TODO how could I still tie it to Brewery?
-  // REMEMBER.. I can reference TypeOrm
-  // TODO what if this was params for a BelongsTo class?
-  @BelongsTo(type => Brewery, { as: "scales" })
+  @Attribute({ alias: "BreweryId" })
   // TODO is there a uuid type
   public breweryId: string;
+
+  // TODO Is this relation in the right place?
+  @BelongsTo(type => Brewery, { as: "scales" })
+  public brewery: Brewery;
 }
 
 @Entity
@@ -44,13 +43,6 @@ class Brewery extends DrewsBrewsTable {
     return "hi";
   }
 }
-
-// TODO start here. I am working on findByIncludes
-// First get queryFilter working then get data, then map...
-// 1. Get QueryParams class to compile
-// 2. Remember... I dont need all the doc (toModel, toDoc etc) stuff if I pull if tableName is a class then I can get all the metadata
-//     And I can make an attribute class if needed...
-//     In fact.... I could make classes for the stuff stored in MetaData...
 
 (async () => {
   try {
