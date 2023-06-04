@@ -15,7 +15,7 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 @Entity
 class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "Id" })
-  public id!: string;
+  public id: string;
 
   // @BelongsTo(type => Brewery, brewery => brewery.scales)
   // TODO this needs an "as": scale...
@@ -24,21 +24,21 @@ class Scale extends DrewsBrewsTable {
   // TODO what if this was params for a BelongsTo class?
   @BelongsTo(type => Brewery, { as: "scales" })
   // TODO is there a uuid type
-  public breweryId!: string;
+  public breweryId: string;
 }
 
 @Entity
 class Brewery extends DrewsBrewsTable {
   // TODO how to avoid the !
   @Attribute({ alias: "Id" })
-  public id!: string;
+  public id: string;
 
   @Attribute({ alias: "UpdatedAt" })
-  public updatedAt!: Date;
+  public updatedAt: Date;
 
   // TODO maybe params for a HasMany class?
   @HasMany(type => Scale, { foreignKey: "breweryId" })
-  public scales!: Scale[];
+  public scales: Scale[];
 
   public testing() {
     return "hi";
