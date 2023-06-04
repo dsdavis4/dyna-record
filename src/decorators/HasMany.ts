@@ -2,15 +2,19 @@ import Metadata from "../metadata";
 
 type ObjectType<T> = { new (): T };
 
+interface HasManyProps<T> {
+  foreignKey: keyof T;
+}
+
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
 function HasMany<T>(
   target: (type?: any) => ObjectType<T>,
-  foreignKey: keyof T
+  props: HasManyProps<T>
 ) {
   const association = target;
 
-  const s = foreignKey;
+  const s = props.foreignKey;
 
   // TODO  HERE.... How can I get return type of inverseSide?
 

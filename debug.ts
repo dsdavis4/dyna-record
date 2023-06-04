@@ -17,9 +17,12 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "Id" })
   public id!: string;
 
-  // TODO should this be {as: "scales"} WITH type safety?
   // @BelongsTo(type => Brewery, brewery => brewery.scales)
-  @BelongsTo(type => Brewery, "scales")
+  // TODO this needs an "as": scale...
+  // TODO how could I still tie it to Brewery?
+  // REMEMBER.. I can reference TypeOrm
+  // TODO what if this was params for a BelongsTo class?
+  @BelongsTo(type => Brewery, { as: "scales" })
   // TODO is there a uuid type
   public breweryId!: string;
 }
@@ -33,8 +36,8 @@ class Brewery extends DrewsBrewsTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt!: Date;
 
-  // TODO should this be an object : {foreignKey: "breweryId"} WITH type safety?
-  @HasMany(type => Scale, "breweryId")
+  // TODO maybe params for a HasMany class?
+  @HasMany(type => Scale, { foreignKey: "breweryId" })
   public scales!: Scale[];
 
   public testing() {

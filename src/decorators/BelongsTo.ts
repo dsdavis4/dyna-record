@@ -3,13 +3,20 @@ import Metadata from "../metadata";
 // TODO this is copied in multiple places
 type ObjectType<T> = { new (): T };
 
+interface BelongsToProps<T> {
+  as: keyof T;
+}
+
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
-function BelongsTo<T>(target: (type?: any) => ObjectType<T>, alias: keyof T) {
+function BelongsTo<T>(
+  target: (type?: any) => ObjectType<T>,
+  props: BelongsToProps<T>
+) {
   const association = target;
   debugger;
   // const link
-  const s = alias;
+  const s = props.as;
 
   debugger;
 
