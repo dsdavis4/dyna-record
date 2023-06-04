@@ -8,7 +8,6 @@ interface AttributeProps {
 //    meaning this is only run once
 function Attribute<T>(props: AttributeProps) {
   return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
-    debugger;
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
