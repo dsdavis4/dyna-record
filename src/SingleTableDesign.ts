@@ -5,12 +5,12 @@ import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import QueryBuilder, { FilterParams, KeyConditions } from "./QueryBuilder";
 
 // TODO does this belong here
-interface FindByIdOptions {
+interface FindByIdOptions<T> {
   // TODO can this be more type safe? Keyof has many of something?
-  include?: { association: string }[];
+  include?: { association: keyof T }[];
 }
 
-interface QueryOptions extends FindByIdOptions {
+interface QueryOptions<T> extends FindByIdOptions<T> {
   filter?: FilterParams;
 }
 
@@ -18,7 +18,7 @@ abstract class SingleTableDesign {
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string,
-    options: FindByIdOptions = {}
+    options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
@@ -55,7 +55,7 @@ abstract class SingleTableDesign {
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     key: KeyConditions,
-    options: QueryOptions = {}
+    options: QueryOptions<T> = {}
   ) {
     if (options.include) {
       // const includedAssocs = this._includedAssociations(options.include);
