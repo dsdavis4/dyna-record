@@ -3,6 +3,8 @@ import { Table, Entity, Attribute, HasMany, BelongsTo } from "./src/decorators";
 
 import Metadata from "./src/metadata";
 
+// TODO does it make sense for the tahle decorator to do a mixin which extends single table design?
+// That way it doesnt have to be extended
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   // https://stackoverflow.com/questions/66681411/how-to-implement-an-abstract-class-with-static-properties-in-typescript
@@ -10,6 +12,14 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   // static readonly primaryKey = "PK";
   // static readonly sortKey = "SK";
   // static readonly delimiter = "#";
+
+  // TODO should I make a decorator for primate key and sort key8?
+  // At the very least find out how to
+  @Attribute({ alias: "PK" })
+  public pk: string;
+
+  @Attribute({ alias: "SK" })
+  public sk: string;
 }
 
 @Entity
@@ -18,7 +28,6 @@ class Scale extends DrewsBrewsTable {
   public id: string;
 
   @Attribute({ alias: "BreweryId" })
-  // TODO is there a uuid type
   public breweryId: string;
 
   // TODO Is this relation in the right place?
@@ -28,7 +37,6 @@ class Scale extends DrewsBrewsTable {
 
 @Entity
 class Brewery extends DrewsBrewsTable {
-  // TODO how to avoid the !
   @Attribute({ alias: "Id" })
   public id: string;
 
@@ -47,8 +55,6 @@ class Brewery extends DrewsBrewsTable {
 (async () => {
   try {
     const metadata = Metadata;
-
-    debugger;
 
     const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
       include: [{ association: "scales" }]

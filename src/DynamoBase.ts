@@ -60,6 +60,8 @@ class DynamoBase {
     // return response.Items.map(item => this.toModel(item));
 
     const response = await this.dynamo.send(new QueryCommand(params));
+
+    debugger;
   }
 }
 

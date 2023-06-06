@@ -1,8 +1,14 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
-import Metadata, { AttributeMetadata } from "./metadata";
+import Metadata, { AttributeMetadata, RelationshipMetadata } from "./metadata";
 import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import QueryBuilder, { FilterParams, KeyConditions } from "./QueryBuilder";
+import QueryBuilder, {
+  FilterParams,
+  KeyConditions,
+  OrFilter
+} from "./QueryBuilder";
+import { BelongsToLink } from "./relationships";
+import { Attribute } from "./decorators";
 
 // TODO does this belong here
 interface FindByIdOptions<T> {
@@ -15,17 +21,28 @@ interface QueryOptions<T> extends FindByIdOptions<T> {
 }
 
 abstract class SingleTableDesign {
+  @Attribute({ alias: "Type" })
+  public type: string;
+
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string,
     options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
+    const instance = this.init<T>();
+
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
+    const modelPrimaryKey =
+      entityMetadata.attributes[tableMetadata.primaryKey].name;
+    const modelSortKey = entityMetadata.attributes[tableMetadata.sortKey].name;
+
     if (options.include) {
       const result = await this.query(
-        { pk: this.pk(id, tableMetadata.delimiter) },
+        {
+          [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
+        },
         options
       );
 
@@ -36,11 +53,16 @@ abstract class SingleTableDesign {
     } else {
       const dynamo = new DynamoBase(tableMetadata.name);
       const res = await dynamo.findById({
-        [tableMetadata.primaryKey]: this.pk(id, tableMetadata.delimiter),
-        [tableMetadata.sortKey]: this.name
+        [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter),
+        [modelSortKey]: this.name
       });
 
-      return res ? this.serialize<T>(res, entityMetadata.attributes) : null;
+      if (res) {
+        instance.serializeTableItemToModel(res, entityMetadata.attributes);
+        return instance;
+      } else {
+        return null;
+      }
     }
   }
 
@@ -51,6 +73,9 @@ abstract class SingleTableDesign {
     options: QueryOptions<T> = {}
   ) {
     if (options.include) {
+      // const entityMetadata = Metadata.entities[this.name];
+      // const tableMetadata = Metadata.tables[entityMetadata.tableName];
+
       // const includedAssocs = this._includedAssociations(options.include);
 
       // options.filter = this._associationsFilter(includedAssocs);
@@ -84,7 +109,17 @@ abstract class SingleTableDesign {
           Metadata.relationships.some(assocRel => assocRel.target() === this)
       );
 
-      // TODO start here... just got this to find the correct relationships
+      // TODO In JS version I query for local partitions here
+
+      const partitionFilter = this.buildPartitionFilter(includedRelationships);
+
+      const instance = this.init();
+
+      const params = new QueryBuilder({
+        entityClassName: this.name,
+        key,
+        options: { filter: partitionFilter }
+      }).build();
 
       debugger;
     } else {
@@ -93,25 +128,65 @@ abstract class SingleTableDesign {
     }
   }
 
-  private static pk(id: string, delimiter: string) {
+  private static primaryKeyValue(id: string, delimiter: string) {
     return `${this.name}${delimiter}${id}`;
   }
 
-  private static serialize<Entity extends SingleTableDesign>(
-    this: { new (): Entity },
+  // TODO do I need to extend here?
+  // private static serialize<Entity extends SingleTableDesign>(
+  //   this: { new (): Entity },
+  //   tableItem: Record<string, NativeAttributeValue>,
+  //   attrs: Record<string, AttributeMetadata>
+  // ) {
+  //   const instance = new this();
+
+  //   Object.keys(tableItem).forEach(attr => {
+  //     if (attrs[attr]) {
+  //       const entityKey = attrs[attr].name;
+  //       instance[entityKey as keyof Entity] = tableItem[attr];
+  //     }
+  //   });
+
+  //   return instance;
+  // }
+
+  // TODO make sure this doesnt get called more then the number of instances returned...
+  // TODO do I need to extend here?
+  private static init<Entity extends SingleTableDesign>(this: {
+    new (): Entity;
+  }) {
+    return new this();
+  }
+
+  private serializeTableItemToModel(
     tableItem: Record<string, NativeAttributeValue>,
     attrs: Record<string, AttributeMetadata>
   ) {
-    const instance = new this();
-
     Object.keys(tableItem).forEach(attr => {
       if (attrs[attr]) {
         const entityKey = attrs[attr].name;
-        instance[entityKey as keyof Entity] = tableItem[attr];
+        this[entityKey as keyof this] = tableItem[attr];
       }
     });
+  }
 
-    return instance;
+  // TODO is this the right place for this class? Should it be its own class?
+  // TODO should I build a FilterBuilder class?
+  // Build filter to include links or relationships from the parent partition
+  private static buildPartitionFilter(
+    includedRelationships: RelationshipMetadata[]
+  ): OrFilter {
+    // TODO needs HasOne + scopes...
+
+    const parentFilter = { type: this.name };
+    const filters = [parentFilter];
+
+    const includeBelongsToLinks = includedRelationships.some(
+      rel => rel.type === "HasMany"
+    );
+    includeBelongsToLinks && filters.push({ type: BelongsToLink.name });
+
+    return { $or: filters };
   }
 
   // TODO delete me. this is not

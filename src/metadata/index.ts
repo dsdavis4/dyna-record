@@ -2,11 +2,9 @@ export interface AttributeMetadata {
   name: string;
 }
 
-// TODO this is copied in multiple places
-type ObjectType<T> = { new (): T };
-
 export interface EntityMetadata {
-  tableName: string;
+  // TODO should this be tableClassName?
+  tableName: string; //
   attributes: Record<string, AttributeMetadata>;
   // TODO dont use any
   // hasManies?: [any];
@@ -21,7 +19,7 @@ export interface TableMetadata {
 
 // TODO could I do something similiar for attributes?
 // TODO make sure these are all needed
-interface RelationshipMetadata {
+export interface RelationshipMetadata {
   type: "HasMany" | "BelongsTo";
   // Function to obtain Class to which relationship is applied
   target: Function;

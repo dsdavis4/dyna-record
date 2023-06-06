@@ -5,8 +5,6 @@ function Entity(target: Function, _context: ClassDecoratorContext) {
     tableName: Object.getPrototypeOf(target).name,
     attributes: {}
   };
-
-  return this;
 }
 
 export default Entity;

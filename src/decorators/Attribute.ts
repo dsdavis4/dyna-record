@@ -19,6 +19,7 @@ function Attribute<T>(props: AttributeProps) {
           entityMetadata.attributes[props.alias] = {
             name: context.name.toString()
           };
+          Metadata.tables[entityMetadata.tableName];
         }
       });
     }

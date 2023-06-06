@@ -1,5 +1,6 @@
 import { QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import Metadata, { TableMetadata, EntityMetadata } from "./metadata";
 
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],
@@ -20,7 +21,7 @@ type FilterTypes =
 
 // Filter value that does not have an '$or' key
 type AndFilter = Record<string, FilterTypes>;
-type OrFilter = Record<"$or", AndFilter[]>;
+export type OrFilter = Record<"$or", AndFilter[]>;
 export type FilterParams = AndFilter | OrFilter;
 
 type AndOrFilter = FilterParams & OrFilter;
@@ -49,34 +50,51 @@ const bla: FilterParams = {
 
 interface QueryCommandProps {
   // entity: typeof DynamoBase;
+  entityClassName: string;
   key: KeyConditions;
   // TODO should this be optional?
   // TODO make it so at least one of the params is required
   // TODO should filter be optional?
-  options: { indexName?: string; filter: FilterParams };
+  options?: { indexName?: string; filter?: FilterParams };
 }
 
 // TODO should I add explicit returns for all these functions?
 class QueryBuilder {
   // private readonly doc: Record<string, NativeAttributeValue>;
   private attrCounter: number;
+  private tableMetadata: TableMetadata;
+  // private entityMetadata: EntityMetadata;
+
+  // Lookup tableKey by modelKey: ex: { modelProp1: :"ModelProp1", modelProp2: :"ModelProp2" }
+  private tableKeyLookup: Record<string, string>;
 
   constructor(private props: QueryCommandProps) {
     this.props = props;
-    // this.doc = props.entity.toDocument(props.key);
     this.attrCounter = 0;
+
+    const entityMetadata = Metadata.entities[props.entityClassName];
+    this.tableMetadata = Metadata.tables[entityMetadata.tableName];
+
+    // TODO should this be in meta data so its not recalcualted? That would mean more data in cache...
+    this.tableKeyLookup = Object.entries(entityMetadata.attributes).reduce(
+      (acc, [tableKey, attrMetadata]) => {
+        acc[attrMetadata.name] = tableKey;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
   }
 
   // TODO should this be called build?
   public build(): QueryCommand {
-    const { indexName, filter } = this.props.options;
+    const { indexName, filter = {} } = this.props.options ?? {};
     const filterParams = filter && this.filterParams(filter);
 
     const keyFilter = this.andFilter(this.props.key);
 
     return new QueryCommand({
       // TODO
-      TableName: "drews-brews",
+      TableName: this.tableMetadata.name,
       // TableName: this.props.entity.tableName,
       ...(indexName && { IndexName: indexName }),
       ...(filter && { FilterExpression: filterParams.expression }),
@@ -166,26 +184,24 @@ class QueryBuilder {
   }
 
   private andCondition(attr: string, value: FilterTypes): FilterExpression {
-    // const doc = this.props.entity.toDocument({ [attr]: value });
-    const doc = {}; // TODO reference metadata, annd/or store attribute classes on metadata...
-    const docAttribute = Object.keys(doc)[0];
+    const tableKey = this.tableKeyLookup[attr];
 
     let condition;
     let values: Record<string, NativeScalarAttributeValue> = {};
     if (Array.isArray(value)) {
       const mappings = value.reduce((acc, value) => {
-        const attr = `${docAttribute}${++this.attrCounter}`;
+        const attr = `${tableKey}${++this.attrCounter}`;
         values[attr] = value;
         return acc.concat(`:${attr}`);
       }, [] as string[]);
-      condition = `#${docAttribute} IN (${mappings.join()})`;
+      condition = `#${tableKey} IN (${mappings.join()})`;
     } else if (this.isBeginsWithFilter(value)) {
-      const attr = `${docAttribute}${++this.attrCounter}`;
-      condition = `begins_with(#${docAttribute}, :${attr})`;
+      const attr = `${tableKey}${++this.attrCounter}`;
+      condition = `begins_with(#${tableKey}, :${attr})`;
       values = { [`${attr}`]: value.$beginsWith };
     } else {
-      const attr = `${docAttribute}${++this.attrCounter}`;
-      condition = `#${docAttribute} = :${attr}`;
+      const attr = `${tableKey}${++this.attrCounter}`;
+      condition = `#${tableKey} = :${attr}`;
       values = { [`${attr}`]: value };
     }
 
