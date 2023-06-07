@@ -22,7 +22,9 @@ type FilterTypes =
 // Filter value that does not have an '$or' key
 type AndFilter = Record<string, FilterTypes>;
 export type OrFilter = Record<"$or", AndFilter[]>;
-export type FilterParams = AndFilter | OrFilter;
+
+type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
+export type FilterParams = (AndFilter | OrFilter) & OrOptional;
 
 type AndOrFilter = FilterParams & OrFilter;
 
@@ -43,6 +45,17 @@ const bla: FilterParams = {
     { status: "active" },
     { name: "ReadKegData", status: ["complete", "canceled"] }
   ],
+  type: "Process",
+  createdAt: { $beginsWith: "2021-09-05" },
+  status: ["complete", "canceled"]
+};
+
+const allAnd: FilterParams = {
+  // $or: [
+  //   { createdAt: { $beginsWith: "2021-09-05" } },
+  //   { status: "active" },
+  //   { name: "ReadKegData", status: ["complete", "canceled"] }
+  // ],
   type: "Process",
   createdAt: { $beginsWith: "2021-09-05" },
   status: ["complete", "canceled"]
@@ -85,64 +98,65 @@ class QueryBuilder {
     );
   }
 
-  // TODO should this be called build?
-  public build(): QueryCommand {
+  public build(): QueryCommandInput {
     const { indexName, filter = {} } = this.props.options ?? {};
     const filterParams = filter && this.filterParams(filter);
 
     const keyFilter = this.andFilter(this.props.key);
 
-    return new QueryCommand({
-      // TODO
+    return {
       TableName: this.tableMetadata.name,
-      // TableName: this.props.entity.tableName,
       ...(indexName && { IndexName: indexName }),
       ...(filter && { FilterExpression: filterParams.expression }),
-      KeyConditionExpression: keyFilter.expression
-      // TODO
-      // ExpressionAttributeNames: this.expressionAttributeNames(),
-      // ExpressionAttributeValues: this.expressionAttributeValueParams(
-      //   keyFilter,
-      //   filterParams
-      // )
-    });
+      KeyConditionExpression: keyFilter.expression,
+      ExpressionAttributeNames: this.expressionAttributeNames(),
+      ExpressionAttributeValues: this.expressionAttributeValueParams(
+        keyFilter,
+        filterParams
+      )
+    };
   }
 
-  // private expressionAttributeValueParams(
-  //   keyParams: Filter,
-  //   filterParams: Filter
-  // ): Record<string, NativeAttributeValue> {
-  //   const valueParams = this.props.options.filter
-  //     ? { ...keyParams.values, ...filterParams.values }
-  //     : keyParams.values;
+  private expressionAttributeValueParams(
+    keyParams: FilterExpression,
+    filterParams: FilterExpression
+  ): QueryCommandInput["ExpressionAttributeValues"] {
+    const valueParams = this.props.options?.filter
+      ? { ...keyParams.values, ...filterParams.values }
+      : keyParams.values;
 
-  //   return this.props.entity.expressionAttributeValues(valueParams);
-  // }
+    return Object.entries(valueParams).reduce(
+      (params, [attrName, value]) => ({ ...params, [`:${attrName}`]: value }),
+      {}
+    );
+  }
 
-  // private expressionAttributeNames(): Record<string, string> {
-  //   const { filter } = this.props.options;
-  //   let filterAttributeNames = {};
-  //   if (filter) {
-  //     const { $or: orFilters, ...andFilters } = filter;
+  private expressionAttributeNames(): QueryCommandInput["ExpressionAttributeNames"] {
+    const { filter } = this.props.options || {};
+    if (filter) {
+      const { $or: orFilters = [], ...andFilters } = filter;
 
-  //     const or =
-  //       orFilters &&
-  //       orFilters.reduce(
-  //         (attrNames, model) => ({
-  //           ...attrNames,
-  //           ...this.props.entity.toDocument(model)
-  //         }),
-  //         {}
-  //       );
+      const or = orFilters.reduce((acc: Record<string, string>, filter) => {
+        Object.keys(filter).forEach(key => {
+          const tableKey = this.tableKeyLookup[key];
+          acc[`#${tableKey}`] = tableKey;
+        });
 
-  //     const and = andFilters ? this.props.entity.toDocument(andFilters) : {};
+        return acc;
+      }, {} as Record<string, string>);
 
-  //     filterAttributeNames = { ...or, ...and };
-  //   }
+      const and = Object.keys({ ...andFilters, ...this.props.key }).reduce(
+        (acc, key) => {
+          const tableKey = this.tableKeyLookup[key];
+          acc[`#${tableKey}`] = tableKey;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
 
-  //   const nameParams = { ...this.doc, ...filterAttributeNames };
-  //   return this.props.entity.expressionAttributeNames(nameParams);
-  // }
+      return { ...or, ...and };
+    }
+  }
 
   // Note:
   // Supports 'AND' and 'OR'

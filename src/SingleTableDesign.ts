@@ -73,8 +73,8 @@ abstract class SingleTableDesign {
     options: QueryOptions<T> = {}
   ) {
     if (options.include) {
-      // const entityMetadata = Metadata.entities[this.name];
-      // const tableMetadata = Metadata.tables[entityMetadata.tableName];
+      const entityMetadata = Metadata.entities[this.name];
+      const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
       // const includedAssocs = this._includedAssociations(options.include);
 
@@ -109,8 +109,6 @@ abstract class SingleTableDesign {
           Metadata.relationships.some(assocRel => assocRel.target() === this)
       );
 
-      // TODO In JS version I query for local partitions here
-
       const partitionFilter = this.buildPartitionFilter(includedRelationships);
 
       const instance = this.init();
@@ -120,6 +118,9 @@ abstract class SingleTableDesign {
         key,
         options: { filter: partitionFilter }
       }).build();
+
+      const dynamo = new DynamoBase(tableMetadata.name);
+      const res = await dynamo.query(params);
 
       debugger;
     } else {

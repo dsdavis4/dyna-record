@@ -53,15 +53,10 @@ class DynamoBase {
     return response.Item ?? null;
   }
 
-  public async query(params: QueryCommandInput, options = {}) {
-    console.log("query", { params, options });
-    // const params = new QueryParams(this, key, options).get();
-    // const response = await dynamo.query(params).promise();
-    // return response.Items.map(item => this.toModel(item));
-
+  public async query(params: QueryCommandInput) {
+    console.log("query", { params });
     const response = await this.dynamo.send(new QueryCommand(params));
-
-    debugger;
+    return response.Items ?? [];
   }
 }
 
