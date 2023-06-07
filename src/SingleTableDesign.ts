@@ -20,9 +20,17 @@ interface QueryOptions<T> extends FindByIdOptions<T> {
   filter?: FilterParams;
 }
 
+// TODO find a way to not refetch meta data in some many functions. Maybe make instance?
+
 abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public type: string;
+
+  // TODO because you cant filter on keys, this would be what a BelongsToLink is linked to
+  /// should be called LinkedTo
+  // Can it be defined in the belongs to class instead
+  @Attribute({ alias: "Bla" })
+  public bla: string;
 
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
@@ -119,6 +127,8 @@ abstract class SingleTableDesign {
         options: { filter: partitionFilter }
       }).build();
 
+      debugger;
+
       const dynamo = new DynamoBase(tableMetadata.name);
       const res = await dynamo.query(params);
 
@@ -177,15 +187,33 @@ abstract class SingleTableDesign {
   private static buildPartitionFilter(
     includedRelationships: RelationshipMetadata[]
   ): OrFilter {
+    const entityMetadata = Metadata.entities[this.name];
+    const tableMetadata = Metadata.tables[entityMetadata.tableName];
+
     // TODO needs HasOne + scopes...
 
     const parentFilter = { type: this.name };
-    const filters = [parentFilter];
+    // TODO do I need parent filter?
+    const filters: OrFilter["$or"] = [parentFilter];
 
-    const includeBelongsToLinks = includedRelationships.some(
-      rel => rel.type === "HasMany"
-    );
-    includeBelongsToLinks && filters.push({ type: BelongsToLink.name });
+    // const includeBelongsToLinks = includedRelationships.some(
+    //   rel => rel.type === "HasMany"
+    // );
+    // includeBelongsToLinks && filters.push({ type: BelongsToLink.name });
+
+    includedRelationships
+      .filter(rel => rel.type === "HasMany")
+      .forEach(rel =>
+        filters.push({
+          // TODO dynami
+          type: BelongsToLink.name,
+          bla: {
+            $beginsWith: rel.target().name
+          }
+        })
+      );
+
+    debugger;
 
     return { $or: filters };
   }
