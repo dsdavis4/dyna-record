@@ -141,7 +141,7 @@ abstract class SingleTableDesign {
       // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
 
       // TODO dont use any
-      let promises: Promise<any>[] = [];
+      let promises: Promise<T>[] = [];
 
       queryResults.forEach(res => {
         if (res.Type === BelongsToLink.name) {
@@ -151,6 +151,7 @@ abstract class SingleTableDesign {
           const includedRel = relationsLookup[modelName];
           if (!!includedRel) {
             // TODO findById is not typed correctly here... it should know it requires a string
+            // It thinks it of type any
             promises.push(includedRel.target().findById(id));
           }
         }
