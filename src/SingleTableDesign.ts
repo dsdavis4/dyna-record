@@ -16,6 +16,9 @@ interface FindByIdOptions<T> {
   include?: { association: keyof T }[];
 }
 
+// TODO find a way to not fe-fetch meta data in multiple functions
+// Maybe make instances in the static methods?
+
 interface QueryOptions<T> extends FindByIdOptions<T> {
   filter?: FilterParams;
 }
@@ -53,8 +56,11 @@ abstract class SingleTableDesign {
     } else {
       const dynamo = new DynamoBase(tableMetadata.name);
       const res = await dynamo.findById({
-        [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter),
-        [modelSortKey]: this.name
+        [tableMetadata.primaryKey]: this.primaryKeyValue(
+          id,
+          tableMetadata.delimiter
+        ),
+        [tableMetadata.sortKey]: this.name
       });
 
       if (res) {
@@ -67,6 +73,7 @@ abstract class SingleTableDesign {
   }
 
   // TODO add return type
+  // TODO clean up and make function shorter
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     key: KeyConditions,
@@ -120,7 +127,36 @@ abstract class SingleTableDesign {
       }).build();
 
       const dynamo = new DynamoBase(tableMetadata.name);
-      const res = await dynamo.query(params);
+      // TODO this is returning a lot of results for BelongsToLinks...
+      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+      const queryResults = await dynamo.query(params);
+
+      const relationsLookup = includedRelationships.reduce(
+        (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+        {} as Record<string, RelationshipMetadata>
+      );
+
+      // TODO this is returning a lot of results for BelongsToLinks...
+      // Wont need the filter if this is fixed. Although... maybe doesnt hurt
+      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+
+      // TODO dont use any
+      let promises: Promise<any>[] = [];
+
+      queryResults.forEach(res => {
+        if (res.Type === BelongsToLink.name) {
+          const [modelName, id] = res[tableMetadata.sortKey].split(
+            tableMetadata.delimiter
+          );
+          const includedRel = relationsLookup[modelName];
+          if (!!includedRel) {
+            // TODO findById is not typed correctly here... it should know it requires a string
+            promises.push(includedRel.target().findById(id));
+          }
+        }
+      });
+
+      const bla = await Promise.all(promises);
 
       debugger;
     } else {

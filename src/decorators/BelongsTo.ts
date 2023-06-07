@@ -10,6 +10,7 @@ interface BelongsToProps<T> {
 // TODO can I do this in a way where I dont set the metadata on every instance?
 //    meaning this is only run once
 function BelongsTo<T>(
+  // TODO can I get better typeing on this so it knows it extends single table design?
   target: (type?: any) => ObjectType<T>,
   props: BelongsToProps<T>
 ) {
