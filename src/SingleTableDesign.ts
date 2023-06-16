@@ -32,6 +32,8 @@ interface QueryOptions<T> extends FindByIdOptions<T> {
 
 // TODO should this be abstract?
 abstract class SingleTableDesign {
+  // TODO this is too generic. Consuming models would want to use this
+  // Maybe EntityType? Would require data migration....
   @Attribute({ alias: "Type" })
   public type: string;
 
