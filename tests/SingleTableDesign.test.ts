@@ -40,9 +40,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
       from: jest.fn().mockImplementation(() => {
-        return {
-          send: mockSend
-        };
+        return { send: mockSend };
       })
     },
     /* Return your other docClient methods here too... */
@@ -62,33 +60,42 @@ abstract class MockTable extends SingleTableDesign {
 }
 
 @Entity
-class Pet extends MockTable {
+class Order extends MockTable {
   @Attribute({ alias: "Id" })
   public id: string;
 
-  @Attribute({ alias: "OwnerId" })
-  public ownerId: string;
+  @Attribute({ alias: "CustomerId" })
+  public customerId: string;
 
-  @BelongsTo(type => Person, { as: "pets" })
-  public owner: Person;
+  @Attribute({ alias: "OrderDate" })
+  public orderDate: Date;
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date;
+
+  @BelongsTo(type => Customer, { as: "orders" })
+  public order: Order;
 }
 
 @Entity
-class Person extends MockTable {
+class Customer extends MockTable {
   @Attribute({ alias: "Id" })
   public id: string;
 
   @Attribute({ alias: "Name" })
   public name: string;
 
+  @Attribute({ alias: "Address" })
+  public address: string;
+
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
-  @HasMany(type => Pet, { foreignKey: "ownerId" })
-  public pets: Pet[];
+  @HasMany(type => Order, { foreignKey: "customerId" })
+  public orders: Order[];
 
   public mockCustomInstanceMethod() {
-    return "mock-value";
+    return `${this.name}-${this.id}`;
   }
 }
 
@@ -103,7 +110,7 @@ describe("SingleTableDesign", () => {
 
       mockGet.mockResolvedValueOnce({});
 
-      await Person.findById("123");
+      await Customer.findById("123");
 
       expect(mockedDynamoDBClient.mock.calls).toEqual([
         [{ region: "us-west-2" }]
@@ -118,31 +125,34 @@ describe("SingleTableDesign", () => {
 
       mockGet.mockResolvedValueOnce({
         Item: {
-          PK: "Person#123",
-          SK: "Person",
+          PK: "Customer#123",
+          SK: "Customer",
           Id: "123",
-          Name: "Some Person",
-          Type: "Person",
-          UpdatedAt: "2023-09-15T04:26:31.148Z"
+          Name: "Some Customer",
+          Address: "11 Some St",
+          Type: "Customer",
+          UpdatedAt: "2023-09-15T04:26:31.148Z",
+          SomeAttr: "attribute that is not modeled"
         }
       });
 
-      const result = await Person.findById("123");
+      const result = await Customer.findById("123");
 
-      expect(result).toBeInstanceOf(Person);
+      expect(result).toBeInstanceOf(Customer);
       expect(result).toEqual({
-        type: "Person",
-        pk: "Person#123",
-        sk: "Person",
+        type: "Customer",
+        pk: "Customer#123",
+        sk: "Customer",
         id: "123",
-        name: "Some Person",
+        name: "Some Customer",
+        address: "11 Some St",
         updatedAt: "2023-09-15T04:26:31.148Z"
       });
-      expect(result?.mockCustomInstanceMethod()).toEqual("mock-value");
+      expect(result?.mockCustomInstanceMethod()).toEqual("Some Customer-123");
       expect(mockedGetCommand.mock.calls).toEqual([
         [
           {
-            Key: { PK: "Person#123", SK: "Person" },
+            Key: { PK: "Customer#123", SK: "Customer" },
             TableName: "mock-table"
           }
         ]
@@ -155,13 +165,13 @@ describe("SingleTableDesign", () => {
 
       mockGet.mockResolvedValueOnce({});
 
-      const result = await Person.findById("123");
+      const result = await Customer.findById("123");
 
       expect(result).toEqual(null);
       expect(mockedGetCommand.mock.calls).toEqual([
         [
           {
-            Key: { PK: "Person#123", SK: "Person" },
+            Key: { PK: "Customer#123", SK: "Customer" },
             TableName: "mock-table"
           }
         ]

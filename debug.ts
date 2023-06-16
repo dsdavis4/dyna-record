@@ -39,17 +39,46 @@ class Scale extends DrewsBrewsTable {
 }
 
 @Entity
-class Brewery extends DrewsBrewsTable {
+class Beer extends DrewsBrewsTable {
   @Attribute({ alias: "Id" })
   public id: string;
 
+  @Attribute({ alias: "BreweryId" })
+  public breweryId: string;
+
+  @Attribute({ alias: "Style" })
+  public style: string;
+
+  // TODO can I make this return an actual number.. its returning a string
+  // maybe by doing a parseInt in the initializer?
+  // If I cant get it dynamically I could make a NumberAttribute class...
+  @Attribute({ alias: "ABV" })
+  public abv: number;
+
+  // TODO Is this relation in the right place?
+  // TODO can I make this so that it has to be defined as an intance of the given type?
+  @BelongsTo(type => Brewery, { as: "scales" })
+  public brewery: Brewery;
+}
+
+@Entity
+class Brewery extends DrewsBrewsTable {
+  // TODO do I really want this to have to be defined on all tables?
+  // Virtual attribute? Defind on single table design?
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  // # TODO should this be on single table design? Maybe optionally through a config?
   @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
+  public updatedAt: Date; // TODO this should serialize to date
 
   // TODO maybe params for a HasMany class?
   // TODO can I make it so that this has to be an array of the given type?
   @HasMany(type => Scale, { foreignKey: "breweryId" })
   public scales: Scale[];
+
+  @HasMany(type => Beer, { foreignKey: "breweryId" })
+  public beers: Beer[];
 
   public testing() {
     return "hi";
@@ -61,7 +90,7 @@ class Brewery extends DrewsBrewsTable {
     const metadata = Metadata;
 
     const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
-      include: [{ association: "scales" }]
+      include: [{ association: "scales" }, { association: "beers" }]
     });
 
     debugger;

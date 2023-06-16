@@ -18,3 +18,5 @@ cdk.out
 .env
 
 .vscode
+
+coverage
