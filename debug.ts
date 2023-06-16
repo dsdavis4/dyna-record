@@ -3,6 +3,8 @@ import { Table, Entity, Attribute, HasMany, BelongsTo } from "./src/decorators";
 
 import Metadata from "./src/metadata";
 
+// TODO move this file to a .debug folder and remove from tsconfig
+
 // TODO does it make sense for the tahle decorator to do a mixin which extends single table design?
 // That way it doesnt have to be extended
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })

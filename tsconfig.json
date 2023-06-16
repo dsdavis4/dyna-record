@@ -1,6 +1,7 @@
 {
   // TODO uninstall recommended or strictest if not used
   "extends": "@tsconfig/recommended/tsconfig.json",
+  "exclude": ["**/*.test.ts"],
   "compilerOptions": {
     "ignoreDeprecations": "5.0",
     "strictNullChecks": true,

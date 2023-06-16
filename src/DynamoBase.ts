@@ -4,10 +4,6 @@ import {
   GetCommand,
   QueryCommand,
   QueryCommandInput
-  // DeleteCommand,
-  // PutCommand,
-  // UpdateCommand,
-  // GetCommandInput
 } from "@aws-sdk/lib-dynamodb";
 import { KeyConditions } from "./QueryBuilder";
 // import QueryParams from "./QueryParams";

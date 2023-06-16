@@ -248,6 +248,7 @@ abstract class SingleTableDesign {
               res
             ] as any;
           }
+          // TODO handle BelongsTo
         }
       }
     } else if (modelName === this.constructor.name) {
@@ -260,7 +261,7 @@ abstract class SingleTableDesign {
     attrs: Record<string, AttributeMetadata>
   ) {
     Object.keys(tableItem).forEach(attr => {
-      // TODO should I do a proper type guard?
+      // TODO use type guard isKeyOfEntity
       if (attrs[attr]) {
         const entityKey = attrs[attr].name;
         this[entityKey as keyof this] = tableItem[attr];
