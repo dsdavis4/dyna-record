@@ -14,7 +14,7 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   // static readonly delimiter = "#";
 
   // TODO should I make a decorator for primate key and sort key8?
-  // At the very least find out how to
+  // At the very least find out how to not repeate myself here and in the decorator for table
   @Attribute({ alias: "PK" })
   public pk: string;
 
@@ -31,6 +31,7 @@ class Scale extends DrewsBrewsTable {
   public breweryId: string;
 
   // TODO Is this relation in the right place?
+  // TODO can I make this so that it has to be defined as an intance of the given type?
   @BelongsTo(type => Brewery, { as: "scales" })
   public brewery: Brewery;
 }
@@ -44,6 +45,7 @@ class Brewery extends DrewsBrewsTable {
   public updatedAt: Date;
 
   // TODO maybe params for a HasMany class?
+  // TODO can I make it so that this has to be an array of the given type?
   @HasMany(type => Scale, { foreignKey: "breweryId" })
   public scales: Scale[];
 

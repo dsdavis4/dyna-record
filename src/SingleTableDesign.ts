@@ -1,6 +1,11 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
-import Metadata, { AttributeMetadata, RelationshipMetadata } from "./metadata";
+import Metadata, {
+  AttributeMetadata,
+  RelationshipMetadata,
+  EntityMetadata,
+  TableMetadata
+} from "./metadata";
 import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import QueryBuilder, {
   FilterParams,
@@ -9,6 +14,8 @@ import QueryBuilder, {
 } from "./QueryBuilder";
 import { BelongsToLink } from "./relationships";
 import { Attribute } from "./decorators";
+
+// type Entity<T> = T extends SingleTableDesign;
 
 // TODO does this belong here
 interface FindByIdOptions<T> {
@@ -23,9 +30,18 @@ interface QueryOptions<T> extends FindByIdOptions<T> {
   filter?: FilterParams;
 }
 
+// TODO should this be abstract?
 abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public type: string;
+
+  private readonly entityMetadata: EntityMetadata;
+  private readonly tableMetadata: TableMetadata;
+
+  // constructor() {
+  //   this.entityMetadata = Metadata.entities[this.constructor.name];
+  //   this.tableMetadata = Metadata.tables[this.entityMetadata.tableName];
+  // }
 
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
@@ -42,17 +58,57 @@ abstract class SingleTableDesign {
     const modelSortKey = entityMetadata.attributes[tableMetadata.sortKey].name;
 
     if (options.include) {
-      const result = await this.query(
-        {
-          [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
-        },
-        options
+      // const result = await this.query(
+      //   {
+      //     [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
+      //   },
+      //   options
+      // );
+      const associationLookup = options.include.reduce(
+        (acc, included) => ({
+          ...acc,
+          [included.association]: true
+        }),
+        {} as Record<string, boolean>
       );
 
-      debugger;
+      // TODO is this better then adding an initializer in the decorator?
+      // const entityMetadata = Metadata.entities[this.name];
+      const includedRelationships = Metadata.relationships.filter(
+        rel =>
+          associationLookup[rel.propertyName] &&
+          Metadata.relationships.some(assocRel => assocRel.target() === this)
+      );
 
-      return null;
-      // return result[0] || null;
+      const partitionFilter = this.buildPartitionFilter(includedRelationships);
+
+      // TODO make sure this is not called more then it needs too... right now it would be in this case...
+
+      const params = new QueryBuilder({
+        entityClassName: this.name,
+        key: {
+          [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
+        },
+        options: { filter: partitionFilter }
+      }).build();
+
+      const dynamo = new DynamoBase(tableMetadata.name);
+      // TODO this is returning a lot of results for BelongsToLinks...
+      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+      const queryResults = await dynamo.query(params);
+
+      const relationsLookup = includedRelationships.reduce(
+        (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+        {} as Record<string, RelationshipMetadata>
+      );
+
+      const abc = await Promise.all(
+        queryResults.map(res =>
+          instance.blabla(res, tableMetadata, entityMetadata, relationsLookup)
+        )
+      );
+
+      return instance;
     } else {
       const dynamo = new DynamoBase(tableMetadata.name);
       const res = await dynamo.findById({
@@ -74,118 +130,83 @@ abstract class SingleTableDesign {
 
   // TODO add return type
   // TODO clean up and make function shorter
-  public static async query<T extends SingleTableDesign>(
-    this: { new (): T } & typeof SingleTableDesign,
-    key: KeyConditions,
-    options: QueryOptions<T> = {}
-  ) {
-    if (options.include) {
-      const entityMetadata = Metadata.entities[this.name];
-      const tableMetadata = Metadata.tables[entityMetadata.tableName];
+  // public static async query<T extends SingleTableDesign>(
+  //   this: { new (): T } & typeof SingleTableDesign,
+  //   key: KeyConditions,
+  //   options: QueryOptions<T> = {}
+  // ) {
+  //   if (options.include) {
+  //     const entityMetadata = Metadata.entities[this.name];
+  //     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
-      // const includedAssocs = this._includedAssociations(options.include);
+  //     const associationLookup = options.include.reduce(
+  //       (acc, included) => ({
+  //         ...acc,
+  //         [included.association]: true
+  //       }),
+  //       {} as Record<string, boolean>
+  //     );
 
-      // options.filter = this._associationsFilter(includedAssocs);
+  //     // TODO is this better then adding an initializer in the decorator?
+  //     // const entityMetadata = Metadata.entities[this.name];
+  //     const includedRelationships = Metadata.relationships.filter(
+  //       rel =>
+  //         associationLookup[rel.propertyName] &&
+  //         Metadata.relationships.some(assocRel => assocRel.target() === this)
+  //     );
 
-      // const results = await super.query(key, options);
-      // const foreignAssocs = await this._getForeignAssociations(
-      //   results,
-      //   includedAssocs
-      // );
+  //     const partitionFilter = this.buildPartitionFilter(includedRelationships);
 
-      // return this._setModelAssociations([...results, ...foreignAssocs]);
+  //     // TODO make sure this is not called more then it needs too... right now it would be in this case...
+  //     const instance = this.init<T>();
 
-      // const bla =
+  //     const params = new QueryBuilder({
+  //       entityClassName: this.name,
+  //       key,
+  //       options: { filter: partitionFilter }
+  //     }).build();
 
-      const a = options;
-      const b = key;
+  //     const dynamo = new DynamoBase(tableMetadata.name);
+  //     // TODO this is returning a lot of results for BelongsToLinks...
+  //     // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+  //     const queryResults = await dynamo.query(params);
 
-      const associationLookup = options.include.reduce(
-        (acc, included) => ({
-          ...acc,
-          [included.association]: true
-        }),
-        {} as Record<string, boolean>
-      );
+  //     const relationsLookup = includedRelationships.reduce(
+  //       (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+  //       {} as Record<string, RelationshipMetadata>
+  //     );
 
-      // TODO is this better then adding an initializer in the decorator?
-      // const entityMetadata = Metadata.entities[this.name];
-      const includedRelationships = Metadata.relationships.filter(
-        rel =>
-          associationLookup[rel.propertyName] &&
-          Metadata.relationships.some(assocRel => assocRel.target() === this)
-      );
+  //     const abc = await Promise.all(
+  //       queryResults.map(res =>
+  //         instance.blabla(res, tableMetadata, relationsLookup)
+  //       )
+  //     );
 
-      const partitionFilter = this.buildPartitionFilter(includedRelationships);
+  //   } else {
+  //     // return super.query(key, options);
 
-      const instance = this.init();
-
-      const params = new QueryBuilder({
-        entityClassName: this.name,
-        key,
-        options: { filter: partitionFilter }
-      }).build();
-
-      const dynamo = new DynamoBase(tableMetadata.name);
-      // TODO this is returning a lot of results for BelongsToLinks...
-      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-      const queryResults = await dynamo.query(params);
-
-      const relationsLookup = includedRelationships.reduce(
-        (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
-        {} as Record<string, RelationshipMetadata>
-      );
-
-      // TODO this is returning a lot of results for BelongsToLinks...
-      // Wont need the filter if this is fixed. Although... maybe doesnt hurt
-      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-
-      // TODO dont use any
-      let promises: Promise<T>[] = [];
-
-      queryResults.forEach(res => {
-        if (res.Type === BelongsToLink.name) {
-          const [modelName, id] = res[tableMetadata.sortKey].split(
-            tableMetadata.delimiter
-          );
-          const includedRel = relationsLookup[modelName];
-          if (!!includedRel) {
-            // TODO findById is not typed correctly here... it should know it requires a string
-            // It thinks it of type any
-            promises.push(includedRel.target().findById(id));
-          }
-        }
-      });
-
-      const bla = await Promise.all(promises);
-
-      debugger;
-    } else {
-      // return super.query(key, options);
-      debugger;
-    }
-  }
+  //   }
+  // }
 
   private static primaryKeyValue(id: string, delimiter: string) {
     return `${this.name}${delimiter}${id}`;
   }
 
-  // TODO do I need to extend here?
-  // private static serialize<Entity extends SingleTableDesign>(
-  //   this: { new (): Entity },
-  //   tableItem: Record<string, NativeAttributeValue>,
-  //   attrs: Record<string, AttributeMetadata>
-  // ) {
-  //   const instance = new this();
+  private isKeyOfEntity(key: string): key is keyof SingleTableDesign {
+    // TODO should I do "in" or this[key] ?
+    if (key in this) {
+      return true;
+    }
+    return false;
+  }
 
-  //   Object.keys(tableItem).forEach(attr => {
-  //     if (attrs[attr]) {
-  //       const entityKey = attrs[attr].name;
-  //       instance[entityKey as keyof Entity] = tableItem[attr];
-  //     }
-  //   });
-
-  //   return instance;
+  // TODO trying to dynamically check that the value being set is correct...
+  // https://stackoverflow.com/questions/69705488/typescript-property-type-guards-on-unknown
+  // private isValueCorrectType<T extends SingleTableDesign>(
+  //   key: keyof T,
+  //   val: unknown
+  // ): val is T[key] {
+  //   return true;
   // }
 
   // TODO make sure this doesnt get called more then the number of instances returned...
@@ -196,11 +217,50 @@ abstract class SingleTableDesign {
     return new this();
   }
 
+  // TODO rename
+  private async blabla(
+    res: Record<string, any>,
+    tableMetadata: TableMetadata,
+    entityMetadata: EntityMetadata,
+    relationsLookup: Record<string, RelationshipMetadata>
+  ) {
+    const [modelName] = res[tableMetadata.sortKey].split(
+      tableMetadata.delimiter
+    );
+
+    if (res.Type === BelongsToLink.name) {
+      const [modelName, id] = res[tableMetadata.sortKey].split(
+        tableMetadata.delimiter
+      );
+      const includedRel = relationsLookup[modelName];
+      if (!!includedRel) {
+        if (this.isKeyOfEntity(includedRel.propertyName)) {
+          // TODO findById is not typed correctly here... it should know it requires a string
+          const res = await includedRel.target().findById(id);
+
+          // TODO dont use any...
+          if (includedRel.type === "HasMany") {
+            if (!this[includedRel.propertyName]) {
+              this[includedRel.propertyName] = [] as any;
+            } // TODO dont use any
+            this[includedRel.propertyName] = [
+              ...(this[includedRel.propertyName] as any),
+              res
+            ] as any;
+          }
+        }
+      }
+    } else if (modelName === this.constructor.name) {
+      this.serializeTableItemToModel(res, entityMetadata.attributes);
+    }
+  }
+
   private serializeTableItemToModel(
     tableItem: Record<string, NativeAttributeValue>,
     attrs: Record<string, AttributeMetadata>
   ) {
     Object.keys(tableItem).forEach(attr => {
+      // TODO should I do a proper type guard?
       if (attrs[attr]) {
         const entityKey = attrs[attr].name;
         this[entityKey as keyof this] = tableItem[attr];

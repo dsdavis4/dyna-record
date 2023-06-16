@@ -23,6 +23,7 @@ export interface RelationshipMetadata {
   type: "HasMany" | "BelongsTo";
   // Function to obtain Class to which relationship is applied
   target: Function;
+  // target<T>(): () => T;
   // Property name on the target class
   // targetPropertyName: string; // TODO is this needed? Shpuld it be called inverse?
   propertyName: string;

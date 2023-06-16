@@ -15,6 +15,7 @@ function HasMany<T>(
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
     Metadata.relationships.push({
       type: "HasMany",
+      // propertyName: context.name as keyof ObjectType<T>,
       propertyName: context.name.toString(),
       target
       // targetPropertyName: props.foreignKey.toString()

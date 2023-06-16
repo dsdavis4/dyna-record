@@ -1,4 +1,5 @@
 import Metadata from "../metadata";
+import SingleTableDesign from "../SingleTableDesign";
 
 // TODO this is copied in multiple places
 type ObjectType<T> = { new (): T };
@@ -17,6 +18,7 @@ function BelongsTo<T>(
   return function (_value: undefined, context: ClassFieldDecoratorContext) {
     Metadata.relationships.push({
       type: "BelongsTo",
+      // propertyName: context.name as keyof ObjectType<T>,
       propertyName: context.name.toString(),
       target
       // targetPropertyName: props.as.toString()
