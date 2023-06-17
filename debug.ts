@@ -97,9 +97,6 @@ class Brewery extends DrewsBrewsTable {
 
     console.log(res);
 
-    const bla = new Brewery();
-
-    debugger;
     const test = res instanceof Brewery;
     console.log(`Type is correct: ${test}`);
 
