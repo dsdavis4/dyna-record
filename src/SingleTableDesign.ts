@@ -124,11 +124,7 @@ abstract class SingleTableDesign {
   }
 
   private isKeyOfEntity(key: string): key is keyof SingleTableDesign {
-    // TODO should I do "in" or this[key] ?
-    if (key in this) {
-      return true;
-    }
-    return false;
+    return key in this;
   }
 
   // TODO trying to dynamically check that the value being set is correct...
