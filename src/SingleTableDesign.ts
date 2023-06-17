@@ -41,7 +41,6 @@ abstract class SingleTableDesign {
   readonly #tableMetadata: TableMetadata;
 
   constructor() {
-    // TODO does this add extra overhead to all classes? Or is it just a reference...
     this.#entityMetadata = Metadata.entities[this.constructor.name];
     this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
   }
@@ -118,7 +117,7 @@ abstract class SingleTableDesign {
     );
 
     await Promise.all(
-      queryResults.map(res => this.resolveQuery(res, relationsLookup))
+      queryResults.map(res => this.resolveQueryLinks(res, relationsLookup))
     );
 
     return this;
@@ -155,7 +154,7 @@ abstract class SingleTableDesign {
   }
 
   // TODO rename?
-  private async resolveQuery(
+  private async resolveQueryLinks(
     res: Record<string, any>,
     relationsLookup: Record<string, RelationshipMetadata>
   ) {
