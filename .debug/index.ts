@@ -89,11 +89,16 @@ class Brewery extends DrewsBrewsTable {
   }
 }
 
-// TODO can I improve my testing with this? https://jestjs.io/docs/dynamodb
+/* TODO most mvp
+- add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
+  and I could log an error that there is corrupted data when it finds it
 
-// TODO not a priority but... at some point I should add protection so that
-// an attribute/association wont be serialized if that type returned from dynamo is incorrect.
-// and I could log an error that there is corrupted data when it finds it
+- can I improve my testing with this? https://jestjs.io/docs/dynamodb
+
+- When doing a findById with includes, every belongs to link is serilzied even if its not part of the includes
+  See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+  Note I reflected this in my test mocks so I can clean those up
+*/
 
 (async () => {
   try {

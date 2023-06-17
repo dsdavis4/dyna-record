@@ -107,8 +107,6 @@ abstract class SingleTableDesign {
     }).build();
 
     const dynamo = new DynamoBase(tableName);
-    // TODO this is returning a lot of results for BelongsToLinks...
-    // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
     const queryResults = await dynamo.query(params);
 
     const relationsLookup = includedRelationships.reduce(
