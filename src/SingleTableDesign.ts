@@ -109,13 +109,10 @@ abstract class SingleTableDesign {
     const dynamo = new DynamoBase(tableName);
     const queryResults = await dynamo.query(params);
 
-    const relationsLookup = includedRelationships.reduce(
-      (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
-      {} as Record<string, RelationshipMetadata>
-    );
-
     await Promise.all(
-      queryResults.map(res => this.resolveQueryLinks(res, relationsLookup))
+      queryResults.map(res =>
+        this.resolveQueryLinks(res, includedRelationships)
+      )
     );
 
     return this;
@@ -154,10 +151,15 @@ abstract class SingleTableDesign {
   // TODO rename?
   private async resolveQueryLinks(
     res: Record<string, any>,
-    relationsLookup: Record<string, RelationshipMetadata>
+    includedRelationships: RelationshipMetadata[]
   ) {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
+
+    const relationsLookup = includedRelationships.reduce(
+      (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+      {} as Record<string, RelationshipMetadata>
+    );
 
     if (res.Type === BelongsToLink.name) {
       const [modelName, id] = res[sortKey].split(delimiter);
