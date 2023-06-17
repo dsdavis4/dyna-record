@@ -37,13 +37,14 @@ abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public type: string;
 
-  private readonly entityMetadata: EntityMetadata;
-  private readonly tableMetadata: TableMetadata;
+  readonly #entityMetadata: EntityMetadata;
+  readonly #tableMetadata: TableMetadata;
 
-  // constructor() {
-  //   this.entityMetadata = Metadata.entities[this.constructor.name];
-  //   this.tableMetadata = Metadata.tables[this.entityMetadata.tableName];
-  // }
+  constructor() {
+    // TODO does this add extra overhead to all classes? Or is it just a reference...
+    this.#entityMetadata = Metadata.entities[this.constructor.name];
+    this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
+  }
 
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
@@ -52,152 +53,80 @@ abstract class SingleTableDesign {
   ): Promise<T | null> {
     const instance = this.init<T>();
 
-    const entityMetadata = Metadata.entities[this.name];
-    const tableMetadata = Metadata.tables[entityMetadata.tableName];
-
-    const modelPrimaryKey =
-      entityMetadata.attributes[tableMetadata.primaryKey].name;
-    const modelSortKey = entityMetadata.attributes[tableMetadata.sortKey].name;
-
     if (options.include) {
-      // const result = await this.query(
-      //   {
-      //     [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
-      //   },
-      //   options
-      // );
-
-      const associationLookup = options.include.reduce(
-        (acc, included) => ({
-          ...acc,
-          [included.association]: true
-        }),
-        {} as Record<string, boolean>
-      );
-
-      // TODO is this better then adding an initializer in the decorator?
-      // const entityMetadata = Metadata.entities[this.name];
-      const includedRelationships = Metadata.relationships.filter(
-        rel =>
-          associationLookup[rel.propertyName] &&
-          Metadata.relationships.some(assocRel => assocRel.target() === this)
-      );
-
-      const partitionFilter = this.buildPartitionFilter(includedRelationships);
-
-      // TODO make sure this is not called more then it needs too... right now it would be in this case...
-
-      const params = new QueryBuilder({
-        entityClassName: this.name,
-        key: {
-          [modelPrimaryKey]: this.primaryKeyValue(id, tableMetadata.delimiter)
-        },
-        options: { filter: partitionFilter }
-      }).build();
-
-      const dynamo = new DynamoBase(tableMetadata.name);
-      // TODO this is returning a lot of results for BelongsToLinks...
-      // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-      const queryResults = await dynamo.query(params);
-
-      const relationsLookup = includedRelationships.reduce(
-        (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
-        {} as Record<string, RelationshipMetadata>
-      );
-
-      await Promise.all(
-        queryResults.map(res =>
-          instance.resolveQuery(
-            res,
-            tableMetadata,
-            entityMetadata,
-            relationsLookup
-          )
-        )
-      );
-
-      return instance;
+      return await instance.findByIdWithIncludes(id, options.include);
     } else {
-      const dynamo = new DynamoBase(tableMetadata.name);
-      const res = await dynamo.findById({
-        [tableMetadata.primaryKey]: this.primaryKeyValue(
-          id,
-          tableMetadata.delimiter
-        ),
-        [tableMetadata.sortKey]: this.name
-      });
-
-      if (res) {
-        instance.serializeTableItemToModel(res, entityMetadata.attributes);
-        return instance;
-      } else {
-        return null;
-      }
+      return await instance.findById(id);
     }
   }
 
-  // TODO add return type
-  // TODO clean up and make function shorter
-  // public static async query<T extends SingleTableDesign>(
-  //   this: { new (): T } & typeof SingleTableDesign,
-  //   key: KeyConditions,
-  //   options: QueryOptions<T> = {}
-  // ) {
-  //   if (options.include) {
-  //     const entityMetadata = Metadata.entities[this.name];
-  //     const tableMetadata = Metadata.tables[entityMetadata.tableName];
+  private async findById(id: string) {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const dynamo = new DynamoBase(tableName);
+    const res = await dynamo.findById({
+      [primaryKey]: this.primaryKeyValue(id),
+      [sortKey]: this.constructor.name
+    });
 
-  //     const associationLookup = options.include.reduce(
-  //       (acc, included) => ({
-  //         ...acc,
-  //         [included.association]: true
-  //       }),
-  //       {} as Record<string, boolean>
-  //     );
+    if (res) {
+      this.serializeTableItemToModel(res);
+      return this;
+    } else {
+      return null;
+    }
+  }
 
-  //     // TODO is this better then adding an initializer in the decorator?
-  //     // const entityMetadata = Metadata.entities[this.name];
-  //     const includedRelationships = Metadata.relationships.filter(
-  //       rel =>
-  //         associationLookup[rel.propertyName] &&
-  //         Metadata.relationships.some(assocRel => assocRel.target() === this)
-  //     );
+  private async findByIdWithIncludes<T>(
+    id: string,
+    includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
+  ) {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+    const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
-  //     const partitionFilter = this.buildPartitionFilter(includedRelationships);
+    const associationLookup = includedAssociations.reduce(
+      (acc, included) => ({
+        ...acc,
+        [included.association]: true
+      }),
+      {} as Record<string, boolean>
+    );
 
-  //     // TODO make sure this is not called more then it needs too... right now it would be in this case...
-  //     const instance = this.init<T>();
+    const includedRelationships = Metadata.relationships.filter(
+      rel =>
+        associationLookup[rel.propertyName] &&
+        Metadata.relationships.some(
+          assocRel => assocRel.target() === this.constructor
+        )
+    );
 
-  //     const params = new QueryBuilder({
-  //       entityClassName: this.name,
-  //       key,
-  //       options: { filter: partitionFilter }
-  //     }).build();
+    const partitionFilter = this.buildPartitionFilter(includedRelationships);
 
-  //     const dynamo = new DynamoBase(tableMetadata.name);
-  //     // TODO this is returning a lot of results for BelongsToLinks...
-  //     // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-  //     const queryResults = await dynamo.query(params);
+    const params = new QueryBuilder({
+      entityClassName: this.constructor.name,
+      key: { [modelPrimaryKey]: this.primaryKeyValue(id) },
+      options: { filter: partitionFilter }
+    }).build();
 
-  //     const relationsLookup = includedRelationships.reduce(
-  //       (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
-  //       {} as Record<string, RelationshipMetadata>
-  //     );
+    const dynamo = new DynamoBase(tableName);
+    // TODO this is returning a lot of results for BelongsToLinks...
+    // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+    const queryResults = await dynamo.query(params);
 
-  //     const abc = await Promise.all(
-  //       queryResults.map(res =>
-  //         instance.resolveQuery(res, tableMetadata, relationsLookup)
-  //       )
-  //     );
+    const relationsLookup = includedRelationships.reduce(
+      (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+      {} as Record<string, RelationshipMetadata>
+    );
 
-  //   } else {
-  //     // return super.query(key, options);
+    await Promise.all(
+      queryResults.map(res => this.resolveQuery(res, relationsLookup))
+    );
 
-  //   }
-  // }
+    return this;
+  }
 
-  private static primaryKeyValue(id: string, delimiter: string) {
-    return `${this.name}${delimiter}${id}`;
+  private primaryKeyValue(id: string) {
+    const { delimiter } = this.#tableMetadata;
+    return `${this.constructor.name}${delimiter}${id}`;
   }
 
   private isKeyOfEntity(key: string): key is keyof SingleTableDesign {
@@ -225,21 +154,16 @@ abstract class SingleTableDesign {
     return new this();
   }
 
-  // TODO rename
+  // TODO rename?
   private async resolveQuery(
     res: Record<string, any>,
-    tableMetadata: TableMetadata,
-    entityMetadata: EntityMetadata,
     relationsLookup: Record<string, RelationshipMetadata>
   ) {
-    const [modelName] = res[tableMetadata.sortKey].split(
-      tableMetadata.delimiter
-    );
+    const { sortKey, delimiter } = this.#tableMetadata;
+    const [modelName] = res[sortKey].split(delimiter);
 
     if (res.Type === BelongsToLink.name) {
-      const [modelName, id] = res[tableMetadata.sortKey].split(
-        tableMetadata.delimiter
-      );
+      const [modelName, id] = res[sortKey].split(delimiter);
       const includedRel = relationsLookup[modelName];
       if (!!includedRel) {
         if (this.isKeyOfEntity(includedRel.propertyName)) {
@@ -260,14 +184,14 @@ abstract class SingleTableDesign {
         }
       }
     } else if (modelName === this.constructor.name) {
-      this.serializeTableItemToModel(res, entityMetadata.attributes);
+      this.serializeTableItemToModel(res);
     }
   }
 
   private serializeTableItemToModel(
-    tableItem: Record<string, NativeAttributeValue>,
-    attrs: Record<string, AttributeMetadata>
+    tableItem: Record<string, NativeAttributeValue>
   ) {
+    const attrs = this.#entityMetadata.attributes;
     Object.keys(tableItem).forEach(attr => {
       // TODO use type guard isKeyOfEntity
       if (attrs[attr]) {
@@ -280,12 +204,12 @@ abstract class SingleTableDesign {
   // TODO is this the right place for this class? Should it be its own class?
   // TODO should I build a FilterBuilder class?
   // Build filter to include links or relationships from the parent partition
-  private static buildPartitionFilter(
+  private buildPartitionFilter(
     includedRelationships: RelationshipMetadata[]
   ): OrFilter {
     // TODO needs HasOne + scopes...
 
-    const parentFilter = { type: this.name };
+    const parentFilter = { type: this.constructor.name };
     const filters = [parentFilter];
 
     const includeBelongsToLinks = includedRelationships.some(

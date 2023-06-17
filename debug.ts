@@ -91,22 +91,26 @@ class Brewery extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    const bla = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
+    const res = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
       include: [{ association: "scales" }, { association: "beers" }]
     });
 
+    console.log(res);
+
+    const bla = new Brewery();
+
     debugger;
-    const test = bla instanceof Brewery;
+    const test = res instanceof Brewery;
     console.log(`Type is correct: ${test}`);
 
-    if (bla) {
-      bla.updatedAt;
-      bla.scales;
-      console.log(bla.someMethod());
-      console.log(bla.testing());
+    if (res) {
+      res.updatedAt;
+      res.scales;
+      console.log(res.someMethod());
+      console.log(res.testing());
     }
 
-    console.log(bla);
+    console.log(res);
 
     debugger;
 
