@@ -192,10 +192,9 @@ abstract class SingleTableDesign {
   ) {
     const attrs = this.#entityMetadata.attributes;
     Object.keys(tableItem).forEach(attr => {
-      // TODO use type guard isKeyOfEntity
-      if (attrs[attr]) {
-        const entityKey = attrs[attr].name;
-        this[entityKey as keyof this] = tableItem[attr];
+      const entityKey = attrs[attr]?.name;
+      if (this.isKeyOfEntity(entityKey)) {
+        this[entityKey] = tableItem[attr];
       }
     });
   }
