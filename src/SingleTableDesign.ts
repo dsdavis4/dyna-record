@@ -173,10 +173,7 @@ abstract class SingleTableDesign {
             if (!this[includedRel.propertyName]) {
               this[includedRel.propertyName] = [] as any;
             }
-            this[includedRel.propertyName] = [
-              ...(this[includedRel.propertyName] as any),
-              res
-            ] as any;
+            (this[includedRel.propertyName] as unknown as any[]).push(res);
           }
           // TODO handle BelongsTo
         }
