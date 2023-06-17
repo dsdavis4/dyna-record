@@ -91,6 +91,10 @@ class Brewery extends DrewsBrewsTable {
 
 // TODO can I improve my testing with this? https://jestjs.io/docs/dynamodb
 
+// TODO not a priority but... at some point I should add protection so that
+// an attribute/association wont be serialized if that type returned from dynamo is incorrect.
+// and I could log an error that there is corrupted data when it finds it
+
 (async () => {
   try {
     const metadata = Metadata;
