@@ -207,7 +207,7 @@ describe("SingleTableDesign", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
     });
 
-    it("will find an entity with included associations", async () => {
+    it("will find an entity with included HasMany associations", async () => {
       expect.assertions(7);
 
       const orderLinks = [
@@ -423,6 +423,78 @@ describe("SingleTableDesign", () => {
         [{ name: "GetCommand" }],
         [{ name: "GetCommand" }]
       ]);
+    });
+
+    // TODO this test should pass
+    it.skip("will set HasMany associations to an empty array if it doesn't find any", async () => {
+      expect.assertions(4);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "Customer#123",
+            SK: "Customer",
+            Id: "123",
+            Name: "Some Customer",
+            Address: "11 Some St",
+            Type: "Customer",
+            UpdatedAt: "2022-09-15T04:26:31.148Z",
+            SomeAttr: "attribute that is not modeled"
+          },
+          // TODO As of now all belongs to links are returned even if not queried...
+          // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
+          {
+            PK: "Customer#123",
+            SK: "NotIncludedModel#114",
+            Id: "005",
+            Type: "BelongsToLink",
+            UpdatedAt: "2023-01-01T12:31:21.148Z",
+            SomeAttr: "attribute that is not modeled"
+          },
+          {
+            PK: "Customer#123",
+            SK: "NotIncludedModel#115",
+            Id: "006",
+            Type: "BelongsToLink",
+            UpdatedAt: "2023-02-01T12:31:21.148Z",
+            SomeAttr: "attribute that is not modeled"
+          }
+        ]
+      });
+
+      const result = await Customer.findById("123", {
+        include: [{ association: "orders" }, { association: "paymentMethods" }]
+      });
+
+      expect(result).toEqual({
+        type: "Customer",
+        pk: "Customer#123",
+        sk: "Customer",
+        id: "123",
+        name: "Some Customer",
+        address: "11 Some St",
+        updatedAt: "2022-09-15T04:26:31.148Z",
+        orders: [],
+        paymentMethods: []
+      });
+      expect(result).toBeInstanceOf(Customer);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            FilterExpression: "#Type = :Type1 OR #Type = :Type2",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
+            ExpressionAttributeValues: {
+              ":PK3": "Customer#123",
+              ":Type1": "Customer",
+              ":Type2": "BelongsToLink"
+            }
+          }
+        ]
+      ]);
+      expect(mockedGetCommand.mock.calls).toEqual([]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
   });
 });

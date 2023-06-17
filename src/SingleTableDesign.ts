@@ -66,6 +66,7 @@ abstract class SingleTableDesign {
       //   },
       //   options
       // );
+
       const associationLookup = options.include.reduce(
         (acc, included) => ({
           ...acc,
@@ -104,9 +105,14 @@ abstract class SingleTableDesign {
         {} as Record<string, RelationshipMetadata>
       );
 
-      const abc = await Promise.all(
+      await Promise.all(
         queryResults.map(res =>
-          instance.blabla(res, tableMetadata, entityMetadata, relationsLookup)
+          instance.resolveQuery(
+            res,
+            tableMetadata,
+            entityMetadata,
+            relationsLookup
+          )
         )
       );
 
@@ -180,7 +186,7 @@ abstract class SingleTableDesign {
 
   //     const abc = await Promise.all(
   //       queryResults.map(res =>
-  //         instance.blabla(res, tableMetadata, relationsLookup)
+  //         instance.resolveQuery(res, tableMetadata, relationsLookup)
   //       )
   //     );
 
@@ -220,7 +226,7 @@ abstract class SingleTableDesign {
   }
 
   // TODO rename
-  private async blabla(
+  private async resolveQuery(
     res: Record<string, any>,
     tableMetadata: TableMetadata,
     entityMetadata: EntityMetadata,

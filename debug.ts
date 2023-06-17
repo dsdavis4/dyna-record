@@ -85,6 +85,8 @@ class Brewery extends DrewsBrewsTable {
   }
 }
 
+// TODO can I improve my testing with this? https://jestjs.io/docs/dynamodb
+
 (async () => {
   try {
     const metadata = Metadata;
