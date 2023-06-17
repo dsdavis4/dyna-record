@@ -169,8 +169,6 @@ abstract class SingleTableDesign {
           // TODO findById is not typed correctly here... it should know it requires a string
           const res = await includedRel.target().findById(id);
 
-          debugger;
-
           if (includedRel.type === "HasMany") {
             if (!this[includedRel.propertyName]) {
               this[includedRel.propertyName] = [] as any;
