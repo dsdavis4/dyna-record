@@ -36,10 +36,18 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "BreweryId" })
   public breweryId: string;
 
+  @Attribute({ alias: "RoomId" })
+  public roomId: string;
+
   // TODO Is this relation in the right place?
   // TODO can I make this so that it has to be defined as an intance of the given type?
-  @BelongsTo(type => Brewery, { as: "scales" })
+  // TODO IMPORTANT!! THIS NEEDS TO MAKE SURE BREWERY ID IS ON THIS MODEL..
+  // @BelongsTo(type => Brewery, { as: "scales" })
+  @BelongsTo(type => Brewery, { as: "scales", foreignKey: "breweryId" })
   public brewery: Brewery;
+
+  @BelongsTo(type => Room, { as: "scales", foreignKey: "roomId" })
+  public room: Room;
 }
 
 @Entity
@@ -56,12 +64,13 @@ class Beer extends DrewsBrewsTable {
   // TODO can I make this return an actual number.. its returning a string
   // maybe by doing a parseInt in the initializer?
   // If I cant get it dynamically I could make a NumberAttribute class...
+  // Might be able to use the answer here to assure that values are typed correctly for the attribute type https://stackoverflow.com/questions/60590613/typescript-property-decorator-that-takes-a-parameter-of-the-decorated-property-t
   @Attribute({ alias: "ABV" })
   public abv: number;
 
   // TODO Is this relation in the right place?
   // TODO can I make this so that it has to be defined as an intance of the given type?
-  @BelongsTo(type => Brewery, { as: "scales" })
+  @BelongsTo(type => Brewery, { as: "beers", foreignKey: "breweryId" })
   public brewery: Brewery;
 }
 
@@ -71,6 +80,9 @@ class Brewery extends DrewsBrewsTable {
   // Virtual attribute? Defind on single table design?
   @Attribute({ alias: "Id" })
   public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
 
   // # TODO should this be on single table design? Maybe optionally through a config?
   @Attribute({ alias: "UpdatedAt" })
@@ -84,9 +96,30 @@ class Brewery extends DrewsBrewsTable {
   @HasMany(type => Beer, { foreignKey: "breweryId" })
   public beers: Beer[];
 
+  @HasMany(type => Room, { foreignKey: "breweryId" })
+  public rooms: Room[];
+
   public testing() {
     return "hi";
   }
+}
+
+@Entity
+class Room extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "BreweryId" })
+  public breweryId: string;
+
+  @BelongsTo(type => Brewery, { as: "rooms", foreignKey: "breweryId" })
+  public brewery: Brewery;
+
+  @HasMany(type => Scale, { foreignKey: "roomId" })
+  public scales: Scale[];
 }
 
 /* TODO most mvp
@@ -94,6 +127,7 @@ class Brewery extends DrewsBrewsTable {
   and I could log an error that there is corrupted data when it finds it
 
 - can I improve my testing with this? https://jestjs.io/docs/dynamodb
+- v3 docs https://www.npmjs.com/package/@shelf/jest-dynamodb
 
 - When doing a findById with includes, every belongs to link is serilzied even if its not part of the includes
   See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
@@ -104,37 +138,25 @@ class Brewery extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    const res = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
-      include: [{ association: "scales" }, { association: "beers" }]
+    // HasManyAndBelongsTo
+    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+      include: [{ association: "brewery" }, { association: "scales" }]
     });
-
-    console.log(res);
-
-    const test = res instanceof Brewery;
-    console.log(`Type is correct: ${test}`);
-
-    if (res) {
-      res.updatedAt;
-      res.scales;
-      console.log(res.someMethod());
-      console.log(res.testing());
-    }
-
-    console.log(res);
 
     debugger;
 
-    // const bla0 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // BelongsTo only
+    // const beer = await Beer.findById("0c381942-30b5-4082-af98-e2ff8a841d81", {
+    //   include: [{ association: "brewery" }]
+    // });
 
-    // const bla2 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
-
-    // const bla3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
-
-    // const bla4 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
-
-    // debugger;
-
-    // const a = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99");
+    // HasMany only
+    // const brewery = await Brewery.findById(
+    //   "103417f1-4c42-4b40-86a6-a8930be67c99",
+    //   {
+    //     include: [{ association: "scales" }, { association: "beers" }]
+    //   }
+    // );
 
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {

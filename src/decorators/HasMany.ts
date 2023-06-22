@@ -13,18 +13,22 @@ function HasMany<T>(
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
-    Metadata.relationships.push({
-      type: "HasMany",
-      // propertyName: context.name as keyof ObjectType<T>,
-      propertyName: context.name.toString(),
-      target
-      // targetPropertyName: props.foreignKey.toString()
-      // props
-    });
+    // TODO make function for this? since its copied in Belongsto
+    context.addInitializer(function () {
+      const entity = Object.getPrototypeOf(this);
 
-    // context.addInitializer(function () {
-    //   debugger;
-    // });
+      const entityMetadata = Metadata.entities[entity.constructor.name];
+      const propertyName = context.name.toString();
+
+      if (!entityMetadata.relationships[propertyName]) {
+        entityMetadata.relationships[propertyName] = {
+          type: "HasMany",
+          propertyName: context.name.toString(),
+          target,
+          targetPropertyName: props.foreignKey.toString()
+        };
+      }
+    });
   };
 }
 

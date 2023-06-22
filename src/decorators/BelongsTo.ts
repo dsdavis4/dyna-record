@@ -5,7 +5,9 @@ import SingleTableDesign from "../SingleTableDesign";
 type ObjectType<T> = { new (): T };
 
 interface BelongsToProps<T> {
-  as: keyof T; // TODO Does this name make sense?
+  as: keyof T; // TODO Is this needed? Does this name make sense?
+  // IDEA.... instead or foreign key being here... I make a decorator @ForeignKey that enforces it...
+  foreignKey: string; // TODO how do I make it so that typescript requires this to be defined on owning model?
 }
 
 // TODO can I do this in a way where I dont set the metadata on every instance?
@@ -16,12 +18,19 @@ function BelongsTo<T>(
   props: BelongsToProps<T>
 ) {
   return function (_value: undefined, context: ClassFieldDecoratorContext) {
-    Metadata.relationships.push({
-      type: "BelongsTo",
-      // propertyName: context.name as keyof ObjectType<T>,
-      propertyName: context.name.toString(),
-      target
-      // targetPropertyName: props.as.toString()
+    context.addInitializer(function () {
+      const entity = Object.getPrototypeOf(this);
+
+      const entityMetadata = Metadata.entities[entity.constructor.name];
+      const propertyName = context.name.toString();
+      if (!entityMetadata.relationships[propertyName]) {
+        entityMetadata.relationships[propertyName] = {
+          type: "BelongsTo",
+          propertyName: context.name.toString(),
+          target,
+          targetPropertyName: props.foreignKey.toString()
+        };
+      }
     });
   };
 }

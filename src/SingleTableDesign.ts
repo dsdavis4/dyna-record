@@ -82,21 +82,28 @@ abstract class SingleTableDesign {
     const { name: tableName, primaryKey } = this.#tableMetadata;
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
-    const associationLookup = includedAssociations.reduce(
-      (acc, included) => ({
-        ...acc,
-        [included.association]: true
-      }),
-      {} as Record<string, boolean>
+    const includedRelationships = includedAssociations.reduce(
+      (acc, includedRel) => {
+        const key = includedRel.association as string;
+        const included = this.#entityMetadata.relationships[key];
+        if (included) acc.push(included);
+        return acc;
+      },
+      [] as RelationshipMetadata[]
     );
 
-    const includedRelationships = Metadata.relationships.filter(
-      rel =>
-        associationLookup[rel.propertyName] &&
-        Metadata.relationships.some(
-          assocRel => assocRel.target() === this.constructor
-        )
-    );
+    if (includedRelationships.length !== includedAssociations.length) {
+      // TODO IMPORTANT!!! I think I need to add an initialzer so I can group relationships by entity
+      // Otherwise, the association lookup with property name might not always work
+      // Right now its working because the proerpty name EX "breweries" is the same
+      // Make a unit test for this...
+
+      // Does this problem exist for both belongsTo and hasMany?
+      debugger;
+
+      // TODO remove
+      // throw new Error("Not supposed to hit this code");
+    }
 
     const partitionFilter = this.buildPartitionFilter(includedRelationships);
 
@@ -152,6 +159,7 @@ abstract class SingleTableDesign {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
 
+    // TODO this will iterate for EVERY res...
     const relationsLookup = includedRelationships.reduce(
       (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
       {} as Record<string, RelationshipMetadata>
@@ -171,11 +179,41 @@ abstract class SingleTableDesign {
             }
             (this[includedRel.propertyName] as unknown as any[]).push(res);
           }
-          // TODO handle BelongsTo
         }
       }
     } else if (modelName === this.constructor.name) {
       this.serializeTableItemToModel(res);
+
+      // TODO this will iterate for EVERY res...
+      // const getBelongsTos = includedRelationships.reduce((acc, includedRel) => {
+      //   const isBelongsTo = includedRel.type === "BelongsTo";
+      //   // if (isBelongsTo && Metadata.entities[includedRel.target().name]) {
+      //   //   debugger;
+      //   // }
+
+      //   const foreignKey = this[includedRel.targetPropertyName as keyof this];
+
+      //   if (foreignKey) {
+      //     acc.push(includedRel.target.findById(foreignKey));
+      //   }
+
+      //   return [];
+      // }, []);
+
+      const belongTos = includedRelationships.filter(
+        rel => rel.type === "BelongsTo"
+      );
+
+      // TODO make async
+      for await (const belongTo of belongTos) {
+        const foreignKey = this[belongTo.targetPropertyName as keyof this];
+
+        if (this.isKeyOfEntity(belongTo.propertyName) && foreignKey) {
+          this[belongTo.propertyName] = await belongTo
+            .target()
+            .findById(foreignKey);
+        }
+      }
     }
   }
 
