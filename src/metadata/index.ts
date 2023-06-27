@@ -3,13 +3,16 @@ export interface AttributeMetadata {
 }
 
 // TODO make sure these are all needed
+// TODO I can make this a union of HasMany and BelongsTo props
+//     this way foreignKey and targetKey are not optional but required for each type
 export interface RelationshipMetadata {
   type: "HasMany" | "BelongsTo";
   // Function to obtain Class to which relationship is applied
   target: Function;
   // target<T>(): () => T;
   // Property name on the target class
-  targetPropertyName: string; // TODO is this needed? Shpuld it be called inverse?
+  foreignKey?: string; // For BelongsTo
+  targetKey?: string; // for HasMany
   propertyName: string;
 
   // props: TODO need to add...?

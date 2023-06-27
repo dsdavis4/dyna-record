@@ -43,10 +43,10 @@ class Scale extends DrewsBrewsTable {
   // TODO can I make this so that it has to be defined as an intance of the given type?
   // TODO IMPORTANT!! THIS NEEDS TO MAKE SURE BREWERY ID IS ON THIS MODEL..
   // @BelongsTo(type => Brewery, { as: "scales" })
-  @BelongsTo(type => Brewery, { as: "scales", foreignKey: "breweryId" })
+  @BelongsTo((type: any) => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
-  @BelongsTo(type => Room, { as: "scales", foreignKey: "roomId" })
+  @BelongsTo((type: any) => Room, { foreignKey: "roomId" })
   public room: Room;
 }
 
@@ -70,7 +70,7 @@ class Beer extends DrewsBrewsTable {
 
   // TODO Is this relation in the right place?
   // TODO can I make this so that it has to be defined as an intance of the given type?
-  @BelongsTo(type => Brewery, { as: "beers", foreignKey: "breweryId" })
+  @BelongsTo((type: any) => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 }
 
@@ -90,13 +90,13 @@ class Brewery extends DrewsBrewsTable {
 
   // TODO maybe params for a HasMany class?
   // TODO can I make it so that this has to be an array of the given type?
-  @HasMany(type => Scale, { foreignKey: "breweryId" })
+  @HasMany(type => Scale, { targetKey: "breweryId" })
   public scales: Scale[];
 
-  @HasMany(type => Beer, { foreignKey: "breweryId" })
+  @HasMany(type => Beer, { targetKey: "breweryId" })
   public beers: Beer[];
 
-  @HasMany(type => Room, { foreignKey: "breweryId" })
+  @HasMany(type => Room, { targetKey: "breweryId" })
   public rooms: Room[];
 
   public testing() {
@@ -115,10 +115,10 @@ class Room extends DrewsBrewsTable {
   @Attribute({ alias: "BreweryId" })
   public breweryId: string;
 
-  @BelongsTo(type => Brewery, { as: "rooms", foreignKey: "breweryId" })
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
-  @HasMany(type => Scale, { foreignKey: "roomId" })
+  @HasMany(() => Scale, { targetKey: "roomId" })
   public scales: Scale[];
 }
 
@@ -133,6 +133,11 @@ class Room extends DrewsBrewsTable {
   See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
   Note I reflected this in my test mocks so I can clean those up
 */
+
+// TODO START HERE
+// I just got findById to work with includes
+
+// 1. In the code for serizlaiing Belongsto I need to make fetching the relationships in a promise.all
 
 (async () => {
   try {

@@ -185,28 +185,14 @@ abstract class SingleTableDesign {
       this.serializeTableItemToModel(res);
 
       // TODO this will iterate for EVERY res...
-      // const getBelongsTos = includedRelationships.reduce((acc, includedRel) => {
-      //   const isBelongsTo = includedRel.type === "BelongsTo";
-      //   // if (isBelongsTo && Metadata.entities[includedRel.target().name]) {
-      //   //   debugger;
-      //   // }
-
-      //   const foreignKey = this[includedRel.targetPropertyName as keyof this];
-
-      //   if (foreignKey) {
-      //     acc.push(includedRel.target.findById(foreignKey));
-      //   }
-
-      //   return [];
-      // }, []);
-
       const belongTos = includedRelationships.filter(
         rel => rel.type === "BelongsTo"
       );
 
+      // TODO this will iterate for EVERY res...
       // TODO make async
       for await (const belongTo of belongTos) {
-        const foreignKey = this[belongTo.targetPropertyName as keyof this];
+        const foreignKey = this[belongTo.foreignKey as keyof this];
 
         if (this.isKeyOfEntity(belongTo.propertyName) && foreignKey) {
           this[belongTo.propertyName] = await belongTo

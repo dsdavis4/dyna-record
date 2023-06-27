@@ -83,13 +83,10 @@ class Order extends MockTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
-  @BelongsTo(type => Customer, { as: "orders", foreignKey: "customerId" })
+  @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
 
-  @BelongsTo(type => PaymentMethod, {
-    as: "orders",
-    foreignKey: "paymentMethodId"
-  })
+  @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
   public paymentMethod: PaymentMethod;
 }
 
@@ -107,13 +104,10 @@ class PaymentMethod extends MockTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
-  @BelongsTo(type => Customer, {
-    as: "paymentMethods",
-    foreignKey: "customerId"
-  })
+  @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
 
-  @HasMany(type => Order, { foreignKey: "paymentMethodId" })
+  @HasMany(type => Order, { targetKey: "paymentMethodId" })
   public orders: Order[];
 }
 
@@ -131,10 +125,10 @@ class Customer extends MockTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
-  @HasMany(type => Order, { foreignKey: "customerId" })
+  @HasMany(type => Order, { targetKey: "customerId" })
   public orders: Order[];
 
-  @HasMany(type => PaymentMethod, { foreignKey: "customerId" })
+  @HasMany(type => PaymentMethod, { targetKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
   public mockCustomInstanceMethod() {

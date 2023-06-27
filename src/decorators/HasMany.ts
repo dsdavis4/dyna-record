@@ -2,12 +2,11 @@ import Metadata from "../metadata";
 
 type ObjectType<T> = { new (): T };
 
+// TODO is this needed? Its more for making sure models are set up right...
 interface HasManyProps<T> {
-  foreignKey: keyof T;
+  targetKey: keyof T;
 }
 
-// TODO can I do this in a way where I dont set the metadata on every instance?
-//    meaning this is only run once
 function HasMany<T>(
   target: (type?: any) => ObjectType<T>,
   props: HasManyProps<T>
@@ -25,7 +24,7 @@ function HasMany<T>(
           type: "HasMany",
           propertyName: context.name.toString(),
           target,
-          targetPropertyName: props.foreignKey.toString()
+          targetKey: props.targetKey.toString()
         };
       }
     });
