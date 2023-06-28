@@ -127,7 +127,28 @@ class Room extends DrewsBrewsTable {
   public scales: Scale[];
 }
 
-/* TODO most mvp
+@Entity
+class Process extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "Status" })
+  public status: string;
+
+  @Attribute({ alias: "CurrentState" })
+  public currentState: string;
+
+  @Attribute({ alias: "CurrentStateStatus" })
+  public currentStateStatus: string;
+
+  @Attribute({ alias: "CurrentUserInput" })
+  public currentUserInput: string;
+}
+
+/* TODO post mvp
 - add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
   and I could log an error that there is corrupted data when it finds it
 
@@ -138,6 +159,15 @@ class Room extends DrewsBrewsTable {
   See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
   Note I reflected this in my test mocks so I can clean those up
 */
+
+// TODO START HERE
+// Work on HasOne. Right now its a projection just inside the parent
+// Should I keep that? Make it so it has another?
+// Or make something like HasOneLocal?
+// OR... is it a HasMany (HasManyLocal?) extension with a scope... THATS IT
+// IMPORTANT - Why remove functionality I have when it might be a valud use case
+// Come up with a name indicating its local to the parent partition
+// And make a list item to make a HasOne with link...
 
 (async () => {
   try {

@@ -1,6 +1,6 @@
-import { QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
+import { QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata, { TableMetadata, EntityMetadata } from "./metadata";
+import Metadata, { TableMetadata } from "./metadata";
 
 // TODO add unit tests for this class
 
