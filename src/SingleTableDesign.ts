@@ -16,6 +16,12 @@ import { Attribute } from "./decorators";
 
 // type Entity<T> = T extends SingleTableDesign;
 
+// type BelongsToRel = RelationshipMetadata & { type: "BelongsTo" };
+
+interface BelongsToRel extends RelationshipMetadata {
+  type: "BelongsTo";
+}
+
 // TODO does this belong here
 interface FindByIdOptions<T> {
   // TODO can this be more type safe? Keyof has many of something?
@@ -111,7 +117,7 @@ abstract class SingleTableDesign {
 
     const { relationsLookup, belongTos } = includedRelationships.reduce(
       (acc, rel) => {
-        if (rel.type === "BelongsTo") {
+        if (this.isBelongsToRel(rel)) {
           acc.belongTos.push(rel);
         }
 
@@ -121,7 +127,7 @@ abstract class SingleTableDesign {
       },
       {
         relationsLookup: {} as Record<string, RelationshipMetadata>,
-        belongTos: [] as RelationshipMetadata[]
+        belongTos: [] as BelongsToRel[]
       }
     );
 
@@ -143,6 +149,11 @@ abstract class SingleTableDesign {
     return key in this;
   }
 
+  // TODO does this belong in this class?
+  private isBelongsToRel(rel: RelationshipMetadata): rel is BelongsToRel {
+    return rel.type === "BelongsTo";
+  }
+
   // TODO make sure this doesnt get called more then the number of instances returned...
   // TODO do I need to extend here?
   private static init<Entity extends SingleTableDesign>(this: {
@@ -155,7 +166,7 @@ abstract class SingleTableDesign {
   private async resolveFindByIdIncludesQuery(
     res: Record<string, NativeAttributeValue>,
     relationsLookup: Record<string, RelationshipMetadata>,
-    belongsTos: RelationshipMetadata[] // TODO make sure this is only for belongsTos
+    belongsTos: BelongsToRel[]
   ) {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
@@ -185,7 +196,7 @@ abstract class SingleTableDesign {
   }
 
   // TODO make sure only belongs to relations can be in here
-  private async findAndResolveBelongsTo(belongsTo: RelationshipMetadata) {
+  private async findAndResolveBelongsTo(belongsTo: BelongsToRel) {
     const foreignKey = this[belongsTo.foreignKey as keyof this];
 
     if (this.isKeyOfEntity(belongsTo.propertyName) && foreignKey) {
