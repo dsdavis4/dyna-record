@@ -197,7 +197,7 @@ abstract class SingleTableDesign {
           // const res = await belongTo.target.findById(foreignKey as string);
 
           this[belongTo.propertyName] = (await belongTo.target.findById(
-            foreignKey as any
+            foreignKey as string
           )) as any;
         }
       }
