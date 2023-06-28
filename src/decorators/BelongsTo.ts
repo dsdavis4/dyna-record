@@ -6,7 +6,7 @@ interface BelongsToProps<T> {
 }
 
 function BelongsTo<T extends SingleTableDesign>(
-  // TODO can I get better typeing on this so it knows it extends single table design?
+  // Function to obtain Class to which relationship is applied
   target: Function,
   props: BelongsToProps<T>
 ) {
@@ -17,7 +17,6 @@ function BelongsTo<T extends SingleTableDesign>(
       const entityMetadata = Metadata.entities[entity.constructor.name];
       const propertyName = context.name.toString();
       if (!entityMetadata.relationships[propertyName]) {
-        // TODO can I do keyof? like on belngs to model..
         entityMetadata.relationships[propertyName] = {
           type: "BelongsTo",
           propertyName: context.name.toString(),

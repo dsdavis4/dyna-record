@@ -9,6 +9,7 @@ interface HasManyProps<T> {
 }
 
 function HasMany<T>(
+  // Function to obtain Class to which relationship is applied
   target: (type?: any) => ObjectType<T>,
   props: HasManyProps<T>
 ) {

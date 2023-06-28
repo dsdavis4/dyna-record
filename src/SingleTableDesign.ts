@@ -2,6 +2,7 @@ import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
 import Metadata, {
   RelationshipMetadata,
+  BelongsToRelationship,
   EntityMetadata,
   TableMetadata
 } from "./metadata";
@@ -16,11 +17,7 @@ import { Attribute } from "./decorators";
 
 // type Entity<T> = T extends SingleTableDesign;
 
-// type BelongsToRel = RelationshipMetadata & { type: "BelongsTo" };
-
-interface BelongsToRel extends RelationshipMetadata {
-  type: "BelongsTo";
-}
+// type BelongsToRelationship = RelationshipMetadata & { type: "BelongsTo" };
 
 // TODO does this belong here
 interface FindByIdOptions<T> {
@@ -117,7 +114,7 @@ abstract class SingleTableDesign {
 
     const { relationsLookup, belongTos } = includedRelationships.reduce(
       (acc, rel) => {
-        if (this.isBelongsToRel(rel)) {
+        if (this.isBelongsToRelationship(rel)) {
           acc.belongTos.push(rel);
         }
 
@@ -127,7 +124,7 @@ abstract class SingleTableDesign {
       },
       {
         relationsLookup: {} as Record<string, RelationshipMetadata>,
-        belongTos: [] as BelongsToRel[]
+        belongTos: [] as BelongsToRelationship[]
       }
     );
 
@@ -150,7 +147,9 @@ abstract class SingleTableDesign {
   }
 
   // TODO does this belong in this class?
-  private isBelongsToRel(rel: RelationshipMetadata): rel is BelongsToRel {
+  private isBelongsToRelationship(
+    rel: RelationshipMetadata
+  ): rel is BelongsToRelationship {
     return rel.type === "BelongsTo";
   }
 
@@ -166,7 +165,7 @@ abstract class SingleTableDesign {
   private async resolveFindByIdIncludesQuery(
     res: Record<string, NativeAttributeValue>,
     relationsLookup: Record<string, RelationshipMetadata>,
-    belongsTos: BelongsToRel[]
+    belongsTos: BelongsToRelationship[]
   ) {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
@@ -196,7 +195,7 @@ abstract class SingleTableDesign {
   }
 
   // TODO make sure only belongs to relations can be in here
-  private async findAndResolveBelongsTo(belongsTo: BelongsToRel) {
+  private async findAndResolveBelongsTo(belongsTo: BelongsToRelationship) {
     const foreignKey = this[belongsTo.foreignKey as keyof this];
 
     if (this.isKeyOfEntity(belongsTo.propertyName) && foreignKey) {
