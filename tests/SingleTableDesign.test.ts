@@ -689,6 +689,7 @@ describe("SingleTableDesign", () => {
         ]
       });
 
+      mockGet.mockResolvedValueOnce({ Item: customerRes });
       orderLinks.forEach(link => {
         mockGet.mockResolvedValueOnce({
           Item: {
@@ -702,7 +703,6 @@ describe("SingleTableDesign", () => {
           }
         });
       });
-      mockGet.mockResolvedValueOnce({ Item: customerRes });
 
       const result = await PaymentMethod.findById("789", {
         include: [{ association: "orders" }, { association: "customer" }]
@@ -775,15 +775,15 @@ describe("SingleTableDesign", () => {
         ]
       ]);
       expect(mockedGetCommand.mock.calls).toEqual([
-        [{ TableName: "mock-table", Key: { PK: "Order#111", SK: "Order" } }],
-        [{ TableName: "mock-table", Key: { PK: "Order#112", SK: "Order" } }],
-        [{ TableName: "mock-table", Key: { PK: "Order#113", SK: "Order" } }],
         [
           {
             TableName: "mock-table",
             Key: { PK: "Customer#123", SK: "Customer" }
           }
-        ]
+        ],
+        [{ TableName: "mock-table", Key: { PK: "Order#111", SK: "Order" } }],
+        [{ TableName: "mock-table", Key: { PK: "Order#112", SK: "Order" } }],
+        [{ TableName: "mock-table", Key: { PK: "Order#113", SK: "Order" } }]
       ]);
       expect(mockSend.mock.calls).toEqual([
         [{ name: "QueryCommand" }],
