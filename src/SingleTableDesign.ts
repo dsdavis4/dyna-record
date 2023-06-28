@@ -77,6 +77,7 @@ abstract class SingleTableDesign {
     }
   }
 
+  // TODO clean up this method...
   private async findByIdWithIncludes<T>(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
@@ -100,8 +101,6 @@ abstract class SingleTableDesign {
     }
 
     const partitionFilter = this.buildPartitionFilter(includedRelationships);
-
-    // TODO wrap as much as i can in class EX // SingleTableDesignQuerier
 
     const params = new QueryBuilder({
       entityClassName: this.constructor.name,
