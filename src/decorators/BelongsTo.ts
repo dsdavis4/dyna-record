@@ -1,5 +1,4 @@
 import Metadata from "../metadata";
-import BelongsToModel from "../relationships/BelongsTo";
 import SingleTableDesign from "../SingleTableDesign";
 
 interface BelongsToProps<T> {
@@ -25,12 +24,6 @@ function BelongsTo<T extends SingleTableDesign>(
           target: target(),
           foreignKey: props.foreignKey.toString()
         };
-
-        const bla = new BelongsToModel({
-          entityClass: target(),
-          propertyName: context.name as keyof SingleTableDesign,
-          foreignKey: props.foreignKey as keyof SingleTableDesign
-        });
       }
     });
   };
