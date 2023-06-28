@@ -139,11 +139,6 @@ class Room extends DrewsBrewsTable {
   Note I reflected this in my test mocks so I can clean those up
 */
 
-// TODO START HERE
-// I just got findById to work with includes
-
-// 1. In the code for serizlaiing Belongsto I need to make fetching the relationships in a promise.all
-
 (async () => {
   try {
     const metadata = Metadata;
