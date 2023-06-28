@@ -91,22 +91,6 @@ abstract class SingleTableDesign {
       [] as RelationshipMetadata[]
     );
 
-    // const { relationsLookup, belongTos } = this.includedRelationships.reduce(
-    //   (acc, rel) => {
-    //     if (rel.type === "BelongsTo") {
-    //       acc.belongTos.push(rel);
-    //     }
-
-    //     acc.relationsLookup[rel.target.name] = rel;
-
-    //     return acc;
-    //   },
-    //   {
-    //     relationsLookup: {} as Record<string, RelationshipMetadata>,
-    //     belongTos: [] as RelationshipMetadata[]
-    //   }
-    // );
-
     // TODO remove this block of code, its to show me if we reach this block unintentionally
     if (includedRelationships.length !== includedAssociations.length) {
       throw new Error("Not supposed to hit this code");
@@ -125,9 +109,25 @@ abstract class SingleTableDesign {
     const dynamo = new DynamoBase(tableName);
     const queryResults = await dynamo.query(params);
 
+    const { relationsLookup, belongTos } = includedRelationships.reduce(
+      (acc, rel) => {
+        if (rel.type === "BelongsTo") {
+          acc.belongTos.push(rel);
+        }
+
+        acc.relationsLookup[rel.target.name] = rel;
+
+        return acc;
+      },
+      {
+        relationsLookup: {} as Record<string, RelationshipMetadata>,
+        belongTos: [] as RelationshipMetadata[]
+      }
+    );
+
     await Promise.all(
       queryResults.map(res =>
-        this.resolveQueryLinks(res, includedRelationships)
+        this.resolveFindByIdIncludesQuery(res, relationsLookup, belongTos)
       )
     );
 
@@ -152,18 +152,13 @@ abstract class SingleTableDesign {
   }
 
   // TODO rename?
-  private async resolveQueryLinks(
+  private async resolveFindByIdIncludesQuery(
     res: Record<string, NativeAttributeValue>,
-    includedRelationships: RelationshipMetadata[]
+    relationsLookup: Record<string, RelationshipMetadata>,
+    belongsTos: RelationshipMetadata[] // TODO make sure this is only for belongsTos
   ) {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
-
-    // TODO this will iterate for EVERY res...
-    const relationsLookup = includedRelationships.reduce(
-      (lookup, rel) => ({ ...lookup, [rel.target.name]: rel }),
-      {} as Record<string, RelationshipMetadata>
-    );
 
     if (res.Type === BelongsToLink.name) {
       const [modelName, id] = res[sortKey].split(delimiter);
@@ -182,11 +177,6 @@ abstract class SingleTableDesign {
       }
     } else if (modelName === this.constructor.name) {
       this.serializeTableItemToModel(res);
-
-      // TODO this will iterate for EVERY res...
-      const belongsTos = includedRelationships.filter(
-        rel => rel.type === "BelongsTo"
-      );
 
       await Promise.all(
         belongsTos.map(belongsTo => this.findAndResolveBelongsTo(belongsTo))
