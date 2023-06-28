@@ -2,6 +2,8 @@ import { QueryCommand, QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, { TableMetadata, EntityMetadata } from "./metadata";
 
+// TODO add unit tests for this class
+
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],
   "undefined"
@@ -63,7 +65,7 @@ const allAnd: FilterParams = {
 
 interface QueryCommandProps {
   // entity: typeof DynamoBase;
-  entityClassName: string;
+  entityClassName: string; // TODO is this needed or should I pass tableMetadata?
   key: KeyConditions;
   // TODO should this be optional?
   // TODO make it so at least one of the params is required

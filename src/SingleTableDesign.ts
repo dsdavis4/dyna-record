@@ -1,7 +1,6 @@
 import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
 import Metadata, {
-  AttributeMetadata,
   RelationshipMetadata,
   EntityMetadata,
   TableMetadata
@@ -92,20 +91,30 @@ abstract class SingleTableDesign {
       [] as RelationshipMetadata[]
     );
 
+    // const { relationsLookup, belongTos } = this.includedRelationships.reduce(
+    //   (acc, rel) => {
+    //     if (rel.type === "BelongsTo") {
+    //       acc.belongTos.push(rel);
+    //     }
+
+    //     acc.relationsLookup[rel.target.name] = rel;
+
+    //     return acc;
+    //   },
+    //   {
+    //     relationsLookup: {} as Record<string, RelationshipMetadata>,
+    //     belongTos: [] as RelationshipMetadata[]
+    //   }
+    // );
+
+    // TODO remove this block of code, its to show me if we reach this block unintentionally
     if (includedRelationships.length !== includedAssociations.length) {
-      // TODO IMPORTANT!!! I think I need to add an initialzer so I can group relationships by entity
-      // Otherwise, the association lookup with property name might not always work
-      // Right now its working because the proerpty name EX "breweries" is the same
-      // Make a unit test for this...
-
-      // Does this problem exist for both belongsTo and hasMany?
-      debugger;
-
-      // TODO remove
-      // throw new Error("Not supposed to hit this code");
+      throw new Error("Not supposed to hit this code");
     }
 
     const partitionFilter = this.buildPartitionFilter(includedRelationships);
+
+    // TODO wrap as much as i can in class EX // SingleTableDesignQuerier
 
     const params = new QueryBuilder({
       entityClassName: this.constructor.name,
@@ -134,15 +143,6 @@ abstract class SingleTableDesign {
     return key in this;
   }
 
-  // TODO trying to dynamically check that the value being set is correct...
-  // https://stackoverflow.com/questions/69705488/typescript-property-type-guards-on-unknown
-  // private isValueCorrectType<T extends SingleTableDesign>(
-  //   key: keyof T,
-  //   val: unknown
-  // ): val is T[key] {
-  //   return true;
-  // }
-
   // TODO make sure this doesnt get called more then the number of instances returned...
   // TODO do I need to extend here?
   private static init<Entity extends SingleTableDesign>(this: {
@@ -153,7 +153,7 @@ abstract class SingleTableDesign {
 
   // TODO rename?
   private async resolveQueryLinks(
-    res: Record<string, any>,
+    res: Record<string, NativeAttributeValue>,
     includedRelationships: RelationshipMetadata[]
   ) {
     const { sortKey, delimiter } = this.#tableMetadata;
@@ -161,7 +161,7 @@ abstract class SingleTableDesign {
 
     // TODO this will iterate for EVERY res...
     const relationsLookup = includedRelationships.reduce(
-      (lookup, rel) => ({ ...lookup, [rel.target().name]: rel }),
+      (lookup, rel) => ({ ...lookup, [rel.target.name]: rel }),
       {} as Record<string, RelationshipMetadata>
     );
 
@@ -170,8 +170,7 @@ abstract class SingleTableDesign {
       const includedRel = relationsLookup[modelName];
       if (!!includedRel) {
         if (this.isKeyOfEntity(includedRel.propertyName)) {
-          // TODO findById is not typed correctly here... it should know it requires a string
-          const res = await includedRel.target().findById(id);
+          const res = await includedRel.target.findById(id);
 
           if (includedRel.type === "HasMany") {
             if (!this[includedRel.propertyName]) {
@@ -195,9 +194,11 @@ abstract class SingleTableDesign {
         const foreignKey = this[belongTo.foreignKey as keyof this];
 
         if (this.isKeyOfEntity(belongTo.propertyName) && foreignKey) {
-          this[belongTo.propertyName] = await belongTo
-            .target()
-            .findById(foreignKey);
+          // const res = await belongTo.target.findById(foreignKey as string);
+
+          this[belongTo.propertyName] = (await belongTo.target.findById(
+            foreignKey as any
+          )) as any;
         }
       }
     }

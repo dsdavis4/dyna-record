@@ -3,7 +3,8 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
-  QueryCommandInput
+  QueryCommandInput,
+  QueryCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import { KeyConditions } from "./QueryBuilder";
 // import QueryParams from "./QueryParams";
@@ -49,7 +50,9 @@ class DynamoBase {
     return response.Item ?? null;
   }
 
-  public async query(params: QueryCommandInput) {
+  public async query(
+    params: QueryCommandInput
+  ): Promise<NonNullable<QueryCommandOutput["Items"]>> {
     console.log("query", { params });
     const response = await this.dynamo.send(new QueryCommand(params));
     return response.Items ?? [];

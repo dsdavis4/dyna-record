@@ -9,6 +9,8 @@ import {
 
 import Metadata from "../src/metadata";
 
+// TODO I need to standadridze on relationship + association terminology
+
 // TODO does it make sense for the tahle decorator to do a mixin which extends single table design?
 // That way it doesnt have to be extended
 @Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })

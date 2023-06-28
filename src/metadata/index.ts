@@ -1,14 +1,22 @@
+import SingleTableDesign from "../SingleTableDesign";
+
 export interface AttributeMetadata {
   name: string;
 }
+
+type RelationshipTypes = "HasMany" | "BelongsTo";
+
+type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
 
 // TODO make sure these are all needed
 // TODO I can make this a union of HasMany and BelongsTo props
 //     this way foreignKey and targetKey are not optional but required for each type
 export interface RelationshipMetadata {
-  type: "HasMany" | "BelongsTo";
+  type: RelationshipTypes;
   // Function to obtain Class to which relationship is applied
-  target: Function;
+  // target: Function;
+  // target: <T>() => EntityClass<T>;
+  target: EntityClass<SingleTableDesign>;
   // target<T>(): () => T;
   // Property name on the target class
   foreignKey?: string; // For BelongsTo

@@ -1,4 +1,5 @@
 import Metadata from "../metadata";
+import SingleTableDesign from "../SingleTableDesign";
 
 type ObjectType<T> = { new (): T };
 
@@ -23,7 +24,7 @@ function HasMany<T>(
         entityMetadata.relationships[propertyName] = {
           type: "HasMany",
           propertyName: context.name.toString(),
-          target,
+          target: target() as any,
           targetKey: props.targetKey.toString()
         };
       }
