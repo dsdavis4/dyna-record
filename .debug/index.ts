@@ -127,27 +127,6 @@ class Room extends DrewsBrewsTable {
   public scales: Scale[];
 }
 
-@Entity
-class Process extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
-  @Attribute({ alias: "Name" })
-  public name: string;
-
-  @Attribute({ alias: "Status" })
-  public status: string;
-
-  @Attribute({ alias: "CurrentState" })
-  public currentState: string;
-
-  @Attribute({ alias: "CurrentStateStatus" })
-  public currentStateStatus: string;
-
-  @Attribute({ alias: "CurrentUserInput" })
-  public currentUserInput: string;
-}
-
 /* TODO post mvp
 - add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
   and I could log an error that there is corrupted data when it finds it
@@ -158,7 +137,14 @@ class Process extends DrewsBrewsTable {
 - When doing a findById with includes, every belongs to link is serilzied even if its not part of the includes
   See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
   Note I reflected this in my test mocks so I can clean those up
+
+- Support projected associations
 */
+
+// TODO PRE MVP
+// Get HasOne Process to work where process is a top level entity
+// Add comments to each decorator/class etc so that on hover there is a description. See projen for example
+// Should be able to access params with optional chaining or not as appropriate
 
 // TODO START HERE
 // Work on HasOne. Right now its a projection just inside the parent

@@ -1,4 +1,3 @@
-import "reflect-metadata";
 import DynamoBase from "./DynamoBase";
 import Metadata, {
   RelationshipMetadata,
@@ -14,6 +13,7 @@ import QueryBuilder, {
 } from "./QueryBuilder";
 import { BelongsToLink } from "./relationships";
 import { Attribute } from "./decorators";
+import QueryResolver from "./QueryResolver";
 
 // type Entity<T> = T extends SingleTableDesign;
 
@@ -32,7 +32,6 @@ interface QueryOptions<T> extends FindByIdOptions<T> {
   filter?: FilterParams;
 }
 
-// TODO should this be abstract?
 abstract class SingleTableDesign {
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
@@ -61,7 +60,7 @@ abstract class SingleTableDesign {
     }
   }
 
-  private async findById(id: string) {
+  private async findById<T extends SingleTableDesign>(id: string) {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
     const dynamo = new DynamoBase(tableName);
     const res = await dynamo.findById({
@@ -70,8 +69,8 @@ abstract class SingleTableDesign {
     });
 
     if (res) {
-      this.serializeTableItemToModel(res);
-      return this;
+      const queryResolver = new QueryResolver(this);
+      return await queryResolver.resolve(res);
     } else {
       return null;
     }
@@ -111,45 +110,13 @@ abstract class SingleTableDesign {
     const dynamo = new DynamoBase(tableName);
     const queryResults = await dynamo.query(params);
 
-    const { relationsLookup, belongTos } = includedRelationships.reduce(
-      (acc, rel) => {
-        if (this.isBelongsToRelationship(rel)) {
-          acc.belongTos.push(rel);
-        }
-
-        acc.relationsLookup[rel.target.name] = rel;
-
-        return acc;
-      },
-      {
-        relationsLookup: {} as Record<string, RelationshipMetadata>,
-        belongTos: [] as BelongsToRelationship[]
-      }
-    );
-
-    await Promise.all(
-      queryResults.map(res =>
-        this.resolveFindByIdIncludesQuery(res, relationsLookup, belongTos)
-      )
-    );
-
-    return this;
+    const queryResolver = new QueryResolver(this);
+    return await queryResolver.resolve(queryResults, includedRelationships);
   }
 
   private primaryKeyValue(id: string) {
     const { delimiter } = this.#tableMetadata;
     return `${this.constructor.name}${delimiter}${id}`;
-  }
-
-  private isKeyOfEntity(key: string): key is keyof SingleTableDesign {
-    return key in this;
-  }
-
-  // TODO does this belong in this class?
-  private isBelongsToRelationship(
-    rel: RelationshipMetadata
-  ): rel is BelongsToRelationship {
-    return rel.type === "BelongsTo";
   }
 
   // TODO make sure this doesnt get called more then the number of instances returned...
@@ -158,62 +125,6 @@ abstract class SingleTableDesign {
     new (): Entity;
   }) {
     return new this();
-  }
-
-  // TODO rename?
-  private async resolveFindByIdIncludesQuery(
-    res: Record<string, NativeAttributeValue>,
-    relationsLookup: Record<string, RelationshipMetadata>,
-    belongsTos: BelongsToRelationship[]
-  ) {
-    const { sortKey, delimiter } = this.#tableMetadata;
-    const [modelName] = res[sortKey].split(delimiter);
-
-    if (res.Type === BelongsToLink.name) {
-      const [modelName, id] = res[sortKey].split(delimiter);
-      const includedRel = relationsLookup[modelName];
-      if (!!includedRel) {
-        if (this.isKeyOfEntity(includedRel.propertyName)) {
-          const res = await includedRel.target.findById(id);
-
-          if (includedRel.type === "HasMany") {
-            if (!this[includedRel.propertyName]) {
-              this[includedRel.propertyName] = [] as any;
-            }
-            (this[includedRel.propertyName] as unknown as any[]).push(res);
-          }
-        }
-      }
-    } else if (modelName === this.constructor.name) {
-      this.serializeTableItemToModel(res);
-
-      await Promise.all(
-        belongsTos.map(belongsTo => this.findAndResolveBelongsTo(belongsTo))
-      );
-    }
-  }
-
-  // TODO make sure only belongs to relations can be in here
-  private async findAndResolveBelongsTo(belongsTo: BelongsToRelationship) {
-    const foreignKey = this[belongsTo.foreignKey as keyof this];
-
-    if (this.isKeyOfEntity(belongsTo.propertyName) && foreignKey) {
-      // const res = await belongTo.target.findById(foreignKey as string);
-      const res = await belongsTo.target.findById(foreignKey as string);
-      this[belongsTo.propertyName] = res as any;
-    }
-  }
-
-  private serializeTableItemToModel(
-    tableItem: Record<string, NativeAttributeValue>
-  ) {
-    const attrs = this.#entityMetadata.attributes;
-    Object.keys(tableItem).forEach(attr => {
-      const entityKey = attrs[attr]?.name;
-      if (this.isKeyOfEntity(entityKey)) {
-        this[entityKey] = tableItem[attr];
-      }
-    });
   }
 
   // TODO is this the right place for this class? Should it be its own class?

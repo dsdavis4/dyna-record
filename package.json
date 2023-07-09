@@ -21,8 +21,7 @@
   "homepage": "https://github.com/dsdavis4/no-orm#readme",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.290.0",
-    "@aws-sdk/lib-dynamodb": "^3.290.0",
-    "reflect-metadata": "^0.1.13"
+    "@aws-sdk/lib-dynamodb": "^3.290.0"
   },
   "devDependencies": {
     "@aws-sdk/types": "^3.290.0",
