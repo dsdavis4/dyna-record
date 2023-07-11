@@ -4,8 +4,6 @@ interface AttributeProps {
   alias: string;
 }
 
-// TODO can I do this in a way where I dont set the metadata on every instance?
-//    meaning this is only run once
 function Attribute<T>(props: AttributeProps) {
   return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
     if (context.kind === "field") {

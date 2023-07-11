@@ -11,16 +11,18 @@ function HasOne<T extends SingleTableDesign>(
   props: HasOneProps<T>
 ) {
   return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
-    context.addInitializer(function () {
-      const entity = Object.getPrototypeOf(this);
+    if (context.kind === "field") {
+      context.addInitializer(function () {
+        const entity = Object.getPrototypeOf(this);
 
-      Metadata.addEntityRelationship(entity.constructor.name, {
-        type: "HasOne",
-        propertyName: context.name as keyof SingleTableDesign,
-        target: target(),
-        foreignKey: props.foreignKey as keyof SingleTableDesign
+        Metadata.addEntityRelationship(entity.constructor.name, {
+          type: "HasOne",
+          propertyName: context.name as keyof SingleTableDesign,
+          target: target(),
+          foreignKey: props.foreignKey as keyof SingleTableDesign
+        });
       });
-    });
+    }
   };
 }
 

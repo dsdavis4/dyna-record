@@ -11,16 +11,18 @@ function HasMany<T extends SingleTableDesign>(
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
-    context.addInitializer(function () {
-      const entity = Object.getPrototypeOf(this);
+    if (context.kind === "field") {
+      context.addInitializer(function () {
+        const entity = Object.getPrototypeOf(this);
 
-      Metadata.addEntityRelationship(entity.constructor.name, {
-        type: "HasMany",
-        propertyName: context.name as keyof SingleTableDesign,
-        target: target(),
-        targetKey: props.targetKey as keyof SingleTableDesign
+        Metadata.addEntityRelationship(entity.constructor.name, {
+          type: "HasMany",
+          propertyName: context.name as keyof SingleTableDesign,
+          target: target(),
+          targetKey: props.targetKey as keyof SingleTableDesign
+        });
       });
-    });
+    }
   };
 }
 
