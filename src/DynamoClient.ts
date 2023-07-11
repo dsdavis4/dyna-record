@@ -30,7 +30,7 @@ const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
 
-class DynamoBase {
+class DynamoClient {
   private readonly tableName: string;
 
   constructor(tableName: string) {
@@ -59,4 +59,4 @@ class DynamoBase {
   }
 }
 
-export default DynamoBase;
+export default DynamoClient;

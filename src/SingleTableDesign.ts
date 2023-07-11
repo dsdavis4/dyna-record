@@ -1,4 +1,4 @@
-import DynamoBase from "./DynamoBase";
+import DynamoClient from "./DynamoClient";
 import Metadata, {
   RelationshipMetadata,
   EntityMetadata,
@@ -41,7 +41,7 @@ abstract class SingleTableDesign {
 
   private async findById<T extends SingleTableDesign>(id: string) {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-    const dynamo = new DynamoBase(tableName);
+    const dynamo = new DynamoClient(tableName);
     const res = await dynamo.findById({
       [primaryKey]: this.primaryKeyValue(id),
       [sortKey]: this.constructor.name
@@ -83,7 +83,7 @@ abstract class SingleTableDesign {
       options: { filter: partitionFilter }
     }).build();
 
-    const dynamo = new DynamoBase(tableName);
+    const dynamo = new DynamoClient(tableName);
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver(this);
@@ -98,7 +98,6 @@ abstract class SingleTableDesign {
   private static init<Entity extends SingleTableDesign>(this: {
     new (): Entity;
   }) {
-    console.log("BLA");
     return new this();
   }
 }
