@@ -1,8 +1,10 @@
 import Metadata, { TableMetadata } from "../metadata";
 
 function Table(props: TableMetadata) {
-  return function (target: Function, _context: ClassDecoratorContext) {
-    Metadata.tables[target.name] = props;
+  return function (target: Function, context: ClassDecoratorContext) {
+    if (context.kind === "class") {
+      Metadata.addTable(target.name, props);
+    }
   };
 }
 
