@@ -17,13 +17,7 @@ import Metadata from "../src/metadata";
 // That way it doesnt have to be extended
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  // https://stackoverflow.com/questions/66681411/how-to-implement-an-abstract-class-with-static-properties-in-typescript
-  // static readonly tableName = "drews-brews";
-  // static readonly primaryKey = "PK";
-  // static readonly sortKey = "SK";
-  // static readonly delimiter = "#";
-
-  // TODO should I make a decorator for primate key and sort key8?
+  // TODO should I make a decorator for primary key and sort key8?
   // At the very least find out how to not repeate myself here and in the decorator for table
   @Attribute({ alias: "PK" })
   public pk: string;
