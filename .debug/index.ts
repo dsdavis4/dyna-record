@@ -10,8 +10,6 @@ import {
 
 import Metadata from "../src/metadata";
 
-// TODO I need to standadridze on relationship + association terminology
-
 // TODO can I make it so the attribute decorator target functions must return a class that extends SingleTableDesign?
 // Then I could use keyOf instead of toString on propertyName fields etc
 
