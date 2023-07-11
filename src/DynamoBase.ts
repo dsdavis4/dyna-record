@@ -26,21 +26,21 @@ import { KeyConditions } from "./QueryBuilder";
 // ddbDocClient.destroy(); // no-op
 // client.destroy(); // destroys DynamoDBClient
 
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: "us-west-2" })
+);
+
 class DynamoBase {
   private readonly tableName: string;
-  private readonly dynamo: DynamoDBDocumentClient;
 
   constructor(tableName: string) {
     this.tableName = tableName;
-    this.dynamo = DynamoDBDocumentClient.from(
-      new DynamoDBClient({ region: "us-west-2" })
-    );
   }
 
   public async findById(key: KeyConditions) {
     console.log("findById", { key });
 
-    const response = await this.dynamo.send(
+    const response = await dynamo.send(
       new GetCommand({
         TableName: this.tableName,
         Key: key
@@ -54,7 +54,7 @@ class DynamoBase {
     params: QueryCommandInput
   ): Promise<NonNullable<QueryCommandOutput["Items"]>> {
     console.log("query", { params });
-    const response = await this.dynamo.send(new QueryCommand(params));
+    const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
   }
 }

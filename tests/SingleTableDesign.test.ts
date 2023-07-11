@@ -25,14 +25,16 @@ const mockedQueryCommand = jest.mocked(QueryCommand);
 
 const mockGet = jest.fn();
 const mockQuery = jest.fn();
-const mockSend = jest.fn().mockImplementation(command => {
-  if (command.name == "GetCommand") {
-    return Promise.resolve(mockGet());
-  }
-  if (command.name == "QueryCommand") {
-    return Promise.resolve(mockQuery());
-  }
-});
+// const mockSend = jest.fn().mockImplementation(command => {
+//   if (command.name == "GetCommand") {
+//     return Promise.resolve(mockGet());
+//   }
+//   if (command.name == "QueryCommand") {
+//     return Promise.resolve(mockQuery());
+//   }
+// });
+
+const mockSend = jest.fn();
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -46,7 +48,17 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
       from: jest.fn().mockImplementation(() => {
-        return { send: mockSend };
+        return {
+          send: jest.fn().mockImplementation(command => {
+            mockSend(command);
+            if (command.name == "GetCommand") {
+              return Promise.resolve(mockGet());
+            }
+            if (command.name == "QueryCommand") {
+              return Promise.resolve(mockQuery());
+            }
+          })
+        };
       })
     },
     GetCommand: jest.fn().mockImplementation(() => {
