@@ -15,13 +15,13 @@ function BelongsTo<T extends SingleTableDesign>(
       const entity = Object.getPrototypeOf(this);
 
       const entityMetadata = Metadata.entities[entity.constructor.name];
-      const propertyName = context.name.toString();
+      const propertyName = context.name as keyof SingleTableDesign;
       if (!entityMetadata.relationships[propertyName]) {
         entityMetadata.relationships[propertyName] = {
           type: "BelongsTo",
-          propertyName: context.name.toString(),
+          propertyName: context.name as keyof SingleTableDesign,
           target: target(),
-          foreignKey: props.foreignKey.toString()
+          foreignKey: props.foreignKey as keyof SingleTableDesign
         };
       }
     });

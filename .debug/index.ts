@@ -10,11 +10,6 @@ import {
 
 import Metadata from "../src/metadata";
 
-// TODO can I make it so the attribute decorator target functions must return a class that extends SingleTableDesign?
-// Then I could use keyOf instead of toString on propertyName fields etc
-
-// TODO does it make sense for the tahle decorator to do a mixin which extends single table design?
-// That way it doesnt have to be extended
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   // TODO should I make a decorator for primary key and sort key8?

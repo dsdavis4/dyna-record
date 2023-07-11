@@ -157,7 +157,7 @@ class QueryResolver<T extends SingleTableDesign> {
    * Resolve a BelongsTo or HasOne relationship by performing a GetItem using the foreignKey to get the related Entity
    */
   private async findAndResolveByForeignKey(rel: ForeignKeyLinkedRelationship) {
-    const foreignKey = this.entity[rel.foreignKey as keyof T];
+    const foreignKey = this.entity[rel.foreignKey];
 
     if (this.isKeyOfEntity(rel.propertyName) && foreignKey) {
       const res = await rel.target.findById(foreignKey as string);

@@ -11,22 +11,22 @@ type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
 interface RelationshipMetadataBase {
   type: RelationshipTypes;
   target: EntityClass<SingleTableDesign>;
-  propertyName: string;
+  propertyName: keyof SingleTableDesign;
 }
 
 export interface BelongsToRelationship extends RelationshipMetadataBase {
   type: "BelongsTo";
-  foreignKey: string;
+  foreignKey: keyof SingleTableDesign;
 }
 
 export interface HasOneRelationship extends RelationshipMetadataBase {
   type: "HasOne";
-  foreignKey: string;
+  foreignKey: keyof SingleTableDesign;
 }
 
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
-  targetKey: string;
+  targetKey: keyof SingleTableDesign;
 }
 
 export type RelationshipMetadata =
