@@ -6,7 +6,7 @@ import {
   QueryCommandInput,
   QueryCommandOutput
 } from "@aws-sdk/lib-dynamodb";
-import { KeyConditions } from "./QueryBuilder";
+import { KeyConditions } from "./query-utils";
 // import QueryParams from "./QueryParams";
 
 // import { v4 as uuidv4 } from "uuid";

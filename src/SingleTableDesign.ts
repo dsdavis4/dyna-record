@@ -4,10 +4,9 @@ import Metadata, {
   EntityMetadata,
   TableMetadata
 } from "./metadata";
-import QueryBuilder, { OrFilter } from "./QueryBuilder";
+import { QueryBuilder, QueryResolver, OrFilter } from "./query-utils";
 import { BelongsToLink } from "./relationships";
 import { Attribute } from "./decorators";
-import QueryResolver from "./QueryResolver";
 
 interface FindByIdOptions<T> {
   include?: { association: keyof T }[];

@@ -1,4 +1,4 @@
-import SingleTableDesign from "./SingleTableDesign";
+import SingleTableDesign from "../SingleTableDesign";
 import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, {
   RelationshipMetadata,
@@ -6,8 +6,8 @@ import Metadata, {
   HasOneRelationship,
   EntityMetadata,
   TableMetadata
-} from "./metadata";
-import { BelongsToLink } from "./relationships";
+} from "../metadata";
+import { BelongsToLink } from "../relationships";
 
 type DynamoTableItem = Record<string, NativeAttributeValue>;
 

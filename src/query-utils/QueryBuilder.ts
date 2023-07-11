@@ -1,8 +1,6 @@
 import { QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata, { TableMetadata } from "./metadata";
-
-// TODO add unit tests for this class
+import Metadata, { TableMetadata } from "../metadata";
 
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],
