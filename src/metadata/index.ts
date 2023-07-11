@@ -1,7 +1,12 @@
 import SingleTableDesign from "../SingleTableDesign";
 
-export interface AttributeMetadata {
+interface AttributeMetadata {
   name: string;
+}
+
+interface AttributeMetadataOptions {
+  attributeName: string;
+  alias: string;
 }
 
 type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
@@ -77,6 +82,24 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
     if (!entityMetadata.relationships[options.propertyName]) {
       entityMetadata.relationships[options.propertyName] = options;
+    }
+  }
+
+  /**
+   * Adds an attribute to an Entity's metadata storage
+   * @param entityName
+   * @param options
+   */
+  public addEntityAttribute(
+    entityName: string,
+    options: AttributeMetadataOptions
+  ) {
+    const entityMetadata = this.entities[entityName];
+
+    if (!entityMetadata.attributes[options.alias]) {
+      entityMetadata.attributes[options.alias] = {
+        name: options.attributeName
+      };
     }
   }
 }

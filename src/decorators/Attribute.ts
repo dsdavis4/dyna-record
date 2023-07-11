@@ -10,15 +10,10 @@ function Attribute<T>(props: AttributeProps) {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
 
-        const entityMetadata = Metadata.entities[entity.constructor.name];
-
-        // TODO would I benefit from storing classes?
-        if (!entityMetadata.attributes[props.alias]) {
-          entityMetadata.attributes[props.alias] = {
-            name: context.name.toString()
-          };
-          Metadata.tables[entityMetadata.tableName];
-        }
+        Metadata.addEntityAttribute(entity.constructor.name, {
+          attributeName: context.name.toString(),
+          alias: props.alias
+        });
       });
     }
   };
