@@ -53,6 +53,19 @@ class Metadata {
   public readonly entities: Record<string, EntityMetadata> = {};
 
   /**
+   * Add an entity to metadata storage
+   * @param entityName
+   * @param tableName
+   */
+  public addEntity(entityName: string, tableName: string) {
+    this.entities[entityName] = {
+      tableName,
+      attributes: {},
+      relationships: {}
+    };
+  }
+
+  /**
    * Adds a relationship to an Entity's metadata storage
    * @param entityName
    * @param options
