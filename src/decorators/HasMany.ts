@@ -1,34 +1,25 @@
-import Metadata from "../metadata";
+import Metadata, { EntityClass } from "../metadata";
 import SingleTableDesign from "../SingleTableDesign";
 
-type ObjectType<T> = { new (): T };
-
-// TODO is this needed? Its more for making sure models are set up right...
 interface HasManyProps<T> {
   targetKey: keyof T;
 }
 
 function HasMany<T extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
-  target: (type?: any) => ObjectType<T>,
+  target: () => EntityClass<T>,
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
-    // TODO make function for this? since its copied in Belongsto
     context.addInitializer(function () {
       const entity = Object.getPrototypeOf(this);
 
-      const entityMetadata = Metadata.entities[entity.constructor.name];
-      const propertyName = context.name as keyof SingleTableDesign;
-
-      if (!entityMetadata.relationships[propertyName]) {
-        entityMetadata.relationships[propertyName] = {
-          type: "HasMany",
-          propertyName: context.name as keyof SingleTableDesign,
-          target: target() as any,
-          targetKey: props.targetKey as keyof SingleTableDesign
-        };
-      }
+      Metadata.addEntityRelationship(entity.constructor.name, {
+        type: "HasMany",
+        propertyName: context.name as keyof SingleTableDesign,
+        target: target(),
+        targetKey: props.targetKey as keyof SingleTableDesign
+      });
     });
   };
 }

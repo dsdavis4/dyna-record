@@ -4,12 +4,12 @@ export interface AttributeMetadata {
   name: string;
 }
 
-type RelationshipTypes = "HasMany" | "BelongsTo" | "HasOne";
+type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
 
-type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
+export type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
 
 interface RelationshipMetadataBase {
-  type: RelationshipTypes;
+  type: RelationshipType;
   target: EntityClass<SingleTableDesign>;
   propertyName: keyof SingleTableDesign;
 }
@@ -51,6 +51,21 @@ export interface TableMetadata {
 class Metadata {
   public readonly tables: Record<string, TableMetadata> = {};
   public readonly entities: Record<string, EntityMetadata> = {};
+
+  /**
+   * Adds a relationship to an Entity's metadata storage
+   * @param entityName
+   * @param options
+   */
+  public addEntityRelationship(
+    entityName: string,
+    options: RelationshipMetadata
+  ) {
+    const entityMetadata = this.entities[entityName];
+    if (!entityMetadata.relationships[options.propertyName]) {
+      entityMetadata.relationships[options.propertyName] = options;
+    }
+  }
 }
 
 export default new Metadata();

@@ -89,13 +89,13 @@ class Brewery extends DrewsBrewsTable {
 
   // TODO maybe params for a HasMany class?
   // TODO can I make it so that this has to be an array of the given type?
-  @HasMany(type => Scale, { targetKey: "breweryId" })
+  @HasMany(() => Scale, { targetKey: "breweryId" })
   public scales: Scale[];
 
-  @HasMany(type => Beer, { targetKey: "breweryId" })
+  @HasMany(() => Beer, { targetKey: "breweryId" })
   public beers: Beer[];
 
-  @HasMany(type => Room, { targetKey: "breweryId" })
+  @HasMany(() => Room, { targetKey: "breweryId" })
   public rooms: Room[];
 
   public testing() {
