@@ -4,7 +4,7 @@ export interface AttributeMetadata {
   name: string;
 }
 
-type RelationshipTypes = "HasMany" | "BelongsTo";
+type RelationshipTypes = "HasMany" | "BelongsTo" | "HasOne";
 
 type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
 
@@ -19,12 +19,20 @@ export interface BelongsToRelationship extends RelationshipMetadataBase {
   foreignKey: string;
 }
 
+export interface HasOneRelationship extends RelationshipMetadataBase {
+  type: "HasOne";
+  foreignKey: string;
+}
+
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
   targetKey: string;
 }
 
-export type RelationshipMetadata = BelongsToRelationship | HasManyRelationship;
+export type RelationshipMetadata =
+  | BelongsToRelationship
+  | HasManyRelationship
+  | HasOneRelationship;
 
 export interface EntityMetadata {
   // TODO should this be tableClassName?

@@ -4,6 +4,7 @@ import {
   Entity,
   Attribute,
   HasMany,
+  HasOne,
   BelongsTo
 } from "../src/decorators";
 
@@ -91,6 +92,15 @@ class Order extends MockTable {
 }
 
 @Entity
+class PaymentMethodProvider extends MockTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
+}
+
+@Entity
 class PaymentMethod extends MockTable {
   @Attribute({ alias: "Id" })
   public id: string;
@@ -101,14 +111,22 @@ class PaymentMethod extends MockTable {
   @Attribute({ alias: "CustomerId" })
   public customerId: string;
 
+  @Attribute({ alias: "PaymentMethodProviderId" })
+  public paymentMethodProviderId: string;
+
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
 
-  @HasMany(type => Order, { targetKey: "paymentMethodId" })
+  @HasMany(() => Order, { targetKey: "paymentMethodId" })
   public orders: Order[];
+
+  @HasOne(() => PaymentMethodProvider, {
+    foreignKey: "paymentMethodProviderId"
+  })
+  public paymentMethodProvider: PaymentMethodProvider;
 }
 
 @Entity
@@ -125,10 +143,10 @@ class Customer extends MockTable {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
-  @HasMany(type => Order, { targetKey: "customerId" })
+  @HasMany(() => Order, { targetKey: "customerId" })
   public orders: Order[];
 
-  @HasMany(type => PaymentMethod, { targetKey: "customerId" })
+  @HasMany(() => PaymentMethod, { targetKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
   public mockCustomInstanceMethod() {
@@ -610,6 +628,87 @@ describe("SingleTableDesign", () => {
       expect(mockSend.mock.calls).toEqual([
         [{ name: "QueryCommand" }],
         [{ name: "GetCommand" }],
+        [{ name: "GetCommand" }]
+      ]);
+    });
+
+    it("will find an entity with included HasOne associations", async () => {
+      expect.assertions(6);
+
+      const paymentMethodRes = {
+        PK: "PaymentMethod#789",
+        SK: "PaymentMethod",
+        Id: "789",
+        LastFour: "0000",
+        CustomerId: "123",
+        UpdatedAt: "2023-02-15T08:31:15.148Z",
+        PaymentMethodProviderId: "123"
+      };
+
+      const paymentMethodProviderRes = {
+        PK: "PaymentMethodProvider#123",
+        SK: "PaymentMethodProvider",
+        Id: "123",
+        Name: "Vida"
+      };
+
+      mockQuery.mockResolvedValueOnce({ Items: [paymentMethodRes] });
+      mockGet.mockResolvedValueOnce({ Item: paymentMethodProviderRes });
+
+      const result = await PaymentMethod.findById("789", {
+        include: [{ association: "paymentMethodProvider" }]
+      });
+
+      expect(result).toEqual({
+        customer: undefined,
+        customerId: "123",
+        id: "789",
+        lastFour: "0000",
+        orders: undefined,
+        paymentMethodProviderId: "123",
+        pk: "PaymentMethod#789",
+        sk: "PaymentMethod",
+        type: undefined,
+        updatedAt: "2023-02-15T08:31:15.148Z",
+        paymentMethodProvider: {
+          id: "123",
+          name: "Vida",
+          pk: "PaymentMethodProvider#123",
+          sk: "PaymentMethodProvider",
+          type: undefined
+        }
+      });
+      expect(result).toBeInstanceOf(PaymentMethod);
+      expect(result?.paymentMethodProvider).toBeInstanceOf(
+        PaymentMethodProvider
+      );
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            FilterExpression: "#Type = :Type1",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
+            ExpressionAttributeValues: {
+              ":PK2": "PaymentMethod#789",
+              ":Type1": "PaymentMethod"
+            }
+          }
+        ]
+      ]);
+      expect(mockedGetCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            Key: {
+              PK: "PaymentMethodProvider#123",
+              SK: "PaymentMethodProvider"
+            }
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
         [{ name: "GetCommand" }]
       ]);
     });

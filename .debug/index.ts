@@ -4,7 +4,8 @@ import {
   Entity,
   Attribute,
   HasMany,
-  BelongsTo
+  BelongsTo,
+  HasOne
 } from "../src/decorators";
 
 import Metadata from "../src/metadata";
@@ -44,15 +45,21 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "RoomId" })
   public roomId: string;
 
+  @Attribute({ alias: "ProcessId" })
+  public processId: string;
+
   // TODO Is this relation in the right place?
   // TODO can I make this so that it has to be defined as an intance of the given type?
   // TODO IMPORTANT!! THIS NEEDS TO MAKE SURE BREWERY ID IS ON THIS MODEL..
   // @BelongsTo(type => Brewery, { as: "scales" })
-  @BelongsTo((type: any) => Brewery, { foreignKey: "breweryId" })
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
-  @BelongsTo((type: any) => Room, { foreignKey: "roomId" })
+  @BelongsTo(() => Room, { foreignKey: "roomId" })
   public room: Room;
+
+  @HasOne(() => Process, { foreignKey: "processId" })
+  public process: Process;
 }
 
 @Entity
@@ -75,7 +82,7 @@ class Beer extends DrewsBrewsTable {
 
   // TODO Is this relation in the right place?
   // TODO can I make this so that it has to be defined as an intance of the given type?
-  @BelongsTo((type: any) => Brewery, { foreignKey: "breweryId" })
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 }
 
@@ -127,6 +134,30 @@ class Room extends DrewsBrewsTable {
   public scales: Scale[];
 }
 
+@Entity
+class Process extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "CurrentState" })
+  public currentState: string;
+
+  @Attribute({ alias: "CurrentStateStatus" })
+  public currentStateStatus: string;
+
+  @Attribute({ alias: "CurrentUserInput" })
+  public currentUserInput: string;
+
+  @Attribute({ alias: "CreatedAt" })
+  public createdAt: Date;
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date;
+}
+
 // TODO delete seed-table scripts in package.json and ts file
 
 /* TODO post mvp
@@ -142,6 +173,9 @@ class Room extends DrewsBrewsTable {
 
 - Support projected associations
 */
+
+// TODO HasOne and BelongsTo are essentially the same. Do I keep them?
+// Keeping for now in case they are different by the end
 
 // TODO PRE MVP
 // Get HasOne Process to work where process is a top level entity
@@ -160,13 +194,13 @@ class Room extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
-    });
+    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+    //   include: [{ association: "brewery" }, { association: "scales" }]
+    // });
 
-    console.timeEnd("bla");
+    // console.timeEnd("bla");
 
-    debugger;
+    // debugger;
 
     // BelongsTo only
     // const beer = await Beer.findById("0c381942-30b5-4082-af98-e2ff8a841d81", {
@@ -180,6 +214,14 @@ class Room extends DrewsBrewsTable {
     //     include: [{ association: "scales" }, { association: "beers" }]
     //   }
     // );
+
+    const scale = await Scale.findById("035188db-de1f-4452-b76b-77849445a4dd", {
+      include: [{ association: "process" }]
+    });
+
+    console.timeEnd("bla");
+
+    debugger;
 
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {
