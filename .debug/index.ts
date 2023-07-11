@@ -16,7 +16,7 @@ import Metadata from "../src/metadata";
 
 // TODO does it make sense for the tahle decorator to do a mixin which extends single table design?
 // That way it doesnt have to be extended
-@Table({ name: "drews-brews", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+@Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   // https://stackoverflow.com/questions/66681411/how-to-implement-an-abstract-class-with-static-properties-in-typescript
   // static readonly tableName = "drews-brews";
@@ -127,6 +127,8 @@ class Room extends DrewsBrewsTable {
   public scales: Scale[];
 }
 
+// TODO delete seed-table scripts in package.json and ts file
+
 /* TODO post mvp
 - add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
   and I could log an error that there is corrupted data when it finds it
@@ -145,24 +147,24 @@ class Room extends DrewsBrewsTable {
 // Get HasOne Process to work where process is a top level entity
 // Add comments to each decorator/class etc so that on hover there is a description. See projen for example
 // Should be able to access params with optional chaining or not as appropriate
+// Need to support HasOne where the HasOne is its own parent entity
+//      I will do this after the create methods
 
-// TODO START HERE
-// Work on HasOne. Right now its a projection just inside the parent
-// Should I keep that? Make it so it has another?
-// Or make something like HasOneLocal?
-// OR... is it a HasMany (HasManyLocal?) extension with a scope... THATS IT
-// IMPORTANT - Why remove functionality I have when it might be a valud use case
-// Come up with a name indicating its local to the parent partition
-// And make a list item to make a HasOne with link...
-
+// TODO Implement HasOne. Its probably very similiar to belongsTo...
+// Maybe the difference is that the other relationship doesnt have to have the foreign key?
+// Or would I want that?
 (async () => {
   try {
     const metadata = Metadata;
+
+    console.time("bla");
 
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
+
+    console.timeEnd("bla");
 
     debugger;
 

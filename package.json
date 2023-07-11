@@ -7,7 +7,8 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "debug-invoke": "npx ts-node .debug/index.ts"
+    "debug-invoke": "npx ts-node .debug/index.ts",
+    "seed-test-table": "npx ts-node seed-test-table.ts"
   },
   "repository": {
     "type": "git",

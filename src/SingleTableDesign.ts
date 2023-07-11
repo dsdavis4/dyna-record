@@ -76,7 +76,6 @@ abstract class SingleTableDesign {
     }
   }
 
-  // TODO clean up this method...
   private async findByIdWithIncludes<T>(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
