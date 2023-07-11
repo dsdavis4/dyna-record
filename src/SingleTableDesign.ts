@@ -1,35 +1,16 @@
 import DynamoBase from "./DynamoBase";
 import Metadata, {
   RelationshipMetadata,
-  BelongsToRelationship,
   EntityMetadata,
   TableMetadata
 } from "./metadata";
-import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import QueryBuilder, {
-  FilterParams,
-  KeyConditions,
-  OrFilter
-} from "./QueryBuilder";
+import QueryBuilder, { OrFilter } from "./QueryBuilder";
 import { BelongsToLink } from "./relationships";
 import { Attribute } from "./decorators";
 import QueryResolver from "./QueryResolver";
 
-// type Entity<T> = T extends SingleTableDesign;
-
-// type BelongsToRelationship = RelationshipMetadata & { type: "BelongsTo" };
-
-// TODO does this belong here
 interface FindByIdOptions<T> {
-  // TODO can this be more type safe? Keyof has many of something?
   include?: { association: keyof T }[];
-}
-
-// TODO find a way to not fe-fetch meta data in multiple functions
-// Maybe make instances in the static methods?
-
-interface QueryOptions<T> extends FindByIdOptions<T> {
-  filter?: FilterParams;
 }
 
 abstract class SingleTableDesign {
@@ -132,8 +113,6 @@ abstract class SingleTableDesign {
   private buildPartitionFilter(
     includedRelationships: RelationshipMetadata[]
   ): OrFilter {
-    // TODO needs HasOne + scopes...
-
     const parentFilter = { type: this.constructor.name };
     const filters = [parentFilter];
 
