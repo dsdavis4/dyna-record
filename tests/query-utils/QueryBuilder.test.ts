@@ -1,7 +1,6 @@
-import QueryBuilder from "../src/QueryBuilder";
+import QueryBuilder from "../../src/query-utils/QueryBuilder";
 
-// import metadata from "../src/metadata";
-jest.mock("../src/metadata", () => ({
+jest.mock("../../src/metadata", () => ({
   tables: {
     MockTable: {
       name: "mock-table",

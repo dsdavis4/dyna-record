@@ -4,8 +4,7 @@ import Metadata, {
   EntityMetadata,
   TableMetadata
 } from "./metadata";
-import { QueryBuilder, QueryResolver, OrFilter } from "./query-utils";
-import { BelongsToLink } from "./relationships";
+import { QueryBuilder, QueryResolver, Filters } from "./query-utils";
 import { Attribute } from "./decorators";
 
 interface FindByIdOptions<T> {
@@ -73,12 +72,10 @@ abstract class SingleTableDesign {
       [] as RelationshipMetadata[]
     );
 
-    // TODO remove this block of code, its to show me if we reach this block unintentionally
-    if (includedRelationships.length !== includedAssociations.length) {
-      throw new Error("Not supposed to hit this code");
-    }
-
-    const partitionFilter = this.buildPartitionFilter(includedRelationships);
+    const partitionFilter = Filters.includedRelationships(
+      this.constructor.name,
+      includedRelationships
+    );
 
     const params = new QueryBuilder({
       entityClassName: this.constructor.name,
@@ -98,34 +95,11 @@ abstract class SingleTableDesign {
     return `${this.constructor.name}${delimiter}${id}`;
   }
 
-  // TODO make sure this doesnt get called more then the number of instances returned...
-  // TODO do I need to extend here?
   private static init<Entity extends SingleTableDesign>(this: {
     new (): Entity;
   }) {
+    console.log("BLA");
     return new this();
-  }
-
-  // TODO is this the right place for this class? Should it be its own class?
-  // TODO should I build a FilterBuilder class?
-  // Build filter to include links or relationships from the parent partition
-  private buildPartitionFilter(
-    includedRelationships: RelationshipMetadata[]
-  ): OrFilter {
-    const parentFilter = { type: this.constructor.name };
-    const filters = [parentFilter];
-
-    const includeBelongsToLinks = includedRelationships.some(
-      rel => rel.type === "HasMany"
-    );
-    includeBelongsToLinks && filters.push({ type: BelongsToLink.name });
-
-    return { $or: filters };
-  }
-
-  // TODO delete me. this is not
-  public someMethod() {
-    return "bla";
   }
 }
 

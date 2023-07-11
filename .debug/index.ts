@@ -186,9 +186,9 @@ class Process extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-    //   include: [{ association: "brewery" }, { association: "scales" }]
-    // });
+    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+      include: [{ association: "brewery" }, { association: "scales" }]
+    });
 
     // console.timeEnd("bla");
 
@@ -200,12 +200,12 @@ class Process extends DrewsBrewsTable {
     // });
 
     // HasMany only
-    const brewery = await Brewery.findById(
-      "103417f1-4c42-4b40-86a6-a8930be67c99",
-      {
-        include: [{ association: "scales" }, { association: "beers" }]
-      }
-    );
+    // const brewery = await Brewery.findById(
+    //   "103417f1-4c42-4b40-86a6-a8930be67c99",
+    //   {
+    //     include: [{ association: "scales" }, { association: "beers" }]
+    //   }
+    // );
 
     // const scale = await Scale.findById("035188db-de1f-4452-b76b-77849445a4dd", {
     //   include: [{ association: "process" }]
