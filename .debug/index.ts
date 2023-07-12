@@ -12,8 +12,6 @@ import Metadata from "../src/metadata";
 
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  // TODO should I make a decorator for primary key and sort key8?
-  // At the very least find out how to not repeate myself here and in the decorator for table
   @Attribute({ alias: "PK" })
   public pk: string;
 
