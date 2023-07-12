@@ -161,19 +161,12 @@ class Process extends DrewsBrewsTable {
 - Support projected associations
 */
 
-// TODO HasOne and BelongsTo are essentially the same. Do I keep them?
-// Keeping for now in case they are different by the end
-
 // TODO PRE MVP
-// Get HasOne Process to work where process is a top level entity
 // Add comments to each decorator/class etc so that on hover there is a description. See projen for example
 // Should be able to access params with optional chaining or not as appropriate
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
-// TODO Implement HasOne. Its probably very similiar to belongsTo...
-// Maybe the difference is that the other relationship doesnt have to have the foreign key?
-// Or would I want that?
 (async () => {
   try {
     const metadata = Metadata;
