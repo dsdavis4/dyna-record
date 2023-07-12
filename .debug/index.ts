@@ -17,6 +17,12 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
   @Attribute({ alias: "SK" })
   public sk: string;
+
+  @Attribute({ alias: "CreatedAt" })
+  public createdAt: Date; // TODO this should serialize to date
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date; // TODO this should serialize to date
 }
 
 @Entity
@@ -33,10 +39,6 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "ProcessId" })
   public processId: string;
 
-  // TODO Is this relation in the right place?
-  // TODO can I make this so that it has to be defined as an intance of the given type?
-  // TODO IMPORTANT!! THIS NEEDS TO MAKE SURE BREWERY ID IS ON THIS MODEL..
-  // @BelongsTo(type => Brewery, { as: "scales" })
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
@@ -58,35 +60,21 @@ class Beer extends DrewsBrewsTable {
   @Attribute({ alias: "Style" })
   public style: string;
 
-  // TODO can I make this return an actual number.. its returning a string
-  // maybe by doing a parseInt in the initializer?
-  // If I cant get it dynamically I could make a NumberAttribute class...
-  // Might be able to use the answer here to assure that values are typed correctly for the attribute type https://stackoverflow.com/questions/60590613/typescript-property-decorator-that-takes-a-parameter-of-the-decorated-property-t
   @Attribute({ alias: "ABV" })
-  public abv: number;
+  public abv: number; // TODO should serialize to number
 
-  // TODO Is this relation in the right place?
-  // TODO can I make this so that it has to be defined as an intance of the given type?
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 }
 
 @Entity
 class Brewery extends DrewsBrewsTable {
-  // TODO do I really want this to have to be defined on all tables?
-  // Virtual attribute? Defind on single table design?
   @Attribute({ alias: "Id" })
   public id: string;
 
   @Attribute({ alias: "Name" })
   public name: string;
 
-  // # TODO should this be on single table design? Maybe optionally through a config?
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
-
-  // TODO maybe params for a HasMany class?
-  // TODO can I make it so that this has to be an array of the given type?
   @HasMany(() => Scale, { targetKey: "breweryId" })
   public scales: Scale[];
 
@@ -135,12 +123,6 @@ class Process extends DrewsBrewsTable {
 
   @Attribute({ alias: "CurrentUserInput" })
   public currentUserInput: string;
-
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
 }
 
 // TODO delete seed-table scripts in package.json and ts file
