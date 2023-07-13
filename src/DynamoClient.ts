@@ -1,12 +1,12 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  GetCommand
-  // DeleteCommand,
-  // PutCommand,
-  // UpdateCommand,
-  // GetCommandInput
+  GetCommand,
+  QueryCommand,
+  QueryCommandInput,
+  QueryCommandOutput
 } from "@aws-sdk/lib-dynamodb";
+import { KeyConditions } from "./query-utils";
 // import QueryParams from "./QueryParams";
 
 // import { v4 as uuidv4 } from "uuid";
@@ -26,21 +26,21 @@ import {
 // ddbDocClient.destroy(); // no-op
 // client.destroy(); // destroys DynamoDBClient
 
-class DynamoBase {
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: "us-west-2" })
+);
+
+class DynamoClient {
   private readonly tableName: string;
-  private readonly dynamo: DynamoDBDocumentClient;
 
   constructor(tableName: string) {
     this.tableName = tableName;
-    this.dynamo = DynamoDBDocumentClient.from(
-      new DynamoDBClient({ region: "us-west-2" })
-    );
   }
 
-  public async findById(key: Record<string, string>) {
+  public async findById(key: KeyConditions) {
     console.log("findById", { key });
 
-    const response = await this.dynamo.send(
+    const response = await dynamo.send(
       new GetCommand({
         TableName: this.tableName,
         Key: key
@@ -49,6 +49,14 @@ class DynamoBase {
 
     return response.Item ?? null;
   }
+
+  public async query(
+    params: QueryCommandInput
+  ): Promise<NonNullable<QueryCommandOutput["Items"]>> {
+    console.log("query", { params });
+    const response = await dynamo.send(new QueryCommand(params));
+    return response.Items ?? [];
+  }
 }
 
-export default DynamoBase;
+export default DynamoClient;

@@ -1,49 +1,104 @@
-import "reflect-metadata";
-import DynamoBase from "./DynamoBase";
-import Metadata, { AttributeMetadata } from "./metadata";
-import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import DynamoClient from "./DynamoClient";
+import Metadata, {
+  RelationshipMetadata,
+  EntityMetadata,
+  TableMetadata
+} from "./metadata";
+import { QueryBuilder, QueryResolver, Filters } from "./query-utils";
+import { Attribute } from "./decorators";
+
+interface FindByIdOptions<T> {
+  include?: { association: keyof T }[];
+}
 
 abstract class SingleTableDesign {
+  // TODO this is too generic. Consuming models would want to use this
+  // Maybe EntityType? Would require data migration....
+  @Attribute({ alias: "Type" })
+  public type: string;
+
+  readonly #entityMetadata: EntityMetadata;
+  readonly #tableMetadata: TableMetadata;
+
+  constructor() {
+    this.#entityMetadata = Metadata.entities[this.constructor.name];
+    this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
+  }
+
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
-    id: string
+    id: string,
+    options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
-    const entityMetadata = Metadata.entities[this.name];
-    const tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const instance = this.init<T>();
 
-    const dynamo = new DynamoBase(tableMetadata.name);
+    if (options.include) {
+      return await instance.findByIdWithIncludes(id, options.include);
+    } else {
+      return await instance.findById(id);
+    }
+  }
+
+  private async findById<T extends SingleTableDesign>(id: string) {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const dynamo = new DynamoClient(tableName);
     const res = await dynamo.findById({
-      [tableMetadata.primaryKey]: this.pk(id, tableMetadata.delimiter),
-      [tableMetadata.sortKey]: this.name
+      [primaryKey]: this.primaryKeyValue(id),
+      [sortKey]: this.constructor.name
     });
 
-    return res ? this.serialize<T>(res, entityMetadata.attributes) : null;
+    if (res) {
+      const queryResolver = new QueryResolver(this);
+      return await queryResolver.resolve(res);
+    } else {
+      return null;
+    }
   }
 
-  private static pk(id: string, delimiter: string) {
-    return `${this.name}${delimiter}${id}`;
-  }
-
-  private static serialize<Entity extends SingleTableDesign>(
-    this: { new (): Entity },
-    tableItem: Record<string, NativeAttributeValue>,
-    attrs: Record<string, AttributeMetadata>
+  private async findByIdWithIncludes<T>(
+    id: string,
+    includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
   ) {
-    const instance = new this();
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+    const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
-    Object.keys(tableItem).forEach(attr => {
-      if (attrs[attr]) {
-        const entityKey = attrs[attr].name;
-        instance[entityKey as keyof Entity] = tableItem[attr];
-      }
-    });
+    const includedRelationships = includedAssociations.reduce(
+      (acc, includedRel) => {
+        const key = includedRel.association as string;
+        const included = this.#entityMetadata.relationships[key];
+        if (included) acc.push(included);
+        return acc;
+      },
+      [] as RelationshipMetadata[]
+    );
 
-    return instance;
+    const partitionFilter = Filters.includedRelationships(
+      this.constructor.name,
+      includedRelationships
+    );
+
+    const params = new QueryBuilder({
+      entityClassName: this.constructor.name,
+      key: { [modelPrimaryKey]: this.primaryKeyValue(id) },
+      options: { filter: partitionFilter }
+    }).build();
+
+    const dynamo = new DynamoClient(tableName);
+    const queryResults = await dynamo.query(params);
+
+    const queryResolver = new QueryResolver(this);
+    return await queryResolver.resolve(queryResults, includedRelationships);
   }
 
-  // TODO delete me. this is not
-  public someMethod() {
-    return "bla";
+  private primaryKeyValue(id: string) {
+    const { delimiter } = this.#tableMetadata;
+    return `${this.constructor.name}${delimiter}${id}`;
+  }
+
+  private static init<Entity extends SingleTableDesign>(this: {
+    new (): Entity;
+  }) {
+    return new this();
   }
 }
 

@@ -4,6 +4,9 @@
 
 **/dist
 
+!jest.config.js
+!global-setup.js
+
 # CDK asset staging directory
 .cdk.staging
 cdk.out
@@ -15,3 +18,5 @@ cdk.out
 .env
 
 .vscode
+
+coverage

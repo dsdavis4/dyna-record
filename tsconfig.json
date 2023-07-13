@@ -1,8 +1,14 @@
 {
   // TODO uninstall recommended or strictest if not used
   "extends": "@tsconfig/recommended/tsconfig.json",
+  "exclude": ["**/*.test.ts"],
   "compilerOptions": {
     "ignoreDeprecations": "5.0",
+    "strictNullChecks": true,
+    "target": "ES2022",
+    // "useDefineForClassFields": true,
+    // TODO do I want this? It makes it so I dont need the bang on class fields
+    "strictPropertyInitialization": false,
     /* Visit https://aka.ms/tsconfig to read more about this file */
 
     /* Projects */
