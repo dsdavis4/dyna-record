@@ -5,12 +5,12 @@ interface HasManyProps<T> {
   targetKey: keyof T;
 }
 
-function HasMany<T extends SingleTableDesign>(
+function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
   props: HasManyProps<T>
 ) {
-  return (_value: undefined, context: ClassFieldDecoratorContext) => {
+  return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);

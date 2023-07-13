@@ -10,7 +10,10 @@ function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
   getTarget: () => EntityClass<K>,
   props: BelongsToProps<T>
 ) {
-  return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
+  return function (
+    _value: undefined,
+    context: ClassFieldDecoratorContext<T, K>
+  ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
