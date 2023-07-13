@@ -7,7 +7,7 @@ interface HasManyProps<T> {
 
 function HasMany<T extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
-  target: () => EntityClass<T>,
+  getTarget: () => EntityClass<T>,
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext) => {
@@ -18,7 +18,7 @@ function HasMany<T extends SingleTableDesign>(
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasMany",
           propertyName: context.name as keyof SingleTableDesign,
-          target: target(),
+          target: getTarget(),
           targetKey: props.targetKey as keyof SingleTableDesign
         });
       });

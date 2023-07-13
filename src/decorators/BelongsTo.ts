@@ -1,13 +1,13 @@
-import Metadata from "../metadata";
+import Metadata, { EntityClass } from "../metadata";
 import SingleTableDesign from "../SingleTableDesign";
 
 interface BelongsToProps<T> {
   foreignKey: keyof T;
 }
 
-function BelongsTo<T extends SingleTableDesign>(
+function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
-  target: Function,
+  getTarget: () => EntityClass<K>,
   props: BelongsToProps<T>
 ) {
   return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
@@ -18,7 +18,7 @@ function BelongsTo<T extends SingleTableDesign>(
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "BelongsTo",
           propertyName: context.name as keyof SingleTableDesign,
-          target: target(),
+          target: getTarget(),
           foreignKey: props.foreignKey as keyof SingleTableDesign
         });
       });
