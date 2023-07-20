@@ -6,7 +6,8 @@ import {
   HasMany,
   BelongsTo,
   HasOne,
-  DateAttribute
+  DateAttribute,
+  TestAccessor
 } from "../src/decorators";
 
 // import { TestAccessor } from "../src/decorators/TestAccessor";
@@ -21,14 +22,14 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "SK" })
   public sk: string;
 
-  // @DateAttribute({ alias: "CreatedAt" })
-  // public accessor createdAt: Date;
+  @TestAccessor({ alias: "CreatedAt" })
+  public accessor createdAt: Date;
 
   // @DateAttribute({ alias: "UpdatedAt" })
   // public accessor updatedAt: Date;
 
-  @DateAttribute({ alias: "CreatedAt" })
-  public createdAt: Date;
+  // @DateAttribute({ alias: "CreatedAt" })
+  // public createdAt: Date;
 
   @DateAttribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
@@ -184,7 +185,10 @@ class Process extends DrewsBrewsTable {
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
+    console.log(room?.createdAt);
     debugger;
+    // room?.createdAt = new Date();
+    // room?.updatedAt = new Date();
 
     if (room) {
       const bla = room.createdAt;
