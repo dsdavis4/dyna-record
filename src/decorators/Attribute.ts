@@ -4,8 +4,11 @@ interface AttributeProps {
   alias: string;
 }
 
-function Attribute<T>(props: AttributeProps) {
-  return function (_value: undefined, context: ClassFieldDecoratorContext<T>) {
+function Attribute<T, K>(props: AttributeProps) {
+  return function (
+    _value: undefined,
+    context: ClassFieldDecoratorContext<T, K>
+  ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);

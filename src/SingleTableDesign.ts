@@ -25,6 +25,7 @@ abstract class SingleTableDesign {
     this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
   }
 
+  // TODO refactor so I dont need instance methods...?
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string,
