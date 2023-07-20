@@ -6,6 +6,7 @@
     "ignoreDeprecations": "5.0",
     "strictNullChecks": true,
     "target": "ES2022",
+
     // "useDefineForClassFields": true,
     // TODO do I want this? It makes it so I dont need the bang on class fields
     "strictPropertyInitialization": false,

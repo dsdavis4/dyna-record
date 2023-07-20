@@ -1,5 +1,5 @@
-import Metadata, { EntityClass } from "../metadata";
-import SingleTableDesign from "../SingleTableDesign";
+import Metadata, { EntityClass } from "../../metadata";
+import SingleTableDesign from "../../SingleTableDesign";
 
 interface HasManyProps<T> {
   targetKey: keyof T;

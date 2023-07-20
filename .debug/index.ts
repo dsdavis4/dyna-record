@@ -5,28 +5,48 @@ import {
   Attribute,
   HasMany,
   BelongsTo,
-  HasOne
+  HasOne,
+  DateAttribute
 } from "../src/decorators";
+
+// import { TestAccessor } from "../src/decorators/TestAccessor";
 
 import Metadata from "../src/metadata";
 
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
+  @Attribute({ alias: "PK", type: "bool" as const } as const)
   public pk: string;
 
   @Attribute({ alias: "SK" })
   public sk: string;
 
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date; // TODO this should serialize to date
+  // @DateAttribute({ alias: "CreatedAt" })
+  // public accessor createdAt: Date;
 
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
+  // @DateAttribute({ alias: "UpdatedAt" })
+  // public accessor updatedAt: Date;
+
+  @DateAttribute({ alias: "CreatedAt" })
+  public createdAt: Date;
+
+  @DateAttribute({ alias: "UpdatedAt" })
+  public updatedAt: Date;
+
+  // @TestAccessor
+  // public accessor testingBla: string;
 }
 
 @Entity
 class Scale extends DrewsBrewsTable {
+  // constructor() {
+  //   super();
+  //   this.id = "BLAAA";
+  //   debugger;
+  //   this.updatedAt = new Date();
+  //   debugger;
+  // }
+
   @Attribute({ alias: "Id" })
   public id: string;
 
@@ -38,6 +58,9 @@ class Scale extends DrewsBrewsTable {
 
   @Attribute({ alias: "ProcessId" })
   public processId: string;
+
+  @Attribute({ alias: "Position" })
+  public position: number;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
@@ -151,12 +174,34 @@ class Process extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    // debugger;
+
+    // const bla = new Scale();
+
     console.time("bla");
 
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
+    debugger;
+
+    if (room) {
+      const bla = room.createdAt;
+      console.log(JSON.stringify(room, null, 4));
+      // debugger;
+      // room.testingBla = "ok";
+      // const abc = room.testingBla;
+      debugger;
+    }
+
+    // room.d;
+
+    console.log(room?.createdAt);
+
+    debugger;
+
+    console.log(room?.createdAt);
 
     // console.timeEnd("bla");
 

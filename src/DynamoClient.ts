@@ -28,6 +28,9 @@ import { KeyConditions } from "./query-utils";
 
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
+  // {
+  //   unmarshallOptions: { wrapNumbers: true }
+  // }
 );
 
 class DynamoClient {

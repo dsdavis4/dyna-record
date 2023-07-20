@@ -1,14 +1,14 @@
-import Metadata, { EntityClass } from "../metadata";
-import SingleTableDesign from "../SingleTableDesign";
+import Metadata, { EntityClass } from "../../metadata";
+import SingleTableDesign from "../../SingleTableDesign";
 
-interface BelongsToProps<T> {
+interface HasOneProps<T> {
   foreignKey: keyof T;
 }
 
-function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
+function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<K>,
-  props: BelongsToProps<T>
+  props: HasOneProps<T>
 ) {
   return function (
     _value: undefined,
@@ -19,7 +19,7 @@ function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
         const entity = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
-          type: "BelongsTo",
+          type: "HasOne",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
           foreignKey: props.foreignKey as keyof SingleTableDesign
@@ -29,4 +29,4 @@ function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
   };
 }
 
-export default BelongsTo;
+export default HasOne;
