@@ -160,12 +160,11 @@ class Process extends DrewsBrewsTable {
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     const results = await Brewery.query(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
       {
-        // pk: Brewery.pk("157cc981-1be2-4ecc-a257-07d9a6037559"),
-        pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559", // TODO clean up
-        sk: { $beginsWith: "Scale" }
-      },
-      { filter: { type: "BelongsToLink" } }
+        skCondition: { $beginsWith: "Scale" },
+        filter: { type: "BelongsToLink" }
+      }
     ).catch(e => {
       debugger;
     });

@@ -28,6 +28,8 @@ export type FilterParams = (AndFilter | OrFilter) & OrOptional;
 
 type AndOrFilter = FilterParams & OrFilter;
 
+export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
+
 const testing: AndOrFilter = {
   $or: [
     { createdAt: { $beginsWith: "2021-09-05" } },
@@ -61,6 +63,11 @@ const allAnd: FilterParams = {
   status: ["complete", "canceled"]
 };
 
+export interface QueryOptions {
+  indexName?: string;
+  filter?: FilterParams;
+}
+
 export interface QueryCommandProps {
   // entity: typeof DynamoBase;
   entityClassName: string; // TODO is this needed or should I pass tableMetadata?
@@ -68,7 +75,7 @@ export interface QueryCommandProps {
   // TODO should this be optional?
   // TODO make it so at least one of the params is required
   // TODO should filter be optional?
-  options?: { indexName?: string; filter?: FilterParams };
+  options?: QueryOptions;
 }
 
 // TODO should I add explicit returns for all these functions?

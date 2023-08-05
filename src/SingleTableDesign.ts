@@ -8,8 +8,11 @@ import {
   QueryBuilder,
   QueryResolver,
   Filters,
+  // TODO check if unused props need to be exported at all
   KeyConditions,
-  QueryCommandProps
+  QueryCommandProps,
+  QueryOptions as QueryBuilderOptions,
+  SortKeyCondition
   // QueryFilter
 } from "./query-utils";
 import { Attribute } from "./decorators";
@@ -17,6 +20,10 @@ import { BelongsToLink } from "./relationships";
 
 interface FindByIdOptions<T> {
   include?: { association: keyof T }[];
+}
+
+interface QueryOptions extends QueryBuilderOptions {
+  skCondition: SortKeyCondition;
 }
 
 abstract class SingleTableDesign {
@@ -60,20 +67,32 @@ abstract class SingleTableDesign {
   //   { skCondition: { $beginsWith: "Scale" }, filter: { type: "BelongsToLink" } }
   // );
 
+  // TODO need to add query by index
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
-    key: KeyConditions,
-    options?: QueryCommandProps["options"]
-  ): Promise<T | BelongsToLink | null> {
+    id: string,
+    options: QueryOptions
+  ): Promise<T | BelongsToLink | []> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
     const instance = this.init<T>(); // TODO Query resolver should do this
 
+    const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
+    const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
+
+    const keyCondition = {
+      [modelPk]: this.primaryKeyValue(id),
+      [modelSk]: options.skCondition
+    };
+
+    debugger;
+
     const params = new QueryBuilder({
       entityClassName: this.name,
       // key: { [tableMetadata.primaryKey]: this.primaryKeyValue(id) },
-      key,
+      // keyCondition,
+      key: keyCondition,
       options
     }).build();
 
@@ -142,6 +161,7 @@ abstract class SingleTableDesign {
     return `${this.constructor.name}${delimiter}${id}`;
   }
 
+  // TODO duplicated. See note on instance method
   private static primaryKeyValue(id: string) {
     const entityMetadata = Metadata.entities[this.name];
     const { delimiter } = Metadata.tables[entityMetadata.tableName];
