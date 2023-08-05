@@ -154,9 +154,23 @@ class Process extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
+    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+    //   include: [{ association: "brewery" }, { association: "scales" }]
+    // });
+
+    // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
+    const results = await Brewery.query(
+      {
+        // pk: Brewery.pk("157cc981-1be2-4ecc-a257-07d9a6037559"),
+        pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559", // TODO clean up
+        sk: { $beginsWith: "Scale" }
+      },
+      { filter: { type: "BelongsToLink" } }
+    ).catch(e => {
+      debugger;
     });
+
+    debugger;
 
     // console.timeEnd("bla");
 

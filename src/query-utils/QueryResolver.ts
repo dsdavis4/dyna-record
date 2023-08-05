@@ -49,13 +49,22 @@ class QueryResolver<T extends SingleTableDesign> {
     const isMultipleTableItems = Array.isArray(queryResult);
     const hasIncludedRelationships =
       Array.isArray(includedRelationships) && !!includedRelationships.length;
-    if (!isMultipleTableItems && !hasIncludedRelationships) {
+
+    const isFindByIdWithoutIncludes =
+      !isMultipleTableItems && !hasIncludedRelationships;
+    const isFindByIdWithIncludes =
+      isMultipleTableItems && hasIncludedRelationships;
+    const isQueryResults = isMultipleTableItems && !hasIncludedRelationships;
+
+    if (isFindByIdWithoutIncludes) {
       return this.resolveEntity(queryResult);
-    } else if (isMultipleTableItems && hasIncludedRelationships) {
+    } else if (isFindByIdWithIncludes) {
       return await this.resolveEntityWithRelationships(
         queryResult,
         includedRelationships
       );
+    } else if (isQueryResults) {
+      return this.resolveQueryResults(queryResult);
     } else {
       throw new Error("Invalid query resolution");
     }
@@ -74,6 +83,28 @@ class QueryResolver<T extends SingleTableDesign> {
     });
 
     return this.entity;
+  }
+
+  /**
+   * Serialize a dynamo table item to a BelongsToLink
+   * @param tableItem
+   */
+  private resolveBelongsToLink(
+    tableItem: Record<string, NativeAttributeValue>
+  ) {
+    if (tableItem.Type !== BelongsToLink.name) return;
+
+    const instance = new BelongsToLink();
+    const attrs = Metadata.entities.BelongsToLink.attributes;
+
+    Object.keys(tableItem).forEach(attr => {
+      const entityKey = attrs[attr]?.name;
+      if (this.isKeyOfBelongsToLink(instance, entityKey)) {
+        instance[entityKey] = tableItem[attr];
+      }
+    });
+
+    return instance;
   }
 
   /**
@@ -166,10 +197,32 @@ class QueryResolver<T extends SingleTableDesign> {
   }
 
   /**
+   * Resolves results of a query operation
+   * @param queryResults
+   */
+  private async resolveQueryResults(queryResults: DynamoTableItem[]) {
+    return queryResults.map(res =>
+      res.Type === BelongsToLink.name
+        ? this.resolveBelongsToLink(res)
+        : this.resolveEntity(res)
+    );
+  }
+
+  /**
    * Type guard to check if the key is defined on the entity
    */
   private isKeyOfEntity(key: string): key is keyof SingleTableDesign {
     return key in this.entity;
+  }
+
+  /**
+   * Type guard to check if the key is defined on BelongsToLink
+   */
+  private isKeyOfBelongsToLink(
+    instance: BelongsToLink,
+    key: string
+  ): key is keyof BelongsToLink {
+    return key in instance;
   }
 
   /**

@@ -61,7 +61,7 @@ const allAnd: FilterParams = {
   status: ["complete", "canceled"]
 };
 
-interface QueryCommandProps {
+export interface QueryCommandProps {
   // entity: typeof DynamoBase;
   entityClassName: string; // TODO is this needed or should I pass tableMetadata?
   key: KeyConditions;
