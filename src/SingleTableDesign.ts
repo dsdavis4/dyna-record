@@ -23,7 +23,7 @@ interface FindByIdOptions<T> {
 }
 
 interface QueryOptions extends QueryBuilderOptions {
-  skCondition: SortKeyCondition;
+  skCondition?: SortKeyCondition;
 }
 
 abstract class SingleTableDesign {
@@ -68,10 +68,16 @@ abstract class SingleTableDesign {
   // );
 
   // TODO need to add query by index
+  // TODO add tests for
+  //   - query by PK only
+  //   - query by PK and SK value
+  //   - query by PK and SK begins with
+  //   - query by PK and filter only
+  //   - query by PK and SK with filter
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string,
-    options: QueryOptions
+    options?: QueryOptions
   ): Promise<T | BelongsToLink | []> {
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
@@ -83,7 +89,7 @@ abstract class SingleTableDesign {
 
     const keyCondition = {
       [modelPk]: this.primaryKeyValue(id),
-      [modelSk]: options.skCondition
+      ...(options?.skCondition && { [modelSk]: options?.skCondition })
     };
 
     debugger;
