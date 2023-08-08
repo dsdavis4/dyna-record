@@ -94,8 +94,7 @@ abstract class SingleTableDesign {
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver(instance);
-    const bla = await queryResolver.resolve(queryResults);
-    return bla;
+    return await queryResolver.resolve(queryResults);
   }
 
   // TODO add tests for
