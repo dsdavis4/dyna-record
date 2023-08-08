@@ -164,6 +164,8 @@ abstract class SingleTableDesign {
   //   // TODO delete me
   // }
   // TODO when an association is included the type on the variable should know that key will be present
+  //   EX: const brewery = awaot Brewwery.findById("bla", {includes: "scales"})
+  //   brewery.scales should be typed as Scale[] and not be optional
 
   private async findByIdWithIncludes<T>(
     id: string,
