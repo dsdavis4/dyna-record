@@ -79,11 +79,7 @@ abstract class SingleTableDesign {
     key: KeyConditions,
     options?: QueryBuilderOptions
   ): Promise<(T | BelongsToLink)[]> {
-    // TODO
-    // ) {
     const instance = this.init<T>();
-
-    // TODO this is called twice when other query method is called...
 
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
