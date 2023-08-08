@@ -10,6 +10,11 @@ import {
 
 import Metadata from "../src/metadata";
 
+// TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
+//  the accepted comment has conversations about getting class name on class field decorators
+//   this would make it so I dont have to have addInitializer methods
+//
+
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "PK" })
@@ -200,9 +205,9 @@ class WsToken extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
-    });
+    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+    //   include: [{ association: "brewery" }, { association: "scales" }]
+    // });
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
@@ -229,6 +234,10 @@ class WsToken extends DrewsBrewsTable {
     );
 
     const bla = results[0];
+
+    const e = metadata;
+
+    debugger;
 
     const wsTokens = await WsToken.getAllByRoomId(
       "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"
