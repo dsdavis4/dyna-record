@@ -163,6 +163,7 @@ abstract class SingleTableDesign {
   // public someMethod() {
   //   // TODO delete me
   // }
+  // TODO when an association is included the type on the variable should know that key will be present
 
   private async findByIdWithIncludes<T>(
     id: string,
