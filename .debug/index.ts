@@ -163,7 +163,11 @@ class WsToken extends DrewsBrewsTable {
    * @returns
    */
   static async getAllByRoomId(roomId: string): Promise<WsToken[]> {
-    return await super.queryByRoomIdAndConnectionId(roomId);
+    // The method will only return WsToken, the filter makes typescript happy for the return type
+    const wsTokens = await super.queryByRoomIdAndConnectionId(roomId);
+    return wsTokens.filter(
+      (wsToken): wsToken is WsToken => wsToken instanceof WsToken
+    );
   }
 }
 
@@ -224,7 +228,7 @@ class WsToken extends DrewsBrewsTable {
       }
     );
 
-    results[0];
+    const bla = results[0];
 
     const wsTokens = await WsToken.getAllByRoomId(
       "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"

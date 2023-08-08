@@ -78,7 +78,7 @@ abstract class SingleTableDesign {
     this: { new (): T } & typeof SingleTableDesign,
     key: KeyConditions,
     options?: QueryBuilderOptions
-  ): Promise<T[]> {
+  ): Promise<(T | BelongsToLink)[]> {
     // TODO
     // ) {
     const instance = this.init<T>();
@@ -98,7 +98,8 @@ abstract class SingleTableDesign {
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver(instance);
-    return await queryResolver.resolve(queryResults);
+    const bla = await queryResolver.resolve(queryResults);
+    return bla;
   }
 
   // TODO add tests for

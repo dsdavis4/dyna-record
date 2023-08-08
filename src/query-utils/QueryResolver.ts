@@ -32,7 +32,9 @@ class QueryResolver<T extends SingleTableDesign> {
    * Resolves an array of dynamo items to an array of Entities
    * @param queryResults
    */
-  public async resolve(queryResults: DynamoTableItem[]): Promise<T[]>;
+  public async resolve(
+    queryResults: DynamoTableItem[]
+  ): Promise<(T | BelongsToLink)[]>;
 
   /**
    * Resolves a single dynamo table item to an Entity
