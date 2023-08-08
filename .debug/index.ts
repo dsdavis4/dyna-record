@@ -30,17 +30,17 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
    * @param connectionId
    * @returns
    */
-  protected static async queryByRoomIdAndConnectionId(
-    roomId: string,
-    connectionId?: string
-  ) {
+  protected static async queryByRoomIdAndConnectionId<
+    T extends DrewsBrewsTable
+  >(roomId: string, connectionId?: string) {
     const keyCondition = connectionId ? { roomId, connectionId } : { roomId };
+    // TODO delete if not used
     // return await super.query(roomId, {
     //   ...(connectionId && { skCondition: connectionId }),
     //   indexName: "ByRoomIdAndConnectionId"
     // });
 
-    return await super.query(keyCondition, {
+    return await super.query<T>(keyCondition, {
       indexName: "ByRoomIdAndConnectionId"
     });
   }
@@ -162,7 +162,7 @@ class WsToken extends DrewsBrewsTable {
    * @param roomId
    * @returns
    */
-  static async getAllByRoomId(roomId: string) {
+  static async getAllByRoomId(roomId: string): Promise<WsToken[]> {
     return await super.queryByRoomIdAndConnectionId(roomId);
   }
 }
@@ -196,9 +196,9 @@ class WsToken extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-    //   include: [{ association: "brewery" }, { association: "scales" }]
-    // });
+    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+      include: [{ association: "brewery" }, { association: "scales" }]
+    });
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
@@ -213,17 +213,18 @@ class WsToken extends DrewsBrewsTable {
     // });
 
     // TODO this or the one above should work
-    // const results = await Brewery.query(
-    //   {
-    //     pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
-    //     sk: { $beginsWith: "Scale" }
-    //   },
-    //   {
-    //     filter: { type: ["BelongsToLink", "Brewery"] }
-    //   }
-    // ).catch(e => {
-    //   debugger;
-    // });
+    const results = await Brewery.query(
+      {
+        // TODO can this be a function?
+        pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
+        sk: { $beginsWith: "Scale" }
+      },
+      {
+        filter: { type: ["BelongsToLink", "Brewery"] }
+      }
+    );
+
+    results[0];
 
     const wsTokens = await WsToken.getAllByRoomId(
       "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"

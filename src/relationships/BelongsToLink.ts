@@ -3,6 +3,7 @@ import { Entity, Attribute } from "../decorators";
 
 // TODO is belongs to link accurate? Or EntityLink?
 // TODO delete if not used
+// TODO should I use the decorators???
 @Entity
 class BelongsToLink {
   // // TODO how to obtain the pk and sk...

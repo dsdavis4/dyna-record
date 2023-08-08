@@ -73,11 +73,14 @@ abstract class SingleTableDesign {
   //   options?: Omit<QueryOptions, "skCondition">
   // ): Promise<T | BelongsToLink | []>;
 
-  protected static async query<T extends SingleTableDesign>(
+  // TODO add jsdoc
+  public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     key: KeyConditions,
     options?: QueryBuilderOptions
-  ) {
+  ): Promise<T[]> {
+    // TODO
+    // ) {
     const instance = this.init<T>();
 
     // TODO this is called twice when other query method is called...
@@ -105,6 +108,8 @@ abstract class SingleTableDesign {
   //   - query by PK and filter only
   //   - query by PK and SK with filter
   //   - query by index with and without SK and filter
+  //   - Test that when a method overrides a method that it will return instances of correct class type
+  //       EX: "await WsToken.getAllByRoomId" should be array of WsToken not SingleTableDesign
 
   // TODO do I want something like this?
   // public static async queryEntity<T extends SingleTableDesign>(
@@ -153,6 +158,10 @@ abstract class SingleTableDesign {
       return null;
     }
   }
+
+  // public someMethod() {
+  //   // TODO delete me
+  // }
 
   private async findByIdWithIncludes<T>(
     id: string,

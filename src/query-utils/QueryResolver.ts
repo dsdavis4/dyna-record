@@ -29,6 +29,12 @@ class QueryResolver<T extends SingleTableDesign> {
   }
 
   /**
+   * Resolves an array of dynamo items to an array of Entities
+   * @param queryResults
+   */
+  public async resolve(queryResults: DynamoTableItem[]): Promise<T[]>;
+
+  /**
    * Resolves a single dynamo table item to an Entity
    */
   public async resolve(queryResult: DynamoTableItem): Promise<T>;
@@ -65,9 +71,9 @@ class QueryResolver<T extends SingleTableDesign> {
       );
     } else if (isQueryResults) {
       return this.resolveQueryResults(queryResult);
-    } else {
-      throw new Error("Invalid query resolution");
     }
+
+    throw new Error("Invalid query resolution");
   }
 
   /**
