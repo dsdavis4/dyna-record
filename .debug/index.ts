@@ -157,6 +157,11 @@ class WsToken extends DrewsBrewsTable {
   @Attribute({ alias: "RoomId" })
   public roomId: string;
 
+  /**
+   * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
+   * @param roomId
+   * @returns
+   */
   static async getAllByRoomId(roomId: string) {
     return await super.queryByRoomIdAndConnectionId(roomId);
   }
@@ -191,9 +196,9 @@ class WsToken extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
-    });
+    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+    //   include: [{ association: "brewery" }, { association: "scales" }]
+    // });
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
@@ -201,6 +206,19 @@ class WsToken extends DrewsBrewsTable {
     //   "157cc981-1be2-4ecc-a257-07d9a6037559",
     //   {
     //     skCondition: { $beginsWith: "Scale" },
+    //     filter: { type: ["BelongsToLink", "Brewery"] }
+    //   }
+    // ).catch(e => {
+    //   debugger;
+    // });
+
+    // TODO this or the one above should work
+    // const results = await Brewery.query(
+    //   {
+    //     pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
+    //     sk: { $beginsWith: "Scale" }
+    //   },
+    //   {
     //     filter: { type: ["BelongsToLink", "Brewery"] }
     //   }
     // ).catch(e => {
