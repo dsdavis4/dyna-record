@@ -23,6 +23,27 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date; // TODO this should serialize to date
+
+  /*
+   * Query the GSI 'ByRoomIdAndConnectionId'
+   * @param roomId
+   * @param connectionId
+   * @returns
+   */
+  protected static async queryByRoomIdAndConnectionId(
+    roomId: string,
+    connectionId?: string
+  ) {
+    const keyCondition = connectionId ? { roomId, connectionId } : { roomId };
+    // return await super.query(roomId, {
+    //   ...(connectionId && { skCondition: connectionId }),
+    //   indexName: "ByRoomIdAndConnectionId"
+    // });
+
+    return await super.query(keyCondition, {
+      indexName: "ByRoomIdAndConnectionId"
+    });
+  }
 }
 
 @Entity
@@ -125,6 +146,22 @@ class Process extends DrewsBrewsTable {
   public currentUserInput: string;
 }
 
+@Entity
+class WsToken extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "ConnectionId" })
+  public connectionId: string;
+
+  @Attribute({ alias: "RoomId" })
+  public roomId: string;
+
+  static async getAllByRoomId(roomId: string) {
+    return await super.queryByRoomIdAndConnectionId(roomId);
+  }
+}
+
 // TODO delete seed-table scripts in package.json and ts file
 
 /* TODO post mvp
@@ -154,21 +191,25 @@ class Process extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-    //   include: [{ association: "brewery" }, { association: "scales" }]
-    // });
+    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+      include: [{ association: "brewery" }, { association: "scales" }]
+    });
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
-    const results = await Brewery.query(
-      "157cc981-1be2-4ecc-a257-07d9a6037559",
-      {
-        skCondition: { $beginsWith: "Scale" },
-        filter: { type: ["BelongsToLink", "Brewery"] }
-      }
-    ).catch(e => {
-      debugger;
-    });
+    // const results = await Brewery.query(
+    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   {
+    //     skCondition: { $beginsWith: "Scale" },
+    //     filter: { type: ["BelongsToLink", "Brewery"] }
+    //   }
+    // ).catch(e => {
+    //   debugger;
+    // });
+
+    const wsTokens = await WsToken.getAllByRoomId(
+      "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"
+    );
 
     debugger;
 

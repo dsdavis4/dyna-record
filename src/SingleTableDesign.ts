@@ -55,60 +55,88 @@ abstract class SingleTableDesign {
     }
   }
 
-  // TODO START HERe this is not working yet
-  // Do I want to contiue with this?
-  //    I need the option to query, but maybe it should not be on model?
-  //    Maybe the contract proposal commented out below is better?
-  // If I keep this, then I should refactor this class's find* methods so there are no instance vairables... its weird and akward to have to make two versions of each
-  // I also shouldnt need to pass pk and sk in. Something like this
+  // /**
+  //  * Query entities partition given the Entity Id
+  //  * @param this
+  //  * @param id
+  //  * @param options
+  //  */
+  // public static async query<T extends SingleTableDesign>(
+  //   this: { new (): T } & typeof SingleTableDesign,
+  //   id: string,
+  //   options?: QueryOptions
+  // ): Promise<T | BelongsToLink | []>;
 
-  // const results = await Brewery.query(
-  //   "123", // 123
-  //   { skCondition: { $beginsWith: "Scale" }, filter: { type: "BelongsToLink" } }
-  // );
+  // public static async query<T extends SingleTableDesign>(
+  //   this: { new (): T } & typeof SingleTableDesign,
+  //   key: KeyConditions,
+  //   options?: Omit<QueryOptions, "skCondition">
+  // ): Promise<T | BelongsToLink | []>;
 
-  // TODO need to add query by index
-  // TODO add tests for
-  //   - query by PK only
-  //   - query by PK and SK value
-  //   - query by PK and SK begins with
-  //   - query by PK and filter only
-  //   - query by PK and SK with filter
-  public static async query<T extends SingleTableDesign>(
+  protected static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
-    id: string,
-    options?: QueryOptions
-  ): Promise<T | BelongsToLink | []> {
+    key: KeyConditions,
+    options?: QueryBuilderOptions
+  ) {
+    const instance = this.init<T>();
+
+    // TODO this is called twice when other query method is called...
+
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
-    const instance = this.init<T>(); // TODO Query resolver should do this
-
-    const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
-    const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
-
-    const keyCondition = {
-      [modelPk]: this.primaryKeyValue(id),
-      ...(options?.skCondition && { [modelSk]: options?.skCondition })
-    };
-
-    debugger;
-
     const params = new QueryBuilder({
       entityClassName: this.name,
-      // key: { [tableMetadata.primaryKey]: this.primaryKeyValue(id) },
-      // keyCondition,
-      key: keyCondition,
+      key,
       options
     }).build();
 
     const dynamo = new DynamoClient(tableMetadata.name);
     const queryResults = await dynamo.query(params);
 
-    // const instance = this.init<T>(); // TODO Query resolver should do this
     const queryResolver = new QueryResolver(instance);
     return await queryResolver.resolve(queryResults);
   }
+
+  // TODO add tests for
+  //   - query by PK only
+  //   - query by PK and SK value
+  //   - query by PK and SK begins with
+  //   - query by PK and filter only
+  //   - query by PK and SK with filter
+  //   - query by index with and without SK and filter
+
+  // TODO do I want something like this?
+  // public static async queryEntity<T extends SingleTableDesign>(
+  //   this: { new (): T } & typeof SingleTableDesign,
+  //   id: string,
+  //   options?: QueryOptions
+  // ): Promise<T | BelongsToLink | []> {
+  //   const entityMetadata = Metadata.entities[this.name];
+  //   const tableMetadata = Metadata.tables[entityMetadata.tableName];
+
+  //   const instance = this.init<T>(); // TODO Query resolver should do this
+
+  //   const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
+  //   const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
+
+  //   const keyCondition = {
+  //     [modelPk]: this.primaryKeyValue(id),
+  //     ...(options?.skCondition && { [modelSk]: options?.skCondition })
+  //   };
+
+  //   const params = new QueryBuilder({
+  //     entityClassName: this.name,
+  //     key: keyCondition,
+  //     options
+  //   }).build();
+
+  //   const dynamo = new DynamoClient(tableMetadata.name);
+  //   const queryResults = await dynamo.query(params);
+
+  //   const queryResolver = new QueryResolver(instance);
+  //   return await queryResolver.resolve(queryResults);
+  // }
 
   private async findById<T extends SingleTableDesign>(id: string) {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
