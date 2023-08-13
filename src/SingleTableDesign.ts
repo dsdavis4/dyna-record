@@ -82,6 +82,9 @@ abstract class SingleTableDesign {
   ): Promise<(T | BelongsToLink)[]> {
     const instance = this.init<T>();
 
+    // TODO test should pass with this line removed...
+    // const bla = new BelongsToLink();
+
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
@@ -214,6 +217,10 @@ abstract class SingleTableDesign {
   private static init<Entity extends SingleTableDesign>(this: {
     new (): Entity;
   }) {
+    // TODO START HERE
+    // The code on this branch could help me eliminate the need to initialize the function on each static call
+    // This could help clean methods up
+    Metadata.init();
     return new this();
   }
 }

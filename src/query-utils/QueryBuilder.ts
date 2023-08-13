@@ -95,8 +95,13 @@ class QueryBuilder {
     const entityMetadata = Metadata.entities[props.entityClassName];
     this.tableMetadata = Metadata.tables[entityMetadata.tableName];
 
+    const possibleAttrs = {
+      ...entityMetadata.attributes,
+      ...Metadata.entities?.BelongsToLink?.attributes
+    };
+
     // TODO should this be in meta data so its not recalcualted? That would mean more data in cache...
-    this.tableKeyLookup = Object.entries(entityMetadata.attributes).reduce(
+    this.tableKeyLookup = Object.entries(possibleAttrs).reduce(
       (acc, [tableKey, attrMetadata]) => {
         acc[attrMetadata.name] = tableKey;
         return acc;

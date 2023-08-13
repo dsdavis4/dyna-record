@@ -1159,9 +1159,8 @@ describe("SingleTableDesign", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
-    // TODO should pass
-    it.skip("queries by PK and SK with filter", async () => {
-      expect.assertions(9);
+    it("queries by PK and SK with filter", async () => {
+      expect.assertions(4);
 
       mockQuery.mockResolvedValueOnce({
         Items: [
