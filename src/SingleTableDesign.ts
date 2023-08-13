@@ -74,6 +74,7 @@ abstract class SingleTableDesign {
   // ): Promise<T | BelongsToLink | []>;
 
   // TODO add jsdoc
+  // TODO this should know that the PK and sk are keys on the object
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     key: KeyConditions,

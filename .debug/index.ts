@@ -15,6 +15,20 @@ import Metadata from "../src/metadata";
 //   this would make it so I dont have to have addInitializer methods
 //
 
+// TODO start here
+//   Things are working,
+//   I was trying to make a refactor so I dont have to call init at the start of every method leading to better refactors
+//      1. Make a global init function, that has to be called before anything is used.
+//         store initialized! somehwere (metadata object).
+//          - Could I add the initialize call to an index file so it runs on load?
+//          - Instead of an init method being called before any methods are used I could instead lazy load
+//            and do initializiton the first time a key is acceed on metadata
+//      2. In the init method iiterate entities and init each one
+//         this will trigger the addInitilzier functions before any methods are called
+//         . This appraoch makes it an easy shift if TS 5 ever supports get class of class field in the class field decorator
+//         The same method could also init the DB connection for the first time...
+//   need unit tests, and other TODOS plus clean up
+
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "PK" })
@@ -205,9 +219,9 @@ class WsToken extends DrewsBrewsTable {
     console.time("bla");
 
     // HasManyAndBelongsTo
-    // const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-    //   include: [{ association: "brewery" }, { association: "scales" }]
-    // });
+    const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
+      include: [{ association: "brewery" }, { association: "scales" }]
+    });
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
