@@ -26,6 +26,10 @@ interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
 }
 
+type EntityKeyConditions<T> = {
+  [K in keyof T]?: KeyConditions;
+};
+
 abstract class SingleTableDesign {
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
@@ -66,10 +70,9 @@ abstract class SingleTableDesign {
   // ): Promise<T | BelongsToLink | []>;
 
   // TODO add jsdoc
-  // TODO this should know that the PK and sk are keys on the object
   public static async query<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
-    key: KeyConditions,
+    key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
   ): Promise<(T | BelongsToLink)[]> {
     this.init();

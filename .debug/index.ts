@@ -50,7 +50,7 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
    * @returns
    */
   protected static async queryByRoomIdAndConnectionId<
-    T extends DrewsBrewsTable
+    T extends DrewsBrewsTable & { roomId: string; connectionId: string }
   >(roomId: string, connectionId?: string) {
     const keyCondition = connectionId ? { roomId, connectionId } : { roomId };
     // TODO delete if not used
@@ -183,7 +183,7 @@ class WsToken extends DrewsBrewsTable {
    */
   static async getAllByRoomId(roomId: string): Promise<WsToken[]> {
     // The method will only return WsToken, the filter makes typescript happy for the return type
-    const wsTokens = await super.queryByRoomIdAndConnectionId(roomId);
+    const wsTokens = await super.queryByRoomIdAndConnectionId<WsToken>(roomId);
     return wsTokens.filter(
       (wsToken): wsToken is WsToken => wsToken instanceof WsToken
     );
