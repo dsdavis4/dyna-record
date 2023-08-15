@@ -22,9 +22,9 @@ class QueryResolver<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
 
-  constructor(entity: T) {
-    this.entity = entity;
-    this.#entityMetadata = Metadata.entities[entity.constructor.name];
+  constructor(entity: new () => T) {
+    this.entity = new entity();
+    this.#entityMetadata = Metadata.entities[entity.name];
     this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
   }
 

@@ -32,26 +32,18 @@ abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public type: string;
 
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
-
-  constructor() {
-    this.#entityMetadata = Metadata.entities[this.constructor.name];
-    this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
-  }
-
   // TODO should I refactor so I dont need instance methods...?
   public static async findById<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     id: string,
     options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
-    const instance = this.init<T>();
+    this.init();
 
     if (options.include) {
-      return await instance.findByIdWithIncludes(id, options.include);
+      return await this.findByIdWithIncludes(id, options.include);
     } else {
-      return await instance.findById(id);
+      return await this.findByIdOnly<T>(id);
     }
   }
 
@@ -80,10 +72,7 @@ abstract class SingleTableDesign {
     key: KeyConditions,
     options?: QueryBuilderOptions
   ): Promise<(T | BelongsToLink)[]> {
-    const instance = this.init<T>();
-
-    // TODO test should pass with this line removed...
-    // const bla = new BelongsToLink();
+    this.init();
 
     const entityMetadata = Metadata.entities[this.name];
     const tableMetadata = Metadata.tables[entityMetadata.tableName];
@@ -97,7 +86,7 @@ abstract class SingleTableDesign {
     const dynamo = new DynamoClient(tableMetadata.name);
     const queryResults = await dynamo.query(params);
 
-    const queryResolver = new QueryResolver(instance);
+    const queryResolver = new QueryResolver<T>(this);
     return await queryResolver.resolve(queryResults);
   }
 
@@ -120,7 +109,7 @@ abstract class SingleTableDesign {
   //   const entityMetadata = Metadata.entities[this.name];
   //   const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
-  //   const instance = this.init<T>(); // TODO Query resolver should do this
+  // TODO Query resolver should do this
 
   //   const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
   //   const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
@@ -143,16 +132,22 @@ abstract class SingleTableDesign {
   //   return await queryResolver.resolve(queryResults);
   // }
 
-  private async findById<T extends SingleTableDesign>(id: string) {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+  private static async findByIdOnly<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    id: string
+  ) {
+    const entityMetadata = Metadata.entities[this.name];
+    const tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const { name: tableName, primaryKey, sortKey } = tableMetadata;
+
     const dynamo = new DynamoClient(tableName);
     const res = await dynamo.findById({
       [primaryKey]: this.primaryKeyValue(id),
-      [sortKey]: this.constructor.name
+      [sortKey]: this.name
     });
 
     if (res) {
-      const queryResolver = new QueryResolver(this);
+      const queryResolver = new QueryResolver<T>(this);
       return await queryResolver.resolve(res);
     } else {
       return null;
@@ -166,17 +161,20 @@ abstract class SingleTableDesign {
   //   EX: const brewery = awaot Brewwery.findById("bla", {includes: "scales"})
   //   brewery.scales should be typed as Scale[] and not be optional
 
-  private async findByIdWithIncludes<T>(
+  private static async findByIdWithIncludes<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
   ) {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
-    const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
+    const entityMetadata = Metadata.entities[this.name];
+    const tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const { name: tableName, primaryKey } = tableMetadata;
+    const modelPrimaryKey = entityMetadata.attributes[primaryKey].name;
 
     const includedRelationships = includedAssociations.reduce(
       (acc, includedRel) => {
         const key = includedRel.association as string;
-        const included = this.#entityMetadata.relationships[key];
+        const included = entityMetadata.relationships[key];
         if (included) acc.push(included);
         return acc;
       },
@@ -184,12 +182,12 @@ abstract class SingleTableDesign {
     );
 
     const partitionFilter = Filters.includedRelationships(
-      this.constructor.name,
+      this.name,
       includedRelationships
     );
 
     const params = new QueryBuilder({
-      entityClassName: this.constructor.name,
+      entityClassName: this.name,
       key: { [modelPrimaryKey]: this.primaryKeyValue(id) },
       options: { filter: partitionFilter }
     }).build();
@@ -197,31 +195,18 @@ abstract class SingleTableDesign {
     const dynamo = new DynamoClient(tableName);
     const queryResults = await dynamo.query(params);
 
-    const queryResolver = new QueryResolver(this);
+    const queryResolver = new QueryResolver<T>(this);
     return await queryResolver.resolve(queryResults, includedRelationships);
   }
 
-  // TODO refactor so only static exists
-  private primaryKeyValue(id: string) {
-    const { delimiter } = this.#tableMetadata;
-    return `${this.constructor.name}${delimiter}${id}`;
-  }
-
-  // TODO duplicated. See note on instance method
-  private static primaryKeyValue(id: string) {
+  public static primaryKeyValue(id: string) {
     const entityMetadata = Metadata.entities[this.name];
     const { delimiter } = Metadata.tables[entityMetadata.tableName];
     return `${this.name}${delimiter}${id}`;
   }
 
-  private static init<Entity extends SingleTableDesign>(this: {
-    new (): Entity;
-  }) {
-    // TODO START HERE
-    // The code on this branch could help me eliminate the need to initialize the function on each static call
-    // This could help clean methods up
+  private static init() {
     Metadata.init();
-    return new this();
   }
 }
 

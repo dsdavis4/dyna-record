@@ -238,8 +238,7 @@ class WsToken extends DrewsBrewsTable {
     // TODO this or the one above should work
     const results = await Brewery.query(
       {
-        // TODO can this be a function?
-        pk: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
+        pk: Brewery.primaryKeyValue("157cc981-1be2-4ecc-a257-07d9a6037559"),
         sk: { $beginsWith: "Scale" }
       },
       {
