@@ -1,11 +1,8 @@
 import Metadata from "../metadata";
-import { BelongsToLink } from "../relationships";
 import SingleTableDesign from "../SingleTableDesign";
-import { Entity } from "../metadata";
 
-function Entity<T extends Entity>(
-  // target: typ of SingleTableDesign | typeof BelongsToLink,
-  target: T,
+function Entity<T extends SingleTableDesign>(
+  target: new () => T,
   context: ClassDecoratorContext
 ) {
   if (context.kind === "class") {

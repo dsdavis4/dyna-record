@@ -13,7 +13,7 @@ interface AttributeMetadataOptions {
 type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
 
 export type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
-export type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
+type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
 
 interface RelationshipMetadataBase {
   type: RelationshipType;
