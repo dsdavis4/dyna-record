@@ -29,11 +29,11 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date; // TODO this should serialize to date
 
-  /*
+  /**
    * Query the GSI 'ByRoomIdAndConnectionId'
-   * @param roomId
-   * @param connectionId
-   * @returns
+   * @param {string} roomId - Room Id
+   * @param {string=} connectionId - Websocket connection Id
+   * @returns Array of Entities
    */
   protected static async queryByRoomIdAndConnectionId<
     T extends DrewsBrewsTable & { roomId: string; connectionId: string }
@@ -164,8 +164,8 @@ class WsToken extends DrewsBrewsTable {
 
   /**
    * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
-   * @param roomId
-   * @returns
+   * @param {string} roomId - Room Id
+   * @returns Array of WsToken
    */
   static async getAllByRoomId(roomId: string): Promise<WsToken[]> {
     // The method will only return WsToken, the filter makes typescript happy for the return type
