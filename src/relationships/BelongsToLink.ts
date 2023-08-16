@@ -1,9 +1,7 @@
-import SingleTableDesign from "../SingleTableDesign";
 import { Entity, Attribute } from "../decorators";
 
-// TODO is belongs to link accurate? Or EntityLink?
-// TODO delete if not used
-// TODO should I use the decorators???
+// TODO is belongs to link accurate? Or EntityLink? Its used by HasOne...
+
 @Entity
 class BelongsToLink {
   // // TODO how to obtain the pk and sk...
