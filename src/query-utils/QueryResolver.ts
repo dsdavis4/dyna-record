@@ -13,6 +13,8 @@ type DynamoTableItem = Record<string, NativeAttributeValue>;
 
 type ForeignKeyLinkedRelationship = HasOneRelationship | BelongsToRelationship;
 
+// TODO make jsdoc better. See SingleTableDesign
+
 /**
  * Resolves a Dynamo query to Entities instances
  */

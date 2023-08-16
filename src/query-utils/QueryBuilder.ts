@@ -77,6 +77,7 @@ interface QueryCommandProps {
   options?: QueryOptions;
 }
 
+// TODO add jsdoc
 // TODO should I add explicit returns for all these functions?
 class QueryBuilder {
   // private readonly doc: Record<string, NativeAttributeValue>;
