@@ -12,6 +12,9 @@ export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: { association: keyof T }[];
 }
 
+/**
+ * FindById operations
+ */
 class FindById<T extends SingleTableDesign> {
   private EntityClass: EntityClass<T>;
 
@@ -24,7 +27,14 @@ class FindById<T extends SingleTableDesign> {
     this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
   }
 
-  // TODO add jsdoc
+  /**
+   * Find an entity by Id and optionally include associations
+   * @param {string} id - Entity Id
+   * @param {Object} options - FindById options
+   * @param {Object[]=} options.include - The associations to include in the query
+   * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
+   * @returns An entity with optional included associations serialized
+   */
   public async run(
     id: string,
     options: FindByIdOptions<T> = {}
@@ -36,7 +46,11 @@ class FindById<T extends SingleTableDesign> {
     }
   }
 
-  // TODO add jsdoc
+  /**
+   * Find an Entity by id without associations
+   * @param {string} id - Entity Id
+   * @returns An entity object or null
+   */
   private async findByIdOnly(id: string) {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
@@ -58,7 +72,13 @@ class FindById<T extends SingleTableDesign> {
   //   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
   //   brewery.scales should be typed as Scale[] and not be optional
 
-  // TODO add jsdoc
+  /**
+   * Find an entity with included associations
+   * @param {string} id - Entity Id
+   * @param {Object[]=} includedAssociations - The associations to include in the query
+   * @param {string} includedAssociations[].association - The name of the association to include. Must be defined on the model
+   * @returns An entity with included associations serialized
+   */
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>

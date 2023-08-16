@@ -1252,7 +1252,7 @@ describe("SingleTableDesign", () => {
               $or: [
                 {
                   address: ["11 Some St", "22 Other St"],
-                  createdAt: "2021-09-15T04:26:31.148Z"
+                  createdAt: { $beginsWith: "2021-09-15T" }
                 }
               ]
             }
@@ -1721,7 +1721,7 @@ describe("SingleTableDesign", () => {
             $or: [
               {
                 address: ["11 Some St", "22 Other St"],
-                createdAt: "2021-09-15T04:26:31.148Z"
+                createdAt: { $beginsWith: "2021-09-15T" }
               }
             ]
           }

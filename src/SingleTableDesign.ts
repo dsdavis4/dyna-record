@@ -16,7 +16,14 @@ abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public type: string;
 
-  // TODO add jsdoc
+  /**
+   * Find an entity by Id and optionally include associations
+   * @param {string} id - Entity Id
+   * @param {Object} options - FindById options
+   * @param {Object[]=} options.include - The associations to include in the query
+   * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
+   * @returns An entity with included associations serialized
+   */
   public static async findById<T extends SingleTableDesign>(
     this: EntityClass<T>,
     id: string,
@@ -28,14 +35,27 @@ abstract class SingleTableDesign {
     return await op.run(id, options);
   }
 
-  // TODO add jsdoc
+  /**
+   * Query by PrimaryKey and optional SortKey/Filter/Index conditions
+   * @param {Object} key - PrimaryKey value and optional SortKey condition. Keys must be attributes defined on the model
+   * @param {Object=} options - QueryBuilderOptions. Supports filter and indexName
+   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   * @param {string=} options.indexName - The name of the index to filter on
+   */
   public static async query<T extends SingleTableDesign>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
   ): Promise<(T | BelongsToLink)[]>;
 
-  // TODO add jsdoc
+  /**
+   * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
+   * QueryByIndex not supported. Use Query with keys if indexName is needed
+   * @param {string} id - Entity Id
+   * @param {Object=} options - QueryOptions. Supports filter and skCondition
+   * @param {Object=} options.skCondition - Sort Key condition. Can be an exact value or { $beginsWith: "val" }
+   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   */
   public static async query<T extends SingleTableDesign>(
     this: EntityClass<T>,
     id: string,
@@ -53,19 +73,27 @@ abstract class SingleTableDesign {
     return await op.run(key, options);
   }
 
-  // public someMethod() {
-  //   // TODO delete me
-  // }
-
+  /**
+   * Constructs the primary key value
+   * @param {string} id - Entity Id
+   * @returns Constructed primary key value
+   */
   public static primaryKeyValue(id: string) {
     const entityMetadata = Metadata.entities[this.name];
     const { delimiter } = Metadata.tables[entityMetadata.tableName];
     return `${this.name}${delimiter}${id}`;
   }
 
+  /**
+   * Initializer for class.
+   */
   private static init() {
     Metadata.init();
   }
+
+  // public someMethod() {
+  //   // TODO delete me
+  // }
 }
 
 export default SingleTableDesign;

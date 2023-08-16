@@ -23,6 +23,9 @@ export type EntityKeyConditions<T> = {
   [K in keyof T]?: KeyConditions;
 };
 
+/**
+ * Query operations
+ */
 class Query<T extends SingleTableDesign> {
   private EntityClass: EntityClass<T>;
 
@@ -35,7 +38,12 @@ class Query<T extends SingleTableDesign> {
     this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
   }
 
-  // TODO add jsdoc
+  /**
+   *
+   * @param key EntityId or object with PrimaryKey and optional SortKey conditions
+   * @param options Filter conditions, indexName, or SortKey conditions if querying by keys
+   * @returns Array of Entity or BelongsToLinks
+   */
   public async run(
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
@@ -47,7 +55,13 @@ class Query<T extends SingleTableDesign> {
     }
   }
 
-  // TODO add jsdoc
+  /**
+   * Query by PrimaryKey and optional SortKey/Filter/Index conditions
+   * @param {Object} key - PrimaryKey value and optional SortKey condition. Keys must be attributes defined on the model
+   * @param {Object=} options - QueryBuilderOptions. Supports filter and indexName
+   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   * @param {string=} options.indexName - The name of the index to filter on
+   */
   private async queryByKey(
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
@@ -67,8 +81,14 @@ class Query<T extends SingleTableDesign> {
     return await queryResolver.resolve(queryResults);
   }
 
-  // TODO add jdoc
-  // TODO add tests for this function
+  /**
+   * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
+   * QueryByIndex not supported. Use Query with keys if indexName is needed
+   * @param {string} id - Entity Id
+   * @param {Object=} options - QueryOptions. Supports filter and skCondition
+   * @param {Object=} options.skCondition - Sort Key condition. Can be an exact value or { $beginsWith: "val" }
+   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   */
   private async queryEntity(
     id: string,
     options?: Omit<QueryOptions, "indexName">
