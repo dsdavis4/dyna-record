@@ -15,20 +15,6 @@ import Metadata from "../src/metadata";
 //   this would make it so I dont have to have addInitializer methods
 //
 
-// TODO start here
-//   Things are working,
-//   I was trying to make a refactor so I dont have to call init at the start of every method leading to better refactors
-//      1. Make a global init function, that has to be called before anything is used.
-//         store initialized! somehwere (metadata object).
-//          - Could I add the initialize call to an index file so it runs on load?
-//          - Instead of an init method being called before any methods are used I could instead lazy load
-//            and do initializiton the first time a key is acceed on metadata
-//      2. In the init method iiterate entities and init each one
-//         this will trigger the addInitilzier functions before any methods are called
-//         . This appraoch makes it an easy shift if TS 5 ever supports get class of class field in the class field decorator
-//         The same method could also init the DB connection for the first time...
-//   need unit tests, and other TODOS plus clean up
-
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "PK" })
@@ -223,17 +209,30 @@ class WsToken extends DrewsBrewsTable {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
 
+    // TODO START HERE
+    // just created the overloaded query method
+    // I need to create tests for this
+    // I also need should do a refactor where I create a queries folder
+    //      - and it includes classes for managing each query typre
+    //      - Goal here is so SingleTableDesign is not clutterd.
+
+    // TODO should I make a class field decorator on SingleTableDesign to ensure metadata is always set by:
+    //    1. class method decorator to go on functions that will need it
+    //    2. Automatically all it on all public methods of a class
+    //    3. Make it so that Metadata has a method `get` which calls init if not initialized
+    //       and otherwise returns it
+    // 2 is likely not possible, dont waste time
+    // 3. is probably best as its simple and could be re-usable outside of class methods
+
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
-    // const results = await Brewery.query(
-    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
-    //   {
-    //     skCondition: { $beginsWith: "Scale" },
-    //     filter: { type: ["BelongsToLink", "Brewery"] }
-    //   }
-    // ).catch(e => {
-    //   debugger;
-    // });
+    const res = await Brewery.query("157cc981-1be2-4ecc-a257-07d9a6037559", {
+      skCondition: { $beginsWith: "Scale" },
+      filter: { type: ["BelongsToLink", "Brewery"] }
+      // indexName: "Bla"
+    }).catch(e => {
+      debugger;
+    });
 
     // TODO this or the one above should work
     const results = await Brewery.query(

@@ -51,26 +51,36 @@ abstract class SingleTableDesign {
     }
   }
 
-  // /**
-  //  * Query entities partition given the Entity Id
-  //  * @param this
-  //  * @param id
-  //  * @param options
-  //  */
-  // public static async query<T extends SingleTableDesign>(
-  //   this: { new (): T } & typeof SingleTableDesign,
-  //   id: string,
-  //   options?: QueryOptions
-  // ): Promise<T | BelongsToLink | []>;
-
-  // public static async query<T extends SingleTableDesign>(
-  //   this: { new (): T } & typeof SingleTableDesign,
-  //   key: KeyConditions,
-  //   options?: Omit<QueryOptions, "skCondition">
-  // ): Promise<T | BelongsToLink | []>;
+  // TODO add jsdoc
+  public static async query<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    key: EntityKeyConditions<T>,
+    options?: QueryBuilderOptions
+  ): Promise<(T | BelongsToLink)[]>;
 
   // TODO add jsdoc
   public static async query<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    id: string,
+    options?: Omit<QueryOptions, "indexName">
+  ): Promise<(T | BelongsToLink)[]>;
+
+  public static async query<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    key: string | EntityKeyConditions<T>,
+    options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
+  ): Promise<(T | BelongsToLink)[]> {
+    this.init();
+
+    if (typeof key === "string") {
+      return await this.queryEntity<T>(key, options);
+    } else {
+      return this.queryByKey<T>(key, options);
+    }
+  }
+
+  // TODO add jsdoc
+  private static async queryByKey<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
@@ -93,47 +103,36 @@ abstract class SingleTableDesign {
     return await queryResolver.resolve(queryResults);
   }
 
-  // TODO add tests for
-  //   - query by PK only
-  //   - query by PK and SK value
-  //   - query by PK and SK begins with
-  //   - query by PK and filter only
-  //   - query by PK and SK with filter
-  //   - query by index with and without SK and filter
-  //   - Test that when a method overrides a method that it will return instances of correct class type
-  //       EX: "await WsToken.getAllByRoomId" should be array of WsToken not SingleTableDesign
+  // TODO add jdoc
+  // TODO add tests for this function
+  private static async queryEntity<T extends SingleTableDesign>(
+    this: { new (): T } & typeof SingleTableDesign,
+    id: string,
+    options?: Omit<QueryOptions, "indexName">
+  ): Promise<(T | BelongsToLink)[]> {
+    const entityMetadata = Metadata.entities[this.name];
+    const tableMetadata = Metadata.tables[entityMetadata.tableName];
 
-  // TODO do I want something like this?
-  // public static async queryEntity<T extends SingleTableDesign>(
-  //   this: { new (): T } & typeof SingleTableDesign,
-  //   id: string,
-  //   options?: QueryOptions
-  // ): Promise<T | BelongsToLink | []> {
-  //   const entityMetadata = Metadata.entities[this.name];
-  //   const tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
+    const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
 
-  // TODO Query resolver should do this
+    const keyCondition = {
+      [modelPk]: this.primaryKeyValue(id),
+      ...(options?.skCondition && { [modelSk]: options?.skCondition })
+    };
 
-  //   const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
-  //   const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
+    const params = new QueryBuilder({
+      entityClassName: this.name,
+      key: keyCondition,
+      options
+    }).build();
 
-  //   const keyCondition = {
-  //     [modelPk]: this.primaryKeyValue(id),
-  //     ...(options?.skCondition && { [modelSk]: options?.skCondition })
-  //   };
+    const dynamo = new DynamoClient(tableMetadata.name);
+    const queryResults = await dynamo.query(params);
 
-  //   const params = new QueryBuilder({
-  //     entityClassName: this.name,
-  //     key: keyCondition,
-  //     options
-  //   }).build();
-
-  //   const dynamo = new DynamoClient(tableMetadata.name);
-  //   const queryResults = await dynamo.query(params);
-
-  //   const queryResolver = new QueryResolver(instance);
-  //   return await queryResolver.resolve(queryResults);
-  // }
+    const queryResolver = new QueryResolver<T>(this);
+    return await queryResolver.resolve(queryResults);
+  }
 
   private static async findByIdOnly<T extends SingleTableDesign>(
     this: { new (): T } & typeof SingleTableDesign,
@@ -161,7 +160,7 @@ abstract class SingleTableDesign {
   //   // TODO delete me
   // }
   // TODO when an association is included the type on the variable should know that key will be present
-  //   EX: const brewery = awaot Brewwery.findById("bla", {includes: "scales"})
+  //   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
   //   brewery.scales should be typed as Scale[] and not be optional
 
   private static async findByIdWithIncludes<T extends SingleTableDesign>(
