@@ -1,8 +1,6 @@
 export {
   default as QueryBuilder,
-  OrFilter,
   KeyConditions,
-  QueryCommandProps,
   QueryOptions,
   SortKeyCondition
 } from "./QueryBuilder";

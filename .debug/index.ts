@@ -198,6 +198,14 @@ class WsToken extends DrewsBrewsTable {
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
+// TODO should I make a class field decorator on SingleTableDesign to ensure metadata is always set by:
+//    1. class method decorator to go on functions that will need it
+//    2. Automatically all it on all public methods of a class
+//    3. Make it so that Metadata has a method `get` which calls init if not initialized
+//       and otherwise returns it
+// 2 is likely not possible, dont waste time
+// 3. is probably best as its simple and could be re-usable outside of class methods
+
 (async () => {
   try {
     const metadata = Metadata;
@@ -209,20 +217,7 @@ class WsToken extends DrewsBrewsTable {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
 
-    // TODO START HERE
-    // just created the overloaded query method
-    // I need to create tests for this
-    // I also need should do a refactor where I create a queries folder
-    //      - and it includes classes for managing each query typre
-    //      - Goal here is so SingleTableDesign is not clutterd.
-
-    // TODO should I make a class field decorator on SingleTableDesign to ensure metadata is always set by:
-    //    1. class method decorator to go on functions that will need it
-    //    2. Automatically all it on all public methods of a class
-    //    3. Make it so that Metadata has a method `get` which calls init if not initialized
-    //       and otherwise returns it
-    // 2 is likely not possible, dont waste time
-    // 3. is probably best as its simple and could be re-usable outside of class methods
+    // debugger;
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
     // TODO this should work without any options
@@ -230,8 +225,6 @@ class WsToken extends DrewsBrewsTable {
       skCondition: { $beginsWith: "Scale" },
       filter: { type: ["BelongsToLink", "Brewery"] }
       // indexName: "Bla"
-    }).catch(e => {
-      debugger;
     });
 
     // TODO this or the one above should work
@@ -245,17 +238,11 @@ class WsToken extends DrewsBrewsTable {
       }
     );
 
-    const bla = results[0];
-
-    const e = metadata;
-
-    debugger;
-
     const wsTokens = await WsToken.getAllByRoomId(
       "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"
     );
 
-    debugger;
+    // debugger;
 
     // console.timeEnd("bla");
 

@@ -24,8 +24,7 @@ type AndFilter = Record<string, FilterTypes>;
 export type OrFilter = Record<"$or", AndFilter[]>;
 
 type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
-export type FilterParams = (AndFilter | OrFilter) & OrOptional;
-
+type FilterParams = (AndFilter | OrFilter) & OrOptional;
 type AndOrFilter = FilterParams & OrFilter;
 
 export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
@@ -68,7 +67,7 @@ export interface QueryOptions {
   filter?: FilterParams;
 }
 
-export interface QueryCommandProps {
+interface QueryCommandProps {
   // entity: typeof DynamoBase;
   entityClassName: string; // TODO is this needed or should I pass tableMetadata?
   key: KeyConditions;
