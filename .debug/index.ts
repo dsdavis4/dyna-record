@@ -39,11 +39,6 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
     T extends DrewsBrewsTable & { roomId: string; connectionId: string }
   >(roomId: string, connectionId?: string) {
     const keyCondition = connectionId ? { roomId, connectionId } : { roomId };
-    // TODO delete if not used
-    // return await super.query(roomId, {
-    //   ...(connectionId && { skCondition: connectionId }),
-    //   indexName: "ByRoomIdAndConnectionId"
-    // });
 
     return await super.query<T>(keyCondition, {
       indexName: "ByRoomIdAndConnectionId"
