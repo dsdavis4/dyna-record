@@ -55,7 +55,7 @@ export interface TableMetadata {
   delimiter: string;
 }
 
-// TODO make jsdoc in this class better
+// TODO make jsdoc in this class better. See SingleTableDesign
 
 class Metadata {
   public readonly tables: Record<string, TableMetadata> = {};
