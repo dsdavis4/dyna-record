@@ -1,4 +1,5 @@
 import SingleTableDesign from "../SingleTableDesign";
+import { BelongsToLink } from "../relationships";
 
 interface AttributeMetadata {
   name: string;
@@ -12,6 +13,7 @@ interface AttributeMetadataOptions {
 type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
 
 export type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
+type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
 
 interface RelationshipMetadataBase {
   type: RelationshipType;
@@ -53,9 +55,25 @@ export interface TableMetadata {
   delimiter: string;
 }
 
+// TODO make jsdoc in this class better. See SingleTableDesign
+
 class Metadata {
   public readonly tables: Record<string, TableMetadata> = {};
   public readonly entities: Record<string, EntityMetadata> = {};
+
+  private initialized: boolean = false;
+  private readonly entityClasses: Entity[] = [];
+
+  /**
+   * Initialize metadata object
+   */
+  public init() {
+    if (this.initialized === false) {
+      // Initialize all entities once to trigger Attribute decorators and fill metadata object
+      this.entityClasses.forEach(entityClass => new entityClass());
+      this.initialized = true;
+    }
+  }
 
   /**
    * Add a table to metadata storage
@@ -71,8 +89,13 @@ class Metadata {
    * @param entityName
    * @param tableName
    */
-  public addEntity(entityName: string, tableName: string) {
-    this.entities[entityName] = {
+  public addEntity(
+    // entityClass: typeof SingleTableDesign | typeof BelongsToLink,
+    entityClass: Entity,
+    tableName: string
+  ) {
+    this.entityClasses.push(entityClass);
+    this.entities[entityClass.name] = {
       tableName,
       attributes: {},
       relationships: {}

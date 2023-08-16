@@ -10,6 +10,11 @@ import {
 
 import Metadata from "../src/metadata";
 
+// TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
+//  the accepted comment has conversations about getting class name on class field decorators
+//   this would make it so I dont have to have addInitializer methods
+//
+
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
   @Attribute({ alias: "PK" })
@@ -23,6 +28,22 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date; // TODO this should serialize to date
+
+  /**
+   * Query the GSI 'ByRoomIdAndConnectionId'
+   * @param {string} roomId - Room Id
+   * @param {string=} connectionId - Websocket connection Id
+   * @returns Array of Entities
+   */
+  protected static async queryByRoomIdAndConnectionId<
+    T extends DrewsBrewsTable & { roomId: string; connectionId: string }
+  >(roomId: string, connectionId?: string) {
+    const keyCondition = connectionId ? { roomId, connectionId } : { roomId };
+
+    return await super.query<T>(keyCondition, {
+      indexName: "ByRoomIdAndConnectionId"
+    });
+  }
 }
 
 @Entity
@@ -125,6 +146,31 @@ class Process extends DrewsBrewsTable {
   public currentUserInput: string;
 }
 
+@Entity
+class WsToken extends DrewsBrewsTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "ConnectionId" })
+  public connectionId: string;
+
+  @Attribute({ alias: "RoomId" })
+  public roomId: string;
+
+  /**
+   * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
+   * @param {string} roomId - Room Id
+   * @returns Array of WsToken
+   */
+  static async getAllByRoomId(roomId: string): Promise<WsToken[]> {
+    // The method will only return WsToken, the filter makes typescript happy for the return type
+    const wsTokens = await super.queryByRoomIdAndConnectionId<WsToken>(roomId);
+    return wsTokens.filter(
+      (wsToken): wsToken is WsToken => wsToken instanceof WsToken
+    );
+  }
+}
+
 // TODO delete seed-table scripts in package.json and ts file
 
 /* TODO post mvp
@@ -147,6 +193,14 @@ class Process extends DrewsBrewsTable {
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
+// TODO should I make a class field decorator on SingleTableDesign to ensure metadata is always set by:
+//    1. class method decorator to go on functions that will need it
+//    2. Automatically all it on all public methods of a class
+//    3. Make it so that Metadata has a method `get` which calls init if not initialized
+//       and otherwise returns it
+// 2 is likely not possible, dont waste time
+// 3. is probably best as its simple and could be re-usable outside of class methods
+
 (async () => {
   try {
     const metadata = Metadata;
@@ -157,6 +211,32 @@ class Process extends DrewsBrewsTable {
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
+
+    // debugger;
+
+    // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
+    const res = await Brewery.query("157cc981-1be2-4ecc-a257-07d9a6037559", {
+      skCondition: { $beginsWith: "Scale" },
+      filter: { type: ["BelongsToLink", "Brewery"] }
+      // indexName: "Bla"
+    });
+
+    // TODO this or the one above should work
+    const results = await Brewery.query(
+      {
+        pk: Brewery.primaryKeyValue("157cc981-1be2-4ecc-a257-07d9a6037559"),
+        sk: { $beginsWith: "Scale" }
+      },
+      {
+        filter: { type: ["BelongsToLink", "Brewery"] }
+      }
+    );
+
+    const wsTokens = await WsToken.getAllByRoomId(
+      "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"
+    );
+
+    // debugger;
 
     // console.timeEnd("bla");
 

@@ -24,9 +24,10 @@ type AndFilter = Record<string, FilterTypes>;
 export type OrFilter = Record<"$or", AndFilter[]>;
 
 type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
-export type FilterParams = (AndFilter | OrFilter) & OrOptional;
-
+type FilterParams = (AndFilter | OrFilter) & OrOptional;
 type AndOrFilter = FilterParams & OrFilter;
+
+export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
 
 const testing: AndOrFilter = {
   $or: [
@@ -61,6 +62,11 @@ const allAnd: FilterParams = {
   status: ["complete", "canceled"]
 };
 
+export interface QueryOptions {
+  indexName?: string;
+  filter?: FilterParams;
+}
+
 interface QueryCommandProps {
   // entity: typeof DynamoBase;
   entityClassName: string; // TODO is this needed or should I pass tableMetadata?
@@ -68,9 +74,10 @@ interface QueryCommandProps {
   // TODO should this be optional?
   // TODO make it so at least one of the params is required
   // TODO should filter be optional?
-  options?: { indexName?: string; filter?: FilterParams };
+  options?: QueryOptions;
 }
 
+// TODO add jsdoc
 // TODO should I add explicit returns for all these functions?
 class QueryBuilder {
   // private readonly doc: Record<string, NativeAttributeValue>;
@@ -88,8 +95,13 @@ class QueryBuilder {
     const entityMetadata = Metadata.entities[props.entityClassName];
     this.tableMetadata = Metadata.tables[entityMetadata.tableName];
 
+    const possibleAttrs = {
+      ...entityMetadata.attributes,
+      ...Metadata.entities?.BelongsToLink?.attributes
+    };
+
     // TODO should this be in meta data so its not recalcualted? That would mean more data in cache...
-    this.tableKeyLookup = Object.entries(entityMetadata.attributes).reduce(
+    this.tableKeyLookup = Object.entries(possibleAttrs).reduce(
       (acc, [tableKey, attrMetadata]) => {
         acc[attrMetadata.name] = tableKey;
         return acc;
@@ -99,7 +111,7 @@ class QueryBuilder {
   }
 
   public build(): QueryCommandInput {
-    const { indexName, filter = {} } = this.props.options ?? {};
+    const { indexName, filter } = this.props.options ?? {};
     const filterParams = filter && this.filterParams(filter);
 
     const keyFilter = this.andFilter(this.props.key);
@@ -107,7 +119,7 @@ class QueryBuilder {
     return {
       TableName: this.tableMetadata.name,
       ...(indexName && { IndexName: indexName }),
-      ...(filter && { FilterExpression: filterParams.expression }),
+      ...(filterParams && { FilterExpression: filterParams.expression }),
       KeyConditionExpression: keyFilter.expression,
       ExpressionAttributeNames: this.expressionAttributeNames(),
       ExpressionAttributeValues: this.expressionAttributeValueParams(
@@ -119,10 +131,10 @@ class QueryBuilder {
 
   private expressionAttributeValueParams(
     keyParams: FilterExpression,
-    filterParams: FilterExpression
+    filterParams?: FilterExpression
   ): QueryCommandInput["ExpressionAttributeValues"] {
     const valueParams = this.props.options?.filter
-      ? { ...keyParams.values, ...filterParams.values }
+      ? { ...keyParams.values, ...filterParams?.values }
       : keyParams.values;
 
     return Object.entries(valueParams).reduce(
@@ -133,29 +145,35 @@ class QueryBuilder {
 
   private expressionAttributeNames(): QueryCommandInput["ExpressionAttributeNames"] {
     const { filter } = this.props.options || {};
+
+    const accumulator = (obj: Record<string, string>, key: string) => {
+      const tableKey = this.tableKeyLookup[key];
+      obj[`#${tableKey}`] = tableKey;
+      return obj;
+    };
+
+    let expressionAttributeNames = Object.keys(this.props.key).reduce(
+      (acc, key) => accumulator(acc, key),
+      {} as Record<string, string>
+    );
+
     if (filter) {
       const { $or: orFilters = [], ...andFilters } = filter;
 
       const or = orFilters.reduce((acc: Record<string, string>, filter) => {
-        Object.keys(filter).forEach(key => {
-          const tableKey = this.tableKeyLookup[key];
-          acc[`#${tableKey}`] = tableKey;
-        });
-
+        Object.keys(filter).forEach(key => accumulator(acc, key));
         return acc;
       }, {} as Record<string, string>);
 
-      const and = Object.keys({ ...andFilters, ...this.props.key }).reduce(
-        (acc, key) => {
-          const tableKey = this.tableKeyLookup[key];
-          acc[`#${tableKey}`] = tableKey;
-          return acc;
-        },
+      const and = Object.keys(andFilters).reduce(
+        (acc, key) => accumulator(acc, key),
         {} as Record<string, string>
       );
 
-      return { ...or, ...and };
+      expressionAttributeNames = { ...expressionAttributeNames, ...or, ...and };
     }
+
+    return expressionAttributeNames;
   }
 
   // Note:
