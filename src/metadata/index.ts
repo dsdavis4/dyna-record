@@ -42,8 +42,7 @@ export type RelationshipMetadata =
   | HasOneRelationship;
 
 export interface EntityMetadata {
-  // TODO should this be tableClassName?
-  tableName: string; //
+  tableClassName: string; //
   attributes: Record<string, AttributeMetadata>;
   relationships: Record<string, RelationshipMetadata>;
 }
@@ -92,7 +91,7 @@ class Metadata {
   public getEntityTable(entityName: string) {
     this.init();
     const entityMetadata = this.getEntity(entityName);
-    return this.getTable(entityMetadata.tableName);
+    return this.getTable(entityMetadata.tableClassName);
   }
 
   /**
@@ -112,11 +111,11 @@ class Metadata {
   public addEntity(
     // entityClass: typeof SingleTableDesign | typeof BelongsToLink,
     entityClass: Entity,
-    tableName: string
+    tableClassName: string
   ) {
     this.entityClasses.push(entityClass);
     this.entities[entityClass.name] = {
-      tableName,
+      tableClassName,
       attributes: {},
       relationships: {}
     };

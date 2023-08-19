@@ -88,7 +88,7 @@ class QueryBuilder {
     this.attrCounter = 0;
 
     const entityMetadata = Metadata.getEntity(props.entityClassName);
-    this.tableMetadata = Metadata.getTable(entityMetadata.tableName);
+    this.tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
 
     const possibleAttrs = {
       ...entityMetadata.attributes,

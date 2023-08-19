@@ -30,7 +30,9 @@ class FindById<T extends SingleTableDesign> {
   constructor(Entity: EntityClass<T>) {
     this.EntityClass = Entity;
     this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(this.#entityMetadata.tableName);
+    this.#tableMetadata = Metadata.getTable(
+      this.#entityMetadata.tableClassName
+    );
   }
 
   /**

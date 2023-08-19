@@ -27,7 +27,9 @@ class QueryResolver<T extends SingleTableDesign> {
   constructor(entity: new () => T) {
     this.entity = new entity();
     this.#entityMetadata = Metadata.getEntity(entity.name);
-    this.#tableMetadata = Metadata.getTable(this.#entityMetadata.tableName);
+    this.#tableMetadata = Metadata.getTable(
+      this.#entityMetadata.tableClassName
+    );
   }
 
   /**
