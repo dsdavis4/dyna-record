@@ -34,8 +34,8 @@ class Query<T extends SingleTableDesign> {
 
   constructor(Entity: EntityClass<T>) {
     this.EntityClass = Entity;
-    this.#entityMetadata = Metadata.entities[Entity.name];
-    this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
+    this.#entityMetadata = Metadata.getEntity(Entity.name);
+    this.#tableMetadata = Metadata.getTable(this.#entityMetadata.tableName);
   }
 
   /**
@@ -93,11 +93,11 @@ class Query<T extends SingleTableDesign> {
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<(T | BelongsToLink)[]> {
-    const entityMetadata = Metadata.entities[this.EntityClass.name];
-    const tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const entityMetadata = this.#entityMetadata;
+    const { primaryKey, sortKey, name: tableName } = this.#tableMetadata;
 
-    const modelPk = entityMetadata.attributes[tableMetadata.primaryKey].name;
-    const modelSk = entityMetadata.attributes[tableMetadata.sortKey].name;
+    const modelPk = entityMetadata.attributes[primaryKey].name;
+    const modelSk = entityMetadata.attributes[sortKey].name;
 
     const keyCondition = {
       [modelPk]: this.EntityClass.primaryKeyValue(id),
@@ -110,7 +110,7 @@ class Query<T extends SingleTableDesign> {
       options
     }).build();
 
-    const dynamo = new DynamoClient(tableMetadata.name);
+    const dynamo = new DynamoClient(tableName);
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver<T>(this.EntityClass);

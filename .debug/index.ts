@@ -44,6 +44,8 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
       indexName: "ByRoomIdAndConnectionId"
     });
   }
+
+  // public someMethod() {}
 }
 
 @Entity

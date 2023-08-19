@@ -58,21 +58,45 @@ export interface TableMetadata {
 // TODO make jsdoc in this class better. See SingleTableDesign
 
 class Metadata {
-  public readonly tables: Record<string, TableMetadata> = {};
-  public readonly entities: Record<string, EntityMetadata> = {};
+  private readonly tables: Record<string, TableMetadata> = {};
+  private readonly entities: Record<string, EntityMetadata> = {};
 
   private initialized: boolean = false;
   private readonly entityClasses: Entity[] = [];
 
+  // constructor() {
+  //   this.init();
+  // }
+
   /**
-   * Initialize metadata object
+   * Returns entity metadata given an entity name
+   * @param {string} entityName - Name of the entity
+   * @returns Entity metadata
    */
-  public init() {
-    if (this.initialized === false) {
-      // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      this.entityClasses.forEach(entityClass => new entityClass());
-      this.initialized = true;
-    }
+  public getEntity(entityName: string) {
+    this.init();
+    return this.entities[entityName];
+  }
+
+  /**
+   * Returns table metadata given a table name
+   * @param {string} tableName - Name of the table
+   * @returns Table metadata
+   */
+  public getTable(tableName: string) {
+    this.init();
+    return this.tables[tableName];
+  }
+
+  /**
+   * Returns table metadata for an entity given an entity name
+   * @param {string} entityName - Name of the entity
+   * @returns Table metadata
+   */
+  public getEntityTable(entityName: string) {
+    this.init();
+    const entityMetadata = this.getEntity(entityName);
+    return this.getTable(entityMetadata.tableName);
   }
 
   /**
@@ -132,6 +156,17 @@ class Metadata {
       entityMetadata.attributes[options.alias] = {
         name: options.attributeName
       };
+    }
+  }
+
+  /**
+   * Initialize metadata object
+   */
+  private init() {
+    if (this.initialized === false) {
+      // Initialize all entities once to trigger Attribute decorators and fill metadata object
+      this.entityClasses.forEach(entityClass => new entityClass());
+      this.initialized = true;
     }
   }
 }

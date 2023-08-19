@@ -6,9 +6,7 @@
     "ignoreDeprecations": "5.0",
     "strictNullChecks": true,
     "target": "ES2022",
-    // TODO test if this workers and include if so
-    //     https://dev.to/lioness100/introducing-typescript-override-keyword-4b36
-    // "noImplicitOverride": true,
+    "noImplicitOverride": true,
     // "useDefineForClassFields": true,
     // TODO do I want this? It makes it so I dont need the bang on class fields
     "strictPropertyInitialization": false,

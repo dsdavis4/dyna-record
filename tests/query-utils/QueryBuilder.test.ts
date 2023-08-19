@@ -1,29 +1,30 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
+import SingleTableDesign from "../../src";
+import { Table, Entity, Attribute } from "../../src/decorators";
 
-jest.mock("../../src/metadata", () => ({
-  tables: {
-    MockTable: {
-      name: "mock-table",
-      primaryKey: "PK",
-      sortKey: "SK",
-      delimiter: "#"
-    }
-  },
-  entities: {
-    Scale: {
-      tableName: "MockTable",
-      attributes: {
-        Type: { name: "type" },
-        PK: { name: "pk" },
-        SK: { name: "sk" },
-        Id: { name: "id" },
-        Name: { name: "name" },
-        UpdatedAt: { name: "updatedAt" },
-        CreatedAt: { name: "createdAt" }
-      }
-    }
-  }
-}));
+@Table({ name: "mock-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+class MockTable extends SingleTableDesign {
+  @Attribute({ alias: "PK" })
+  public pk: string;
+
+  @Attribute({ alias: "SK" })
+  public sk: string;
+
+  @Attribute({ alias: "CreatedAt" })
+  public createdAt: Date;
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date;
+}
+
+@Entity
+class Scale extends MockTable {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
+}
 
 describe("QueryBuilder", () => {
   it("returns QueryCommandInput for an AND filter on a partition", () => {

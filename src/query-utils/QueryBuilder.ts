@@ -1,6 +1,7 @@
 import { QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, { TableMetadata } from "../metadata";
+import { BelongsToLink } from "../relationships";
 
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],
@@ -86,12 +87,12 @@ class QueryBuilder {
     this.props = props;
     this.attrCounter = 0;
 
-    const entityMetadata = Metadata.entities[props.entityClassName];
-    this.tableMetadata = Metadata.tables[entityMetadata.tableName];
+    const entityMetadata = Metadata.getEntity(props.entityClassName);
+    this.tableMetadata = Metadata.getTable(entityMetadata.tableName);
 
     const possibleAttrs = {
       ...entityMetadata.attributes,
-      ...Metadata.entities?.BelongsToLink?.attributes
+      ...Metadata.getEntity(BelongsToLink.name).attributes
     };
 
     // TODO should this be in meta data so its not recalcualted? That would mean more data in cache...

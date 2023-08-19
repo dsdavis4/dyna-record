@@ -29,8 +29,6 @@ abstract class SingleTableDesign {
     id: string,
     options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
-    this.init();
-
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
@@ -67,8 +65,6 @@ abstract class SingleTableDesign {
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
   ): Promise<(T | BelongsToLink)[]> {
-    this.init();
-
     const op = new Query<T>(this);
     return await op.run(key, options);
   }
@@ -79,16 +75,8 @@ abstract class SingleTableDesign {
    * @returns Constructed primary key value
    */
   public static primaryKeyValue(id: string) {
-    const entityMetadata = Metadata.entities[this.name];
-    const { delimiter } = Metadata.tables[entityMetadata.tableName];
+    const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
-  }
-
-  /**
-   * Initializer for class.
-   */
-  private static init() {
-    Metadata.init();
   }
 
   // public someMethod() {

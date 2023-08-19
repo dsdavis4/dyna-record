@@ -26,8 +26,8 @@ class QueryResolver<T extends SingleTableDesign> {
 
   constructor(entity: new () => T) {
     this.entity = new entity();
-    this.#entityMetadata = Metadata.entities[entity.name];
-    this.#tableMetadata = Metadata.tables[this.#entityMetadata.tableName];
+    this.#entityMetadata = Metadata.getEntity(entity.name);
+    this.#tableMetadata = Metadata.getTable(this.#entityMetadata.tableName);
   }
 
   /**
@@ -105,7 +105,7 @@ class QueryResolver<T extends SingleTableDesign> {
     if (tableItem.Type !== BelongsToLink.name) return;
 
     const instance = new BelongsToLink();
-    const attrs = Metadata.entities.BelongsToLink.attributes;
+    const attrs = Metadata.getEntity(BelongsToLink.name).attributes;
 
     Object.keys(tableItem).forEach(attr => {
       const entityKey = attrs[attr]?.name;
