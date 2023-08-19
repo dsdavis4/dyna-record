@@ -12,7 +12,11 @@ export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: { association: keyof T }[];
 }
 
-// TODO would something like this work for making fields required when the association is included?
+// TODO when an association is included the type on the variable should know that key will be present
+//   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
+//   brewery.scales should be typed as Scale[] and not be optional
+//
+//  would something like this work for making fields required when the association is included?
 // export type FindByIdResponse<
 //   T extends SingleTableDesign,
 //   Opts extends FindByIdOptions<T>
@@ -75,10 +79,6 @@ class FindById<T extends SingleTableDesign> {
       return null;
     }
   }
-
-  // TODO when an association is included the type on the variable should know that key will be present
-  //   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
-  //   brewery.scales should be typed as Scale[] and not be optional
 
   /**
    * Find an entity with included associations
