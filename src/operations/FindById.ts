@@ -12,6 +12,12 @@ export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: { association: keyof T }[];
 }
 
+// TODO would something like this work for making fields required when the association is included?
+// export type FindByIdResponse<
+//   T extends SingleTableDesign,
+//   Opts extends FindByIdOptions<T>
+// > = Required<Pick<T, NonNullable<Opts["include"]>[number]["association"]>> & T;
+
 /**
  * FindById operations
  */
