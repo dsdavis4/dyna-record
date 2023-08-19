@@ -71,9 +71,6 @@ interface QueryCommandProps {
   // entity: typeof DynamoBase;
   entityClassName: string; // TODO is this needed or should I pass tableMetadata?
   key: KeyConditions;
-  // TODO should this be optional?
-  // TODO make it so at least one of the params is required
-  // TODO should filter be optional?
   options?: QueryOptions;
 }
 
