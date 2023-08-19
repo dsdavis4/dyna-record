@@ -68,8 +68,7 @@ export interface QueryOptions {
 }
 
 interface QueryCommandProps {
-  // entity: typeof DynamoBase;
-  entityClassName: string; // TODO is this needed or should I pass tableMetadata?
+  entityClassName: string;
   key: KeyConditions;
   options?: QueryOptions;
 }
@@ -77,10 +76,8 @@ interface QueryCommandProps {
 // TODO add jsdoc
 // TODO should I add explicit returns for all these functions?
 class QueryBuilder {
-  // private readonly doc: Record<string, NativeAttributeValue>;
   private attrCounter: number;
   private tableMetadata: TableMetadata;
-  // private entityMetadata: EntityMetadata;
 
   // Lookup tableKey by modelKey: ex: { modelProp1: :"ModelProp1", modelProp2: :"ModelProp2" }
   private tableKeyLookup: Record<string, string>;
