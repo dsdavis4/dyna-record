@@ -95,7 +95,6 @@ class QueryBuilder {
       ...Metadata.getEntity(BelongsToLink.name).attributes
     };
 
-    // TODO should this be in meta data so its not recalcualted? That would mean more data in cache...
     this.tableKeyLookup = Object.entries(possibleAttrs).reduce(
       (acc, [tableKey, attrMetadata]) => {
         acc[attrMetadata.name] = tableKey;
