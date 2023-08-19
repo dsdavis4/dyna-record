@@ -64,10 +64,6 @@ class Metadata {
   private initialized: boolean = false;
   private readonly entityClasses: Entity[] = [];
 
-  // constructor() {
-  //   this.init();
-  // }
-
   /**
    * Returns entity metadata given an entity name
    * @param {string} entityName - Name of the entity
