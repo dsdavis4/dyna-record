@@ -195,14 +195,6 @@ class WsToken extends DrewsBrewsTable {
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
-// TODO should I make a class field decorator on SingleTableDesign to ensure metadata is always set by:
-//    1. class method decorator to go on functions that will need it
-//    2. Automatically all it on all public methods of a class
-//    3. Make it so that Metadata has a method `get` which calls init if not initialized
-//       and otherwise returns it
-// 2 is likely not possible, dont waste time
-// 3. is probably best as its simple and could be re-usable outside of class methods
-
 (async () => {
   try {
     const metadata = Metadata;
