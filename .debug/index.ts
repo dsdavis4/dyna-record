@@ -217,7 +217,6 @@ class WsToken extends DrewsBrewsTable {
       // indexName: "Bla"
     });
 
-    // TODO this or the one above should work
     const results = await Brewery.query(
       {
         pk: Brewery.primaryKeyValue("157cc981-1be2-4ecc-a257-07d9a6037559"),
