@@ -19,6 +19,9 @@ class BelongsToLink {
   @Attribute({ alias: "Type" })
   public type: string;
 
+  @Attribute({ alias: "ForeignEntityType" })
+  public foreignEntityType: string;
+
   @Attribute({ alias: "CreatedAt" })
   public createdAt: Date;
 

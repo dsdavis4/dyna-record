@@ -187,6 +187,8 @@ class WsToken extends DrewsBrewsTable {
   Note I reflected this in my test mocks so I can clean those up
 
 - Support projected associations
+
+- eslint
 */
 
 // TODO PRE MVP

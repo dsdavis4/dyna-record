@@ -8,7 +8,8 @@
     "watch": "tsc -w",
     "test": "jest",
     "debug-invoke": "npx ts-node .debug/index.ts",
-    "seed-test-table": "npx ts-node seed-test-table.ts"
+    "seed-test-table": "npx ts-node seeds/seed-test-table.ts",
+    "seed-links": "npx ts-node seeds/populate-belongs-to-links-entity.ts"
   },
   "repository": {
     "type": "git",

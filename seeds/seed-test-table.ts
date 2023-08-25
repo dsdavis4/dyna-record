@@ -4,6 +4,10 @@ import {
   PutItemCommand
 } from "@aws-sdk/client-dynamodb";
 
+// TODO delete this and script in package.json
+
+// Used to see a test table copy from drews-brews
+
 const client = new DynamoDBClient({});
 
 (async () => {

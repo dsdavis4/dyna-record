@@ -309,24 +309,6 @@ describe("SingleTableDesign", () => {
             SomeAttr: "attribute that is not modeled"
           },
           ...orderLinks,
-          // TODO As of now all belongs to links are returned even if not queried...
-          // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#114",
-            Id: "005",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-01-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
-          },
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#115",
-            Id: "006",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-02-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
-          },
           ...paymentMethodLinks
         ]
       });
@@ -431,13 +413,20 @@ describe("SingleTableDesign", () => {
         [
           {
             TableName: "mock-table",
-            FilterExpression: "#Type = :Type1 OR #Type = :Type2",
-            KeyConditionExpression: "#PK = :PK3",
-            ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
+            FilterExpression:
+              "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type",
+              "#ForeignEntityType": "ForeignEntityType"
+            },
             ExpressionAttributeValues: {
-              ":PK3": "Customer#123",
+              ":PK5": "Customer#123",
               ":Type1": "Customer",
-              ":Type2": "BelongsToLink"
+              ":Type2": "BelongsToLink",
+              ":ForeignEntityType3": "Order",
+              ":ForeignEntityType4": "PaymentMethod"
             }
           }
         ]
@@ -483,24 +472,6 @@ describe("SingleTableDesign", () => {
             Address: "11 Some St",
             Type: "Customer",
             UpdatedAt: "2022-09-15T04:26:31.148Z",
-            SomeAttr: "attribute that is not modeled"
-          },
-          // TODO As of now all belongs to links are returned even if not queried...
-          // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#114",
-            Id: "005",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-01-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
-          },
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#115",
-            Id: "006",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-02-01T12:31:21.148Z",
             SomeAttr: "attribute that is not modeled"
           }
         ]
@@ -777,28 +748,7 @@ describe("SingleTableDesign", () => {
       };
 
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          paymentMethodRes,
-          ...orderLinks,
-          // TODO As of now all belongs to links are returned even if not queried...
-          // See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#114",
-            Id: "005",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-01-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
-          },
-          {
-            PK: "Customer#123",
-            SK: "NotIncludedModel#115",
-            Id: "006",
-            Type: "BelongsToLink",
-            UpdatedAt: "2023-02-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
-          }
-        ]
+        Items: [paymentMethodRes, ...orderLinks]
       });
 
       mockGet.mockResolvedValueOnce({ Item: customerRes });
@@ -875,13 +825,20 @@ describe("SingleTableDesign", () => {
         [
           {
             TableName: "mock-table",
-            FilterExpression: "#Type = :Type1 OR #Type = :Type2",
-            KeyConditionExpression: "#PK = :PK3",
-            ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
+            FilterExpression:
+              "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type",
+              "#ForeignEntityType": "ForeignEntityType"
+            },
             ExpressionAttributeValues: {
-              ":PK3": "PaymentMethod#789",
+              ":PK5": "PaymentMethod#789",
               ":Type1": "PaymentMethod",
-              ":Type2": "BelongsToLink"
+              ":Type2": "BelongsToLink",
+              ":ForeignEntityType3": "Order",
+              ":ForeignEntityType4": "Customer"
             }
           }
         ]
