@@ -197,6 +197,8 @@ class WsToken extends DrewsBrewsTable {
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
+// TODO start here... on to create
+
 (async () => {
   try {
     const metadata = Metadata;

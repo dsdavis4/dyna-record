@@ -154,10 +154,13 @@ class QueryBuilder {
     if (filter) {
       const { $or: orFilters = [], ...andFilters } = filter;
 
-      const or = orFilters.reduce((acc: Record<string, string>, filter) => {
-        Object.keys(filter).forEach(key => accumulator(acc, key));
-        return acc;
-      }, {} as Record<string, string>);
+      const or = orFilters.reduce(
+        (acc: Record<string, string>, filter) => {
+          Object.keys(filter).forEach(key => accumulator(acc, key));
+          return acc;
+        },
+        {} as Record<string, string>
+      );
 
       const and = Object.keys(andFilters).reduce(
         (acc, key) => accumulator(acc, key),

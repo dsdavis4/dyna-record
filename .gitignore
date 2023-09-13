@@ -20,3 +20,5 @@ cdk.out
 .vscode
 
 coverage
+
+!.eslintrc.js
