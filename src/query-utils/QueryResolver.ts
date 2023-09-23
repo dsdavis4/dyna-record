@@ -15,6 +15,11 @@ type ForeignKeyLinkedRelationship = HasOneRelationship | BelongsToRelationship;
 
 type RelationshipLookup = Record<string, RelationshipMetadata>;
 
+interface BelongsToLinkDynamoItem {
+  Type: typeof BelongsToLink.name;
+  [key: string]: NativeAttributeValue;
+}
+
 interface RelationshipObj {
   relationsLookup: RelationshipLookup;
   foreignKeyLinkedRelationships: ForeignKeyLinkedRelationship[];
@@ -62,11 +67,10 @@ class QueryResolver<T extends SingleTableDesign> {
   ): Promise<T>;
 
   // TODO fix this
-  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   public async resolve(
     queryResult: DynamoTableItem | DynamoTableItem[],
     includedRelationships?: RelationshipMetadata[]
-  ) {
+  ): Promise<T | Array<T | BelongsToLink>> {
     const isMultipleTableItems = Array.isArray(queryResult);
     const hasIncludedRelationships =
       Array.isArray(includedRelationships) &&
@@ -112,10 +116,8 @@ class QueryResolver<T extends SingleTableDesign> {
    * @param tableItem
    */
   private resolveBelongsToLink(
-    tableItem: Record<string, NativeAttributeValue>
-  ): BelongsToLink | undefined {
-    if (tableItem.Type !== BelongsToLink.name) return;
-
+    tableItem: BelongsToLinkDynamoItem
+  ): BelongsToLink {
     const instance = new BelongsToLink();
     const attrs = Metadata.getEntity(BelongsToLink.name).attributes;
 
@@ -227,9 +229,9 @@ class QueryResolver<T extends SingleTableDesign> {
    */
   private async resolveQueryResults(
     queryResults: DynamoTableItem[]
-  ): Promise<Array<T | BelongsToLink | undefined>> {
+  ): Promise<Array<T | BelongsToLink>> {
     return queryResults.map(res =>
-      res.Type === BelongsToLink.name
+      this.isBelongsToLinkDynamoItem(res)
         ? this.resolveBelongsToLink(res)
         : this.resolveEntity(res)
     );
@@ -277,6 +279,17 @@ class QueryResolver<T extends SingleTableDesign> {
     rel: RelationshipMetadata
   ): rel is ForeignKeyLinkedRelationship {
     return this.isHasOneRelationship(rel) || this.isBelongsToRelationship(rel);
+  }
+
+  /**
+   * Type guard to check if the DynamoTableItem is a BelongsToLink
+   * @param res DynamoTableItem
+   * @returns boolean
+   */
+  private isBelongsToLinkDynamoItem(
+    res: DynamoTableItem
+  ): res is BelongsToLinkDynamoItem {
+    return res.Type === BelongsToLink.name;
   }
 }
 
