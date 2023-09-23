@@ -1176,9 +1176,8 @@ describe("SingleTableDesign", () => {
         expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
       });
 
-      // TODO should pass
-      it.skip("and perform complex queries (arbitrary example)", async () => {
-        expect.assertions(9);
+      it("and perform complex queries (arbitrary example)", async () => {
+        expect.assertions(4);
 
         mockQuery.mockResolvedValueOnce({
           Items: [
@@ -1249,10 +1248,10 @@ describe("SingleTableDesign", () => {
                 ":SK8": "Order",
                 ":Type4": "BelongsToLink",
                 ":Type5": "Brewery",
-                ":CreatedAt3": "2021-09-15T04:26:31.148Z"
+                ":CreatedAt3": "2021-09-15T"
               },
               FilterExpression:
-                "((#Address IN (:Address1,:Address2) AND #CreatedAt = :CreatedAt3)) OR (#Type IN (:Type4,:Type5) AND #Name = :Name6)"
+                "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)"
             }
           ]
         ]);
