@@ -1,24 +1,23 @@
 import {
   DynamoDBClient,
   ScanCommand,
-  PutItemCommand,
   UpdateItemCommand
 } from "@aws-sdk/client-dynamodb";
 
-// TODO delete this and script in package.json
+// TODO delete this AND script in package.json
 
 // Use this class to add ForeignEntityType to the table BelongsToLinks
 
 const client = new DynamoDBClient({});
 
-(async () => {
+void (async () => {
   const command = new ScanCommand({
     TableName: "drews-brews"
   });
 
   const response = await client.send(command);
 
-  const items = response.Items || [];
+  const items = response.Items ?? [];
 
   const belongsToLinks = items.filter(item => item.Type.S === "BelongsToLink");
 
@@ -26,7 +25,7 @@ const client = new DynamoDBClient({});
   console.log(belongsToLinks.length);
   console.log(belongsToLinks[0]);
 
-  if (belongsToLinks.length) {
+  if (belongsToLinks.length > 0) {
     const updates = belongsToLinks.map(
       link =>
         new UpdateItemCommand({
@@ -37,6 +36,7 @@ const client = new DynamoDBClient({});
           },
           ExpressionAttributeValues: {
             ":ForeignEntityType": {
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-non-null-asserted-optional-chain
               S: link.SK.S?.split("#")[0]!
             }
           },
@@ -45,7 +45,7 @@ const client = new DynamoDBClient({});
     );
 
     try {
-      await Promise.all(updates.map(cmd => client.send(cmd)));
+      await Promise.all(updates.map(async cmd => await client.send(cmd)));
     } catch (e) {
       console.log(e);
     }

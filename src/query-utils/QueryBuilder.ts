@@ -1,6 +1,6 @@
-import { QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata, { TableMetadata } from "../metadata";
+import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
+import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import Metadata, { type TableMetadata } from "../metadata";
 import { BelongsToLink } from "../relationships";
 
 export type KeyConditions = Omit<
@@ -30,38 +30,7 @@ type AndOrFilter = FilterParams & OrFilter;
 
 export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
 
-const testing: AndOrFilter = {
-  $or: [
-    { createdAt: { $beginsWith: "2021-09-05" } },
-    { status: "active" },
-    { name: "ReadKegData", status: ["complete", "canceled"] }
-  ],
-  type: "Process",
-  createdAt: { $beginsWith: "2021-09-05" },
-  status: ["complete", "canceled"]
-};
-
-const bla: FilterParams = {
-  $or: [
-    { createdAt: { $beginsWith: "2021-09-05" } },
-    { status: "active" },
-    { name: "ReadKegData", status: ["complete", "canceled"] }
-  ],
-  type: "Process",
-  createdAt: { $beginsWith: "2021-09-05" },
-  status: ["complete", "canceled"]
-};
-
-const allAnd: FilterParams = {
-  // $or: [
-  //   { createdAt: { $beginsWith: "2021-09-05" } },
-  //   { status: "active" },
-  //   { name: "ReadKegData", status: ["complete", "canceled"] }
-  // ],
-  type: "Process",
-  createdAt: { $beginsWith: "2021-09-05" },
-  status: ["complete", "canceled"]
-};
+type StringObj = Record<string, string>;
 
 export interface QueryOptions {
   indexName?: string;
@@ -78,12 +47,12 @@ interface QueryCommandProps {
 // TODO should I add explicit returns for all these functions?
 class QueryBuilder {
   private attrCounter: number;
-  private tableMetadata: TableMetadata;
+  private readonly tableMetadata: TableMetadata;
 
   // Lookup tableKey by modelKey: ex: { modelProp1: :"ModelProp1", modelProp2: :"ModelProp2" }
-  private tableKeyLookup: Record<string, string>;
+  private readonly tableKeyLookup: StringObj;
 
-  constructor(private props: QueryCommandProps) {
+  constructor(private readonly props: QueryCommandProps) {
     this.props = props;
     this.attrCounter = 0;
 
@@ -95,25 +64,29 @@ class QueryBuilder {
       ...Metadata.getEntity(BelongsToLink.name).attributes
     };
 
-    this.tableKeyLookup = Object.entries(possibleAttrs).reduce(
+    this.tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
       (acc, [tableKey, attrMetadata]) => {
         acc[attrMetadata.name] = tableKey;
         return acc;
       },
-      {} as Record<string, string>
+      {}
     );
   }
 
   public build(): QueryCommandInput {
     const { indexName, filter } = this.props.options ?? {};
-    const filterParams = filter && this.filterParams(filter);
+    const filterParams =
+      filter !== undefined ? this.filterParams(filter) : undefined;
 
     const keyFilter = this.andFilter(this.props.key);
 
+    const hasIndex = indexName !== undefined;
+    const hasFilter = filterParams !== undefined;
+
     return {
       TableName: this.tableMetadata.name,
-      ...(indexName && { IndexName: indexName }),
-      ...(filterParams && { FilterExpression: filterParams.expression }),
+      ...(hasIndex && { IndexName: indexName }),
+      ...(hasFilter && { FilterExpression: filterParams.expression }),
       KeyConditionExpression: keyFilter.expression,
       ExpressionAttributeNames: this.expressionAttributeNames(),
       ExpressionAttributeValues: this.expressionAttributeValueParams(
@@ -127,7 +100,8 @@ class QueryBuilder {
     keyParams: FilterExpression,
     filterParams?: FilterExpression
   ): QueryCommandInput["ExpressionAttributeValues"] {
-    const valueParams = this.props.options?.filter
+    const hasFilter = this.props.options?.filter !== undefined;
+    const valueParams = hasFilter
       ? { ...keyParams.values, ...filterParams?.values }
       : keyParams.values;
 
@@ -138,30 +112,29 @@ class QueryBuilder {
   }
 
   private expressionAttributeNames(): QueryCommandInput["ExpressionAttributeNames"] {
-    const { filter } = this.props.options || {};
+    const { filter } = this.props.options ?? {};
 
-    const accumulator = (obj: Record<string, string>, key: string) => {
+    const accumulator = (obj: StringObj, key: string): StringObj => {
       const tableKey = this.tableKeyLookup[key];
       obj[`#${tableKey}`] = tableKey;
       return obj;
     };
 
-    let expressionAttributeNames = Object.keys(this.props.key).reduce(
-      (acc, key) => accumulator(acc, key),
-      {} as Record<string, string>
-    );
+    let expressionAttributeNames = Object.keys(
+      this.props.key
+    ).reduce<StringObj>((acc, key) => accumulator(acc, key), {});
 
-    if (filter) {
+    if (filter !== undefined) {
       const { $or: orFilters = [], ...andFilters } = filter;
 
-      const or = orFilters.reduce((acc: Record<string, string>, filter) => {
+      const or = orFilters.reduce<StringObj>((acc: StringObj, filter) => {
         Object.keys(filter).forEach(key => accumulator(acc, key));
         return acc;
-      }, {} as Record<string, string>);
+      }, {});
 
-      const and = Object.keys(andFilters).reduce(
+      const and = Object.keys(andFilters).reduce<StringObj>(
         (acc, key) => accumulator(acc, key),
-        {} as Record<string, string>
+        {}
       );
 
       expressionAttributeNames = { ...expressionAttributeNames, ...or, ...and };
@@ -215,11 +188,11 @@ class QueryBuilder {
     let condition;
     let values: Record<string, NativeScalarAttributeValue> = {};
     if (Array.isArray(value)) {
-      const mappings = value.reduce((acc, value) => {
+      const mappings = value.reduce<string[]>((acc, value) => {
         const attr = `${tableKey}${++this.attrCounter}`;
         values[attr] = value;
         return acc.concat(`:${attr}`);
-      }, [] as string[]);
+      }, []);
       condition = `#${tableKey} IN (${mappings.join()})`;
     } else if (this.isBeginsWithFilter(value)) {
       const attr = `${tableKey}${++this.attrCounter}`;
@@ -235,7 +208,7 @@ class QueryBuilder {
   }
 
   private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
-    return !!filter && (filter as BeginsWithFilter).$beginsWith !== undefined;
+    return (filter as BeginsWithFilter).$beginsWith !== undefined;
   }
 
   private isAndOrFilter(filter: FilterParams): filter is AndOrFilter {
@@ -247,7 +220,7 @@ class QueryBuilder {
   }
 
   private orFilter(filter: OrFilter): FilterExpression {
-    const orFilter = filter.$or.reduce(
+    const orFilter = filter.$or.reduce<FilterExpression>(
       (filterParams, filter) => {
         const { expression, values } = this.orCondition(filter);
         return {
@@ -255,7 +228,7 @@ class QueryBuilder {
           values: { ...filterParams.values, ...values }
         };
       },
-      { expression: "", values: {} } as FilterExpression
+      { expression: "", values: {} }
     );
     orFilter.expression = orFilter.expression.slice(0, -4); // trim off the trailing " OR "
     return orFilter;
@@ -268,10 +241,9 @@ class QueryBuilder {
       ? `(${andParams.expression}) OR `
       : `${andParams.expression} OR `;
 
-    const values = Object.entries(andParams.values).reduce(
-      (obj, [key, val]) => ({ ...obj, [key]: val }),
-      {} as FilterExpression["values"]
-    );
+    const values = Object.entries(andParams.values).reduce<
+      FilterExpression["values"]
+    >((obj, [key, val]) => ({ ...obj, [key]: val }), {});
     return { expression, values };
   }
 }

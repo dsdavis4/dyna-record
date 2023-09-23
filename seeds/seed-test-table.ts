@@ -1,7 +1,7 @@
 import {
   DynamoDBClient,
-  ScanCommand,
-  PutItemCommand
+  ScanCommand
+  // PutItemCommand
 } from "@aws-sdk/client-dynamodb";
 
 // TODO delete this and script in package.json
@@ -10,14 +10,14 @@ import {
 
 const client = new DynamoDBClient({});
 
-(async () => {
+void (async () => {
   const command = new ScanCommand({
     TableName: "drews-brews"
   });
 
   const response = await client.send(command);
 
-  if (response.Items) {
+  if (response.Items !== undefined) {
     console.log("COMMENTED OUT PUT ITEM OPERATION");
     // await Promise.all(
     //   response.Items.map(item =>

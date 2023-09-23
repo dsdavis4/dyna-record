@@ -18,6 +18,7 @@ class MockTable extends SingleTableDesign {
 }
 
 @Entity
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Scale extends MockTable {
   @Attribute({ alias: "Id" })
   public id: string;
@@ -27,6 +28,7 @@ class Scale extends MockTable {
 }
 
 @Entity
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Room extends MockTable {
   @Attribute({ alias: "Id" })
   public id: string;

@@ -1,5 +1,5 @@
-import Metadata, { EntityClass } from "../metadata";
-import SingleTableDesign from "../SingleTableDesign";
+import Metadata, { type EntityClass } from "../metadata";
+import type SingleTableDesign from "../SingleTableDesign";
 
 interface BelongsToProps<T> {
   foreignKey: keyof T;

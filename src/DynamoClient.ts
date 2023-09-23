@@ -3,10 +3,11 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
-  QueryCommandInput,
-  QueryCommandOutput
+  type QueryCommandInput,
+  type QueryCommandOutput,
+  type GetCommandOutput
 } from "@aws-sdk/lib-dynamodb";
-import { KeyConditions } from "./query-utils";
+import { type KeyConditions } from "./query-utils";
 // import QueryParams from "./QueryParams";
 
 // import { v4 as uuidv4 } from "uuid";
@@ -37,7 +38,9 @@ class DynamoClient {
     this.tableName = tableName;
   }
 
-  public async findById(key: KeyConditions) {
+  public async findById(
+    key: KeyConditions
+  ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {
     console.log("findById", { key });
 
     const response = await dynamo.send(

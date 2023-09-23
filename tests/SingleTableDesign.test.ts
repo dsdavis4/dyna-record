@@ -9,15 +9,14 @@ import {
 } from "../src/decorators";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-jest.mock("@aws-sdk/client-dynamodb");
 
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  QueryCommand,
-  QueryCommandInput
+  QueryCommand
 } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../src/relationships";
+jest.mock("@aws-sdk/client-dynamodb");
 
 const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
@@ -50,13 +49,13 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     DynamoDBDocumentClient: {
       from: jest.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(command => {
+          send: jest.fn().mockImplementation(async command => {
             mockSend(command);
-            if (command.name == "GetCommand") {
-              return Promise.resolve(mockGet());
+            if (command.name === "GetCommand") {
+              return await Promise.resolve(mockGet());
             }
-            if (command.name == "QueryCommand") {
-              return Promise.resolve(mockQuery());
+            if (command.name === "QueryCommand") {
+              return await Promise.resolve(mockQuery());
             }
           })
         };
@@ -162,7 +161,7 @@ class Customer extends MockTable {
   @HasMany(() => PaymentMethod, { targetKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
-  public mockCustomInstanceMethod() {
+  public mockCustomInstanceMethod(): string {
     return `${this.name}-${this.id}`;
   }
 }

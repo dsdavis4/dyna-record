@@ -1,5 +1,5 @@
-import SingleTableDesign from "../SingleTableDesign";
-import { BelongsToLink } from "../relationships";
+import type SingleTableDesign from "../SingleTableDesign";
+import { type BelongsToLink } from "../relationships";
 
 interface AttributeMetadata {
   name: string;
@@ -12,7 +12,7 @@ interface AttributeMetadataOptions {
 
 type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
 
-export type EntityClass<T> = { new (): T } & typeof SingleTableDesign;
+export type EntityClass<T> = (new () => T) & typeof SingleTableDesign;
 type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
 
 interface RelationshipMetadataBase {
@@ -68,7 +68,7 @@ class Metadata {
    * @param {string} entityName - Name of the entity
    * @returns Entity metadata
    */
-  public getEntity(entityName: string) {
+  public getEntity(entityName: string): EntityMetadata {
     this.init();
     return this.entities[entityName];
   }
@@ -78,7 +78,7 @@ class Metadata {
    * @param {string} tableName - Name of the table
    * @returns Table metadata
    */
-  public getTable(tableName: string) {
+  public getTable(tableName: string): TableMetadata {
     this.init();
     return this.tables[tableName];
   }
@@ -88,7 +88,7 @@ class Metadata {
    * @param {string} entityName - Name of the entity
    * @returns Table metadata
    */
-  public getEntityTable(entityName: string) {
+  public getEntityTable(entityName: string): TableMetadata {
     this.init();
     const entityMetadata = this.getEntity(entityName);
     return this.getTable(entityMetadata.tableClassName);
@@ -99,7 +99,7 @@ class Metadata {
    * @param tableClassName
    * @param options
    */
-  public addTable(tableClassName: string, options: TableMetadata) {
+  public addTable(tableClassName: string, options: TableMetadata): void {
     this.tables[tableClassName] = options;
   }
 
@@ -112,7 +112,7 @@ class Metadata {
     // entityClass: typeof SingleTableDesign | typeof BelongsToLink,
     entityClass: Entity,
     tableClassName: string
-  ) {
+  ): void {
     this.entityClasses.push(entityClass);
     this.entities[entityClass.name] = {
       tableClassName,
@@ -129,9 +129,9 @@ class Metadata {
   public addEntityRelationship(
     entityName: string,
     options: RelationshipMetadata
-  ) {
+  ): void {
     const entityMetadata = this.entities[entityName];
-    if (!entityMetadata.relationships[options.propertyName]) {
+    if (entityMetadata.relationships[options.propertyName] === undefined) {
       entityMetadata.relationships[options.propertyName] = options;
     }
   }
@@ -144,10 +144,10 @@ class Metadata {
   public addEntityAttribute(
     entityName: string,
     options: AttributeMetadataOptions
-  ) {
+  ): void {
     const entityMetadata = this.entities[entityName];
 
-    if (!entityMetadata.attributes[options.alias]) {
+    if (entityMetadata.attributes[options.alias] === undefined) {
       entityMetadata.attributes[options.alias] = {
         name: options.attributeName
       };
@@ -157,10 +157,10 @@ class Metadata {
   /**
    * Initialize metadata object
    */
-  private init() {
-    if (this.initialized === false) {
+  private init(): void {
+    if (!this.initialized) {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      this.entityClasses.forEach(entityClass => new entityClass());
+      this.entityClasses.forEach(EntityClass => new EntityClass());
       this.initialized = true;
     }
   }
