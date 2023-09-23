@@ -199,6 +199,8 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO start here... on to create
 
+// TODO add eslint workflow
+
 (async () => {
   try {
     const metadata = Metadata;
