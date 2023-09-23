@@ -78,10 +78,6 @@ abstract class SingleTableDesign {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
   }
-
-  // public someMethod() {
-  //   // TODO delete me
-  // }
 }
 
 export default SingleTableDesign;
