@@ -1,19 +1,18 @@
-import SingleTableDesign from "../SingleTableDesign";
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata, {
-  RelationshipMetadata,
-  EntityMetadata,
-  TableMetadata,
-  EntityClass
+  type EntityMetadata,
+  type TableMetadata,
+  type EntityClass
 } from "../metadata";
 import {
   QueryBuilder,
   QueryResolver,
-  KeyConditions,
-  QueryOptions as QueryBuilderOptions,
-  SortKeyCondition
+  type KeyConditions,
+  type QueryOptions as QueryBuilderOptions,
+  type SortKeyCondition
 } from "../query-utils";
 import DynamoClient from "../DynamoClient";
-import { BelongsToLink } from "../relationships";
+import { type BelongsToLink } from "../relationships";
 
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
@@ -27,7 +26,7 @@ export type EntityKeyConditions<T> = {
  * Query operations
  */
 class Query<T extends SingleTableDesign> {
-  private EntityClass: EntityClass<T>;
+  private readonly EntityClass: EntityClass<T>;
 
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -49,11 +48,11 @@ class Query<T extends SingleTableDesign> {
   public async run(
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
-  ): Promise<(T | BelongsToLink)[]> {
+  ): Promise<Array<T | BelongsToLink>> {
     if (typeof key === "string") {
       return await this.queryEntity(key, options);
     } else {
-      return this.queryByKey(key, options);
+      return await this.queryByKey(key, options);
     }
   }
 
@@ -67,7 +66,7 @@ class Query<T extends SingleTableDesign> {
   private async queryByKey(
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
-  ): Promise<(T | BelongsToLink)[]> {
+  ): Promise<Array<T | BelongsToLink>> {
     const { name: tableName } = this.#tableMetadata;
 
     const params = new QueryBuilder({
@@ -94,7 +93,7 @@ class Query<T extends SingleTableDesign> {
   private async queryEntity(
     id: string,
     options?: Omit<QueryOptions, "indexName">
-  ): Promise<(T | BelongsToLink)[]> {
+  ): Promise<Array<T | BelongsToLink>> {
     const entityMetadata = this.#entityMetadata;
     const { primaryKey, sortKey, name: tableName } = this.#tableMetadata;
 
@@ -103,7 +102,9 @@ class Query<T extends SingleTableDesign> {
 
     const keyCondition = {
       [modelPk]: this.EntityClass.primaryKeyValue(id),
-      ...(options?.skCondition && { [modelSk]: options?.skCondition })
+      ...(options?.skCondition !== undefined && {
+        [modelSk]: options?.skCondition
+      })
     };
 
     const params = new QueryBuilder({

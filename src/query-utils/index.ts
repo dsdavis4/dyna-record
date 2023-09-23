@@ -1,8 +1,7 @@
 export {
   default as QueryBuilder,
-  KeyConditions,
-  QueryOptions,
-  SortKeyCondition
+  type KeyConditions,
+  type QueryOptions,
+  type SortKeyCondition
 } from "./QueryBuilder";
 export { default as QueryResolver } from "./QueryResolver";
-export { default as Filters } from "./Filters";

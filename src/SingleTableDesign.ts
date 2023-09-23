@@ -1,13 +1,13 @@
-import Metadata, { EntityClass } from "./metadata";
-import { QueryOptions as QueryBuilderOptions } from "./query-utils";
+import Metadata, { type EntityClass } from "./metadata";
+import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute } from "./decorators";
-import { BelongsToLink } from "./relationships";
+import { type BelongsToLink } from "./relationships";
 import {
   FindById,
-  FindByIdOptions,
+  type FindByIdOptions,
   Query,
-  QueryOptions,
-  EntityKeyConditions
+  type QueryOptions,
+  type EntityKeyConditions
 } from "./operations";
 
 abstract class SingleTableDesign {
@@ -44,7 +44,7 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
-  ): Promise<(T | BelongsToLink)[]>;
+  ): Promise<Array<T | BelongsToLink>>;
 
   /**
    * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
@@ -58,13 +58,13 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     options?: Omit<QueryOptions, "indexName">
-  ): Promise<(T | BelongsToLink)[]>;
+  ): Promise<Array<T | BelongsToLink>>;
 
   public static async query<T extends SingleTableDesign>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
-  ): Promise<(T | BelongsToLink)[]> {
+  ): Promise<Array<T | BelongsToLink>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
   }
@@ -74,7 +74,7 @@ abstract class SingleTableDesign {
    * @param {string} id - Entity Id
    * @returns Constructed primary key value
    */
-  public static primaryKeyValue(id: string) {
+  public static primaryKeyValue(id: string): string {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
   }

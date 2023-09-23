@@ -1,15 +1,16 @@
-import SingleTableDesign from "../SingleTableDesign";
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata, {
-  RelationshipMetadata,
-  EntityMetadata,
-  TableMetadata,
-  EntityClass
+  type RelationshipMetadata,
+  type EntityMetadata,
+  type TableMetadata,
+  type EntityClass
 } from "../metadata";
 import DynamoClient from "../DynamoClient";
-import { QueryBuilder, QueryResolver, Filters } from "../query-utils";
+import { QueryBuilder, QueryResolver } from "../query-utils";
+import { includedRelationshipsFilter } from "../query-utils/Filters";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
-  include?: { association: keyof T }[];
+  include?: Array<{ association: keyof T }>;
 }
 
 // TODO when an association is included the type on the variable should know that key will be present
@@ -26,7 +27,7 @@ export interface FindByIdOptions<T extends SingleTableDesign> {
  * FindById operations
  */
 class FindById<T extends SingleTableDesign> {
-  private EntityClass: EntityClass<T>;
+  private readonly EntityClass: EntityClass<T>;
 
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -51,7 +52,7 @@ class FindById<T extends SingleTableDesign> {
     id: string,
     options: FindByIdOptions<T> = {}
   ): Promise<T | null> {
-    if (options.include) {
+    if (options.include !== undefined) {
       return await this.findByIdWithIncludes(id, options.include);
     } else {
       return await this.findByIdOnly(id);
@@ -63,7 +64,7 @@ class FindById<T extends SingleTableDesign> {
    * @param {string} id - Entity Id
    * @returns An entity object or null
    */
-  private async findByIdOnly(id: string) {
+  private async findByIdOnly(id: string): Promise<T | null> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
@@ -72,7 +73,7 @@ class FindById<T extends SingleTableDesign> {
       [sortKey]: this.EntityClass.name
     });
 
-    if (res) {
+    if (res !== null) {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
       return await queryResolver.resolve(res);
     } else {
@@ -90,21 +91,20 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
-  ) {
+  ): Promise<T | null> {
     const { name: tableName, primaryKey } = this.#tableMetadata;
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
-    const includedRelationships = includedAssociations.reduce(
-      (acc, includedRel) => {
-        const key = includedRel.association as string;
-        const included = this.#entityMetadata.relationships[key];
-        if (included) acc.push(included);
-        return acc;
-      },
-      [] as RelationshipMetadata[]
-    );
+    const includedRelationships = includedAssociations.reduce<
+      RelationshipMetadata[]
+    >((acc, includedRel) => {
+      const key = includedRel.association as string;
+      const included = this.#entityMetadata.relationships[key];
+      if (included !== undefined) acc.push(included);
+      return acc;
+    }, []);
 
-    const partitionFilter = Filters.includedRelationships(
+    const partitionFilter = includedRelationshipsFilter(
       this.EntityClass.name,
       includedRelationships
     );
