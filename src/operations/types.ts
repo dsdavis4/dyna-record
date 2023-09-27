@@ -12,7 +12,7 @@ type RelationshipAttributeNames<T> = {
 }[keyof T];
 
 /**
- * Excludes relationship attributes
+ * Entity attributes excluding relationship attributes
  */
 export type EntityAttributes<T extends SingleTableDesign> = Omit<
   T,
