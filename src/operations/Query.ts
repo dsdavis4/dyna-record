@@ -13,6 +13,7 @@ import {
 } from "../query-utils";
 import DynamoClient from "../DynamoClient";
 import { type BelongsToLink } from "../relationships";
+import type { EntityAttributes } from "./types";
 
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
@@ -21,6 +22,10 @@ export interface QueryOptions extends QueryBuilderOptions {
 export type EntityKeyConditions<T> = {
   [K in keyof T]?: KeyConditions;
 };
+
+export type QueryResults<T extends SingleTableDesign> = Array<
+  EntityAttributes<T> | BelongsToLink
+>;
 
 /**
  * Query operations
@@ -48,7 +53,7 @@ class Query<T extends SingleTableDesign> {
   public async run(
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
-  ): Promise<Array<T | BelongsToLink>> {
+  ): Promise<QueryResults<T>> {
     if (typeof key === "string") {
       return await this.queryEntity(key, options);
     } else {
@@ -66,7 +71,7 @@ class Query<T extends SingleTableDesign> {
   private async queryByKey(
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
-  ): Promise<Array<T | BelongsToLink>> {
+  ): Promise<QueryResults<T>> {
     const { name: tableName } = this.#tableMetadata;
 
     const params = new QueryBuilder({
@@ -93,7 +98,7 @@ class Query<T extends SingleTableDesign> {
   private async queryEntity(
     id: string,
     options?: Omit<QueryOptions, "indexName">
-  ): Promise<Array<T | BelongsToLink>> {
+  ): Promise<QueryResults<T>> {
     const entityMetadata = this.#entityMetadata;
     const { primaryKey, sortKey, name: tableName } = this.#tableMetadata;
 

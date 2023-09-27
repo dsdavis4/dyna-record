@@ -1,13 +1,13 @@
 import Metadata, { type EntityClass } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute } from "./decorators";
-import { type BelongsToLink } from "./relationships";
 import {
   FindById,
   type FindByIdOptions,
   Query,
   type QueryOptions,
-  type EntityKeyConditions
+  type EntityKeyConditions,
+  type QueryResults
 } from "./operations";
 
 abstract class SingleTableDesign {
@@ -44,7 +44,7 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
-  ): Promise<Array<T | BelongsToLink>>;
+  ): Promise<QueryResults<T>>;
 
   /**
    * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
@@ -58,13 +58,13 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     options?: Omit<QueryOptions, "indexName">
-  ): Promise<Array<T | BelongsToLink>>;
+  ): Promise<QueryResults<T>>;
 
   public static async query<T extends SingleTableDesign>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
-  ): Promise<Array<T | BelongsToLink>> {
+  ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
   }

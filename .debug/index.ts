@@ -9,6 +9,7 @@ import {
 } from "../src/decorators";
 
 import Metadata from "../src/metadata";
+import { BelongsToLink } from "../src/relationships";
 
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
@@ -214,6 +215,11 @@ class WsToken extends DrewsBrewsTable {
       include: [{ association: "brewery" }, { association: "scales" }]
     });
 
+    if (room) {
+      room.brewery;
+      room.scales;
+    }
+
     // debugger;
 
     // Example filtering on sort key. Gets all belongs to links for a brewery that link to a scale
@@ -232,6 +238,12 @@ class WsToken extends DrewsBrewsTable {
         filter: { type: ["BelongsToLink", "Brewery"] }
       }
     );
+
+    if (results[0] && !(results[0] instanceof BelongsToLink)) {
+      const bla = results[0];
+      // @ts-expect-error
+      bla.scales;
+    }
 
     const wsTokens = await WsToken.getAllByRoomId(
       "1a97a62b-6c30-42bd-a2e7-05f2090e87ce"
