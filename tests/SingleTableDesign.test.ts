@@ -18,6 +18,8 @@ import {
 import { BelongsToLink } from "../src/relationships";
 jest.mock("@aws-sdk/client-dynamodb");
 
+// TODO types tests should cause failures when they break. Right now it just makes a red squiggly
+
 const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
@@ -1339,6 +1341,31 @@ describe("SingleTableDesign", () => {
         ]);
         expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
       });
+
+      describe("types", () => {
+        it("does not serialize relationships", async () => {
+          mockQuery.mockResolvedValueOnce({
+            Items: []
+          });
+
+          const result = await PaymentMethod.query({
+            pk: "PaymentMethod#123"
+          });
+
+          const paymentMethod = result[0];
+
+          if (
+            paymentMethod !== undefined &&
+            !(paymentMethod instanceof BelongsToLink)
+          ) {
+            // @ts-expect-error: Query does not include HasOne or BelongsTo associations
+            console.log(paymentMethod.customer);
+
+            // @ts-expect-error: Query does not include HasMany relationship associations
+            console.log(paymentMethod.orders);
+          }
+        });
+      });
     });
 
     describe("queryByEntity", () => {
@@ -1723,6 +1750,40 @@ describe("SingleTableDesign", () => {
           ]
         ]);
         expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+      });
+
+      describe("types", () => {
+        it("does not serialize relationships", async () => {
+          mockQuery.mockResolvedValueOnce({
+            Items: []
+          });
+
+          const result = await PaymentMethod.query("123");
+
+          const paymentMethod = result[0];
+
+          if (
+            paymentMethod !== undefined &&
+            !(paymentMethod instanceof BelongsToLink)
+          ) {
+            // @ts-expect-error: Query does not include HasOne or BelongsTo associations
+            console.log(paymentMethod.customer);
+
+            // @ts-expect-error: Query does not include HasMany relationship associations
+            console.log(paymentMethod.orders);
+          }
+        });
+
+        it("does not allow to query by index", async () => {
+          mockQuery.mockResolvedValueOnce({
+            Items: []
+          });
+
+          // @ts-expect-error: Cannot query by index when using query by entity ID
+          await PaymentMethod.query("123", {
+            indexName: "123"
+          });
+        });
       });
     });
   });
