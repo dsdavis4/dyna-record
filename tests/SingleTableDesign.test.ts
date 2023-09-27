@@ -18,6 +18,8 @@ import {
 import { BelongsToLink } from "../src/relationships";
 jest.mock("@aws-sdk/client-dynamodb");
 
+// TODO types tests should cause failures when they break. Right now it just makes a red squiggly
+
 const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
@@ -1751,7 +1753,6 @@ describe("SingleTableDesign", () => {
       });
 
       describe("types", () => {
-        // TODO this should fail if the types are wrong. Right now it just gives red squiggly
         it("does not serialize relationships", async () => {
           mockQuery.mockResolvedValueOnce({
             Items: []
