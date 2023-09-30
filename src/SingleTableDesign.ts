@@ -4,6 +4,7 @@ import { Attribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
+  type FindByIdResponse,
   Query,
   type QueryOptions,
   type EntityKeyConditions,
@@ -13,6 +14,7 @@ import {
 abstract class SingleTableDesign {
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
+
   @Attribute({ alias: "Type" })
   public type: string;
 
@@ -28,9 +30,9 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     options: FindByIdOptions<T> = {}
-  ): Promise<T | null> {
+  ): Promise<FindByIdResponse<T>> {
     const op = new FindById<T>(this);
-    return await op.run(id, options);
+    return await op.run<T>(id, options);
   }
 
   /**

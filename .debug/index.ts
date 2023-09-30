@@ -9,6 +9,7 @@ import {
 } from "../src/decorators";
 
 import Metadata from "../src/metadata";
+import { FindByIdOptions, FindByIdResponse } from "../src/operations";
 import { BelongsToLink } from "../src/relationships";
 
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
@@ -129,6 +130,10 @@ class Room extends DrewsBrewsTable {
 
   @HasMany(() => Scale, { targetKey: "roomId" })
   public scales: Scale[];
+
+  public testing2() {
+    return "hi";
+  }
 }
 
 @Entity
@@ -204,6 +209,268 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO add tsconfig for dev... that includes test files and debug file
 
+// class Bla {
+//   public one: string;
+//   public two: string;
+//   public three: string;
+// }
+
+// type RemoveSome<T> = Pick<T, "one">;
+
+// type Params<T>
+
+// const someFunction = (params: string[]): RemoveSome<Bla> => {
+//   return new Bla();
+// };
+
+// const duh = someFunction(["two"]);
+
+// duh.one;
+// duh.two;
+// duh.three;
+
+type GroupByResult<
+  ObjectType,
+  KeyType extends keyof ObjectType
+> = ObjectType[KeyType] extends PropertyKey
+  ? Record<ObjectType[KeyType], Omit<ObjectType, KeyType>[]>
+  : never;
+
+const groupBy = <ObjectType, KeyType extends keyof ObjectType>(
+  arr: ObjectType[],
+  key: KeyType
+): GroupByResult<ObjectType, KeyType> => {
+  return [] as unknown as GroupByResult<ObjectType, KeyType>;
+};
+
+type MyType = {
+  city: number;
+  name: string;
+};
+
+const L: MyType[] = [
+  {
+    city: 1,
+    name: "name1"
+  },
+  {
+    city: 1,
+    name: "name2"
+  },
+  {
+    city: 2,
+    name: "name3"
+  },
+  {
+    city: 2,
+    name: "name4"
+  }
+];
+
+// ...
+const grouped = groupBy(L, "city");
+
+const duh = grouped[0];
+
+if (duh) {
+  duh[0].city;
+  duh[0].name;
+}
+
+// type UnpackedArray<T> = T extends Array<infer U> ? U : T;
+
+// type Bla = UnpackedArray<NonNullable<FindByIdOptions<Room>["deleteMe"]>>;
+
+// type Abc<T extends SingleTableDesign> = T & {
+//   [P in UnpackedArray<
+//     NonNullable<FindByIdOptions<T>["deleteMe"]>
+//   >]: P extends keyof T ? T : never;
+// };
+
+// type Res<T extends SingleTableDesign> = T & {
+//   [P in UnpackedArray<
+//     NonNullable<FindByIdOptions<T>["deleteMe"]>
+//   >]: P extends keyof T ? T : never;
+// };
+
+// type Res<T extends SingleTableDesign> = T & {
+//   [P in UnpackedArray<
+//     NonNullable<FindByIdOptions<T>["deleteMe"]>
+//   >]: P extends "scales" ? T : never;
+// };
+
+// export type Res<T extends SingleTableDesign> = Pick<
+//   T,
+//   UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMe"]>>
+//   // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
+// >;
+
+// function keys<T extends SingleTableDesign>(
+//   _options: FindByIdOptions<T> = {}
+// ): Res<T> {
+//   return "bla" as any;
+// }
+
+// const ddd = keys<Room>({ deleteMe: ["scales"] });
+
+// console.log(ddd.id);
+// console.log(ddd.scales);
+
+// type TruthyKeys<T> = keyof {
+//   [K in keyof T as T[K] extends false | undefined | null ? never : K]: K;
+// };
+
+// type Args<T> = Partial<Record<keyof T, true>>;
+
+// type PostGetPayload<S extends Args<Room>> = S extends {
+//   include: any;
+// }
+//   ? Room & {
+//       [P in TruthyKeys<S["include"]>]: P extends "scales" ? Scale : never;
+//     }
+//   : Room;
+
+// declare function findMany<T extends Args<Room>>(args: T): PostGetPayload<T>;
+
+// const rrrr = findMany({ scales: true });
+
+// rrrr.scales;
+
+// rrrr.scales;
+
+type TruthyKeys<T> = keyof {
+  [K in keyof T as T[K] extends false | undefined | null ? never : K]: K;
+};
+
+type TestType = TruthyKeys<{ a: true; b: false; c: null; d: "d" }>;
+
+type Args = { include: Record<string, true> };
+
+type PostGetPayload<S extends Args> = S extends {
+  include: any;
+}
+  ? Room & {
+      [P in TruthyKeys<S["include"]>]: P extends "scales" ? Scale[] : never;
+    }
+  : Room;
+
+type Testing2 = PostGetPayload<{ include: { scales: true } }>;
+
+const bla: Testing2 = {} as any;
+bla.scales;
+
+type TestingGenericTruthy<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = T & {
+  [P in TruthyKeys<Opts["deleteMe"]>]: P extends keyof T ? T[P] : never;
+};
+
+type Testing3 = TestingGenericTruthy<Room, { deleteMe: { scales: true } }>;
+
+const www: Testing3 = {} as any;
+www.scales;
+
+//---------- Pick working with truthy..
+
+type TestingPick = Pick<Room, TruthyKeys<{ scales: true }>>;
+
+const mmm: TestingPick = {} as any;
+mmm.scales;
+mmm.id;
+
+//^^^^^^ Pick working with truthy..
+
+//-------START HERE.... Why dont the functions return right? but it works in example...
+
+type UnpackedArray<T> = T extends Array<infer U> ? U : T;
+
+type IncludedKeys<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = keyof {
+  [K in UnpackedArray<NonNullable<Opts["deleteMeArr"]>>]: K;
+};
+
+type TestingPickArr = Pick<
+  Room,
+  IncludedKeys<Room, { deleteMeArr: ["scales"] }>
+>;
+
+const jjjj: TestingPickArr = {} as any;
+jjjj.scales;
+jjjj.id;
+
+type TestingPickArrGeneric<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = Pick<T, IncludedKeys<T, Opts>>;
+
+const pppp: TestingPickArrGeneric<
+  Room,
+  { deleteMeArr: ["scales", "brewery"] }
+> = {} as any;
+pppp.scales;
+pppp.id;
+pppp.brewery;
+
+type FindByIdResponseBla<T extends SingleTableDesign> = Pick<
+  T,
+  // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
+  // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
+  IncludedKeys<T, FindByIdOptions<T>>
+> | null;
+
+type FindByIdResponseBla2<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = Pick<
+  T,
+  // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
+  // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
+  IncludedKeys<T, Opts>
+> | null;
+
+function myFuncBla<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+>(id: string, options: Opts): FindByIdResponseBla2<T, Opts> {
+  return {} as any;
+}
+
+class MyClass extends SingleTableDesign {
+  public id: string;
+
+  @HasMany(() => Scale, { targetKey: "roomId" })
+  public scales: Scale[];
+
+  static myFuncBla(
+    id: string,
+    options: FindByIdOptions<MyClass>
+  ): FindByIdResponseBla<MyClass> {
+    return {} as any;
+  }
+}
+
+const eeee = myFuncBla<Room, FindByIdOptions<Room>>("123", {
+  deleteMeArr: ["scales"]
+});
+
+if (eeee) {
+  eeee.scales;
+  eeee.id;
+  eeee.brewery;
+}
+
+const uuuu = MyClass.myFuncBla("123", { deleteMeArr: ["scales"] });
+
+if (uuuu) {
+  uuuu.scales;
+  uuuu.id;
+}
+
+//-------
+
 (async () => {
   try {
     const metadata = Metadata;
@@ -212,12 +479,25 @@ class WsToken extends DrewsBrewsTable {
 
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
+      include: [{ association: "scales" }],
+      // deleteMe: { scales: true }
+      deleteMeArr: ["scales"]
     });
 
     if (room) {
+      room.type;
+      room.pk;
+      room.sk;
+      room.updatedAt;
+      room.createdAt;
+      room.id;
+      room.name;
+      room.breweryId;
       room.brewery;
+
       room.scales;
+
+      room.testing2();
     }
 
     // debugger;
