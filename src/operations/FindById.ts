@@ -21,10 +21,24 @@ type IncludedKeys<
   ? [...NonNullable<Opts>["include"]][number]["association"]
   : never;
 
+type EntityKeysWithIncludedAssociations<
+  T extends SingleTableDesign,
+  P extends keyof T
+> = {
+  [K in P]: T[K] extends SingleTableDesign
+    ? EntityAttributes<T>
+    : T[K] extends SingleTableDesign[]
+    ? Array<EntityAttributes<T>>
+    : T[K];
+};
+
 export type FindByIdResponse<
   T extends SingleTableDesign,
   Opts extends FindByIdOptions<T>
-> = Pick<T, keyof EntityAttributes<T> | IncludedKeys<T, Opts>>;
+> = EntityKeysWithIncludedAssociations<
+  T,
+  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
+>;
 
 /**
  * FindById operations
@@ -80,7 +94,11 @@ class FindById<T extends SingleTableDesign> {
 
     if (res !== null) {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
-      return await queryResolver.resolve(res);
+      // TODO dont use as
+      return (await queryResolver.resolve(res)) as FindByIdResponse<
+        T,
+        FindByIdOptions<T>
+      >;
     } else {
       return null;
     }
@@ -124,7 +142,11 @@ class FindById<T extends SingleTableDesign> {
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(queryResults, includedRelationships);
+    // TODO dont use as
+    return (await queryResolver.resolve(
+      queryResults,
+      includedRelationships
+    )) as FindByIdResponse<T, FindByIdOptions<T>>;
   }
 }
 

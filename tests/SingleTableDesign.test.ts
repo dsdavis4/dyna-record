@@ -976,19 +976,35 @@ describe("SingleTableDesign", () => {
         }
       });
 
-      // TODO this should pass
-      // it("included relationships should not include any of their associations", async () => {
-      //   mockQuery.mockResolvedValueOnce({ Items: [] });
+      it("(BelongsTo) - included relationships should not include any of their associations", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
 
-      //   const paymentMethod = await PaymentMethod.findById("789", {
-      //     include: [{ association: "customer" }]
-      //   });
+        const paymentMethod = await PaymentMethod.findById("789", {
+          include: [{ association: "customer" }]
+        });
 
-      //   if (paymentMethod !== null) {
-      //     // @ts-expect-error: Included relationships should not include associations
-      //     console.log(paymentMethod.customer.orders);
-      //   }
-      // });
+        if (paymentMethod !== null) {
+          // @ts-expect-error: Included relationships should not include associations
+          console.log(paymentMethod.customer?.orders);
+          // @ts-expect-no-error: Entity attributes should include entity attributes
+          console.log(paymentMethod.customer?.id);
+        }
+      });
+
+      it("(HasMany) - included relationships should not include any of their associations", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const paymentMethod = await PaymentMethod.findById("789", {
+          include: [{ association: "orders" }]
+        });
+
+        if (paymentMethod !== null && paymentMethod.orders?.length > 0) {
+          // @ts-expect-error: Included relationships should not include associations
+          console.log(paymentMethod.orders[0].customer);
+          // @ts-expect-no-error: Entity attributes should include entity attributes
+          console.log(paymentMethod.orders[0].id);
+        }
+      });
     });
   });
 

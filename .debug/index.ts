@@ -232,9 +232,12 @@ class WsToken extends DrewsBrewsTable {
       room.name;
       room.breweryId;
       // room.brewery;
-      room.brewery.beers;
+      // room.brewery.beers;
+      room.brewery.id;
 
       room.scales;
+      // room.scales[0].process;
+      room.scales[0].id;
 
       room.someMethod();
 
