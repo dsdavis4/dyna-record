@@ -27,14 +27,6 @@ const mockedQueryCommand = jest.mocked(QueryCommand);
 
 const mockGet = jest.fn();
 const mockQuery = jest.fn();
-// const mockSend = jest.fn().mockImplementation(command => {
-//   if (command.name == "GetCommand") {
-//     return Promise.resolve(mockGet());
-//   }
-//   if (command.name == "QueryCommand") {
-//     return Promise.resolve(mockQuery());
-//   }
-// });
 
 const mockSend = jest.fn();
 
@@ -862,6 +854,141 @@ describe("SingleTableDesign", () => {
         [{ name: "GetCommand" }],
         [{ name: "GetCommand" }]
       ]);
+    });
+
+    describe("types", () => {
+      it("will allow options with include options that are associations/relationships defined on the model", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        await PaymentMethod.findById("789", {
+          include: [
+            // @ts-expect-no-error: Can include BelongsTo relationships which are defined on the model
+            { association: "customer" },
+            // @ts-expect-no-error: Can include HasOne relationships which are defined on the model
+            { association: "paymentMethodProvider" },
+            // @ts-expect-no-error: Can include HasMAny relationships which are defined on the model
+            { association: "orders" }
+          ]
+        });
+      });
+
+      it("will not allow include options with attributes that do not exist on the entity", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        await PaymentMethod.findById("789", {
+          include: [
+            // @ts-expect-error: Cannot include association using a key not defined on the model
+            { association: "nonExistent" }
+          ]
+        });
+      });
+
+      it("(BelongsTo) - results of a findById with include will not allow any types which were not included in the query", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const paymentMethod = await PaymentMethod.findById("789", {
+          include: [{ association: "customer" }]
+        });
+
+        if (paymentMethod !== null) {
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.pk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.sk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.id);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.lastFour);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.customerId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.paymentMethodProviderId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.updatedAt);
+          // @ts-expect-no-error: Included associations are allowed
+          console.log(paymentMethod.customer);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.orders);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.paymentMethodProvider);
+        }
+      });
+
+      it("(HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const paymentMethod = await PaymentMethod.findById("789", {
+          include: [{ association: "paymentMethodProvider" }]
+        });
+
+        if (paymentMethod !== null) {
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.pk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.sk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.id);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.lastFour);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.customerId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.paymentMethodProviderId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.updatedAt);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.customer);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.orders);
+          // @ts-expect-no-error: Included associations are allowed
+          console.log(paymentMethod.paymentMethodProvider);
+        }
+      });
+
+      it("(HasMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const paymentMethod = await PaymentMethod.findById("789", {
+          include: [{ association: "orders" }]
+        });
+
+        if (paymentMethod !== null) {
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.pk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.sk);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.id);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.lastFour);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.customerId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.paymentMethodProviderId);
+          // @ts-expect-no-error: Entity Attributes are allowed
+          console.log(paymentMethod.updatedAt);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.customer);
+          // @ts-expect-no-error: Included associations are allowed
+          console.log(paymentMethod.orders);
+          // @ts-expect-error: Not included associations are not allowed
+          console.log(paymentMethod.paymentMethodProvider);
+        }
+      });
+
+      // TODO this should pass
+      // it("included relationships should not include any of their associations", async () => {
+      //   mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      //   const paymentMethod = await PaymentMethod.findById("789", {
+      //     include: [{ association: "customer" }]
+      //   });
+
+      //   if (paymentMethod !== null) {
+      //     // @ts-expect-error: Included relationships should not include associations
+      //     console.log(paymentMethod.customer.orders);
+      //   }
+      // });
     });
   });
 

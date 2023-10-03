@@ -213,8 +213,8 @@ class WsToken extends DrewsBrewsTable {
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
       include: [
-        { association: "scales" }
-        // { association: "brewery" },
+        { association: "scales" },
+        { association: "brewery" }
         // { association: "id" },
         // { association: "bla" },
       ]
@@ -232,10 +232,13 @@ class WsToken extends DrewsBrewsTable {
       room.name;
       room.breweryId;
       // room.brewery;
+      room.brewery.beers;
 
       room.scales;
 
       room.someMethod();
+
+      debugger;
     }
 
     // debugger;
