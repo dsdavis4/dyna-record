@@ -11,76 +11,20 @@ import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
-  include?: Array<{ association: keyof T }>;
-  deleteMe?: Partial<Record<keyof T, true>>;
-  deleteMeArr?: Array<keyof T>;
+  include?: Array<{ association: RelationshipAttributeNames<T> }>;
 }
-
-// TODO when an association is included the type on the variable should know that key will be present
-//   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
-//   brewery.scales should be typed as Scale[] and not be optional
-//
-//  would something like this work for making fields required when the association is included?
-// export type FindByIdResponse<
-//   T extends SingleTableDesign,
-//   Opts extends FindByIdOptions<T>
-// > = Required<Pick<T, NonNullable<Opts["include"]>[number]["association"]>> & T;
-
-// type IncludedTypes<T extends SingleTableDesign> = {
-//   [K in keyof T]: K extends NonNullable<
-//     FindByIdOptions<T>["include"]
-//   >[number]["association"]
-//     ? K
-//     : never;
-// }[keyof T];
-
-type ToNonDist<Type> = [Type] extends [any] ? Type[] : never;
-
-type UnpackedArray<T> = T extends Array<infer U> ? U : T;
 
 type IncludedKeys<
   T extends SingleTableDesign,
   Opts extends FindByIdOptions<T>
-> = keyof {
-  [K in UnpackedArray<NonNullable<Opts["deleteMeArr"]>>]: K;
-};
+> = Opts extends Required<FindByIdOptions<T>>
+  ? [...NonNullable<Opts>["include"]][number]["association"]
+  : never;
 
-// TODO this is close maybe...I feel like I am close...
-// Why wont this work? Perhaps check distributive conditional types https://www.typescriptlang.org/docs/handbook/2/conditional-types.html#distributive-conditional-types
-
-// TODO do I need the second generic param
-export type FindByIdResponse<T extends SingleTableDesign> = Pick<
-  T,
-  // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
-  // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
-  IncludedKeys<T, FindByIdOptions<T>>
-> | null;
-
-// type IncludedKeys<
-//   T extends SingleTableDesign,
-//   Opts extends FindByIdOptions<T>
-// > = keyof {
-//   [K in keyof T as T[K] extends Opts["deleteMe"] ? never : K]: K;
-// };
-
-// TODO START HERE...
-// THIS IS IT: https://dev.to/zenstack/dynamic-return-type-based-on-input-parameter-in-typescript-like-prisma-1292
-
-// type TruthyKeys<T> = keyof {
-//   [K in keyof T as T[K] extends false | undefined | null ? never : K]: K;
-// };
-
-// export type FindByIdResponse<T extends SingleTableDesign> = T & {
-//   [P in TruthyKeys<FindByIdOptions<T>["deleteMe"]>]: P extends "scales"
-//     ? T
-//     : never;
-// };
-
-// export type FindByIdResponse<T extends SingleTableDesign> = T & {
-//   [P in UnpackedArray<
-//     NonNullable<FindByIdOptions<T>["deleteMe"]>
-//   >]: P extends keyof T ? T : never;
-// };
+export type FindByIdResponse<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = Pick<T, keyof EntityAttributes<T> | IncludedKeys<T, Opts>>;
 
 /**
  * FindById operations
@@ -109,9 +53,9 @@ class FindById<T extends SingleTableDesign> {
    */
   public async run(
     id: string,
-    options: FindByIdOptions<T> = {}
-  ): Promise<FindByIdResponse<T>> {
-    if (options.include !== undefined) {
+    options?: FindByIdOptions<T>
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
+    if (options?.include !== undefined) {
       return await this.findByIdWithIncludes(id, options.include);
     } else {
       return await this.findByIdOnly(id);
@@ -123,7 +67,9 @@ class FindById<T extends SingleTableDesign> {
    * @param {string} id - Entity Id
    * @returns An entity object or null
    */
-  private async findByIdOnly(id: string): Promise<FindByIdResponse<T>> {
+  private async findByIdOnly(
+    id: string
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
@@ -136,7 +82,7 @@ class FindById<T extends SingleTableDesign> {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
       return await queryResolver.resolve(res);
     } else {
-      return null as any;
+      return null as any; // TODO fix
     }
   }
 
@@ -150,7 +96,7 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
-  ): Promise<FindByIdResponse<T>> {
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
     const { name: tableName, primaryKey } = this.#tableMetadata;
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 

@@ -26,13 +26,16 @@ abstract class SingleTableDesign {
    * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
    * @returns An entity with included associations serialized
    */
-  public static async findById<T extends SingleTableDesign>(
+  public static async findById<
+    T extends SingleTableDesign,
+    Opts extends FindByIdOptions<T>
+  >(
     this: EntityClass<T>,
     id: string,
-    options: FindByIdOptions<T> = {}
-  ): Promise<FindByIdResponse<T>> {
+    options?: Opts
+  ): Promise<FindByIdResponse<T, Opts>> {
     const op = new FindById<T>(this);
-    return await op.run<T>(id, options);
+    return await op.run(id, options);
   }
 
   /**

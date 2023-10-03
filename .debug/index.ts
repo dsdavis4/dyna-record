@@ -565,20 +565,20 @@ export type EntityAttributes<T extends Entity> = Omit<
 >;
 
 // TODO do I have to repat the include here..?
-type MyKeys<T extends Entity, Opts extends FuncOpts<T>> = Opts extends {
-  include: Array<{ association: keyof T }>;
-}
-  ? [...Opts["include"]][number]["association"]
+type MyKeys<T extends Entity, Opts extends FuncOpts<T>> = Opts extends Required<
+  FuncOpts<T>
+>
+  ? [...NonNullable<Opts>["include"]][number]["association"]
   : never;
 
 abstract class Entity {
   abstract id: string;
 
-  public static async findById<T extends Entity, U extends FuncOpts<T>>(
+  public static async findById<T extends Entity, Opts extends FuncOpts<T>>(
     this: EntityClass<T>,
     id: string,
-    opts: U
-  ): Promise<Pick<T, keyof EntityAttributes<T> | MyKeys<T, U>>> {
+    opts: Opts
+  ): Promise<Pick<T, keyof EntityAttributes<T> | MyKeys<T, Opts>>> {
     return {} as any;
   }
 }
@@ -631,9 +631,14 @@ if (user) {
 
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "scales" }],
+      include: [
+        { association: "scales" }
+        // { association: "brewery" },
+        // { association: "id" },
+        // { association: "bla" },
+      ]
       // deleteMe: { scales: true }
-      deleteMeArr: ["scales"]
+      // deleteMeArr: ["scales"]
     });
 
     if (room) {
