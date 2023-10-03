@@ -54,7 +54,7 @@ class FindById<T extends SingleTableDesign> {
   public async run(
     id: string,
     options?: FindByIdOptions<T>
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
     if (options?.include !== undefined) {
       return await this.findByIdWithIncludes(id, options.include);
     } else {
@@ -69,7 +69,7 @@ class FindById<T extends SingleTableDesign> {
    */
   private async findByIdOnly(
     id: string
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
@@ -82,7 +82,7 @@ class FindById<T extends SingleTableDesign> {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
       return await queryResolver.resolve(res);
     } else {
-      return null as any; // TODO fix
+      return null;
     }
   }
 
@@ -96,7 +96,7 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>>> {
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
     const { name: tableName, primaryKey } = this.#tableMetadata;
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 

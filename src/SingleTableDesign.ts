@@ -33,7 +33,7 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<FindByIdResponse<T, Opts>> {
+  ): Promise<FindByIdResponse<T, Opts> | null> {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
