@@ -414,45 +414,95 @@ pppp.scales;
 pppp.id;
 pppp.brewery;
 
-type FindByIdResponseBla<T extends SingleTableDesign> = Pick<
-  T,
-  // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
-  // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
-  IncludedKeys<T, FindByIdOptions<T>>
-> | null;
+// type ExtractFindByIdOptions<T> = T extends FindByIdOptions<infer T> ? T : never;
 
-type FindByIdResponseBla2<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
+// type ExtractFindByIdOptions<T extends SingleTableDesign> =
+//   T extends FindByIdOptions<infer T, any> ? T : never;
+
+// type ExtractIncluded<T> = T extends NonNullable<
+//   FindByIdOptions<infer T>["deleteMeArr"]
+// >
+//   ? T
+//   : never;
+
+type ExtractOptions<P> = P extends FindByIdOptions<infer T> ? T : never;
+
+type ExtractStuff<T> = T extends {
+  deleteMeArr: infer V;
+}
+  ? V
+  : never;
+
+// type FetcherParamsInfer<F extends FindByIdOptions<any>> =
+//   F extends FindByIdOptions<infer Params> ? Params : never;
+
+type FindByIdResponseBla<
+  T extends SingleTableDesign
+  // Opts extends FindByIdOptions<T>
 > = Pick<
   T,
-  // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
+  // ExtractFindByIdOptions<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
   // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
-  IncludedKeys<T, Opts>
+  // IncludedKeys<T, ExtractFindByIdOptions<T>>
+  // IncludedKeys<T, ExtractIncluded<Opts["deleteMeArr"]>>
+  IncludedKeys<T, FindByIdOptions<T>>
+  // IncludedKeys<T, ExtractOptions<FindByIdOptions<T>>>
 > | null;
 
+// TODO THIS https://stackoverflow.com/questions/70646538/typescript-dynamic-object-return-type-based-on-array-parameter
+// https://stackoverflow.com/questions/74233353/typescript-generic-function-return-type-from-paramaters
+
+// type FindByIdResponseBla<
+//   T extends SingleTableDesign,
+//   Opts extends FindByIdOptions<T>
+// > = Opts extends { deleteMeArr: Array<keyof T> }
+//   ? Pick<T, IncludedKeys<T, Opts>>
+//   : T;
+
+// type FindByIdResponseBla2<
+//   T extends SingleTableDesign,
+//   Opts extends FindByIdOptions<T>
+// > = Pick<
+//   T,
+//   // UnpackedArray<NonNullable<FindByIdOptions<T>["deleteMeArr"]>>
+//   // NonNullable<FindByIdOptions<T>["deleteMe"]>[number]
+//   IncludedKeys<T, Opts>
+// > | null;
+
 function myFuncBla<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
->(id: string, options: Opts): FindByIdResponseBla2<T, Opts> {
+  T extends SingleTableDesign
+  // Opts extends FindByIdOptions<T>
+>(
+  id: string,
+  options: FindByIdOptions<T>
+): FindByIdResponseBla<T, FindByIdOptions<T>> {
   return {} as any;
 }
 
-class MyClass extends SingleTableDesign {
-  public id: string;
+// class MyClass extends SingleTableDesign {
+//   public id: string;
 
-  @HasMany(() => Scale, { targetKey: "roomId" })
-  public scales: Scale[];
+//   @HasMany(() => Scale, { targetKey: "roomId" })
+//   public scales: Scale[];
 
-  static myFuncBla(
-    id: string,
-    options: FindByIdOptions<MyClass>
-  ): FindByIdResponseBla<MyClass> {
-    return {} as any;
-  }
-}
+//   static findById(
+//     id: string,
+//     options: FindByIdOptions<MyClass>
+//   ): FindByIdResponseBla<MyClass> {
+//     return {} as any;
+//   }
+// }
 
-const eeee = myFuncBla<Room, FindByIdOptions<Room>>("123", {
+// class FindById<T extends SingleTableDesign, Opts extends FindByIdOptions<T>> {
+//   static run(
+//     id: string,
+//     options: FindByIdOptions<MyClass>
+//   ): FindByIdResponseBla<MyClass> {
+//     return {} as any;
+//   }
+// }
+
+const eeee = myFuncBla<Room>("123", {
   deleteMeArr: ["scales"]
 });
 
@@ -462,14 +512,116 @@ if (eeee) {
   eeee.brewery;
 }
 
-const uuuu = MyClass.myFuncBla("123", { deleteMeArr: ["scales"] });
+// const uuuu = MyClass.myFuncBla("123", { deleteMeArr: ["scales"] });
 
-if (uuuu) {
-  uuuu.scales;
-  uuuu.id;
-}
+// if (uuuu) {
+//   uuuu.scales;
+//   uuuu.id;
+// }
 
 //-------
+
+type KeysMatching<T, V> = {
+  [K in keyof T]-?: T[K] extends V ? K : never;
+}[keyof T];
+
+interface FuncOpts<T extends Entity> {
+  // include: Array<keyof T>;
+  include?: Array<{ association: RelationshipAttributeNames<T> }>;
+  // include: [
+  //   {
+  //     [P in keyof T]: T[P] extends Entity ? never : { association: T[P] };
+  //   }
+  // ];
+}
+
+type EntityClass<T> = (new () => T) & typeof Entity;
+
+// interface Data<Id> {
+//   id: Id
+// }
+
+// const getFirstId = <
+//   Id extends string | number,
+//   Tuple extends Array<Data<Id>>
+// >(data: [...Tuple]): [...Tuple][number]['id'] => {
+//   return data[0].id
+// }
+
+// type MyKeys<T extends Entity, Opts extends FuncOpts<T>> = keyof {
+//   [K in UnpackedArray<Opts["include"]>]: K;
+// };
+
+export type RelationshipAttributeNames<T> = {
+  [K in keyof T]: T[K] extends Entity ? K : T[K] extends Entity[] ? K : never;
+}[keyof T];
+
+/**
+ * Entity attributes excluding relationship attributes
+ */
+export type EntityAttributes<T extends Entity> = Omit<
+  T,
+  RelationshipAttributeNames<T>
+>;
+
+// TODO do I have to repat the include here..?
+type MyKeys<T extends Entity, Opts extends FuncOpts<T>> = Opts extends {
+  include: Array<{ association: keyof T }>;
+}
+  ? [...Opts["include"]][number]["association"]
+  : never;
+
+abstract class Entity {
+  abstract id: string;
+
+  public static async findById<T extends Entity, U extends FuncOpts<T>>(
+    this: EntityClass<T>,
+    id: string,
+    opts: U
+  ): Promise<Pick<T, keyof EntityAttributes<T> | MyKeys<T, U>>> {
+    return {} as any;
+  }
+}
+
+class User extends Entity {
+  id: string;
+  name: string;
+  age: number;
+
+  myEntity1: Entity[];
+
+  myEntity2: Entity;
+}
+
+const useSyncFields = <T extends Entity, U extends keyof T>(
+  type: { new (obj: T): T },
+  id: string,
+  fields: U[]
+): Pick<T, U> => {
+  return {} as any; // implementation
+};
+
+const res = useSyncFields(User, "1234", ["id", "name"]);
+
+res.id;
+res.name;
+res.age;
+
+const user = await User.findById("123", {
+  include: [
+    // { association: "id" }, // TODO this should not be valid
+    { association: "myEntity1" }
+    // { association: "myEntity2" }
+  ]
+});
+
+if (user) {
+  user.id;
+  user.name;
+  user.age;
+  user.myEntity1;
+  user.myEntity2;
+}
 
 (async () => {
   try {
