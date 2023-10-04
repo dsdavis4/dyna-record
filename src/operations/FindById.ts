@@ -94,7 +94,7 @@ class FindById<T extends SingleTableDesign> {
 
     if (res !== null) {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
-      // TODO dont use as
+      // TODO dont use as. Should I break query resolver up so FindById and Query classes own their own resolvers?
       return (await queryResolver.resolve(res)) as FindByIdResponse<
         T,
         FindByIdOptions<T>
@@ -142,7 +142,7 @@ class FindById<T extends SingleTableDesign> {
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver<T>(this.EntityClass);
-    // TODO dont use as
+    // TODO dont use as. Should I break query resolver up so FindById and Query classes own their own resolvers?
     return (await queryResolver.resolve(
       queryResults,
       includedRelationships
