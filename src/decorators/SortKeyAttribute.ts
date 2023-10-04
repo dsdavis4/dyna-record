@@ -1,13 +1,9 @@
 import Metadata from "../metadata";
+import { type SortKey } from "../types";
 
 interface SortKeyAttributeProps {
   alias: string;
 }
-
-// TODO move to shared location
-type Brand<K, T> = K & { __brand: T };
-
-export type SortKey = Brand<string, "SortKey">;
 
 // TODO Share logic with Attribute
 // TODO update so this adds the sort key to the Table metadata

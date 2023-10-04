@@ -10,9 +10,7 @@ import {
   HasOne
 } from "../src/decorators";
 
-// TODO change how these are imported. Where should it live?
-import { PrimaryKey } from "../src/decorators/PrimaryKeyAttribute";
-import { SortKey } from "../src/decorators/SortKeyAttribute";
+import { PrimaryKey, SortKey } from "../src/types";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";

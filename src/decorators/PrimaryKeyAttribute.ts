@@ -1,13 +1,9 @@
 import Metadata from "../metadata";
+import { type PrimaryKey } from "../types";
 
 interface PrimaryKeyAttributeProps {
   alias: string;
 }
-
-// TODO move to shared location
-type Brand<K, T> = K & { __brand: T };
-
-export type PrimaryKey = Brand<string, "PrimaryKey">;
 
 // TODO Share logic with Attribute
 // TODO update so this adds the primary key to the Table metadata

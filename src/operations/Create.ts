@@ -6,9 +6,7 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 
-// TODO change where these are imported from. Importing from decorators doesnt make sense
-import { type PrimaryKey } from "../decorators/PrimaryKeyAttribute";
-import { type SortKey } from "../decorators/SortKeyAttribute";
+import type { PrimaryKey, SortKey } from "../types";
 
 // TODO should I make created at and updatedat default?
 // TODO how to dynanically get pk and sk... and "id"
