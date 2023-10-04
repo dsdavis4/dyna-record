@@ -6,8 +6,7 @@ interface SortKeyAttributeProps {
 }
 
 // TODO Share logic with Attribute
-// TODO update so this adds the sort key to the Table metadata
-//         and so that table meta data doesnt accept the sort key
+// TODO dry up with primary key
 function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
   return function (
     _value: undefined,
@@ -17,7 +16,7 @@ function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
 
-        Metadata.addEntityAttribute(entity.constructor.name, {
+        Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),
           alias: props.alias
         });

@@ -20,16 +20,16 @@ import { BelongsToLink } from "../src/relationships";
 //   this would make it so I dont have to have addInitializer methods
 //
 
-// TODO should I make a Primary/Sort key decorator so I dont have to repeat in the table decoractor and class declaration?
-// Can I ensure that Single table design has a primary key and sort key defined?
+// TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
 //    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
 //    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
-@Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+@Table({ name: "temp-table", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  // TODO if I keep this then update tests to use this...
+  // TODO add test that this must be a primary key type
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 
+  // TODO add test that this must be a sort key type
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
 

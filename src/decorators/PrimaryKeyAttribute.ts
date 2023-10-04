@@ -6,8 +6,8 @@ interface PrimaryKeyAttributeProps {
 }
 
 // TODO Share logic with Attribute
-// TODO update so this adds the primary key to the Table metadata
-//         and so that table meta data doesnt accept the primary key
+// TODO Share logic with Attribute
+// TODO dry up with sort key
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   props: PrimaryKeyAttributeProps
 ) {
@@ -19,7 +19,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
 
-        Metadata.addEntityAttribute(entity.constructor.name, {
+        Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),
           alias: props.alias
         });

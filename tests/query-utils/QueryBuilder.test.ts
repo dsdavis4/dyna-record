@@ -1,14 +1,21 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
 import SingleTableDesign from "../../src";
-import { Table, Entity, Attribute } from "../../src/decorators";
+import {
+  Table,
+  Entity,
+  PrimaryKeyAttribute,
+  SortKeyAttribute,
+  Attribute
+} from "../../src/decorators";
+import type { PrimaryKey, SortKey } from "../../src/types";
 
-@Table({ name: "mock-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+@Table({ name: "mock-table", delimiter: "#" })
 class MockTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
-  public pk: string;
+  @PrimaryKeyAttribute({ alias: "PK" })
+  public pk: PrimaryKey;
 
-  @Attribute({ alias: "SK" })
-  public sk: string;
+  @SortKeyAttribute({ alias: "SK" })
+  public sk: SortKey;
 
   @Attribute({ alias: "CreatedAt" })
   public createdAt: Date;

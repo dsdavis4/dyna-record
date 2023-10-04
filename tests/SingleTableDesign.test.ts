@@ -67,7 +67,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
   };
 });
 
-@Table({ name: "mock-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+@Table({ name: "mock-table", delimiter: "#" })
 abstract class MockTable extends SingleTableDesign {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
