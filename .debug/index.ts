@@ -208,6 +208,17 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    const beer = await Beer.create({
+      style: "lager",
+      breweryId: "123",
+      abv: 1
+    });
+
+    const newRoom = await Room.create({
+      name: "name",
+      breweryId: "123"
+    });
+
     console.time("bla");
 
     // HasManyAndBelongsTo
@@ -267,6 +278,8 @@ class WsToken extends DrewsBrewsTable {
       const bla = results[0];
       // @ts-expect-error
       bla.scales;
+    } else {
+      results[0].foreignEntityType;
     }
 
     const wsTokens = await WsToken.getAllByRoomId(

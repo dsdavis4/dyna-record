@@ -8,7 +8,9 @@ import {
   Query,
   type QueryOptions,
   type EntityKeyConditions,
-  type QueryResults
+  type QueryResults,
+  Create,
+  type CreateOptions
 } from "./operations";
 
 abstract class SingleTableDesign {
@@ -72,6 +74,15 @@ abstract class SingleTableDesign {
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
+  }
+
+  // TODO add tsdoc
+  public static async create<T extends SingleTableDesign>(
+    this: EntityClass<T>,
+    attributes: CreateOptions<T>
+  ): Promise<T> {
+    const op = new Create<T>(this);
+    return await op.run(attributes);
   }
 
   /**
