@@ -4,6 +4,7 @@ import { Attribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
+  type FindByIdResponse,
   Query,
   type QueryOptions,
   type EntityKeyConditions,
@@ -13,6 +14,7 @@ import {
 abstract class SingleTableDesign {
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
+
   @Attribute({ alias: "Type" })
   public type: string;
 
@@ -24,11 +26,14 @@ abstract class SingleTableDesign {
    * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
    * @returns An entity with included associations serialized
    */
-  public static async findById<T extends SingleTableDesign>(
+  public static async findById<
+    T extends SingleTableDesign,
+    Opts extends FindByIdOptions<T>
+  >(
     this: EntityClass<T>,
     id: string,
-    options: FindByIdOptions<T> = {}
-  ): Promise<T | null> {
+    options?: Opts
+  ): Promise<FindByIdResponse<T, Opts> | null> {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }

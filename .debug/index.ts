@@ -46,7 +46,7 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
     });
   }
 
-  // public someMethod() {}
+  public someMethod() {}
 }
 
 @Entity
@@ -212,12 +212,36 @@ class WsToken extends DrewsBrewsTable {
 
     // HasManyAndBelongsTo
     const room = await Room.findById("1a97a62b-6c30-42bd-a2e7-05f2090e87ce", {
-      include: [{ association: "brewery" }, { association: "scales" }]
+      include: [
+        { association: "scales" },
+        { association: "brewery" }
+        // { association: "id" },
+        // { association: "bla" },
+      ]
+      // deleteMe: { scales: true }
+      // deleteMeArr: ["scales"]
     });
 
     if (room) {
-      room.brewery;
+      room.type;
+      room.pk;
+      room.sk;
+      room.updatedAt;
+      room.createdAt;
+      room.id;
+      room.name;
+      room.breweryId;
+      // room.brewery;
+      // room.brewery.beers;
+      room.brewery.id;
+
       room.scales;
+      // room.scales[0].process;
+      room.scales[0].id;
+
+      room.someMethod();
+
+      debugger;
     }
 
     // debugger;

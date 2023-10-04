@@ -8,20 +8,37 @@ import Metadata, {
 import DynamoClient from "../DynamoClient";
 import { QueryBuilder, QueryResolver } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
+import type { EntityAttributes, RelationshipAttributeNames } from "./types";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
-  include?: Array<{ association: keyof T }>;
+  include?: Array<{ association: RelationshipAttributeNames<T> }>;
 }
 
-// TODO when an association is included the type on the variable should know that key will be present
-//   EX: const brewery = await Brewery.findById("bla", {includes: "scales"})
-//   brewery.scales should be typed as Scale[] and not be optional
-//
-//  would something like this work for making fields required when the association is included?
-// export type FindByIdResponse<
-//   T extends SingleTableDesign,
-//   Opts extends FindByIdOptions<T>
-// > = Required<Pick<T, NonNullable<Opts["include"]>[number]["association"]>> & T;
+type IncludedKeys<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = Opts extends Required<FindByIdOptions<T>>
+  ? [...NonNullable<Opts>["include"]][number]["association"]
+  : never;
+
+type EntityKeysWithIncludedAssociations<
+  T extends SingleTableDesign,
+  P extends keyof T
+> = {
+  [K in P]: T[K] extends SingleTableDesign
+    ? EntityAttributes<T>
+    : T[K] extends SingleTableDesign[]
+    ? Array<EntityAttributes<T>>
+    : T[K];
+};
+
+export type FindByIdResponse<
+  T extends SingleTableDesign,
+  Opts extends FindByIdOptions<T>
+> = EntityKeysWithIncludedAssociations<
+  T,
+  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
+>;
 
 /**
  * FindById operations
@@ -50,9 +67,9 @@ class FindById<T extends SingleTableDesign> {
    */
   public async run(
     id: string,
-    options: FindByIdOptions<T> = {}
-  ): Promise<T | null> {
-    if (options.include !== undefined) {
+    options?: FindByIdOptions<T>
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
+    if (options?.include !== undefined) {
       return await this.findByIdWithIncludes(id, options.include);
     } else {
       return await this.findByIdOnly(id);
@@ -64,7 +81,9 @@ class FindById<T extends SingleTableDesign> {
    * @param {string} id - Entity Id
    * @returns An entity object or null
    */
-  private async findByIdOnly(id: string): Promise<T | null> {
+  private async findByIdOnly(
+    id: string
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
@@ -75,7 +94,11 @@ class FindById<T extends SingleTableDesign> {
 
     if (res !== null) {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
-      return await queryResolver.resolve(res);
+      // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
+      return (await queryResolver.resolve(res)) as FindByIdResponse<
+        T,
+        FindByIdOptions<T>
+      >;
     } else {
       return null;
     }
@@ -91,7 +114,7 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: NonNullable<FindByIdOptions<T>["include"]>
-  ): Promise<T | null> {
+  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
     const { name: tableName, primaryKey } = this.#tableMetadata;
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
@@ -119,7 +142,11 @@ class FindById<T extends SingleTableDesign> {
     const queryResults = await dynamo.query(params);
 
     const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(queryResults, includedRelationships);
+    // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
+    return (await queryResolver.resolve(
+      queryResults,
+      includedRelationships
+    )) as FindByIdResponse<T, FindByIdOptions<T>>;
   }
 }
 
