@@ -69,6 +69,8 @@ class Scale extends DrewsBrewsTable {
   @BelongsTo(() => Room, { foreignKey: "roomId" })
   public room: Room;
 
+  // TODO this should be optional but is not supported...
+  // Should I also make it so that if this is optional then the foreign key defined is also optional
   @HasOne(() => Process, { foreignKey: "processId" })
   public process: Process;
 }
@@ -208,16 +210,16 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    const beer = await Beer.create({
-      style: "lager",
-      breweryId: "123",
-      abv: 1
-    });
+    // const beer = await Beer.create({
+    //   style: "lager",
+    //   breweryId: "123",
+    //   abv: 1
+    // });
 
-    const newRoom = await Room.create({
-      name: "name",
-      breweryId: "123"
-    });
+    // const newRoom = await Room.create({
+    //   name: "name",
+    //   breweryId: "123"
+    // });
 
     console.time("bla");
 
@@ -232,6 +234,21 @@ class WsToken extends DrewsBrewsTable {
       // deleteMe: { scales: true }
       // deleteMeArr: ["scales"]
     });
+
+    // const scale1 = await Scale.findById(
+    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale3 = await Scale.findById(
+    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+    //   { include: [{ association: "process" }] }
+    // );
+
+    debugger;
 
     if (room) {
       room.type;
