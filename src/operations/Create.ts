@@ -6,9 +6,13 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 
+// TODO change where these are imported from. Importing from decorators doesnt make sense
+import { type PrimaryKey } from "../decorators/PrimaryKeyAttribute";
+import { type SortKey } from "../decorators/SortKeyAttribute";
+
 // TODO should I make created at and updatedat default?
 // TODO how to dynanically get pk and sk... and "id"
-type DefaultFields = "id" | "pk" | "sk" | "type" | "createdAt" | "updatedAt";
+type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
 
 // TODO add unit test for this
 type FunctionFields<T> = {
@@ -16,9 +20,23 @@ type FunctionFields<T> = {
   [K in keyof T]: T[K] extends Function ? K : never;
 }[keyof T];
 
+type PrimaryKeyAttribute<T> = {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  [K in keyof T]: T[K] extends PrimaryKey ? K : never;
+}[keyof T];
+
+type SortKeyAttribute<T> = {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  [K in keyof T]: T[K] extends SortKey ? K : never;
+}[keyof T];
+
 export type CreateOptions<T extends SingleTableDesign> = Omit<
   T,
-  DefaultFields | RelationshipAttributeNames<T> | FunctionFields<T>
+  | DefaultFields
+  | RelationshipAttributeNames<T>
+  | FunctionFields<T>
+  | PrimaryKeyAttribute<T>
+  | SortKeyAttribute<T>
 >;
 
 // TODO should I make an operations base since they all have the same constructor?

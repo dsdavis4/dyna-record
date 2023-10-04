@@ -2,11 +2,17 @@ import SingleTableDesign from "../src";
 import {
   Table,
   Entity,
+  PrimaryKeyAttribute,
+  SortKeyAttribute,
   Attribute,
   HasMany,
   BelongsTo,
   HasOne
 } from "../src/decorators";
+
+// TODO change how these are imported. Where should it live?
+import { PrimaryKey } from "../src/decorators/PrimaryKeyAttribute";
+import { SortKey } from "../src/decorators/SortKeyAttribute";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
@@ -16,13 +22,18 @@ import { BelongsToLink } from "../src/relationships";
 //   this would make it so I dont have to have addInitializer methods
 //
 
+// TODO should I make a Primary/Sort key decorator so I dont have to repeat in the table decoractor and class declaration?
+// Can I ensure that Single table design has a primary key and sort key defined?
+//    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
+//    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
 @Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
-  public pk: string;
+  // TODO if I keep this then update tests to use this...
+  @PrimaryKeyAttribute({ alias: "PK" })
+  public pk: PrimaryKey;
 
-  @Attribute({ alias: "SK" })
-  public sk: string;
+  @SortKeyAttribute({ alias: "SK" })
+  public sk: SortKey;
 
   @Attribute({ alias: "CreatedAt" })
   public createdAt: Date; // TODO this should serialize to date
@@ -210,16 +221,18 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    // const beer = await Beer.create({
-    //   style: "lager",
-    //   breweryId: "123",
-    //   abv: 1
-    // });
+    const beer = await Beer.create({
+      style: "lager",
+      breweryId: "123",
+      abv: 1
+    });
 
-    // const newRoom = await Room.create({
-    //   name: "name",
-    //   breweryId: "123"
-    // });
+    debugger;
+
+    const newRoom = await Room.create({
+      name: "name",
+      breweryId: "123"
+    });
 
     console.time("bla");
 
