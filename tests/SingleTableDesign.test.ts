@@ -1,12 +1,15 @@
 import SingleTableDesign from "../src";
 import {
   Table,
+  PrimaryKeyAttribute,
+  SortKeyAttribute,
   Entity,
   Attribute,
   HasMany,
   HasOne,
   BelongsTo
 } from "../src/decorators";
+import type { PrimaryKey, SortKey } from "../src/types";
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
@@ -66,11 +69,11 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Table({ name: "mock-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
 abstract class MockTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
-  public pk: string;
+  @PrimaryKeyAttribute({ alias: "PK" })
+  public pk: PrimaryKey;
 
-  @Attribute({ alias: "SK" })
-  public sk: string;
+  @SortKeyAttribute({ alias: "SK" })
+  public sk: SortKey;
 }
 
 @Entity
