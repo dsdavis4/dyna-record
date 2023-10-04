@@ -19,12 +19,10 @@ type FunctionFields<T> = {
 }[keyof T];
 
 type PrimaryKeyAttribute<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;
 }[keyof T];
 
 type SortKeyAttribute<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
   [K in keyof T]: T[K] extends SortKey ? K : never;
 }[keyof T];
 

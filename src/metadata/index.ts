@@ -212,10 +212,10 @@ class Metadata {
     classPrototype: SingleTableDesign
   ): TableMetadata | undefined {
     const protoType = Object.getPrototypeOf(classPrototype);
-    if (
-      protoType !== null &&
-      this.tables[protoType.constructor.name] !== undefined
-    ) {
+
+    if (protoType === null) return;
+
+    if (this.tables[protoType.constructor.name] !== undefined) {
       return this.tables[protoType.constructor.name];
     } else {
       return this.getEntityTableMetadata(protoType);
