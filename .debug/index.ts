@@ -15,7 +15,7 @@ import { PrimaryKey, SortKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
-// TODO START HERE... Working on create. Just finished creating the PrimaryKey and SortKey decorators/types to dynamically exlude from create params
+// TODO START HERE...... Working on create. Just finished creating the PrimaryKey and SortKey decorators/types to dynamically exlude from create params
 //          I should probably start next time by excluding id, type, createdAt and updatedAt
 //           If those are to become default attributes...?
 
