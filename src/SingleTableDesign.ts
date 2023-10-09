@@ -14,11 +14,19 @@ import {
 } from "./operations";
 
 abstract class SingleTableDesign {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
-
   @Attribute({ alias: "Type" })
   public type: string;
+
+  @Attribute({ alias: "CreatedAt" })
+  public createdAt: Date; // TODO this should serialize to date
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date; // TODO this should serialize to date
 
   /**
    * Find an entity by Id and optionally include associations

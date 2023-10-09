@@ -15,7 +15,7 @@ import { PrimaryKey, SortKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
-// TODO START HERE...... Working on create. Just finished creating the PrimaryKey and SortKey decorators/types to dynamically exlude from create params
+// TODO START HERE....... Working on create. Just finished creating the PrimaryKey and SortKey decorators/types to dynamically exlude from create params
 //          I should probably start next time by excluding id, type, createdAt and updatedAt
 //           If those are to become default attributes...?
 
@@ -36,12 +36,6 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
   // TODO add test that this must be a sort key type
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
-
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date; // TODO this should serialize to date
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
 
   /**
    * Query the GSI 'ByRoomIdAndConnectionId'
@@ -64,9 +58,6 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
 @Entity
 class Scale extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "BreweryId" })
   public breweryId: string;
 
@@ -90,9 +81,6 @@ class Scale extends DrewsBrewsTable {
 
 @Entity
 class Beer extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "BreweryId" })
   public breweryId: string;
 
@@ -108,9 +96,6 @@ class Beer extends DrewsBrewsTable {
 
 @Entity
 class Brewery extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
@@ -130,9 +115,6 @@ class Brewery extends DrewsBrewsTable {
 
 @Entity
 class Room extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
@@ -148,9 +130,6 @@ class Room extends DrewsBrewsTable {
 
 @Entity
 class Process extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
@@ -166,9 +145,6 @@ class Process extends DrewsBrewsTable {
 
 @Entity
 class WsToken extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "ConnectionId" })
   public connectionId: string;
 
@@ -220,6 +196,8 @@ class WsToken extends DrewsBrewsTable {
 (async () => {
   try {
     const metadata = Metadata;
+
+    debugger;
 
     const beer = await Beer.create({
       style: "lager",

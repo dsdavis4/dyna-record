@@ -16,20 +16,11 @@ class MockTable extends SingleTableDesign {
 
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
-
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
 }
 
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Scale extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 }
@@ -37,9 +28,6 @@ class Scale extends MockTable {
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Room extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 }

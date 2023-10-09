@@ -78,9 +78,6 @@ abstract class MockTable extends SingleTableDesign {
 
 @Entity
 class Order extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "CustomerId" })
   public customerId: string;
 
@@ -89,9 +86,6 @@ class Order extends MockTable {
 
   @Attribute({ alias: "OrderDate" })
   public orderDate: Date;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
@@ -102,18 +96,12 @@ class Order extends MockTable {
 
 @Entity
 class PaymentMethodProvider extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 }
 
 @Entity
 class PaymentMethod extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "LastFour" })
   public lastFour: string;
 
@@ -122,9 +110,6 @@ class PaymentMethod extends MockTable {
 
   @Attribute({ alias: "PaymentMethodProviderId" })
   public paymentMethodProviderId: string;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
@@ -140,17 +125,11 @@ class PaymentMethod extends MockTable {
 
 @Entity
 class Customer extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
   @Attribute({ alias: "Address" })
   public address: string;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
 
   @HasMany(() => Order, { targetKey: "customerId" })
   public orders: Order[];
@@ -1087,6 +1066,7 @@ describe("SingleTableDesign", () => {
             id: "123",
             name: "Some Customer",
             type: "Customer",
+            createdAt: "2021-09-15T04:26:31.148Z",
             updatedAt: "2022-09-15T04:26:31.148Z"
           },
           {
@@ -1370,6 +1350,7 @@ describe("SingleTableDesign", () => {
             id: "123",
             name: "Some Customer",
             type: "Customer",
+            createdAt: "2021-09-15T04:26:31.148Z",
             updatedAt: "2022-09-15T04:26:31.148Z"
           }
         ]);
@@ -1589,6 +1570,7 @@ describe("SingleTableDesign", () => {
             id: "123",
             name: "Some Customer",
             type: "Customer",
+            createdAt: "2021-09-15T04:26:31.148Z",
             updatedAt: "2022-09-15T04:26:31.148Z"
           },
           {
@@ -1862,6 +1844,7 @@ describe("SingleTableDesign", () => {
             id: "123",
             name: "Some Customer",
             type: "Customer",
+            createdAt: "2021-09-15T04:26:31.148Z",
             updatedAt: "2022-09-15T04:26:31.148Z"
           }
         ]);

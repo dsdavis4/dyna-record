@@ -8,8 +8,8 @@ import { type RelationshipAttributeNames } from "./types";
 
 import type { PrimaryKey, SortKey } from "../types";
 
-// TODO should I make created at and updatedat default?
-// TODO how to dynanically get pk and sk... and "id"
+// TODO type might be too generic
+// TODO how to make the fields shared so they arent repeeated in other files?
 type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
 
 // TODO add unit test for this
