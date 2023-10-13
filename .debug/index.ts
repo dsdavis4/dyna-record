@@ -193,11 +193,15 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO add tsconfig for dev... that includes test files and debug file
 
+// TODO make a logger class to optionally log. Structured logs..
+
 (async () => {
   try {
     const metadata = Metadata;
 
-    debugger;
+    // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+    //   include: [{ association: "brewery" }]
+    // });
 
     const beer = await Beer.create({
       style: "lager",
