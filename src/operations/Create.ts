@@ -52,6 +52,8 @@ type TransactItems = Exclude<
 
 // TODO make sure to add a unit test that optional properties dont have to be included
 
+// TODO add good error messages in here...
+
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -199,8 +201,6 @@ class Create<T extends SingleTableDesign> {
         acc.push({ Put: expression });
       }
 
-      // TODO start here need the other transactions like adding a hasmany
-
       return acc;
     }, []);
   }
@@ -223,37 +223,3 @@ class Create<T extends SingleTableDesign> {
 }
 
 export default Create;
-
-// this works... codify
-//  const bla: TransactWriteCommandInput = {
-//   TransactItems: [
-//     {
-//       ConditionCheck: {
-//         TableName: tableName,
-//         Key: {
-//           PK: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
-//           SK: "Brewery"
-//           // PK: "Bla123",
-//           // SK: "Bla"
-//         },
-//         ConditionExpression: "attribute_exists(PK)"
-//       }
-//     },
-//     {
-//       Update: {
-//         TableName: tableName,
-//         Key: {
-//           PK: "Beer#ceb34f08-3472-45e8-b78c-9fa503b70637",
-//           SK: "Beer"
-//         },
-//         UpdateExpression: "SET #ABV = :newValue",
-//         ExpressionAttributeValues: {
-//           ":newValue": 6.56
-//         },
-//         ExpressionAttributeNames: {
-//           "#ABV": "ABV"
-//         }
-//       }
-//     }
-//   ]
-// };
