@@ -48,7 +48,7 @@ describe("Create", () => {
   });
 
   it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
-    expect.assertions(3);
+    expect.assertions(4);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     mockedUuidv4
@@ -63,18 +63,17 @@ describe("Create", () => {
     });
 
     expect(order).toEqual({
-      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      createdAt: "2023-10-16T03:31:35.918Z",
       customerId: "Customer#123",
       id: "uuid1",
-      orderDate: new Date("2024-01-01T00:00:00.000Z"),
+      orderDate: "2024-01-01T00:00:00.000Z",
       paymentMethodId: "PaymentMethodId#456",
       pk: "Order#uuid1",
       sk: "Order",
       type: "Order",
-      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      updatedAt: "2023-10-16T03:31:35.918Z"
     });
-    // TODO should pass
-    // expect(order).toBeInstanceOf(Order);
+    expect(order).toBeInstanceOf(Order);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [

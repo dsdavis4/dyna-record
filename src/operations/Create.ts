@@ -7,11 +7,12 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { PrimaryKey, SortKey } from "../types";
+import type { DynamoTableItem, PrimaryKey, SortKey } from "../types";
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb"; // TODO dont need this import...
 import DynamoClient from "../DynamoClient";
 import { PutExpression } from "../dynamo-utils";
 import { BelongsToLink } from "../relationships";
+import { QueryResolver } from "../query-utils";
 
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
@@ -97,8 +98,13 @@ class Create<T extends SingleTableDesign> {
 
     debugger;
 
-    // TODO fix return type...
-    return entityData as any;
+    // TODO using QueryResolver here is not great...
+    //      1. It can be renamed..
+    //      2. Or I need to do a big refactor when I update that function to use FindById...
+    const queryResolver = new QueryResolver<T>(this.EntityClass);
+
+    // TODO dont use as. I need to figure out how to refactor the expression stuff..
+    return await queryResolver.resolve(expression.Item as DynamoTableItem);
   }
 
   // TODO is this a good name?
