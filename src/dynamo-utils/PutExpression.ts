@@ -10,7 +10,6 @@ class PutExpression extends ExpressionBuilder {
 
     return {
       TableName: tableName,
-      // Item: marshall(this.buildItem(entityData)),
       Item: this.buildItem(entityData),
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };

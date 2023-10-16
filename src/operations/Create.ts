@@ -7,7 +7,7 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { PrimaryKey, SortKey, DynamoTableItem } from "../types";
+import type { PrimaryKey, SortKey } from "../types";
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb"; // TODO dont need this import...
 import DynamoClient from "../DynamoClient";
 import { PutExpression } from "../dynamo-utils";
@@ -84,20 +84,6 @@ class Create<T extends SingleTableDesign> {
     const relationshipTransactions =
       this.buildRelationshipTransactions(entityData);
 
-    // debugger;
-
-    // const bla3 = Object.values(relationships).filter(rel =>
-    //   rel.type === "HasMany" // TODO what am I finding with the target key...?
-    //     ? attributes[rel.targetKey as keyof CreateOptions<T>]
-    //     : attributes[rel.foreignKey as keyof CreateOptions<T>]
-    // );
-
-    // const
-
-    // TODO if this works make sure to check ALL associated relationships existence
-    // TODO make sure to create BelongsToLinks
-    // TODO if there is overlap with the expression attribute names and expression attribute values from QUERY then DRY up
-
     const dynamo = new DynamoClient(tableName);
 
     try {
@@ -117,7 +103,7 @@ class Create<T extends SingleTableDesign> {
 
   // TODO is this a good name?
   // TODO I dont think Dynamo table ITEM is right here...
-  private buildEntityData(attributes: CreateOptions<T>): DynamoTableItem {
+  private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { primaryKey, sortKey } = this.#tableMetadata;
 
@@ -143,7 +129,7 @@ class Create<T extends SingleTableDesign> {
   }
 
   private buildRelationshipTransactions(
-    entityData: DynamoTableItem
+    entityData: SingleTableDesign
   ): TransactItems {
     const { relationships } = this.#entityMetadata;
 
@@ -153,7 +139,7 @@ class Create<T extends SingleTableDesign> {
       // TODO find a way to not use as
       const relationshipId = entityData[key];
 
-      if (relationshipId !== undefined) {
+      if (relationshipId !== undefined && typeof relationshipId === "string") {
         acc.push({
           ConditionCheck: this.buildRelationshipExistsCondition(
             rel,
@@ -184,8 +170,6 @@ class Create<T extends SingleTableDesign> {
 
           const belongsToLink = {
             pk: `${rel.target.name}#${relationshipId}`,
-            // TODO type here should know its DynamoTableITem of single table design..
-            //    this would make it so it doesnt think this is any...
             sk: `${this.EntityClass.name}#${entityData.id}`
           };
 
