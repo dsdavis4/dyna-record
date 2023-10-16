@@ -116,6 +116,7 @@ class Create<T extends SingleTableDesign> {
   }
 
   // TODO is this a good name?
+  // TODO I dont think Dynamo table ITEM is right here...
   private buildEntityData(attributes: CreateOptions<T>): DynamoTableItem {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { primaryKey, sortKey } = this.#tableMetadata;
