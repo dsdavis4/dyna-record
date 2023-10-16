@@ -1,15 +1,11 @@
 {
-  "compilerOptions": {
-    "types": ["@types/node"],
-    "noEmit": true,
-    "allowJs": true
-  },
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.dev.json",
   "include": [
     ".eslintrc.js",
     "jest.config.js",
     "global-setup.js",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "tests"
   ],
   "exclude": []
 }
