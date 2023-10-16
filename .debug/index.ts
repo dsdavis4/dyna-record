@@ -202,6 +202,8 @@ class WsToken extends DrewsBrewsTable {
     //   include: [{ association: "brewery" }]
     // });
 
+    // TODO type of this should not expect relationships
+    //      and there should be tests for that
     const beer = await Beer.create({
       style: "lager",
       breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
