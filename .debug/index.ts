@@ -208,7 +208,7 @@ class WsToken extends DrewsBrewsTable {
       style: "lager",
       breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
       abv: 1,
-      name: "Test 4"
+      name: "Test 5"
     });
 
     debugger;

@@ -2030,9 +2030,6 @@ describe("SingleTableDesign", () => {
         .mockReturnValueOnce("uuid2")
         .mockReturnValueOnce("uuid3");
 
-      // TODO set this
-      // mockTransactWriteCommand.mockResolvedValueOnce();
-
       const order = await Order.create({
         customerId: "Customer#123",
         paymentMethodId: "PaymentMethodId#456",

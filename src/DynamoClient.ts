@@ -9,7 +9,8 @@ import {
   type QueryCommandOutput,
   type GetCommandOutput,
   type PutCommandInput,
-  type TransactWriteCommandInput
+  type TransactWriteCommandInput,
+  TransactWriteCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
 // import QueryParams from "./QueryParams";
@@ -67,28 +68,12 @@ class DynamoClient {
     return response.Items ?? [];
   }
 
-  // TODO change response type
-  // TODO tsdoc
-  public async create(params: PutCommandInput): Promise<number> {
-    console.log("create", { params });
-
-    const response = await dynamo.send(new PutCommand(params));
-
-    debugger;
-
-    return 1;
-  }
-
-  // TODO change response type
   // TODO tsdoc
   public async transactWriteItems(
     params: TransactWriteCommandInput
-  ): Promise<number> {
+  ): Promise<TransactWriteCommandOutput> {
     console.log("transactWriteItems", { params });
-
-    const response = await dynamo.send(new TransactWriteCommand(params));
-
-    return 1;
+    return await dynamo.send(new TransactWriteCommand(params));
   }
 }
 
