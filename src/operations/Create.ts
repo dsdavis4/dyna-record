@@ -3,9 +3,7 @@ import Metadata, {
   type EntityMetadata,
   type TableMetadata,
   type EntityClass,
-  type BelongsToRelationship,
-  type HasOneRelationship,
-  RelationshipMetadata
+  type RelationshipMetadata
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
@@ -74,7 +72,6 @@ class Create<T extends SingleTableDesign> {
   // TODO add friendly error handling for failed transactions
   public async run(attributes: CreateOptions<T>): Promise<T> {
     const { name: tableName } = this.#tableMetadata;
-    const { relationships } = this.#entityMetadata;
 
     const entityData = this.buildEntityData(attributes);
 
