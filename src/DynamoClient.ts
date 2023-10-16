@@ -39,6 +39,7 @@ const dynamo = DynamoDBDocumentClient.from(
 class DynamoClient {
   private readonly tableName: string;
 
+  // TODO remove table name from here...
   constructor(tableName: string) {
     this.tableName = tableName;
   }

@@ -8,11 +8,12 @@ import Metadata, {
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, PrimaryKey, SortKey } from "../types";
-import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb"; // TODO dont need this import...
-import DynamoClient from "../DynamoClient";
 import { PutExpression } from "../dynamo-utils";
 import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
+import TransactionBuilder, {
+  type ConditionCheck
+} from "../dynamo-utils/TransactionBuilder";
 
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
@@ -41,10 +42,12 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
   | SortKeyAttribute<T>
 >;
 
-type TransactItems = Exclude<
-  TransactWriteCommandInput["TransactItems"],
-  undefined
->;
+// TODO START HERE.... I ended last time getting create v1 working
+//      - The last thing I did was make it return an instance of the object on create, but it uses QueryResolver... yuck. Leave that for now
+//      - Implement the Transactio Builder class I made and get ride of the put expression stuff...
+//      - I also only know that its doing create successfully in one scenario... (Belongs to with HasMany)
+//          - START by testing/codifying the other situations. Then clean up/ DRY up etc
+//      - lots of TODOs to fix
 
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
@@ -56,6 +59,7 @@ type TransactItems = Exclude<
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
+  readonly #transactionBuilder: TransactionBuilder;
 
   private readonly EntityClass: EntityClass<T>;
 
@@ -65,6 +69,7 @@ class Create<T extends SingleTableDesign> {
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
+    this.#transactionBuilder = new TransactionBuilder();
   }
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
@@ -72,8 +77,6 @@ class Create<T extends SingleTableDesign> {
   // TODO tsdoc
   // TODO add friendly error handling for failed transactions
   public async run(attributes: CreateOptions<T>): Promise<T> {
-    const { name: tableName } = this.#tableMetadata;
-
     const entityData = this.buildEntityData(attributes);
 
     // TODO does this need to be a class? Can the method be static?
@@ -81,16 +84,15 @@ class Create<T extends SingleTableDesign> {
       entityClassName: this.EntityClass.name
     });
     const expression = expressionBuilder.build(entityData);
+    this.#transactionBuilder.addPut(expression);
 
-    const relationshipTransactions =
-      this.buildRelationshipTransactions(entityData);
-
-    const dynamo = new DynamoClient(tableName);
+    this.buildRelationshipTransactions(entityData);
 
     try {
-      const res = await dynamo.transactWriteItems({
-        TransactItems: [{ Put: expression }, ...relationshipTransactions]
-      });
+      // const res = await dynamo.transactWriteItems({
+      //   TransactItems: [{ Put: expression }, ...relationshipTransactions]
+      // });
+      await this.#transactionBuilder.executeTransaction();
       debugger;
     } catch (e) {
       debugger;
@@ -134,24 +136,19 @@ class Create<T extends SingleTableDesign> {
     return { ...keys, ...attributes, ...defaultAttrs };
   }
 
-  private buildRelationshipTransactions(
-    entityData: SingleTableDesign
-  ): TransactItems {
+  private buildRelationshipTransactions(entityData: SingleTableDesign): void {
     const { relationships } = this.#entityMetadata;
 
-    return Object.values(relationships).reduce<TransactItems>((acc, rel) => {
+    Object.values(relationships).forEach(rel => {
       const key = rel.type === "HasMany" ? rel.targetKey : rel.foreignKey;
 
       // TODO find a way to not use as
       const relationshipId = entityData[key];
 
       if (relationshipId !== undefined && typeof relationshipId === "string") {
-        acc.push({
-          ConditionCheck: this.buildRelationshipExistsCondition(
-            rel,
-            relationshipId
-          )
-        });
+        this.#transactionBuilder.addConditionCheck(
+          this.buildRelationshipExistsCondition(rel, relationshipId)
+        );
 
         const relMetadata = Metadata.getEntity(rel.target.name);
 
@@ -187,18 +184,16 @@ class Create<T extends SingleTableDesign> {
             ...renameMe
           });
 
-          acc.push({ Put: expression });
+          this.#transactionBuilder.addPut(expression);
         }
       }
-
-      return acc;
-    }, []);
+    });
   }
 
   private buildRelationshipExistsCondition(
     rel: RelationshipMetadata,
     relationshipId: string
-  ): TransactItems[number]["ConditionCheck"] {
+  ): ConditionCheck {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     return {
