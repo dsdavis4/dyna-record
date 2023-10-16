@@ -4,13 +4,16 @@ import Metadata, {
   type TableMetadata,
   type EntityClass,
   type BelongsToRelationship,
-  type HasOneRelationship
+  type HasOneRelationship,
+  RelationshipMetadata
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { PrimaryKey, SortKey, DynamoTableItem } from "../types";
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb"; // TODO dont need this import...
 import DynamoClient from "../DynamoClient";
+import { PutExpression } from "../dynamo-utils";
+import { BelongsToLink } from "../relationships";
 
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
@@ -39,6 +42,11 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
   | SortKeyAttribute<T>
 >;
 
+type TransactItems = Exclude<
+  TransactWriteCommandInput["TransactItems"],
+  undefined
+>;
+
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
 
@@ -63,59 +71,40 @@ class Create<T extends SingleTableDesign> {
   // TODO tsdoc
   // TODO add friendly error handling for failed transactions
   public async run(attributes: CreateOptions<T>): Promise<T> {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-    // TODO add conditional checks when managing relationships
-    //       example: Throw error if breweryId does not exist for beer
-    //                is that possible?
+    const { name: tableName } = this.#tableMetadata;
+    const { relationships } = this.#entityMetadata;
 
-    // TODO start here... I think object is ready, call method
-    const tableItem = this.buildTableItem(attributes);
-    // await this.checkRelationshipsExist(tableItem);
+    const entityData = this.buildEntityData(attributes);
 
-    debugger;
+    // TODO does this need to be a class? Can the method be static?
+    const expressionBuilder = new PutExpression({
+      entityClassName: this.EntityClass.name
+    });
+    const expression = expressionBuilder.build(entityData);
+
+    const relationshipTransactions =
+      this.buildRelationshipTransactions(entityData);
+
+    // debugger;
+
+    // const bla3 = Object.values(relationships).filter(rel =>
+    //   rel.type === "HasMany" // TODO what am I finding with the target key...?
+    //     ? attributes[rel.targetKey as keyof CreateOptions<T>]
+    //     : attributes[rel.foreignKey as keyof CreateOptions<T>]
+    // );
+
+    // const
 
     // TODO if this works make sure to check ALL associated relationships existence
     // TODO make sure to create BelongsToLinks
     // TODO if there is overlap with the expression attribute names and expression attribute values from QUERY then DRY up
 
-    // this works... codify
-    const bla: TransactWriteCommandInput = {
-      TransactItems: [
-        {
-          ConditionCheck: {
-            TableName: tableName,
-            Key: {
-              PK: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
-              SK: "Brewery"
-              // PK: "Bla123",
-              // SK: "Bla"
-            },
-            ConditionExpression: "attribute_exists(PK)"
-          }
-        },
-        {
-          Update: {
-            TableName: tableName,
-            Key: {
-              PK: "Beer#ceb34f08-3472-45e8-b78c-9fa503b70637",
-              SK: "Beer"
-            },
-            UpdateExpression: "SET #Name = :newValue",
-            ExpressionAttributeValues: {
-              ":newValue": { S: "Serrano Pale Ale Test 7" }
-            },
-            ExpressionAttributeNames: {
-              "#Name": "Name"
-            }
-          }
-        }
-      ]
-    };
-
     const dynamo = new DynamoClient(tableName);
 
     try {
-      const res = await dynamo.transactWriteItems(bla);
+      const res = await dynamo.transactWriteItems({
+        TransactItems: [{ Put: expression }, ...relationshipTransactions]
+      });
       debugger;
     } catch (e) {
       debugger;
@@ -123,24 +112,24 @@ class Create<T extends SingleTableDesign> {
 
     debugger;
 
-    // console.log(bla);
-
-    console.log(tableItem);
-    // START here on actual create
-
-    return {} as any;
+    // TODO fix return type...
+    return entityData as any;
   }
 
-  private buildTableItem(attributes: CreateOptions<T>): DynamoTableItem {
+  // TODO is this a good name?
+  private buildEntityData(attributes: CreateOptions<T>): DynamoTableItem {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { primaryKey, sortKey } = this.#tableMetadata;
 
     const id = uuidv4();
     const createdAt = new Date();
 
+    const pk = entityAttrs[primaryKey].name;
+    const sk = entityAttrs[sortKey].name;
+
     const keys = {
-      [primaryKey]: this.EntityClass.primaryKeyValue(id),
-      [sortKey]: this.EntityClass.name
+      [pk]: this.EntityClass.primaryKeyValue(id),
+      [sk]: this.EntityClass.name
     };
 
     const defaultAttrs: SingleTableDesign = {
@@ -150,51 +139,121 @@ class Create<T extends SingleTableDesign> {
       updatedAt: createdAt
     };
 
-    const entityData = { ...attributes, ...defaultAttrs };
-
-    return Object.entries(entityAttrs).reduce<DynamoTableItem>(
-      (acc, [tableKey, attributeData]) => {
-        const val = entityData[attributeData.name as keyof CreateOptions<T>];
-        if (val !== undefined) acc[tableKey] = val;
-        return acc;
-      },
-      keys
-    );
+    return { ...keys, ...attributes, ...defaultAttrs };
   }
 
-  // TODO anything to check for has many?
-  // TODO tsdoc
-  private async checkRelationshipsExist(
-    tableItem: DynamoTableItem
-  ): Promise<void> {
+  private buildRelationshipTransactions(
+    entityData: DynamoTableItem
+  ): TransactItems {
     const { relationships } = this.#entityMetadata;
 
-    // TODO Get the filter to work correctly by using type guard
-    const hasManyOrBelongsTos = Object.values(relationships).filter(
-      rel => rel.type !== "HasMany" // TODO needs type guard
-    );
-    await Promise.all(
-      hasManyOrBelongsTos.map(async rel => {
-        await this.relationshipExists(tableItem, rel as any); // TODO no any
-      })
-    );
+    return Object.values(relationships).reduce<TransactItems>((acc, rel) => {
+      const key = rel.type === "HasMany" ? rel.targetKey : rel.foreignKey;
+
+      // TODO find a way to not use as
+      const relationshipId = entityData[key];
+
+      if (relationshipId !== undefined) {
+        acc.push({
+          ConditionCheck: this.buildRelationshipExistsCondition(
+            rel,
+            relationshipId
+          )
+        });
+
+        const relMetadata = Metadata.getEntity(rel.target.name);
+
+        // TODO add comment, move to function?
+        const entityBelongsToHasManyRel = Object.values(
+          relMetadata.relationships
+        ).find(
+          rel =>
+            rel.type === "HasMany" &&
+            rel.target === this.EntityClass &&
+            rel.targetKey === key
+        );
+
+        const renameMe: BelongsToLink = {
+          id: uuidv4(),
+          type: BelongsToLink.name,
+          foreignEntityType: this.EntityClass.name,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const belongsToLink = {
+          pk: `${rel.target.name}#${relationshipId}`,
+          // TODO type here should know its DynamoTableITem of single table design..
+          //    this would make it so it doesnt think this is any...
+          sk: `${this.EntityClass.name}#${entityData.id}`
+        };
+
+        const expressionBuilder = new PutExpression({
+          entityClassName: rel.target.name
+        });
+        const expression = expressionBuilder.build({
+          ...belongsToLink,
+          ...renameMe
+        });
+
+        acc.push({ Put: expression });
+      }
+
+      // TODO start here need the other transactions like adding a hasmany
+
+      return acc;
+    }, []);
   }
 
-  // TODO tsdoc
-  // TODO unit test for this error for both relationship types
-  private async relationshipExists(
-    tableItem: DynamoTableItem,
-    rel: HasOneRelationship | BelongsToRelationship
-  ): Promise<void> {
-    const { foreignKey, target } = rel;
-    const relationshipId = tableItem[foreignKey];
-    const res = await target.findById(relationshipId);
-    if (res === null) {
-      throw new Error(
-        `Foreign key constraint error (${foreignKey}): No ${target.name} exists with Id ${relationshipId}`
-      );
-    }
+  private buildRelationshipExistsCondition(
+    rel: RelationshipMetadata,
+    relationshipId: string
+  ): TransactItems[number]["ConditionCheck"] {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    return {
+      TableName: tableName,
+      Key: {
+        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+        [sortKey]: rel.target.name
+      },
+      ConditionExpression: `attribute_exists(${primaryKey})`
+    };
   }
 }
 
 export default Create;
+
+// this works... codify
+//  const bla: TransactWriteCommandInput = {
+//   TransactItems: [
+//     {
+//       ConditionCheck: {
+//         TableName: tableName,
+//         Key: {
+//           PK: "Brewery#157cc981-1be2-4ecc-a257-07d9a6037559",
+//           SK: "Brewery"
+//           // PK: "Bla123",
+//           // SK: "Bla"
+//         },
+//         ConditionExpression: "attribute_exists(PK)"
+//       }
+//     },
+//     {
+//       Update: {
+//         TableName: tableName,
+//         Key: {
+//           PK: "Beer#ceb34f08-3472-45e8-b78c-9fa503b70637",
+//           SK: "Beer"
+//         },
+//         UpdateExpression: "SET #ABV = :newValue",
+//         ExpressionAttributeValues: {
+//           ":newValue": 6.56
+//         },
+//         ExpressionAttributeNames: {
+//           "#ABV": "ABV"
+//         }
+//       }
+//     }
+//   ]
+// };

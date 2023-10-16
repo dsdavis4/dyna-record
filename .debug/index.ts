@@ -15,10 +15,6 @@ import { PrimaryKey, SortKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
-// TODO START HERE....... Working on create. Just finished creating the PrimaryKey and SortKey decorators/types to dynamically exlude from create params
-//          I should probably start next time by excluding id, type, createdAt and updatedAt
-//           If those are to become default attributes...?
-
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods
@@ -86,6 +82,9 @@ class Beer extends DrewsBrewsTable {
 
   @Attribute({ alias: "Style" })
   public style: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
 
   @Attribute({ alias: "ABV" })
   public abv: number; // TODO should serialize to number
@@ -205,8 +204,22 @@ class WsToken extends DrewsBrewsTable {
 
     const beer = await Beer.create({
       style: "lager",
-      breweryId: "123",
-      abv: 1
+      breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+      abv: 1,
+      name: "Test 2"
+    });
+
+    debugger;
+
+    const test = await Brewery.findById(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
+      { include: [{ association: "beers" }] }
+    );
+
+    debugger;
+
+    const beerTest = await Beer.findById(beer.id, {
+      include: [{ association: "brewery" }]
     });
 
     debugger;

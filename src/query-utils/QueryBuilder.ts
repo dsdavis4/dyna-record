@@ -3,6 +3,11 @@ import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, { type TableMetadata } from "../metadata";
 import { BelongsToLink } from "../relationships";
 
+// TODO I think this is nto working as expected and should instead be:
+// export type KeyConditions = Exclude<
+//   QueryCommandInput["KeyConditions"],
+//   undefined
+// >;
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],
   "undefined"
