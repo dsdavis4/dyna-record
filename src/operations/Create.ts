@@ -175,30 +175,32 @@ class Create<T extends SingleTableDesign> {
             rel.targetKey === key
         );
 
-        const renameMe: BelongsToLink = {
-          id: uuidv4(),
-          type: BelongsToLink.name,
-          foreignEntityType: this.EntityClass.name,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
+        if (entityBelongsToHasManyRel !== undefined) {
+          const renameMe: BelongsToLink = {
+            id: uuidv4(),
+            type: BelongsToLink.name,
+            foreignEntityType: this.EntityClass.name,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
 
-        const belongsToLink = {
-          pk: `${rel.target.name}#${relationshipId}`,
-          // TODO type here should know its DynamoTableITem of single table design..
-          //    this would make it so it doesnt think this is any...
-          sk: `${this.EntityClass.name}#${entityData.id}`
-        };
+          const belongsToLink = {
+            pk: `${rel.target.name}#${relationshipId}`,
+            // TODO type here should know its DynamoTableITem of single table design..
+            //    this would make it so it doesnt think this is any...
+            sk: `${this.EntityClass.name}#${entityData.id}`
+          };
 
-        const expressionBuilder = new PutExpression({
-          entityClassName: rel.target.name
-        });
-        const expression = expressionBuilder.build({
-          ...belongsToLink,
-          ...renameMe
-        });
+          const expressionBuilder = new PutExpression({
+            entityClassName: rel.target.name
+          });
+          const expression = expressionBuilder.build({
+            ...belongsToLink,
+            ...renameMe
+          });
 
-        acc.push({ Put: expression });
+          acc.push({ Put: expression });
+        }
       }
 
       return acc;
