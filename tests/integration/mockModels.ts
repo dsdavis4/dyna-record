@@ -61,7 +61,7 @@ class PaymentMethod extends MockTable {
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
 
-  @HasMany(() => Order, { targetKey: "paymentMethodId" })
+  @HasMany(() => Order, { foreignKey: "paymentMethodId" })
   public orders: Order[];
 
   @HasOne(() => PaymentMethodProvider, {
@@ -78,10 +78,10 @@ class Customer extends MockTable {
   @Attribute({ alias: "Address" })
   public address: string;
 
-  @HasMany(() => Order, { targetKey: "customerId" })
+  @HasMany(() => Order, { foreignKey: "customerId" })
   public orders: Order[];
 
-  @HasMany(() => PaymentMethod, { targetKey: "customerId" })
+  @HasMany(() => PaymentMethod, { foreignKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
   public mockCustomInstanceMethod(): string {

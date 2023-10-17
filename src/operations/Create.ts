@@ -52,6 +52,14 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 
 // TODO add good error messages in here...
 
+/** TODO need to handle
+ * create beliongs to has many
+ * crate belongs to has one
+ * create has one
+ * create gas many
+ * create belongsto belongs to
+ */
+
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -128,26 +136,33 @@ class Create<T extends SingleTableDesign> {
     const { relationships } = this.#entityMetadata;
 
     Object.values(relationships).forEach(rel => {
-      const key = isHasManyRelationship(rel) ? rel.targetKey : rel.foreignKey;
-      const relationshipId = entityData[key];
+      const isBelongsTo = isBelongsToRelationship(rel);
 
-      if (relationshipId !== undefined && typeof relationshipId === "string") {
-        const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
-        this.#transactionBuilder.addConditionCheck(
-          this.buildRelationshipExistsCondition(rel, relationshipId),
-          errMsg
-        );
+      if (isBelongsTo) {
+        const relationshipId = entityData[rel.foreignKey];
 
         if (
-          this.doesEntityBelongToHasMany(rel, key) &&
-          isBelongsToRelationship(rel)
+          relationshipId !== undefined &&
+          typeof relationshipId === "string"
         ) {
-          this.buildBelongsToHasManyTransaction(
-            rel,
-            entityData.id,
-            relationshipId
+          const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
+          this.#transactionBuilder.addConditionCheck(
+            this.buildRelationshipExistsCondition(rel, relationshipId),
+            errMsg
           );
+
+          if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+            this.buildBelongsToHasManyTransaction(
+              rel,
+              entityData.id,
+              relationshipId
+            );
+          } else {
+            // TODO
+          }
         }
+      } else {
+        // TODO
       }
     });
   }
@@ -168,7 +183,7 @@ class Create<T extends SingleTableDesign> {
       rel =>
         isHasManyRelationship(rel) &&
         rel.target === this.EntityClass &&
-        rel.targetKey === foreignKey
+        rel.foreignKey === foreignKey
     );
   }
 
@@ -192,10 +207,12 @@ class Create<T extends SingleTableDesign> {
       },
       ConditionExpression: `attribute_exists(${primaryKey})`
 
-      // TODO start here... I ended last time by first fixing some create stuff... then I realized I had messed up my HasOne relationships so I fixed that
+      // TODO start here...... I ended last time by first fixing some create stuff... then I realized I had messed up my HasOne relationships so I fixed that
       //       Next time work on Create with BelongsToLinks for HasOne
+      //       and handle BelongsTo conditions
+      //       and anything else....
       // TODO the below is something that works for making sure a process cant be creatd if the scale already has one... I need to implement...
-      //   ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(ProcessId)`
+      // (This might not be needed for BelongsTo...)   ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(FOREIGN_KEY)`
     };
   }
 

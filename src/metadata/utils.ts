@@ -13,7 +13,7 @@ import type {
 export const isHasManyRelationship = (
   rel: RelationshipMetadata
 ): rel is HasManyRelationship => {
-  return rel.type === "HasMany" && rel.targetKey !== undefined;
+  return rel.type === "HasMany" && rel.foreignKey !== undefined;
 };
 
 /**

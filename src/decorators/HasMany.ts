@@ -2,7 +2,7 @@ import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 
 interface HasManyProps<T> {
-  targetKey: keyof T;
+  foreignKey: keyof T;
 }
 
 function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
@@ -19,7 +19,7 @@ function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
           type: "HasMany",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
-          targetKey: props.targetKey as keyof SingleTableDesign
+          foreignKey: props.foreignKey as keyof SingleTableDesign
         });
       });
     }

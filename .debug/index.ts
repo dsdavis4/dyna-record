@@ -95,13 +95,13 @@ class Brewery extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @HasMany(() => Scale, { targetKey: "breweryId" })
+  @HasMany(() => Scale, { foreignKey: "breweryId" })
   public scales: Scale[];
 
-  @HasMany(() => Beer, { targetKey: "breweryId" })
+  @HasMany(() => Beer, { foreignKey: "breweryId" })
   public beers: Beer[];
 
-  @HasMany(() => Room, { targetKey: "breweryId" })
+  @HasMany(() => Room, { foreignKey: "breweryId" })
   public rooms: Room[];
 
   public testing() {
@@ -120,7 +120,7 @@ class Room extends DrewsBrewsTable {
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
-  @HasMany(() => Scale, { targetKey: "roomId" })
+  @HasMany(() => Scale, { foreignKey: "roomId" })
   public scales: Scale[];
 }
 

@@ -33,7 +33,7 @@ export interface HasOneRelationship extends RelationshipMetadataBase {
 
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
-  targetKey: keyof SingleTableDesign;
+  foreignKey: keyof SingleTableDesign;
 }
 
 export type RelationshipMetadata =
