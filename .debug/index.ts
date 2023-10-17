@@ -140,6 +140,12 @@ class Process extends DrewsBrewsTable {
 
   @Attribute({ alias: "CurrentUserInput" })
   public currentUserInput: string;
+
+  @Attribute({ alias: "ScaleId" })
+  public scaleId: string;
+
+  @BelongsTo(() => Scale, { foreignKey: "scaleId" })
+  public scale: Scale;
 }
 
 @Entity
@@ -204,13 +210,13 @@ class WsToken extends DrewsBrewsTable {
 
     // TODO type of this should not expect relationships
     //      and there should be tests for that
-    const beer = await Beer.create({
-      style: "lager",
-      // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
-      breweryId: "bad",
-      abv: 1,
-      name: "Test 8"
-    });
+    // const beer = await Beer.create({
+    //   style: "lager",
+    //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   breweryId: "bad",
+    //   abv: 1,
+    //   name: "Test 8"
+    // });
 
     debugger;
 
@@ -221,16 +227,16 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    const beerTest = await Beer.findById(beer.id, {
-      include: [{ association: "brewery" }]
-    });
+    // const beerTest = await Beer.findById(beer.id, {
+    //   include: [{ association: "brewery" }]
+    // });
 
     debugger;
 
-    const newRoom = await Room.create({
-      name: "name",
-      breweryId: "123"
-    });
+    // const newRoom = await Room.create({
+    //   name: "name",
+    //   breweryId: "123"
+    // });
 
     console.time("bla");
 
@@ -246,18 +252,25 @@ class WsToken extends DrewsBrewsTable {
       // deleteMeArr: ["scales"]
     });
 
-    // const scale1 = await Scale.findById(
-    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
-    //   { include: [{ association: "process" }] }
-    // );
-    // const scale2 = await Scale.findById(
-    //   "035188db-de1f-4452-b76b-77849445a4dd",
-    //   { include: [{ association: "process" }] }
-    // );
-    // const scale3 = await Scale.findById(
-    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
-    //   { include: [{ association: "process" }] }
-    // );
+    const scale1 = await Scale.findById(
+      "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+      { include: [{ association: "process" }] }
+    );
+    const scale2 = await Scale.findById(
+      "035188db-de1f-4452-b76b-77849445a4dd",
+      { include: [{ association: "process" }] }
+    );
+    const scale3 = await Scale.findById(
+      "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+      { include: [{ association: "process" }] }
+    );
+
+    debugger;
+
+    const process = await Process.findById(
+      "c1fc2e27-dbdc-428e-9b7e-30ca05daa066",
+      { include: [{ association: "scale" }] }
+    );
 
     debugger;
 
