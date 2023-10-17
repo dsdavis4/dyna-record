@@ -45,13 +45,6 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
   | SortKeyAttribute<T>
 >;
 
-// TODO START HERE.... I ended last time getting create v1 working
-//      - The last thing I did was make it return an instance of the object on create, but it uses QueryResolver... yuck. Leave that for now
-//      - Get rid of this PutExpression thing...
-//      - I also only know that its doing create successfully in one scenario... (Belongs to with HasMany)
-//          - START by testing/codifying the other situations. Then clean up/ DRY up etc
-//      - lots of TODOs to fix
-
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
 
@@ -199,8 +192,10 @@ class Create<T extends SingleTableDesign> {
       },
       ConditionExpression: `attribute_exists(${primaryKey})`
 
+      // TODO start here... I ended last time by first fixing some create stuff... then I realized I had messed up my HasOne relationships so I fixed that
+      //       Next time work on Create with BelongsToLinks for HasOne
       // TODO the below is something that works for making sure a process cant be creatd if the scale already has one... I need to implement...
-      // TODO  ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(ProcessId)`
+      //   ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(ProcessId)`
     };
   }
 
