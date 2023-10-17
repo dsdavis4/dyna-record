@@ -399,7 +399,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  it("will find an entity with included BelongsTo associations", async () => {
+  it("will find an entity with included BelongsTo HasMany associations", async () => {
     expect.assertions(7);
 
     const orderRes = {
@@ -499,6 +499,78 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
       [{ name: "GetCommand" }],
+      [{ name: "GetCommand" }]
+    ]);
+  });
+
+  it("will find an entity with included BelongsTo HasOne associations", async () => {
+    expect.assertions(6);
+
+    const paymentMethodProviderRes = {
+      PK: "PaymentMethodProvider#123",
+      SK: "PaymentMethodProvider",
+      Id: "123",
+      Name: "Vida",
+      PaymentMethodId: "789"
+    };
+
+    const paymentMethodRes = {
+      PK: "PaymentMethod#789",
+      SK: "PaymentMethod",
+      Id: "789",
+      LastFour: "0000",
+      CustomerId: "123",
+      UpdatedAt: "2023-02-15T08:31:15.148Z"
+    };
+
+    mockQuery.mockResolvedValueOnce({ Items: [paymentMethodProviderRes] });
+    mockGet.mockResolvedValueOnce({ Item: paymentMethodRes });
+
+    const result = await PaymentMethodProvider.findById("123", {
+      include: [{ association: "paymentMethod" }]
+    });
+
+    expect(result).toEqual({
+      pk: "PaymentMethodProvider#123",
+      sk: "PaymentMethodProvider",
+      id: "123",
+      name: "Vida",
+      paymentMethodId: "789",
+      paymentMethod: {
+        pk: "PaymentMethod#789",
+        sk: "PaymentMethod",
+        id: "789",
+        lastFour: "0000",
+        customerId: "123",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    });
+    expect(result).toBeInstanceOf(PaymentMethodProvider);
+    expect(result?.paymentMethod).toBeInstanceOf(PaymentMethod);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          FilterExpression: "#Type = :Type1",
+          KeyConditionExpression: "#PK = :PK2",
+          ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+          ExpressionAttributeValues: {
+            ":PK2": "PaymentMethodProvider#123",
+            ":Type1": "PaymentMethodProvider"
+          }
+        }
+      ]
+    ]);
+    expect(mockedGetCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          Key: { PK: "PaymentMethod#789", SK: "PaymentMethod" }
+        }
+      ]
+    ]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
       [{ name: "GetCommand" }]
     ]);
   });
@@ -820,8 +892,8 @@ describe("FindById", () => {
     it("(BelongsTo HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
 
-      const paymentMethod = await PaymentMethod.findById("789", {
-        include: [{ association: "paymentMethodProvider" }]
+      const paymentMethod = await PaymentMethodProvider.findById("789", {
+        include: [{ association: "paymentMethod" }]
       });
 
       if (paymentMethod !== null) {
@@ -832,17 +904,13 @@ describe("FindById", () => {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.lastFour);
+        console.log(paymentMethod.name);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.customerId);
+        console.log(paymentMethod.paymentMethodId);
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.updatedAt);
-        // @ts-expect-error: Included associations are allowed
-        console.log(paymentMethod.customer);
-        // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.orders);
-        // @ts-expect-no-error: Not included associations are not allowed
-        console.log(paymentMethod.paymentMethodProvider);
+        // @ts-expect-no-error: Included associations are allowed
+        console.log(paymentMethod.paymentMethod);
       }
     });
 

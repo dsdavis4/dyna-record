@@ -47,7 +47,7 @@ class PaymentMethodProvider extends MockTable {
   public paymentMethodId: string;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
-  public scale: PaymentMethod;
+  public paymentMethod: PaymentMethod;
 }
 
 @Entity
