@@ -139,8 +139,10 @@ class Create<T extends SingleTableDesign> {
       const relationshipId = entityData[key];
 
       if (relationshipId !== undefined && typeof relationshipId === "string") {
+        const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
         this.#transactionBuilder.addConditionCheck(
-          this.buildRelationshipExistsCondition(rel, relationshipId)
+          this.buildRelationshipExistsCondition(rel, relationshipId),
+          errMsg
         );
 
         if (

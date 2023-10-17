@@ -1,6 +1,8 @@
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { Order } from "./mockModels";
+import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
@@ -9,6 +11,11 @@ const mockedUuidv4 = jest.mocked(uuidv4);
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
+    TransactionCanceledException: jest.fn().mockImplementation((...params) => {
+      const obj = Object.create(TransactionCanceledException.prototype);
+      Object.assign(obj, ...params);
+      return obj;
+    }),
     DynamoDBClient: jest.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
@@ -147,5 +154,197 @@ describe("Create", () => {
         }
       ]
     ]);
+  });
+
+  describe("error handling", () => {
+    it("will return an AggregateError for a failed conditional check", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Order.create({
+          customerId: "Customer#123",
+          paymentMethodId: "PaymentMethodId#456",
+          orderDate: new Date("2024-01-01")
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'Customer#123' does not exist"
+          )
+        ]);
+      }
+    });
+
+    it("will return an AggregateError for multiple failed conditional checks", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Order.create({
+          customerId: "Customer#123",
+          paymentMethodId: "PaymentMethodId#456",
+          orderDate: new Date("2024-01-01")
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'Customer#123' does not exist"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: PaymentMethod with ID 'PaymentMethodId#456' does not exist"
+          )
+        ]);
+      }
+    });
+
+    it("will use the default error message is a conditional check does not have a custom error message", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "ConditionalCheckFailed", Message: "something happened" },
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Order.create({
+          customerId: "Customer#123",
+          paymentMethodId: "PaymentMethodId#456",
+          orderDate: new Date("2024-01-01")
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: something happened"
+          )
+        ]);
+      }
+    });
+
+    it("will throw the original error if the type is TransactionCanceledException but there are no ConditionalCheckFailed reasons", async () => {
+      expect.assertions(1);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "MockCode" },
+            { Code: "None" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Order.create({
+          customerId: "Customer#123",
+          paymentMethodId: "PaymentMethodId#456",
+          orderDate: new Date("2024-01-01")
+        });
+      } catch (e: any) {
+        expect(e).toEqual(
+          new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "None" },
+              { Code: "MockCode" },
+              { Code: "None" },
+              { Code: "None" }
+            ],
+            $metadata: {}
+          })
+        );
+      }
+    });
+
+    it("allows non TransactionCanceledException errors to bubble up", async () => {
+      expect.assertions(1);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new Error("something bad");
+      });
+
+      try {
+        await Order.create({
+          customerId: "Customer#123",
+          paymentMethodId: "PaymentMethodId#456",
+          orderDate: new Date("2024-01-01")
+        });
+      } catch (e) {
+        expect(e).toEqual(new Error("something bad"));
+      }
+    });
   });
 });
