@@ -60,10 +60,7 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "RoomId" })
   public roomId: string;
 
-  @Attribute({ alias: "ProcessId" })
-  public processId: string;
-
-  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
+  @BelongsTo(() => Brewery, { foreignKey: "id" })
   public brewery: Brewery;
 
   @BelongsTo(() => Room, { foreignKey: "roomId" })
@@ -71,7 +68,7 @@ class Scale extends DrewsBrewsTable {
 
   // TODO this should be optional but is not supported...
   // Should I also make it so that if this is optional then the foreign key defined is also optional
-  @HasOne(() => Process, { foreignKey: "processId" })
+  @HasOne(() => Process, { foreignKey: "scaleId" })
   public process: Process;
 }
 
@@ -218,13 +215,13 @@ class WsToken extends DrewsBrewsTable {
     //   name: "Test 8"
     // });
 
-    const newProcess = await Process.create({
-      name: "somename",
-      currentState: "state",
-      currentStateStatus: "status",
-      currentUserInput: "input",
-      scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
-    });
+    // const newProcess = await Process.create({
+    //   name: "somename",
+    //   currentState: "state",
+    //   currentStateStatus: "status",
+    //   currentUserInput: "input",
+    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    // });
 
     debugger;
 
@@ -233,10 +230,16 @@ class WsToken extends DrewsBrewsTable {
       { include: [{ association: "process" }] }
     );
 
+    scale2?.process;
+
+    debugger;
+
     const process = await Process.findById(
       "c1fc2e27-dbdc-428e-9b7e-30ca05daa066",
       { include: [{ association: "scale" }] }
     );
+
+    process?.scale;
 
     debugger;
 

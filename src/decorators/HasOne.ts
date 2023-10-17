@@ -7,12 +7,12 @@ interface HasOneProps<T> {
 
 function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
-  getTarget: () => EntityClass<K>,
+  getTarget: () => EntityClass<T>,
   props: HasOneProps<T>
 ) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<T, K>
+    context: ClassFieldDecoratorContext<K, T>
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {

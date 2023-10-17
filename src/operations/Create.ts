@@ -200,7 +200,7 @@ class Create<T extends SingleTableDesign> {
       ConditionExpression: `attribute_exists(${primaryKey})`
 
       // TODO the below is something that works for making sure a process cant be creatd if the scale already has one... I need to implement...
-      // ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(ProcessId)`
+      // TODO  ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(ProcessId)`
     };
   }
 

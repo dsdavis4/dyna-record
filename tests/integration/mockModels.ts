@@ -42,6 +42,12 @@ class Order extends MockTable {
 class PaymentMethodProvider extends MockTable {
   @Attribute({ alias: "Name" })
   public name: string;
+
+  @Attribute({ alias: "PaymentMethodId" })
+  public paymentMethodId: string;
+
+  @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
+  public scale: PaymentMethod;
 }
 
 @Entity
@@ -52,9 +58,6 @@ class PaymentMethod extends MockTable {
   @Attribute({ alias: "CustomerId" })
   public customerId: string;
 
-  @Attribute({ alias: "PaymentMethodProviderId" })
-  public paymentMethodProviderId: string;
-
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
 
@@ -62,7 +65,7 @@ class PaymentMethod extends MockTable {
   public orders: Order[];
 
   @HasOne(() => PaymentMethodProvider, {
-    foreignKey: "paymentMethodProviderId"
+    foreignKey: "paymentMethodId"
   })
   public paymentMethodProvider: PaymentMethodProvider;
 }
