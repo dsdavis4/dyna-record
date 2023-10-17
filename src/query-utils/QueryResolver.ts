@@ -8,6 +8,10 @@ import Metadata, {
   type TableMetadata
 } from "../metadata";
 import { BelongsToLink } from "../relationships";
+import {
+  isBelongsToRelationship,
+  isHasOneRelationship
+} from "../metadata/utils";
 
 type DynamoTableItem = Record<string, NativeAttributeValue>;
 
@@ -259,30 +263,12 @@ class QueryResolver<T extends SingleTableDesign> {
   }
 
   /**
-   * Type guard to check if the relationship is a BelongsTo
-   */
-  private isBelongsToRelationship(
-    rel: RelationshipMetadata
-  ): rel is BelongsToRelationship {
-    return rel.type === "BelongsTo" && rel.foreignKey !== undefined;
-  }
-
-  /**
-   * Type guard to check if the relationship is a HasOne
-   */
-  private isHasOneRelationship(
-    rel: RelationshipMetadata
-  ): rel is HasOneRelationship {
-    return rel.type === "HasOne" && rel.foreignKey !== undefined;
-  }
-
-  /**
    * Type guard to check if the relationship is linked by a foreignKey (HasOne or BelongsTo)
    */
   private isForeignKeyLinkedRelationship(
     rel: RelationshipMetadata
   ): rel is ForeignKeyLinkedRelationship {
-    return this.isHasOneRelationship(rel) || this.isBelongsToRelationship(rel);
+    return isHasOneRelationship(rel) || isBelongsToRelationship(rel);
   }
 
   /**

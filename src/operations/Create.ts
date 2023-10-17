@@ -3,7 +3,9 @@ import Metadata, {
   type EntityMetadata,
   type TableMetadata,
   type EntityClass,
-  type RelationshipMetadata
+  type RelationshipMetadata,
+  HasManyRelationship,
+  BelongsToRelationship
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
@@ -12,6 +14,10 @@ import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
 import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
 import { entityToTableItem } from "../utils";
+import {
+  isBelongsToRelationship,
+  isHasManyRelationship
+} from "../metadata/utils";
 
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
@@ -87,29 +93,16 @@ class Create<T extends SingleTableDesign> {
 
     this.buildRelationshipTransactions(entityData);
 
-    try {
-      // const res = await dynamo.transactWriteItems({
-      //   TransactItems: [{ Put: expression }, ...relationshipTransactions]
-      // });
-      await this.#transactionBuilder.executeTransaction();
-      debugger;
-    } catch (e) {
-      debugger;
-    }
-
-    debugger;
+    await this.#transactionBuilder.executeTransaction();
 
     // TODO using QueryResolver here is not great...
     //      1. It can be renamed..
     //      2. Or I need to do a big refactor when I update that function to use FindById...
     const queryResolver = new QueryResolver<T>(this.EntityClass);
-
-    // TODO dont use as. I need to figure out how to refactor the expression stuff..
     return await queryResolver.resolve(putExpression.Item);
   }
 
   // TODO is this a good name?
-  // TODO I dont think Dynamo table ITEM is right here...
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { primaryKey, sortKey } = this.#tableMetadata;
@@ -135,14 +128,15 @@ class Create<T extends SingleTableDesign> {
     return { ...keys, ...attributes, ...defaultAttrs };
   }
 
+  /**
+   * Build transaction items for associations
+   * @param entityData
+   */
   private buildRelationshipTransactions(entityData: SingleTableDesign): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
     const { relationships } = this.#entityMetadata;
 
     Object.values(relationships).forEach(rel => {
-      const key = rel.type === "HasMany" ? rel.targetKey : rel.foreignKey;
-
-      // TODO find a way to not use as
+      const key = isHasManyRelationship(rel) ? rel.targetKey : rel.foreignKey;
       const relationshipId = entityData[key];
 
       if (relationshipId !== undefined && typeof relationshipId === "string") {
@@ -150,45 +144,46 @@ class Create<T extends SingleTableDesign> {
           this.buildRelationshipExistsCondition(rel, relationshipId)
         );
 
-        const relMetadata = Metadata.getEntity(rel.target.name);
-
-        // TODO add comment, move to function?
-        const entityBelongsToHasManyRel = Object.values(
-          relMetadata.relationships
-        ).find(
-          rel =>
-            rel.type === "HasMany" &&
-            rel.target === this.EntityClass &&
-            rel.targetKey === key
-        );
-
-        if (entityBelongsToHasManyRel !== undefined) {
-          const createdAt = new Date();
-          const link: BelongsToLink = {
-            id: uuidv4(),
-            type: BelongsToLink.name,
-            foreignEntityType: this.EntityClass.name,
-            createdAt,
-            updatedAt: createdAt
-          };
-
-          const keys = {
-            pk: `${rel.target.name}#${relationshipId}`,
-            sk: `${this.EntityClass.name}#${entityData.id}`
-          };
-
-          const putExpression = {
-            TableName: tableName,
-            Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
-            ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-          };
-
-          this.#transactionBuilder.addPut(putExpression);
+        if (
+          this.doesEntityBelongToHasMany(rel, key) &&
+          isBelongsToRelationship(rel)
+        ) {
+          this.buildBelongsToHasManyTransaction(
+            rel,
+            entityData.id,
+            relationshipId
+          );
         }
       }
     });
   }
 
+  /**
+   * Returns true if the entity being created Belongs to a HasMany
+   * @param rel
+   * @param foreignKey
+   * @returns
+   */
+  private doesEntityBelongToHasMany(
+    rel: RelationshipMetadata,
+    foreignKey: string
+  ): boolean {
+    const relMetadata = Metadata.getEntity(rel.target.name);
+
+    return Object.values(relMetadata.relationships).some(
+      rel =>
+        isHasManyRelationship(rel) &&
+        rel.target === this.EntityClass &&
+        rel.targetKey === foreignKey
+    );
+  }
+
+  /**
+   * Builds a ConditionCheck that ensures the associated relationship exists
+   * @param rel
+   * @param relationshipId
+   * @returns
+   */
   private buildRelationshipExistsCondition(
     rel: RelationshipMetadata,
     relationshipId: string
@@ -203,6 +198,42 @@ class Create<T extends SingleTableDesign> {
       },
       ConditionExpression: `attribute_exists(${primaryKey})`
     };
+  }
+
+  /**
+   * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasMany association
+   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasMany
+   * @param entityId Id of the entity being created
+   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
+   */
+  private buildBelongsToHasManyTransaction(
+    rel: BelongsToRelationship,
+    entityId: string,
+    relationshipId: string
+  ): void {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+
+    const createdAt = new Date();
+    const link: BelongsToLink = {
+      id: uuidv4(),
+      type: BelongsToLink.name,
+      foreignEntityType: this.EntityClass.name,
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    const keys = {
+      pk: `${rel.target.name}#${relationshipId}`,
+      sk: `${this.EntityClass.name}#${entityId}`
+    };
+
+    const putExpression = {
+      TableName: tableName,
+      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+
+    this.#transactionBuilder.addPut(putExpression);
   }
 }
 
