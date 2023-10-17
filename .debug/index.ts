@@ -218,6 +218,26 @@ class WsToken extends DrewsBrewsTable {
     //   name: "Test 8"
     // });
 
+    const newProcess = await Process.create({
+      name: "somename",
+      currentState: "state",
+      currentStateStatus: "status",
+      currentUserInput: "input",
+      scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    });
+
+    debugger;
+
+    const scale2 = await Scale.findById(
+      "035188db-de1f-4452-b76b-77849445a4dd",
+      { include: [{ association: "process" }] }
+    );
+
+    const process = await Process.findById(
+      "c1fc2e27-dbdc-428e-9b7e-30ca05daa066",
+      { include: [{ association: "scale" }] }
+    );
+
     debugger;
 
     const test = await Brewery.findById(
@@ -252,25 +272,18 @@ class WsToken extends DrewsBrewsTable {
       // deleteMeArr: ["scales"]
     });
 
-    const scale1 = await Scale.findById(
-      "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
-      { include: [{ association: "process" }] }
-    );
-    const scale2 = await Scale.findById(
-      "035188db-de1f-4452-b76b-77849445a4dd",
-      { include: [{ association: "process" }] }
-    );
-    const scale3 = await Scale.findById(
-      "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
-      { include: [{ association: "process" }] }
-    );
-
-    debugger;
-
-    const process = await Process.findById(
-      "c1fc2e27-dbdc-428e-9b7e-30ca05daa066",
-      { include: [{ association: "scale" }] }
-    );
+    // const scale1 = await Scale.findById(
+    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale3 = await Scale.findById(
+    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+    //   { include: [{ association: "process" }] }
+    // );
 
     debugger;
 

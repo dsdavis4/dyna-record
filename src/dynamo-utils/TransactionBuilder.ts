@@ -30,6 +30,7 @@ class TransactionBuilder {
     const dynamo = new DynamoClient("temp-table");
 
     try {
+      debugger;
       const response = await dynamo.transactWriteItems({
         TransactItems: this.transactionItems
       });
