@@ -4,8 +4,7 @@ import Metadata, {
   type TableMetadata,
   type EntityClass,
   type RelationshipMetadata,
-  HasManyRelationship,
-  BelongsToRelationship
+  type BelongsToRelationship
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
