@@ -7,13 +7,11 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { DynamoTableItem, PrimaryKey, SortKey } from "../types";
-import { PutExpression } from "../dynamo-utils";
+import type { PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
-import TransactionBuilder, {
-  type ConditionCheck
-} from "../dynamo-utils/TransactionBuilder";
+import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
+import { entityToTableItem } from "../utils";
 
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
@@ -44,7 +42,7 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 
 // TODO START HERE.... I ended last time getting create v1 working
 //      - The last thing I did was make it return an instance of the object on create, but it uses QueryResolver... yuck. Leave that for now
-//      - Implement the Transactio Builder class I made and get ride of the put expression stuff...
+//      - Get rid of this PutExpression thing...
 //      - I also only know that its doing create successfully in one scenario... (Belongs to with HasMany)
 //          - START by testing/codifying the other situations. Then clean up/ DRY up etc
 //      - lots of TODOs to fix
@@ -77,14 +75,15 @@ class Create<T extends SingleTableDesign> {
   // TODO tsdoc
   // TODO add friendly error handling for failed transactions
   public async run(attributes: CreateOptions<T>): Promise<T> {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
     const entityData = this.buildEntityData(attributes);
 
-    // TODO does this need to be a class? Can the method be static?
-    const expressionBuilder = new PutExpression({
-      entityClassName: this.EntityClass.name
-    });
-    const expression = expressionBuilder.build(entityData);
-    this.#transactionBuilder.addPut(expression);
+    const putExpression = {
+      TableName: tableName,
+      Item: entityToTableItem(this.EntityClass.name, entityData),
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+    this.#transactionBuilder.addPut(putExpression);
 
     this.buildRelationshipTransactions(entityData);
 
@@ -106,7 +105,7 @@ class Create<T extends SingleTableDesign> {
     const queryResolver = new QueryResolver<T>(this.EntityClass);
 
     // TODO dont use as. I need to figure out how to refactor the expression stuff..
-    return await queryResolver.resolve(expression.Item as DynamoTableItem);
+    return await queryResolver.resolve(putExpression.Item);
   }
 
   // TODO is this a good name?
@@ -137,6 +136,7 @@ class Create<T extends SingleTableDesign> {
   }
 
   private buildRelationshipTransactions(entityData: SingleTableDesign): void {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
     const { relationships } = this.#entityMetadata;
 
     Object.values(relationships).forEach(rel => {
@@ -163,28 +163,27 @@ class Create<T extends SingleTableDesign> {
         );
 
         if (entityBelongsToHasManyRel !== undefined) {
-          const renameMe: BelongsToLink = {
+          const createdAt = new Date();
+          const link: BelongsToLink = {
             id: uuidv4(),
             type: BelongsToLink.name,
             foreignEntityType: this.EntityClass.name,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            createdAt,
+            updatedAt: createdAt
           };
 
-          const belongsToLink = {
+          const keys = {
             pk: `${rel.target.name}#${relationshipId}`,
             sk: `${this.EntityClass.name}#${entityData.id}`
           };
 
-          const expressionBuilder = new PutExpression({
-            entityClassName: rel.target.name
-          });
-          const expression = expressionBuilder.build({
-            ...belongsToLink,
-            ...renameMe
-          });
+          const putExpression = {
+            TableName: tableName,
+            Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
+            ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+          };
 
-          this.#transactionBuilder.addPut(expression);
+          this.#transactionBuilder.addPut(putExpression);
         }
       }
     });

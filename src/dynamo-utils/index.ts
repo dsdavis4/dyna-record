@@ -1,1 +1,2 @@
-export { default as PutExpression } from "./PutExpression";
+export { default as TransactionBuilder } from "./TransactionBuilder";
+export * from "./TransactionBuilder";

@@ -206,8 +206,8 @@ class WsToken extends DrewsBrewsTable {
     //      and there should be tests for that
     const beer = await Beer.create({
       style: "lager",
-      breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
-      // breweryId: "bad",
+      // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+      breweryId: "bad",
       abv: 1,
       name: "Test 8"
     });

@@ -12,20 +12,29 @@ export type ConditionCheck = Exclude<
 >;
 export type Put = Exclude<TransactItems[number]["Put"], undefined>;
 
+// TODO tsdoc throughout
 class TransactionBuilder {
   private readonly transactionItems: TransactItems = [];
 
-  // Add a conditional check to the transaction
+  /**
+   * Add a conditional check to the transaction
+   * @param item
+   */
   addConditionCheck(item: ConditionCheck): void {
     this.transactionItems.push({ ConditionCheck: item });
   }
 
-  // Add a put operation to the transaction
+  /**
+   * Add a put operation to the transaction
+   * @param item
+   */
   addPut(item: Put): void {
     this.transactionItems.push({ Put: item });
   }
 
-  // Execute the transaction
+  /**
+   * Execute the transaction
+   */
   async executeTransaction(): Promise<void> {
     // TODO remove hard coded name
     const dynamo = new DynamoClient("temp-table");

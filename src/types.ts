@@ -14,3 +14,6 @@ export type PrimaryKey = Brand<string, "PrimaryKey">;
 // TODO move this back to where it was before if its  not used
 // TODO should this be the native scalar version type?
 export type DynamoTableItem = Record<string, NativeAttributeValue>;
+
+// TODO this is duplicated
+export type StringObj = Record<string, string>;
