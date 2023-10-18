@@ -30,7 +30,6 @@ class TransactionBuilder {
     const dynamo = new DynamoClient("temp-table");
 
     try {
-      debugger;
       const response = await dynamo.transactWriteItems({
         TransactItems: this.transactionItems
       });
@@ -57,7 +56,10 @@ class TransactionBuilder {
    * Add a put operation to the transaction
    * @param item
    */
-  addPut(item: Put): void {
+  addPut(item: Put, conditionFailedMsg?: string): void {
+    if (conditionFailedMsg !== undefined) {
+      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
+    }
     this.transactionItems.push({ Put: item });
   }
 

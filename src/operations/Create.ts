@@ -15,7 +15,8 @@ import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
 import { entityToTableItem } from "../utils";
 import {
   isBelongsToRelationship,
-  isHasManyRelationship
+  isHasManyRelationship,
+  isHasOneRelationship
 } from "../metadata/utils";
 
 // TODO type might be too generic
@@ -157,8 +158,14 @@ class Create<T extends SingleTableDesign> {
               entityData.id,
               relationshipId
             );
-          } else {
-            // TODO
+          }
+
+          if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+            this.buildBelongsToHasOneTransaction(
+              rel,
+              entityData.id,
+              relationshipId
+            );
           }
         }
       } else {
@@ -168,7 +175,7 @@ class Create<T extends SingleTableDesign> {
   }
 
   /**
-   * Returns true if the entity being created Belongs to a HasMany
+   * Returns true if the entity being created BelongsTo a HasMany
    * @param rel
    * @param foreignKey
    * @returns
@@ -182,6 +189,26 @@ class Create<T extends SingleTableDesign> {
     return Object.values(relMetadata.relationships).some(
       rel =>
         isHasManyRelationship(rel) &&
+        rel.target === this.EntityClass &&
+        rel.foreignKey === foreignKey
+    );
+  }
+
+  /**
+   * Returns true if the entity being created BelongsTo a HasOne
+   * @param rel
+   * @param foreignKey
+   * @returns
+   */
+  private doesEntityBelongToHasOne(
+    rel: RelationshipMetadata,
+    foreignKey: string
+  ): boolean {
+    const relMetadata = Metadata.getEntity(rel.target.name);
+
+    return Object.values(relMetadata.relationships).some(
+      rel =>
+        isHasOneRelationship(rel) &&
         rel.target === this.EntityClass &&
         rel.foreignKey === foreignKey
     );
@@ -233,14 +260,15 @@ class Create<T extends SingleTableDesign> {
     const link: BelongsToLink = {
       id: uuidv4(),
       type: BelongsToLink.name,
+      foreignKey: entityId,
       foreignEntityType: this.EntityClass.name,
       createdAt,
       updatedAt: createdAt
     };
 
     const keys = {
-      pk: `${rel.target.name}#${relationshipId}`,
-      sk: `${this.EntityClass.name}#${entityId}`
+      pk: rel.target.primaryKeyValue(relationshipId),
+      sk: this.EntityClass.primaryKeyValue(link.id)
     };
 
     const putExpression = {
@@ -250,6 +278,48 @@ class Create<T extends SingleTableDesign> {
     };
 
     this.#transactionBuilder.addPut(putExpression);
+  }
+
+  /**
+   * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasOne association
+   * Adds conditional check to ensure the parent doesn't already have one of the entity being associated
+   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasOne
+   * @param entityId Id of the entity being created
+   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
+   */
+  private buildBelongsToHasOneTransaction(
+    rel: BelongsToRelationship,
+    entityId: string,
+    relationshipId: string
+  ): void {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+
+    const createdAt = new Date();
+    const link: BelongsToLink = {
+      id: uuidv4(),
+      type: BelongsToLink.name,
+      foreignEntityType: this.EntityClass.name,
+      foreignKey: entityId,
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    const keys = {
+      pk: rel.target.primaryKeyValue(relationshipId),
+      sk: `${this.EntityClass.name}`
+    };
+
+    const putExpression = {
+      TableName: tableName,
+      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+
+    this.#transactionBuilder.addPut(
+      putExpression,
+      // TODO better error message
+      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+    );
   }
 }
 

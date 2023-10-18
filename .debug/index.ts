@@ -197,6 +197,8 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO make a logger class to optionally log. Structured logs..
 
+// TODO check that find byId with includes returns null if the parent is not found... I think I saw this happen...
+
 (async () => {
   try {
     const metadata = Metadata;
@@ -207,13 +209,13 @@ class WsToken extends DrewsBrewsTable {
 
     // TODO type of this should not expect relationships
     //      and there should be tests for that
-    // const beer = await Beer.create({
-    //   style: "lager",
-    //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
-    //   breweryId: "bad",
-    //   abv: 1,
-    //   name: "Test 8"
-    // });
+    const beer = await Beer.create({
+      style: "lager",
+      breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+      // breweryId: "bad",
+      abv: 1,
+      name: "Test 10"
+    });
 
     // const newProcess = await Process.create({
     //   name: "somename",
@@ -234,10 +236,9 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    const process = await Process.findById(
-      "c1fc2e27-dbdc-428e-9b7e-30ca05daa066",
-      { include: [{ association: "scale" }] }
-    );
+    const process = await Process.findById(scale2?.process.id ?? "", {
+      include: [{ association: "scale" }]
+    });
 
     process?.scale;
 

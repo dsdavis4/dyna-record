@@ -141,25 +141,31 @@ describe("FindById", () => {
     const orderLinks = [
       {
         PK: "Customer#123",
-        SK: "Order#111",
+        SK: "Order#001",
         Id: "001",
         Type: "BelongsToLink",
+        ForeignKey: "111",
+        ForeignEntityType: "Order",
         UpdatedAt: "2022-10-15T09:31:15.148Z",
         SomeAttr: "attribute that is not modeled"
       },
       {
         PK: "Customer#123",
-        SK: "Order#112",
+        SK: "Order#003",
         Id: "003",
         Type: "BelongsToLink",
+        ForeignKey: "112",
+        ForeignEntityType: "Order",
         UpdatedAt: "2022-11-01T23:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
       },
       {
         PK: "Customer#123",
-        SK: "Order#113",
+        SK: "Order#004",
         Id: "004",
         Type: "BelongsToLink",
+        ForeignKey: "113",
+        ForeignEntityType: "Order",
         UpdatedAt: "2022-09-01T23:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
       }
@@ -168,17 +174,21 @@ describe("FindById", () => {
     const paymentMethodLinks = [
       {
         PK: "Customer#123",
-        SK: "PaymentMethod#116",
+        SK: "PaymentMethod#007",
         Id: "007",
         Type: "BelongsToLink",
+        ForeignKey: "116",
+        ForeignEntityType: "PaymentMethod",
         UpdatedAt: "2022-10-01T12:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
       },
       {
         PK: "Customer#123",
-        SK: "PaymentMethod#117",
+        SK: "PaymentMethod#008",
         Id: "008",
         Type: "BelongsToLink",
+        ForeignKey: "117",
+        ForeignEntityType: "PaymentMethod",
         UpdatedAt: "2022-11-21T12:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
       }
@@ -204,9 +214,9 @@ describe("FindById", () => {
     orderLinks.forEach(link => {
       mockGet.mockResolvedValueOnce({
         Item: {
-          PK: link.SK,
-          SK: link.SK.split("#")[0],
-          Id: link.SK.split("#")[1],
+          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+          SK: link.ForeignEntityType,
+          Id: link.ForeignKey,
           PaymentMethodId: "116",
           CustomerId: link.PK.split("#")[1],
           OrderDate: "2022-12-15T09:31:15.148Z",
@@ -218,9 +228,9 @@ describe("FindById", () => {
     paymentMethodLinks.forEach((link, idx) => {
       mockGet.mockResolvedValueOnce({
         Item: {
-          PK: link.SK,
-          SK: link.SK.split("#")[0],
-          Id: link.SK.split("#")[1],
+          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+          SK: link.ForeignEntityType,
+          Id: link.ForeignKey,
           CustomerId: link.PK.split("#")[1],
           LastFour: `000${idx}`,
           UpdatedAt: "2023-02-15T08:31:15.148Z"
@@ -589,9 +599,10 @@ describe("FindById", () => {
 
     const paymentMethodProviderLink = {
       PK: "PaymentMethod#789",
-      SK: "PaymentMethodProvider#123",
+      SK: "PaymentMethodProvider",
       Id: "001",
       Type: "BelongsToLink",
+      ForeignKey: 123,
       ForeignEntityType: "PaymentMethodProvider",
       CreatedAt: "2022-10-15T09:31:15.148Z",
       UpdatedAt: "2022-10-15T09:31:15.148Z"
@@ -684,24 +695,30 @@ describe("FindById", () => {
     const orderLinks = [
       {
         PK: "PaymentMethod#789",
-        SK: "Order#111",
+        SK: "Order#001",
         Id: "001",
+        ForeignEntityType: "Order",
+        ForeignKey: "111",
         Type: "BelongsToLink",
         UpdatedAt: "2022-10-15T09:31:15.148Z",
         SomeAttr: "attribute that is not modeled"
       },
       {
         PK: "PaymentMethod#789",
-        SK: "Order#112",
+        SK: "Order#003",
         Id: "003",
+        ForeignEntityType: "Order",
+        ForeignKey: "112",
         Type: "BelongsToLink",
         UpdatedAt: "2022-11-01T23:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
       },
       {
         PK: "PaymentMethod#789",
-        SK: "Order#113",
+        SK: "Order#004",
         Id: "004",
+        ForeignEntityType: "Order",
+        ForeignKey: "113",
         Type: "BelongsToLink",
         UpdatedAt: "2022-09-01T23:31:21.148Z",
         SomeAttr: "attribute that is not modeled"
@@ -727,9 +744,9 @@ describe("FindById", () => {
     orderLinks.forEach(link => {
       mockGet.mockResolvedValueOnce({
         Item: {
-          PK: link.SK,
-          SK: link.SK.split("#")[0],
-          Id: link.SK.split("#")[1],
+          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+          SK: link.ForeignEntityType,
+          Id: link.ForeignKey,
           PaymentMethodId: link.PK.split("#")[1],
           CustomerId: "123",
           OrderDate: "2022-12-15T09:31:15.148Z",

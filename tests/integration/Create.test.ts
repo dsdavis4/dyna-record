@@ -1,5 +1,5 @@
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { Order } from "./mockModels";
+import { Order, PaymentMethodProvider } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -34,7 +34,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
       })
     },
 
-    TransactWriteCommand: jest.fn().mockImplementationOnce(() => {
+    TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     })
   };
@@ -64,17 +64,17 @@ describe("Create", () => {
       .mockReturnValueOnce("uuid3");
 
     const order = await Order.create({
-      customerId: "Customer#123",
-      paymentMethodId: "PaymentMethodId#456",
+      customerId: "123",
+      paymentMethodId: "456",
       orderDate: new Date("2024-01-01")
     });
 
     expect(order).toEqual({
       createdAt: "2023-10-16T03:31:35.918Z",
-      customerId: "Customer#123",
+      customerId: "123",
       id: "uuid1",
       orderDate: "2024-01-01T00:00:00.000Z",
-      paymentMethodId: "PaymentMethodId#456",
+      paymentMethodId: "456",
       pk: "Order#uuid1",
       sk: "Order",
       type: "Order",
@@ -94,8 +94,8 @@ describe("Create", () => {
                   SK: "Order",
                   Type: "Order",
                   Id: "uuid1",
-                  CustomerId: "Customer#123",
-                  PaymentMethodId: "PaymentMethodId#456",
+                  CustomerId: "123",
+                  PaymentMethodId: "456",
                   OrderDate: "2024-01-01T00:00:00.000Z",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
@@ -106,7 +106,7 @@ describe("Create", () => {
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
-                Key: { PK: "Customer#Customer#123", SK: "Customer" },
+                Key: { PK: "Customer#123", SK: "Customer" },
                 TableName: "mock-table"
               }
             },
@@ -114,9 +114,10 @@ describe("Create", () => {
               Put: {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
-                  PK: "Customer#Customer#123",
-                  SK: "Order#uuid1",
+                  PK: "Customer#123",
+                  SK: "Order#uuid2",
                   Id: "uuid2",
+                  ForeignKey: "uuid1",
                   ForeignEntityType: "Order",
                   Type: "BelongsToLink",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
@@ -129,7 +130,7 @@ describe("Create", () => {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
                 Key: {
-                  PK: "PaymentMethod#PaymentMethodId#456",
+                  PK: "PaymentMethod#456",
                   SK: "PaymentMethod"
                 },
                 TableName: "mock-table"
@@ -139,9 +140,10 @@ describe("Create", () => {
               Put: {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
-                  PK: "PaymentMethod#PaymentMethodId#456",
-                  SK: "Order#uuid1",
+                  PK: "PaymentMethod#456",
+                  SK: "Order#uuid3",
                   Id: "uuid3",
+                  ForeignKey: "uuid1",
                   ForeignEntityType: "Order",
                   Type: "BelongsToLink",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
@@ -154,6 +156,114 @@ describe("Create", () => {
         }
       ]
     ]);
+  });
+
+  describe("entity BelongsTo an entity who HasOne of it", () => {
+    it("will create the entity if the parent is not already associated to an entity of this type", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      const paymentMethodProvider = await PaymentMethodProvider.create({
+        name: "provider-1",
+        paymentMethodId: "123"
+      });
+
+      expect(paymentMethodProvider).toEqual({
+        pk: "PaymentMethodProvider#uuid1",
+        sk: "PaymentMethodProvider",
+        id: "uuid1",
+        name: "provider-1",
+        createdAt: "2023-10-16T03:31:35.918Z",
+        paymentMethod: undefined,
+        paymentMethodId: "123",
+        type: "PaymentMethodProvider",
+        updatedAt: "2023-10-16T03:31:35.918Z"
+      });
+      expect(paymentMethodProvider).toBeInstanceOf(PaymentMethodProvider);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "PaymentMethodProvider#uuid1",
+                    SK: "PaymentMethodProvider",
+                    Type: "PaymentMethodProvider",
+                    Id: "uuid1",
+                    Name: "provider-1",
+                    PaymentMethodId: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "PaymentMethod#123",
+                    SK: "PaymentMethodProvider",
+                    Id: "uuid2",
+                    ForeignKey: "uuid1",
+                    ForeignEntityType: "PaymentMethodProvider",
+                    Type: "BelongsToLink",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("throws an error if the request fails because the parent already has an entity of this type associated with it", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await PaymentMethodProvider.create({
+          name: "provider-1",
+          paymentMethodId: "123"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: PaymentMethod with id: 123 already has an associated PaymentMethodProvider"
+          )
+        ]);
+      }
+    });
   });
 
   describe("error handling", () => {
@@ -182,15 +292,15 @@ describe("Create", () => {
 
       try {
         await Order.create({
-          customerId: "Customer#123",
-          paymentMethodId: "PaymentMethodId#456",
+          customerId: "123",
+          paymentMethodId: "456",
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
         expect(e.constructor.name).toEqual("AggregateError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Customer with ID 'Customer#123' does not exist"
+            "ConditionalCheckFailed: Customer with ID '123' does not exist"
           )
         ]);
       }
@@ -221,18 +331,18 @@ describe("Create", () => {
 
       try {
         await Order.create({
-          customerId: "Customer#123",
-          paymentMethodId: "PaymentMethodId#456",
+          customerId: "123",
+          paymentMethodId: "456",
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
         expect(e.constructor.name).toEqual("AggregateError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Customer with ID 'Customer#123' does not exist"
+            "ConditionalCheckFailed: Customer with ID '123' does not exist"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: PaymentMethod with ID 'PaymentMethodId#456' does not exist"
+            "ConditionalCheckFailed: PaymentMethod with ID '456' does not exist"
           )
         ]);
       }
@@ -263,8 +373,8 @@ describe("Create", () => {
 
       try {
         await Order.create({
-          customerId: "Customer#123",
-          paymentMethodId: "PaymentMethodId#456",
+          customerId: "123",
+          paymentMethodId: "456",
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
@@ -302,8 +412,8 @@ describe("Create", () => {
 
       try {
         await Order.create({
-          customerId: "Customer#123",
-          paymentMethodId: "PaymentMethodId#456",
+          customerId: "123",
+          paymentMethodId: "456",
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
@@ -338,8 +448,8 @@ describe("Create", () => {
 
       try {
         await Order.create({
-          customerId: "Customer#123",
-          paymentMethodId: "PaymentMethodId#456",
+          customerId: "123",
+          paymentMethodId: "456",
           orderDate: new Date("2024-01-01")
         });
       } catch (e) {

@@ -12,7 +12,7 @@ class BelongsToLink {
   // @Attribute({ alias: "SK" })
   // public sk: string;
 
-  // TODO how to get this dynamically?
+  // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "Id" })
   public id: string;
 
@@ -24,11 +24,14 @@ class BelongsToLink {
   @Attribute({ alias: "ForeignEntityType" })
   public foreignEntityType: string;
 
-  // TODO how to make it use the fields from the table class
+  @Attribute({ alias: "ForeignKey" })
+  public foreignKey: string;
+
+  // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "CreatedAt" })
   public createdAt: Date;
 
-  // TODO how to make it use the fields from the table class
+  // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 }

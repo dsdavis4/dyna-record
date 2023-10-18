@@ -179,11 +179,12 @@ class QueryResolver<T extends SingleTableDesign> {
     const [modelName] = res[sortKey].split(delimiter);
 
     if (res.Type === BelongsToLink.name) {
-      const [modelName, id] = res[sortKey].split(delimiter);
-      const includedRel = relationsLookup[modelName];
+      // TODO make these type safe... they are type any... Goal is that if something changed in BelongsToLink then there is a type error here...
+      const { ForeignKey, ForeignEntityType } = res;
+      const includedRel = relationsLookup[ForeignEntityType];
       if (includedRel !== undefined) {
         if (this.isKeyOfEntity(includedRel.propertyName)) {
-          const res = await includedRel.target.findById(id);
+          const res = await includedRel.target.findById(ForeignKey);
 
           if (includedRel.type === "HasMany") {
             if (this.entity[includedRel.propertyName] === undefined) {
