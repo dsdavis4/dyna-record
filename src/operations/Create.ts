@@ -53,6 +53,13 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 
 // TODO add good error messages in here...
 
+// TODO DRY up this class where I can
+
+// TODO start here...
+//       I ended last time getting create with HasOne to work
+//       Start by handling the rest of the cases listed below
+//       Then address the other TODO's
+
 /** TODO need to handle
  * create beliongs to has many
  * crate belongs to has one
@@ -233,13 +240,6 @@ class Create<T extends SingleTableDesign> {
         [sortKey]: rel.target.name
       },
       ConditionExpression: `attribute_exists(${primaryKey})`
-
-      // TODO start here...... I ended last time by first fixing some create stuff... then I realized I had messed up my HasOne relationships so I fixed that
-      //       Next time work on Create with BelongsToLinks for HasOne
-      //       and handle BelongsTo conditions
-      //       and anything else....
-      // TODO the below is something that works for making sure a process cant be creatd if the scale already has one... I need to implement...
-      // (This might not be needed for BelongsTo...)   ConditionExpression: `attribute_exists(${primaryKey}) AND attribute_not_exists(FOREIGN_KEY)`
     };
   }
 

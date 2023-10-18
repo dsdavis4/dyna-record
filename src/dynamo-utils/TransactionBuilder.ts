@@ -82,7 +82,11 @@ class TransactionBuilder {
 
       if (conditionFailedErrs.length > 0) {
         console.error(conditionFailedErrs.map(err => err.message));
-        return new AggregateError(conditionFailedErrs);
+        return new AggregateError(
+          conditionFailedErrs,
+          "Failed Conditional Checks",
+          { cause: error }
+        );
       }
     }
 

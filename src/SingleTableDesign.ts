@@ -13,6 +13,9 @@ import {
   type CreateOptions
 } from "./operations";
 
+// TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
+//      This might help me replace the EntityClass<T> that I have been passing around...
+
 abstract class SingleTableDesign {
   @Attribute({ alias: "Id" })
   public id: string;
