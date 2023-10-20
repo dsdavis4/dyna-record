@@ -6,16 +6,12 @@ export class ConditionalCheckFailedError extends Error {
   public readonly code: "ConditionalCheckFailedError";
 }
 
-type TransactItems = Exclude<
-  TransactWriteCommandInput["TransactItems"],
-  undefined
->;
+type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
 
-export type ConditionCheck = Exclude<
-  TransactItems[number]["ConditionCheck"],
-  undefined
+export type ConditionCheck = NonNullable<
+  TransactItems[number]["ConditionCheck"]
 >;
-export type Put = Exclude<TransactItems[number]["Put"], undefined>;
+export type Put = NonNullable<TransactItems[number]["Put"]>;
 
 // TODO tsdoc throughout
 class TransactionBuilder {

@@ -4,9 +4,8 @@ import Metadata, { type TableMetadata } from "../metadata";
 import { BelongsToLink } from "../relationships";
 
 // TODO I think this is nto working as expected and should instead be:
-// export type KeyConditions = Exclude<
+// export type KeyConditions = NonNullable<
 //   QueryCommandInput["KeyConditions"],
-//   undefined
 // >;
 export type KeyConditions = Omit<
   QueryCommandInput["KeyConditions"],

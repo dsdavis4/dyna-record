@@ -176,10 +176,6 @@ class WsToken extends DrewsBrewsTable {
 - can I improve my testing with this? https://jestjs.io/docs/dynamodb
 - v3 docs https://www.npmjs.com/package/@shelf/jest-dynamodb
 
-- When doing a findById with includes, every belongs to link is serilzied even if its not part of the includes
-  See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-  Note I reflected this in my test mocks so I can clean those up
-
 - Support projected associations
 
 - eslint
