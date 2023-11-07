@@ -55,11 +55,6 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 
 // TODO DRY up this class where I can
 
-// TODO start here......
-//       I ended last time getting create with HasOne to work
-//       Start by handling the rest of the cases listed below
-//       Then address the other TODO's
-
 /** TODO need to handle
  * create beliongs to has many
  * crate belongs to has one
@@ -153,11 +148,7 @@ class Create<T extends SingleTableDesign> {
           relationshipId !== undefined &&
           typeof relationshipId === "string"
         ) {
-          const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
-          this.#transactionBuilder.addConditionCheck(
-            this.buildRelationshipExistsCondition(rel, relationshipId),
-            errMsg
-          );
+          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
 
           if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
             this.buildBelongsToHasManyTransaction(
@@ -222,18 +213,20 @@ class Create<T extends SingleTableDesign> {
   }
 
   /**
-   * Builds a ConditionCheck that ensures the associated relationship exists
+   * Builds a ConditionCheck transaction that ensures the associated relationship exists
    * @param rel
    * @param relationshipId
    * @returns
    */
-  private buildRelationshipExistsCondition(
+  private buildRelationshipExistsConditionTransaction(
     rel: RelationshipMetadata,
     relationshipId: string
-  ): ConditionCheck {
+  ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    return {
+    const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
+
+    const conditionCheck: ConditionCheck = {
       TableName: tableName,
       Key: {
         [primaryKey]: rel.target.primaryKeyValue(relationshipId),
@@ -241,6 +234,8 @@ class Create<T extends SingleTableDesign> {
       },
       ConditionExpression: `attribute_exists(${primaryKey})`
     };
+
+    this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
   /**

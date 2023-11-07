@@ -207,19 +207,19 @@ class WsToken extends DrewsBrewsTable {
     //      and there should be tests for that
     const beer = await Beer.create({
       style: "lager",
-      breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
-      // breweryId: "bad",
+      // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+      breweryId: "bad",
       abv: 1,
-      name: "Test 10"
+      name: "Test 11"
     });
 
-    // const newProcess = await Process.create({
-    //   name: "somename",
-    //   currentState: "state",
-    //   currentStateStatus: "status",
-    //   currentUserInput: "input",
-    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
-    // });
+    const newProcess = await Process.create({
+      name: "somename",
+      currentState: "state",
+      currentStateStatus: "status",
+      currentUserInput: "input",
+      scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    });
 
     debugger;
 
@@ -370,5 +370,6 @@ class WsToken extends DrewsBrewsTable {
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {
     console.log("error", err);
+    debugger;
   }
 })();
