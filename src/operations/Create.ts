@@ -55,14 +55,6 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 
 // TODO DRY up this class where I can
 
-/** TODO need to handle
- * create beliongs to has many
- * crate belongs to has one
- * create has one
- * create gas many
- * create belongsto belongs to
- */
-
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -150,20 +142,14 @@ class Create<T extends SingleTableDesign> {
         ) {
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
 
+          const transactionOpts = [rel, entityData.id, relationshipId] as const;
+
           if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
-            this.buildBelongsToHasManyTransaction(
-              rel,
-              entityData.id,
-              relationshipId
-            );
+            this.buildBelongsToHasManyTransaction(...transactionOpts);
           }
 
           if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
-            this.buildBelongsToHasOneTransaction(
-              rel,
-              entityData.id,
-              relationshipId
-            );
+            this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
       } else {

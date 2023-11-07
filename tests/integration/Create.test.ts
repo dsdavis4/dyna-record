@@ -86,6 +86,7 @@ describe("Create", () => {
       [
         {
           TransactItems: [
+            // Create the Order if it does not already exist
             {
               Put: {
                 ConditionExpression: "attribute_not_exists(PK)",
@@ -103,6 +104,7 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
+            // Check that the Customer the Order BelongsTo exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
@@ -110,6 +112,7 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
+            // Create the BelongsToLink to link Customer HasMany Order if the link does dot exist
             {
               Put: {
                 ConditionExpression: "attribute_not_exists(PK)",
@@ -126,6 +129,7 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
+            // Check that the PaymentMethod the Order BelongsTo exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
@@ -136,6 +140,7 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
+            // Create the BelongsToLink to link PaymentMethod HasMany Order if the link does dot exist
             {
               Put: {
                 ConditionExpression: "attribute_not_exists(PK)",
@@ -187,6 +192,7 @@ describe("Create", () => {
         [
           {
             TransactItems: [
+              // Create the PaymentMethodProvider if it does not exist
               {
                 Put: {
                   ConditionExpression: "attribute_not_exists(PK)",
@@ -203,6 +209,7 @@ describe("Create", () => {
                   TableName: "mock-table"
                 }
               },
+              // Check that the PaymentMethod the PaymentMethodProvider BelongsTo exists
               {
                 ConditionCheck: {
                   ConditionExpression: "attribute_exists(PK)",
@@ -210,6 +217,7 @@ describe("Create", () => {
                   TableName: "mock-table"
                 }
               },
+              // Create the BelongsToLink for PaymentMethod HasOne PaymentMethodProvider if it does not exist
               {
                 Put: {
                   ConditionExpression: "attribute_not_exists(PK)",
