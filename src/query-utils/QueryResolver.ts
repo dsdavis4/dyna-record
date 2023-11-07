@@ -225,7 +225,7 @@ class QueryResolver<T extends SingleTableDesign> {
     if (
       this.isKeyOfEntity(rel.propertyName) &&
       foreignKey !== undefined &&
-      typeof foreignKey === "string" // TODO need to find a way to check that its Forgein key instead of string
+      typeof foreignKey === "string" // TODO need to find a way to check that its Foreign key instead of string
     ) {
       const res = await rel.target.findById(foreignKey);
       this.entity[rel.propertyName] = res as any;

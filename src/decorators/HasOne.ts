@@ -1,8 +1,9 @@
 import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
+import { type ForeignEntityAttribute } from "./types";
 
-interface HasOneProps<T> {
-  foreignKey: keyof T; // TODO for all relationships forgeinKeys this should be updated to be a speciifc type... Just not allot relationship attributes...
+interface HasOneProps<T extends SingleTableDesign> {
+  foreignKey: keyof ForeignEntityAttribute<T>;
 }
 
 function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(

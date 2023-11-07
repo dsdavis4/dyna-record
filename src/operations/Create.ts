@@ -8,7 +8,7 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { PrimaryKey, SortKey } from "../types";
+import type { FunctionFields, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
 import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
@@ -22,12 +22,6 @@ import {
 // TODO type might be too generic
 // TODO how to make the fields shared so they arent repeeated in other files?
 type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
-
-// TODO add unit test for this
-type FunctionFields<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T]: T[K] extends Function ? K : never;
-}[keyof T];
 
 type PrimaryKeyAttribute<T> = {
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;

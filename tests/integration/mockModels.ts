@@ -108,6 +108,7 @@ class ContactInformation extends MockTable {
 }
 
 export {
+  MockTable,
   Order,
   PaymentMethodProvider,
   PaymentMethod,

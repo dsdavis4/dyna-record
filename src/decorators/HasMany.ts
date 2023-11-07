@@ -1,8 +1,9 @@
 import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
+import { type ForeignEntityAttribute } from "./types";
 
-interface HasManyProps<T> {
-  foreignKey: keyof T;
+interface HasManyProps<T extends SingleTableDesign> {
+  foreignKey: keyof ForeignEntityAttribute<T>;
 }
 
 function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
