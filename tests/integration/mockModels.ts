@@ -84,9 +84,33 @@ class Customer extends MockTable {
   @HasMany(() => PaymentMethod, { foreignKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
+  @HasOne(() => ContactInformation, { foreignKey: "customerId" })
+  public contactInformation?: ContactInformation;
+
   public mockCustomInstanceMethod(): string {
     return `${this.name}-${this.id}`;
   }
 }
 
-export { Order, PaymentMethodProvider, PaymentMethod, Customer };
+@Entity
+class ContactInformation extends MockTable {
+  @Attribute({ alias: "Email" })
+  public email: string;
+
+  @Attribute({ alias: "Phone" })
+  public phone: string;
+
+  @Attribute({ alias: "CustomerId" })
+  public customerId: string;
+
+  @BelongsTo(() => Customer, { foreignKey: "customerId" })
+  public customer: Customer;
+}
+
+export {
+  Order,
+  PaymentMethodProvider,
+  PaymentMethod,
+  Customer,
+  ContactInformation
+};

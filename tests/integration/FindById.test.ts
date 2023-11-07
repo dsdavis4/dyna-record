@@ -3,7 +3,8 @@ import {
   Customer,
   PaymentMethod,
   Order,
-  PaymentMethodProvider
+  PaymentMethodProvider,
+  ContactInformation
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -851,6 +852,27 @@ describe("FindById", () => {
   });
 
   describe("types", () => {
+    describe("operation results", () => {
+      it("HasOne - when including an optional property, the returned type is optional", async () => {
+        expect.assertions(1);
+
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const result = await Customer.findById("123", {
+          include: [{ association: "contactInformation" }]
+        });
+
+        if (result !== null) {
+          try {
+            // @ts-expect-error ContactInformation could be undefined
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            result.contactInformation.id;
+          } catch (_e) {
+            expect(true).toEqual(true);
+          }
+        }
+      });
+    });
     it("will allow options with include options that are associations/relationships defined on the model", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
 

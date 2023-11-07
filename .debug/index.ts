@@ -58,16 +58,14 @@ class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "RoomId" })
   public roomId: string;
 
-  @BelongsTo(() => Brewery, { foreignKey: "id" })
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
   @BelongsTo(() => Room, { foreignKey: "roomId" })
   public room: Room;
 
-  // TODO this should be optional but is not supported...
-  // Should I also make it so that if this is optional then the foreign key defined is also optional
   @HasOne(() => Process, { foreignKey: "scaleId" })
-  public process: Process;
+  public process?: Process;
 }
 
 @Entity
@@ -202,24 +200,41 @@ class WsToken extends DrewsBrewsTable {
     // });
 
     // TODO type of this should not expect relationships
-    //      and there should be tests for that
-    const beer = await Beer.create({
-      style: "lager",
-      // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
-      breweryId: "bad",
-      abv: 1,
-      name: "Test 11"
+    // //      and there should be tests for that
+    // const beer = await Beer.create({
+    //   style: "lager",
+    //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   breweryId: "bad",
+    //   abv: 1,
+    //   name: "Test 11"
+    // });
+
+    // const newProcess = await Process.create({
+    //   name: "somename",
+    //   currentState: "state",
+    //   currentStateStatus: "status",
+    //   currentUserInput: "input",
+    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    // });
+
+    const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
+      include: [{ association: "process" }, { association: "room" }]
     });
 
-    const newProcess = await Process.create({
-      name: "somename",
-      currentState: "state",
-      currentStateStatus: "status",
-      currentUserInput: "input",
-      scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
-    });
+    if (bla) {
+      bla.process?.id;
+
+      bla.room;
+
+      debugger;
+    }
 
     debugger;
+
+    // const newScale = await Scale.create({
+    //   breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   roomId: "87f5e280-a9b0-4dbd-9017-c285256ffd1e"
+    // });
 
     const scale2 = await Scale.findById(
       "035188db-de1f-4452-b76b-77849445a4dd",
@@ -230,7 +245,7 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    const process = await Process.findById(scale2?.process.id ?? "", {
+    const process = await Process.findById(scale2?.process?.id ?? "", {
       include: [{ association: "scale" }]
     });
 
