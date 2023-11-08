@@ -215,56 +215,56 @@ class WsToken extends DrewsBrewsTable {
     //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
     // });
 
-    const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
-      include: [{ association: "process" }, { association: "room" }]
-    });
+    // const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
+    //   include: [{ association: "process" }, { association: "room" }]
+    // });
 
-    debugger;
+    // debugger;
 
-    if (bla) {
-      bla.process?.id;
+    // if (bla) {
+    //   bla.process?.id;
 
-      bla.room;
+    //   bla.room;
 
-      debugger;
-    }
+    //   debugger;
+    // }
 
-    debugger;
+    // debugger;
 
     // const newScale = await Scale.create({
     //   breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
     //   roomId: "87f5e280-a9b0-4dbd-9017-c285256ffd1e"
     // });
 
-    const scale2 = await Scale.findById(
-      "035188db-de1f-4452-b76b-77849445a4dd",
-      { include: [{ association: "process" }] }
-    );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
 
-    scale2?.process;
+    // scale2?.process;
 
-    debugger;
+    // debugger;
 
-    const process = await Process.findById(scale2?.process?.id ?? "", {
-      include: [{ association: "scale" }]
-    });
+    // const process = await Process.findById(scale2?.process?.id ?? "", {
+    //   include: [{ association: "scale" }]
+    // });
 
-    process?.scale;
+    // process?.scale;
 
-    debugger;
+    // debugger;
 
-    const test = await Brewery.findById(
-      "157cc981-1be2-4ecc-a257-07d9a6037559",
-      { include: [{ association: "beers" }] }
-    );
+    // const test = await Brewery.findById(
+    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   { include: [{ association: "beers" }] }
+    // );
 
-    debugger;
+    // debugger;
 
     // const beerTest = await Beer.findById(beer.id, {
     //   include: [{ association: "brewery" }]
     // });
 
-    debugger;
+    // debugger;
 
     // const newRoom = await Room.create({
     //   name: "name",
@@ -284,6 +284,8 @@ class WsToken extends DrewsBrewsTable {
       // deleteMe: { scales: true }
       // deleteMeArr: ["scales"]
     });
+
+    debugger;
 
     // const scale1 = await Scale.findById(
     //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",

@@ -4,11 +4,14 @@ import {
   GetCommand,
   QueryCommand,
   TransactWriteCommand,
+  TransactGetCommand,
   type QueryCommandInput,
   type QueryCommandOutput,
   type GetCommandOutput,
   type TransactWriteCommandInput,
-  type TransactWriteCommandOutput
+  type TransactWriteCommandOutput,
+  type TransactGetCommandInput,
+  type TransactGetCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
 
@@ -52,6 +55,7 @@ class DynamoClient {
       new GetCommand({
         TableName: this.tableName,
         Key: key
+        // ConsistentRead: true // TODO should I implement this? Maybe on the caller?
       })
     );
 
@@ -64,6 +68,14 @@ class DynamoClient {
     console.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
+  }
+
+  public async transactGetItems(
+    params: TransactGetCommandInput
+  ): Promise<NonNullable<TransactGetCommandOutput["Responses"]>> {
+    console.log("transactGetItems", { params });
+    const response = await dynamo.send(new TransactGetCommand(params));
+    return response.Responses ?? [];
   }
 
   public async transactWriteItems(

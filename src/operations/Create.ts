@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { Brand, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
-import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
+import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
 import { entityToTableItem } from "../utils";
 import {
   isBelongsToRelationship,
@@ -76,7 +76,7 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
-  readonly #transactionBuilder: TransactionBuilder;
+  readonly #transactionBuilder: TransactWriteBuilder;
 
   private readonly EntityClass: EntityClass<T>;
 
@@ -86,7 +86,7 @@ class Create<T extends SingleTableDesign> {
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
-    this.#transactionBuilder = new TransactionBuilder();
+    this.#transactionBuilder = new TransactWriteBuilder();
   }
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html

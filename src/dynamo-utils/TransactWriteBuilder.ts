@@ -20,7 +20,7 @@ class TransactionBuilder {
   /**
    * Execute the transaction
    */
-  async executeTransaction(): Promise<void> {
+  public async executeTransaction(): Promise<void> {
     // TODO remove hard coded name
     const dynamo = new DynamoClient("temp-table");
 
@@ -42,7 +42,10 @@ class TransactionBuilder {
    * Add a conditional check to the transaction
    * @param item
    */
-  addConditionCheck(item: ConditionCheck, conditionFailedMsg: string): void {
+  public addConditionCheck(
+    item: ConditionCheck,
+    conditionFailedMsg: string
+  ): void {
     this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
     this.transactionItems.push({ ConditionCheck: item });
   }
@@ -51,7 +54,7 @@ class TransactionBuilder {
    * Add a put operation to the transaction
    * @param item
    */
-  addPut(item: Put, conditionFailedMsg?: string): void {
+  public addPut(item: Put, conditionFailedMsg?: string): void {
     if (conditionFailedMsg !== undefined) {
       this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
     }
