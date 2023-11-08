@@ -3,7 +3,7 @@ import type SingleTableDesign from "../SingleTableDesign";
 import { type ForeignEntityAttribute } from "./types";
 
 interface HasManyProps<T extends SingleTableDesign> {
-  foreignKey: keyof ForeignEntityAttribute<T>;
+  foreignKey: ForeignEntityAttribute<T>;
 }
 
 function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(

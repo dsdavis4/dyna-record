@@ -1,4 +1,5 @@
 import { Entity, Attribute, BelongsTo, HasOne } from "../../src/decorators";
+import { type ForeignKey } from "../../src/types";
 import { MockTable } from "../integration/mockModels";
 
 describe("BelongsTo", () => {
@@ -7,7 +8,7 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         // @ts-expect-no-error: foreign key can only be linked to a key on itself
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
@@ -16,6 +17,25 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        @HasOne(() => ModelOne, { foreignKey: "key1" })
+        public modelOneRel: ModelOne;
+      }
+    });
+
+    it("requires the foreign key attribute to be of type ForeignKey", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        @Attribute({ alias: "Key1" })
+        public key1: string; // This has to be ForeignKey
+
+        // @ts-expect-error: foreign key must be of type ForeignKey
+        @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
+        public modelTwoRel: ModelTwo;
+      }
+
+      @Entity
+      class ModelTwo extends MockTable {
+        // @ts-expect-error: foreign key must be of type ForeignKey
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
@@ -44,7 +64,7 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         // @ts-expect-error: foreign key can only be linked to a key on itself
         @BelongsTo(() => ModelTwo, { foreignKey: "key2" })
@@ -65,10 +85,10 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         @Attribute({ alias: "Key3" })
-        public key3: string;
+        public key3: ForeignKey;
 
         // @ts-expect-error: foreign key cannot be a relationship key
         @BelongsTo(() => ModelTwo, { foreignKey: "modelThreeRel" })
@@ -95,7 +115,7 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         // @ts-expect-error: foreign key must not be linked to a function key
         @BelongsTo(() => ModelTwo, { foreignKey: "someFunction" })
@@ -117,7 +137,7 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         // @ts-expect-error: a BelongsTo rel cannot be an array
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })

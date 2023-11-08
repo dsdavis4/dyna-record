@@ -10,7 +10,7 @@ import {
   HasOne
 } from "../src/decorators";
 
-import { PrimaryKey, SortKey } from "../src/types";
+import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
@@ -53,10 +53,10 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 @Entity
 class Scale extends DrewsBrewsTable {
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @Attribute({ alias: "RoomId" })
-  public roomId: string;
+  public roomId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
@@ -71,7 +71,7 @@ class Scale extends DrewsBrewsTable {
 @Entity
 class Beer extends DrewsBrewsTable {
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @Attribute({ alias: "Style" })
   public style: string;
@@ -111,7 +111,7 @@ class Room extends DrewsBrewsTable {
   public name: string;
 
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
@@ -135,7 +135,7 @@ class Process extends DrewsBrewsTable {
   public currentUserInput: string;
 
   @Attribute({ alias: "ScaleId" })
-  public scaleId: string;
+  public scaleId: ForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
   public scale: Scale;
@@ -147,7 +147,7 @@ class WsToken extends DrewsBrewsTable {
   public connectionId: string;
 
   @Attribute({ alias: "RoomId" })
-  public roomId: string;
+  public roomId: ForeignKey;
 
   /**
    * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
@@ -220,6 +220,8 @@ class WsToken extends DrewsBrewsTable {
     const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
       include: [{ association: "process" }, { association: "room" }]
     });
+
+    debugger;
 
     if (bla) {
       bla.process?.id;

@@ -3,7 +3,7 @@ import type SingleTableDesign from "../SingleTableDesign";
 import { type ForeignEntityAttribute } from "./types";
 
 interface BelongsToProps<T extends SingleTableDesign> {
-  foreignKey: keyof ForeignEntityAttribute<T>;
+  foreignKey: ForeignEntityAttribute<T>;
 }
 
 function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(

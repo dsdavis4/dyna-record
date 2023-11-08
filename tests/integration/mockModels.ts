@@ -9,7 +9,7 @@ import {
   BelongsTo,
   HasOne
 } from "../../src/decorators";
-import { type PrimaryKey, type SortKey } from "../../src/types";
+import type { PrimaryKey, SortKey, ForeignKey } from "../../src/types";
 
 @Table({ name: "mock-table", delimiter: "#" })
 abstract class MockTable extends SingleTableDesign {
@@ -23,10 +23,10 @@ abstract class MockTable extends SingleTableDesign {
 @Entity
 class Order extends MockTable {
   @Attribute({ alias: "CustomerId" })
-  public customerId: string;
+  public customerId: ForeignKey;
 
   @Attribute({ alias: "PaymentMethodId" })
-  public paymentMethodId: string;
+  public paymentMethodId: ForeignKey;
 
   @Attribute({ alias: "OrderDate" })
   public orderDate: Date;
@@ -44,7 +44,7 @@ class PaymentMethodProvider extends MockTable {
   public name: string;
 
   @Attribute({ alias: "PaymentMethodId" })
-  public paymentMethodId: string;
+  public paymentMethodId: ForeignKey;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
   public paymentMethod: PaymentMethod;
@@ -56,7 +56,7 @@ class PaymentMethod extends MockTable {
   public lastFour: string;
 
   @Attribute({ alias: "CustomerId" })
-  public customerId: string;
+  public customerId: ForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
@@ -101,7 +101,7 @@ class ContactInformation extends MockTable {
   public phone: string;
 
   @Attribute({ alias: "CustomerId" })
-  public customerId: string;
+  public customerId: ForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;

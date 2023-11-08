@@ -8,7 +8,7 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { FunctionFields, PrimaryKey, SortKey } from "../types";
+import type { Brand, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
 import { QueryResolver } from "../query-utils";
 import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
@@ -31,8 +31,32 @@ type SortKeyAttribute<T> = {
   [K in keyof T]: T[K] extends SortKey ? K : never;
 }[keyof T];
 
+// TODO add unit test for this
+type FunctionFields<T> = {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  [K in keyof T]: T[K] extends Function ? K : never;
+}[keyof T];
+
+/**
+ * Infer the primitive type of the branded type
+ */
+type ExtractForeignKeyType<T> = T extends Brand<infer U, "ForeignKey">
+  ? U
+  : never;
+
+/**
+ * Allow ForeignKey attributes to be passes to the create method by using their inferred primitive type
+ * Ex:
+ *  If ModelA has: attr1: ForeignKey
+ *  This allows" ModelA.create({ attr1: "someVal" })
+ *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
+ */
+type ForeignKeyToValue<T> = {
+  [K in keyof T]: ExtractForeignKeyType<T[K]> extends never ? T[K] : string;
+};
+
 export type CreateOptions<T extends SingleTableDesign> = Omit<
-  T,
+  ForeignKeyToValue<T>,
   | DefaultFields
   | RelationshipAttributeNames<T>
   | FunctionFields<T>

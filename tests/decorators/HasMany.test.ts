@@ -1,4 +1,5 @@
 import { Entity, Attribute, HasMany, BelongsTo } from "../../src/decorators";
+import type { ForeignKey } from "../../src/types";
 import { MockTable } from "../integration/mockModels";
 
 describe("HasMany", () => {
@@ -7,7 +8,7 @@ describe("HasMany", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
         public modelTwoRel: ModelTwo;
@@ -21,11 +22,30 @@ describe("HasMany", () => {
       }
     });
 
-    it("will not allow the foreign key to be an attribute defined on itself", () => {
+    it("requires the foreign key to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
         public key1: string;
+
+        // @ts-expect-error: foreign key must be of type ForeignKey
+        @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
+        public modelTwoRel: ModelTwo;
+      }
+
+      @Entity
+      class ModelTwo extends MockTable {
+        // @ts-expect-error: foreign key must be of type ForeignKey
+        @HasMany(() => ModelOne, { foreignKey: "key1" })
+        public modelOneRel: ModelOne[];
+      }
+    });
+
+    it("will not allow the foreign key to be an attribute defined on itself", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        @Attribute({ alias: "Key1" })
+        public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
         public modelTwoRel: ModelTwo;
@@ -65,7 +85,7 @@ describe("HasMany", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
         public modelTwoRel: ModelTwo;
@@ -83,7 +103,7 @@ describe("HasMany", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
         public modelTwoRel: ModelTwo;
@@ -105,7 +125,7 @@ describe("HasMany", () => {
       @Entity
       class ModelOne extends MockTable {
         @Attribute({ alias: "Key1" })
-        public key1: string;
+        public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
         public modelTwoRel: ModelTwo;

@@ -1,11 +1,10 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { type EntityAttributes } from "../operations/types";
-import { type FunctionFields } from "../types";
+import { type ForeignKey } from "../types";
 
 /**
- * Attributes of SingleTableDesign which are not relationships or functions
+ * Returns attributes on the provided model which are EntityAttributes of type ForeignKey
  */
-export type ForeignEntityAttribute<T extends SingleTableDesign> = Omit<
-  EntityAttributes<T>,
-  FunctionFields<T>
->;
+export type ForeignEntityAttribute<T extends SingleTableDesign> = {
+  [K in keyof T]: T[K] extends ForeignKey ? K : never;
+}[keyof EntityAttributes<T>];
