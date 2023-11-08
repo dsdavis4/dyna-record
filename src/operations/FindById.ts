@@ -366,10 +366,9 @@ class FindById<T extends SingleTableDesign> {
               tableItemToEntity(rel.target, tableItem)
             );
           } else {
-            parentEntity[rel.propertyName] = tableItemToEntity(
-              rel.target,
-              tableItem
-            ) as any;
+            Object.assign(parentEntity, {
+              [rel.propertyName]: tableItemToEntity(rel.target, tableItem)
+            });
           }
         }
       }
