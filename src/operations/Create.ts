@@ -115,7 +115,6 @@ class Create<T extends SingleTableDesign> {
     return await queryResolver.resolve(putExpression.Item);
   }
 
-  // TODO is this a good name?
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { primaryKey, sortKey } = this.#tableMetadata;
@@ -170,8 +169,6 @@ class Create<T extends SingleTableDesign> {
             this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
-      } else {
-        // TODO
       }
     });
   }
@@ -316,7 +313,6 @@ class Create<T extends SingleTableDesign> {
 
     this.#transactionBuilder.addPut(
       putExpression,
-      // TODO better error message
       `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
     );
   }
