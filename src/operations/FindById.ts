@@ -360,11 +360,16 @@ class FindById<T extends SingleTableDesign> {
 
         if (isKeyOfEntity(parentEntity, rel.propertyName)) {
           if (rel.type === "HasMany") {
-            // TODO can I get rid of the "as"
-            parentEntity[rel.propertyName] ??= [] as any;
-            (parentEntity[rel.propertyName] as unknown as any[]).push(
-              tableItemToEntity(rel.target, tableItem)
-            );
+            const entity = tableItemToEntity(rel.target, tableItem);
+            const entities = parentEntity[rel.propertyName] ?? [];
+
+            if (Array.isArray(entities)) {
+              entities.push(entity);
+            }
+
+            Object.assign(parentEntity, {
+              [rel.propertyName]: entities
+            });
           } else {
             Object.assign(parentEntity, {
               [rel.propertyName]: tableItemToEntity(rel.target, tableItem)
