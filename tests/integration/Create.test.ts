@@ -1,8 +1,15 @@
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
-import { Order, PaymentMethodProvider } from "./mockModels";
+import {
+  Customer,
+  MockTable,
+  Order,
+  PaymentMethodProvider
+} from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { Attribute, Entity } from "../../src/decorators";
+
 jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
@@ -463,6 +470,52 @@ describe("Create", () => {
       } catch (e) {
         expect(e).toEqual(new Error("something bad"));
       }
+    });
+  });
+
+  describe("types", () => {
+    it("will not accept relationship attributes on create", async () => {
+      await Order.create({
+        orderDate: new Date(),
+        paymentMethodId: "123",
+        customerId: "456",
+        // @ts-expect-error relationship attributes are not allowed
+        customer: new Customer()
+      });
+    });
+
+    it("will not accept function attributes on create", async () => {
+      expect.assertions(1);
+
+      @Entity
+      class MyModel extends MockTable {
+        @Attribute({ alias: "MyAttribute" })
+        public myAttribute: string;
+
+        public someMethod(): string {
+          return "abc123";
+        }
+      }
+
+      try {
+        await MyModel.create({
+          myAttribute: "someVal",
+          // @ts-expect-error function attributes are not allowed
+          someMethod: () => "123"
+        });
+      } catch (e) {
+        expect(true).toEqual(true);
+      }
+    });
+
+    it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {
+      await Order.create({
+        orderDate: new Date(),
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        paymentMethodId: "123",
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        customerId: "456"
+      });
     });
   });
 });
