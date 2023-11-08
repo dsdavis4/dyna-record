@@ -17,7 +17,7 @@ export function includedRelationshipsFilter(
   const filters: OrFilter["$or"] = [{ type: parentClassName }];
 
   const includeBelongsToLinks = includedRelationships.some(
-    rel => rel.type === "HasMany"
+    rel => rel.type === "HasMany" || rel.type === "HasOne"
   );
 
   if (includeBelongsToLinks) {

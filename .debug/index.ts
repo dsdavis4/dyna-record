@@ -2,11 +2,15 @@ import SingleTableDesign from "../src";
 import {
   Table,
   Entity,
+  PrimaryKeyAttribute,
+  SortKeyAttribute,
   Attribute,
   HasMany,
   BelongsTo,
   HasOne
 } from "../src/decorators";
+
+import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
@@ -16,19 +20,16 @@ import { BelongsToLink } from "../src/relationships";
 //   this would make it so I dont have to have addInitializer methods
 //
 
-@Table({ name: "temp-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+// TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
+//    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
+//    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
+@Table({ name: "temp-table", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
-  public pk: string;
+  @PrimaryKeyAttribute({ alias: "PK" })
+  public pk: PrimaryKey;
 
-  @Attribute({ alias: "SK" })
-  public sk: string;
-
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date; // TODO this should serialize to date
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
+  @SortKeyAttribute({ alias: "SK" })
+  public sk: SortKey;
 
   /**
    * Query the GSI 'ByRoomIdAndConnectionId'
@@ -51,17 +52,11 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
 @Entity
 class Scale extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @Attribute({ alias: "RoomId" })
-  public roomId: string;
-
-  @Attribute({ alias: "ProcessId" })
-  public processId: string;
+  public roomId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
@@ -69,20 +64,20 @@ class Scale extends DrewsBrewsTable {
   @BelongsTo(() => Room, { foreignKey: "roomId" })
   public room: Room;
 
-  @HasOne(() => Process, { foreignKey: "processId" })
-  public process: Process;
+  @HasOne(() => Process, { foreignKey: "scaleId" })
+  public process?: Process;
 }
 
 @Entity
 class Beer extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @Attribute({ alias: "Style" })
   public style: string;
+
+  @Attribute({ alias: "Name" })
+  public name: string;
 
   @Attribute({ alias: "ABV" })
   public abv: number; // TODO should serialize to number
@@ -93,19 +88,16 @@ class Beer extends DrewsBrewsTable {
 
 @Entity
 class Brewery extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @HasMany(() => Scale, { targetKey: "breweryId" })
+  @HasMany(() => Scale, { foreignKey: "breweryId" })
   public scales: Scale[];
 
-  @HasMany(() => Beer, { targetKey: "breweryId" })
+  @HasMany(() => Beer, { foreignKey: "breweryId" })
   public beers: Beer[];
 
-  @HasMany(() => Room, { targetKey: "breweryId" })
+  @HasMany(() => Room, { foreignKey: "breweryId" })
   public rooms: Room[];
 
   public testing() {
@@ -115,27 +107,21 @@ class Brewery extends DrewsBrewsTable {
 
 @Entity
 class Room extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
   @Attribute({ alias: "BreweryId" })
-  public breweryId: string;
+  public breweryId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
 
-  @HasMany(() => Scale, { targetKey: "roomId" })
+  @HasMany(() => Scale, { foreignKey: "roomId" })
   public scales: Scale[];
 }
 
 @Entity
 class Process extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 
@@ -147,18 +133,21 @@ class Process extends DrewsBrewsTable {
 
   @Attribute({ alias: "CurrentUserInput" })
   public currentUserInput: string;
+
+  @Attribute({ alias: "ScaleId" })
+  public scaleId: ForeignKey;
+
+  @BelongsTo(() => Scale, { foreignKey: "scaleId" })
+  public scale: Scale;
 }
 
 @Entity
 class WsToken extends DrewsBrewsTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "ConnectionId" })
   public connectionId: string;
 
   @Attribute({ alias: "RoomId" })
-  public roomId: string;
+  public roomId: ForeignKey;
 
   /**
    * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
@@ -183,10 +172,6 @@ class WsToken extends DrewsBrewsTable {
 - can I improve my testing with this? https://jestjs.io/docs/dynamodb
 - v3 docs https://www.npmjs.com/package/@shelf/jest-dynamodb
 
-- When doing a findById with includes, every belongs to link is serilzied even if its not part of the includes
-  See branch/Pr "start_fixing_query_returning_all_links" for a potential solution
-  Note I reflected this in my test mocks so I can clean those up
-
 - Support projected associations
 
 - eslint
@@ -198,15 +183,93 @@ class WsToken extends DrewsBrewsTable {
 // Need to support HasOne where the HasOne is its own parent entity
 //      I will do this after the create methods
 
-// TODO START HERE.... on to create
-
 // TODO add eslint workflow
 
 // TODO add tsconfig for dev... that includes test files and debug file
 
+// TODO make a logger class to optionally log. Structured logs..
+
+// TODO check that find byId with includes returns null if the parent is not found... I think I saw this happen...
+
 (async () => {
   try {
     const metadata = Metadata;
+
+    // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    // const beer = await Beer.create({
+    //   style: "lager",
+    //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   breweryId: "bad",
+    //   abv: 1,
+    //   name: "Test 11"
+    // });
+
+    // const newProcess = await Process.create({
+    //   name: "somename",
+    //   currentState: "state",
+    //   currentStateStatus: "status",
+    //   currentUserInput: "input",
+    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    // });
+
+    const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
+      include: [{ association: "process" }, { association: "room" }]
+    });
+
+    debugger;
+
+    if (bla) {
+      bla.process?.id;
+
+      bla.room;
+
+      debugger;
+    }
+
+    debugger;
+
+    // const newScale = await Scale.create({
+    //   breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   roomId: "87f5e280-a9b0-4dbd-9017-c285256ffd1e"
+    // });
+
+    const scale2 = await Scale.findById(
+      "035188db-de1f-4452-b76b-77849445a4dd",
+      { include: [{ association: "process" }] }
+    );
+
+    scale2?.process;
+
+    debugger;
+
+    const process = await Process.findById(scale2?.process?.id ?? "", {
+      include: [{ association: "scale" }]
+    });
+
+    process?.scale;
+
+    debugger;
+
+    const test = await Brewery.findById(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
+      { include: [{ association: "beers" }] }
+    );
+
+    debugger;
+
+    // const beerTest = await Beer.findById(beer.id, {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    debugger;
+
+    // const newRoom = await Room.create({
+    //   name: "name",
+    //   breweryId: "123"
+    // });
 
     console.time("bla");
 
@@ -221,6 +284,21 @@ class WsToken extends DrewsBrewsTable {
       // deleteMe: { scales: true }
       // deleteMeArr: ["scales"]
     });
+
+    // const scale1 = await Scale.findById(
+    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale3 = await Scale.findById(
+    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+    //   { include: [{ association: "process" }] }
+    // );
+
+    debugger;
 
     if (room) {
       room.type;
@@ -267,6 +345,8 @@ class WsToken extends DrewsBrewsTable {
       const bla = results[0];
       // @ts-expect-error
       bla.scales;
+    } else {
+      results[0].foreignEntityType;
     }
 
     const wsTokens = await WsToken.getAllByRoomId(
@@ -303,5 +383,6 @@ class WsToken extends DrewsBrewsTable {
     // console.log(JSON.stringify(results, null, 4));
   } catch (err) {
     console.log("error", err);
+    debugger;
   }
 })();

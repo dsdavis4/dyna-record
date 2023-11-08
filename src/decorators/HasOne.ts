@@ -1,18 +1,19 @@
 import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
+import { type ForeignEntityAttribute } from "./types";
 
-interface HasOneProps<T> {
-  foreignKey: keyof T;
+interface HasOneProps<T extends SingleTableDesign> {
+  foreignKey: ForeignEntityAttribute<T>;
 }
 
 function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
-  getTarget: () => EntityClass<K>,
+  getTarget: () => EntityClass<T>,
   props: HasOneProps<T>
 ) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<T, K>
+    context: ClassFieldDecoratorContext<K, T | undefined>
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {

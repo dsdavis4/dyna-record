@@ -1,3 +1,5 @@
+export { default as PrimaryKeyAttribute } from "./PrimaryKeyAttribute";
+export { default as SortKeyAttribute } from "./SortKeyAttribute";
 export { default as Attribute } from "./Attribute";
 export { default as Entity } from "./Entity";
 export { default as Table } from "./Table";

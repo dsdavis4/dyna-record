@@ -1,28 +1,26 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
 import SingleTableDesign from "../../src";
-import { Table, Entity, Attribute } from "../../src/decorators";
+import {
+  Table,
+  Entity,
+  PrimaryKeyAttribute,
+  SortKeyAttribute,
+  Attribute
+} from "../../src/decorators";
+import type { PrimaryKey, SortKey } from "../../src/types";
 
-@Table({ name: "mock-table", primaryKey: "PK", sortKey: "SK", delimiter: "#" })
+@Table({ name: "mock-table", delimiter: "#" })
 class MockTable extends SingleTableDesign {
-  @Attribute({ alias: "PK" })
-  public pk: string;
+  @PrimaryKeyAttribute({ alias: "PK" })
+  public pk: PrimaryKey;
 
-  @Attribute({ alias: "SK" })
-  public sk: string;
-
-  @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date;
-
-  @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date;
+  @SortKeyAttribute({ alias: "SK" })
+  public sk: SortKey;
 }
 
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Scale extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 }
@@ -30,9 +28,6 @@ class Scale extends MockTable {
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Room extends MockTable {
-  @Attribute({ alias: "Id" })
-  public id: string;
-
   @Attribute({ alias: "Name" })
   public name: string;
 }

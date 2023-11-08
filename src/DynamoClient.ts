@@ -3,14 +3,14 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
+  TransactWriteCommand,
   type QueryCommandInput,
   type QueryCommandOutput,
-  type GetCommandOutput
+  type GetCommandOutput,
+  type TransactWriteCommandInput,
+  type TransactWriteCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
-// import QueryParams from "./QueryParams";
-
-// import { v4 as uuidv4 } from "uuid";
 
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })
@@ -27,6 +27,8 @@ import { type KeyConditions } from "./query-utils";
 // ddbDocClient.destroy(); // no-op
 // client.destroy(); // destroys DynamoDBClient
 
+// TODO tsdoc for everything in here
+
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
@@ -34,10 +36,13 @@ const dynamo = DynamoDBDocumentClient.from(
 class DynamoClient {
   private readonly tableName: string;
 
+  // TODO remove table name from here...
   constructor(tableName: string) {
     this.tableName = tableName;
   }
 
+  // TODO should this be updated so it gets all the items in a BatchGetItems?
+  // TransctGetItems likely wont work due to limitation of 100 records and will fail if writes happen at same time
   public async findById(
     key: KeyConditions
   ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {
@@ -59,6 +64,13 @@ class DynamoClient {
     console.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
+  }
+
+  public async transactWriteItems(
+    params: TransactWriteCommandInput
+  ): Promise<TransactWriteCommandOutput> {
+    console.log("transactWriteItems", { params });
+    return await dynamo.send(new TransactWriteCommand(params));
   }
 }
 

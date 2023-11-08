@@ -1,7 +1,7 @@
-import Metadata, { type TableMetadata } from "../metadata";
+import Metadata, { type TableMetadataNoKeys } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 
-function Table(props: TableMetadata) {
+function Table(props: TableMetadataNoKeys) {
   return function (
     target: typeof SingleTableDesign,
     context: ClassDecoratorContext

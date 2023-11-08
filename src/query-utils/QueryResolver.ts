@@ -3,15 +3,13 @@ import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, {
   type RelationshipMetadata,
   type BelongsToRelationship,
-  type HasOneRelationship,
   type EntityMetadata,
   type TableMetadata
 } from "../metadata";
 import { BelongsToLink } from "../relationships";
+import { isBelongsToRelationship } from "../metadata/utils";
 
 type DynamoTableItem = Record<string, NativeAttributeValue>;
-
-type ForeignKeyLinkedRelationship = HasOneRelationship | BelongsToRelationship;
 
 type RelationshipLookup = Record<string, RelationshipMetadata>;
 
@@ -22,7 +20,7 @@ interface BelongsToLinkDynamoItem {
 
 interface RelationshipObj {
   relationsLookup: RelationshipLookup;
-  foreignKeyLinkedRelationships: ForeignKeyLinkedRelationship[];
+  belongsToRelationships: BelongsToRelationship[];
 }
 
 // TODO make jsdoc better. See SingleTableDesign
@@ -139,11 +137,11 @@ class QueryResolver<T extends SingleTableDesign> {
     queryResults: DynamoTableItem[],
     includedRelationships: RelationshipMetadata[]
   ): Promise<T> {
-    const { relationsLookup, foreignKeyLinkedRelationships } =
+    const { relationsLookup, belongsToRelationships } =
       includedRelationships.reduce<RelationshipObj>(
         (acc, rel) => {
-          if (this.isForeignKeyLinkedRelationship(rel)) {
-            acc.foreignKeyLinkedRelationships.push(rel);
+          if (isBelongsToRelationship(rel)) {
+            acc.belongsToRelationships.push(rel);
           }
 
           acc.relationsLookup[rel.target.name] = rel;
@@ -152,7 +150,7 @@ class QueryResolver<T extends SingleTableDesign> {
         },
         {
           relationsLookup: {},
-          foreignKeyLinkedRelationships: []
+          belongsToRelationships: []
         }
       );
 
@@ -161,7 +159,7 @@ class QueryResolver<T extends SingleTableDesign> {
         await this.resolveEntityOrFindRelationship(
           res,
           relationsLookup,
-          foreignKeyLinkedRelationships
+          belongsToRelationships
         );
       })
     );
@@ -175,17 +173,18 @@ class QueryResolver<T extends SingleTableDesign> {
   private async resolveEntityOrFindRelationship(
     res: DynamoTableItem,
     relationsLookup: RelationshipLookup,
-    foreignKeyLinkedRelationships: ForeignKeyLinkedRelationship[]
+    belongsToRelationships: BelongsToRelationship[]
   ): Promise<void> {
     const { sortKey, delimiter } = this.#tableMetadata;
     const [modelName] = res[sortKey].split(delimiter);
 
     if (res.Type === BelongsToLink.name) {
-      const [modelName, id] = res[sortKey].split(delimiter);
-      const includedRel = relationsLookup[modelName];
+      // TODO make these type safe... they are type any... Goal is that if something changed in BelongsToLink then there is a type error here...
+      const { ForeignKey, ForeignEntityType } = res;
+      const includedRel = relationsLookup[ForeignEntityType];
       if (includedRel !== undefined) {
         if (this.isKeyOfEntity(includedRel.propertyName)) {
-          const res = await includedRel.target.findById(id);
+          const res = await includedRel.target.findById(ForeignKey);
 
           if (includedRel.type === "HasMany") {
             if (this.entity[includedRel.propertyName] === undefined) {
@@ -195,13 +194,19 @@ class QueryResolver<T extends SingleTableDesign> {
               res
             );
           }
+
+          if (includedRel.type === "HasOne") {
+            if (this.entity[includedRel.propertyName] === undefined) {
+              this.entity[includedRel.propertyName] = res as any;
+            }
+          }
         }
       }
     } else if (modelName === this.entity.constructor.name) {
       await Promise.all([
         this.resolve(res),
         Promise.all(
-          foreignKeyLinkedRelationships.map(async rel => {
+          belongsToRelationships.map(async rel => {
             await this.findAndResolveByForeignKey(rel);
           })
         )
@@ -213,11 +218,15 @@ class QueryResolver<T extends SingleTableDesign> {
    * Resolve a BelongsTo or HasOne relationship by performing a GetItem using the foreignKey to get the related Entity
    */
   private async findAndResolveByForeignKey(
-    rel: ForeignKeyLinkedRelationship
+    rel: BelongsToRelationship
   ): Promise<void> {
     const foreignKey = this.entity[rel.foreignKey];
 
-    if (this.isKeyOfEntity(rel.propertyName) && foreignKey !== undefined) {
+    if (
+      this.isKeyOfEntity(rel.propertyName) &&
+      foreignKey !== undefined &&
+      typeof foreignKey === "string" // TODO need to find a way to check that its Foreign key instead of string
+    ) {
       const res = await rel.target.findById(foreignKey);
       this.entity[rel.propertyName] = res as any;
     }
@@ -252,33 +261,6 @@ class QueryResolver<T extends SingleTableDesign> {
     key: string
   ): key is keyof BelongsToLink {
     return key in instance;
-  }
-
-  /**
-   * Type guard to check if the relationship is a BelongsTo
-   */
-  private isBelongsToRelationship(
-    rel: RelationshipMetadata
-  ): rel is BelongsToRelationship {
-    return rel.type === "BelongsTo" && rel.foreignKey !== undefined;
-  }
-
-  /**
-   * Type guard to check if the relationship is a HasOne
-   */
-  private isHasOneRelationship(
-    rel: RelationshipMetadata
-  ): rel is HasOneRelationship {
-    return rel.type === "HasOne" && rel.foreignKey !== undefined;
-  }
-
-  /**
-   * Type guard to check if the relationship is linked by a foreignKey (HasOne or BelongsTo)
-   */
-  private isForeignKeyLinkedRelationship(
-    rel: RelationshipMetadata
-  ): rel is ForeignKeyLinkedRelationship {
-    return this.isHasOneRelationship(rel) || this.isBelongsToRelationship(rel);
   }
 
   /**

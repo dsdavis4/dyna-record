@@ -8,15 +8,30 @@ import {
   Query,
   type QueryOptions,
   type EntityKeyConditions,
-  type QueryResults
+  type QueryResults,
+  Create,
+  type CreateOptions
 } from "./operations";
 
+// TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
+//      This might help me replace the EntityClass<T> that I have been passing around...
+// TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
+// TODO  or InstanceType from InstanceType
+
 abstract class SingleTableDesign {
+  @Attribute({ alias: "Id" })
+  public id: string;
+
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
-
   @Attribute({ alias: "Type" })
   public type: string;
+
+  @Attribute({ alias: "CreatedAt" })
+  public createdAt: Date; // TODO this should serialize to date
+
+  @Attribute({ alias: "UpdatedAt" })
+  public updatedAt: Date; // TODO this should serialize to date
 
   /**
    * Find an entity by Id and optionally include associations
@@ -72,6 +87,15 @@ abstract class SingleTableDesign {
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
+  }
+
+  // TODO add tsdoc
+  public static async create<T extends SingleTableDesign>(
+    this: EntityClass<T>,
+    attributes: CreateOptions<T>
+  ): Promise<T> {
+    const op = new Create<T>(this);
+    return await op.run(attributes);
   }
 
   /**

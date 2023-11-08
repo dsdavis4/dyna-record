@@ -33,7 +33,7 @@ export interface HasOneRelationship extends RelationshipMetadataBase {
 
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
-  targetKey: keyof SingleTableDesign;
+  foreignKey: keyof SingleTableDesign;
 }
 
 export type RelationshipMetadata =
@@ -53,6 +53,8 @@ export interface TableMetadata {
   sortKey: string;
   delimiter: string;
 }
+
+export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 
 // TODO make jsdoc in this class better. See SingleTableDesign
 
@@ -99,8 +101,8 @@ class Metadata {
    * @param tableClassName
    * @param options
    */
-  public addTable(tableClassName: string, options: TableMetadata): void {
-    this.tables[tableClassName] = options;
+  public addTable(tableClassName: string, options: TableMetadataNoKeys): void {
+    this.tables[tableClassName] = { ...options, primaryKey: "", sortKey: "" };
   }
 
   /**
@@ -155,6 +157,42 @@ class Metadata {
   }
 
   /**
+   * Adds the primary key attribute to Table and Entity metadata storage
+   * @param entityClass
+   * @param options
+   */
+  public addPrimaryKeyAttribute(
+    entityClass: SingleTableDesign,
+    options: AttributeMetadataOptions
+  ): void {
+    const tableMetadata = this.getEntityTableMetadata(entityClass);
+
+    if (tableMetadata !== undefined) {
+      tableMetadata.primaryKey = options.alias;
+    }
+
+    this.addEntityAttribute(entityClass.constructor.name, options);
+  }
+
+  /**
+   * Adds the sort key attribute to Table and Entity metadata storage
+   * @param entityClass
+   * @param options
+   */
+  public addSortKeyAttribute(
+    entityClass: SingleTableDesign,
+    options: AttributeMetadataOptions
+  ): void {
+    const tableMetadata = this.getEntityTableMetadata(entityClass);
+
+    if (tableMetadata !== undefined) {
+      tableMetadata.sortKey = options.alias;
+    }
+
+    this.addEntityAttribute(entityClass.constructor.name, options);
+  }
+
+  /**
    * Initialize metadata object
    */
   private init(): void {
@@ -162,6 +200,25 @@ class Metadata {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
       this.entityClasses.forEach(EntityClass => new EntityClass());
       this.initialized = true;
+    }
+  }
+
+  /**
+   * Recursively search prototype chain and return TableMetadata for an entity class if it exists
+   * @param classPrototype
+   * @returns
+   */
+  private getEntityTableMetadata(
+    classPrototype: SingleTableDesign
+  ): TableMetadata | undefined {
+    const protoType = Object.getPrototypeOf(classPrototype);
+
+    if (protoType === null) return;
+
+    if (this.tables[protoType.constructor.name] !== undefined) {
+      return this.tables[protoType.constructor.name];
+    } else {
+      return this.getEntityTableMetadata(protoType);
     }
   }
 }

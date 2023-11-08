@@ -69,10 +69,10 @@ class FindById<T extends SingleTableDesign> {
     id: string,
     options?: FindByIdOptions<T>
   ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
-    if (options?.include !== undefined) {
-      return await this.findByIdWithIncludes(id, options.include);
-    } else {
+    if (options?.include === undefined) {
       return await this.findByIdOnly(id);
+    } else {
+      return await this.findByIdWithIncludes(id, options.include);
     }
   }
 
@@ -92,15 +92,15 @@ class FindById<T extends SingleTableDesign> {
       [sortKey]: this.EntityClass.name
     });
 
-    if (res !== null) {
+    if (res === null) {
+      return null;
+    } else {
       const queryResolver = new QueryResolver<T>(this.EntityClass);
       // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
       return (await queryResolver.resolve(res)) as FindByIdResponse<
         T,
         FindByIdOptions<T>
       >;
-    } else {
-      return null;
     }
   }
 
