@@ -3,19 +3,14 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
-  PutCommand,
   TransactWriteCommand,
   type QueryCommandInput,
   type QueryCommandOutput,
   type GetCommandOutput,
-  type PutCommandInput,
   type TransactWriteCommandInput,
-  TransactWriteCommandOutput
+  type TransactWriteCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
-// import QueryParams from "./QueryParams";
-
-// import { v4 as uuidv4 } from "uuid";
 
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })
@@ -31,6 +26,8 @@ import { type KeyConditions } from "./query-utils";
 
 // ddbDocClient.destroy(); // no-op
 // client.destroy(); // destroys DynamoDBClient
+
+// TODO tsdoc for everything in here
 
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
@@ -69,7 +66,6 @@ class DynamoClient {
     return response.Items ?? [];
   }
 
-  // TODO tsdoc
   public async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {

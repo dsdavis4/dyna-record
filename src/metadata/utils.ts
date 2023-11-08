@@ -5,8 +5,6 @@ import type {
   HasOneRelationship
 } from ".";
 
-// TODO add other type guards here..
-
 /**
  * Type guard to check if the relationship is a HasMany
  */

@@ -13,7 +13,6 @@ export type ConditionCheck = NonNullable<
 >;
 export type Put = NonNullable<TransactItems[number]["Put"]>;
 
-// TODO tsdoc throughout
 class TransactionBuilder {
   private readonly transactionItems: TransactItems = [];
   private readonly errorMessages: Record<number, string> = {};
@@ -59,6 +58,11 @@ class TransactionBuilder {
     this.transactionItems.push({ Put: item });
   }
 
+  /**
+   * Handle TransactionCanceledException, aggregating errors and applying friendly errors if provided.
+   * @param error
+   * @returns
+   */
   private buildTransactionCanceledException(
     error: TransactionCanceledException
   ): TransactionCanceledException | AggregateError {
