@@ -15,6 +15,12 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
 
+// TODO should this move into dynamo-utils...?
+
+export type TransactGetItemResponses = NonNullable<
+  TransactGetCommandOutput["Responses"]
+>;
+
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })
 // );
@@ -72,7 +78,7 @@ class DynamoClient {
 
   public async transactGetItems(
     params: TransactGetCommandInput
-  ): Promise<NonNullable<TransactGetCommandOutput["Responses"]>> {
+  ): Promise<TransactGetItemResponses> {
     console.log("transactGetItems", { params });
     const response = await dynamo.send(new TransactGetCommand(params));
     return response.Responses ?? [];

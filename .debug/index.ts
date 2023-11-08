@@ -253,12 +253,12 @@ class WsToken extends DrewsBrewsTable {
 
     // debugger;
 
-    // const test = await Brewery.findById(
-    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
-    //   { include: [{ association: "beers" }] }
-    // );
+    const test = await Brewery.findById(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
+      { include: [{ association: "beers" }] }
+    );
 
-    // debugger;
+    debugger;
 
     // const beerTest = await Beer.findById(beer.id, {
     //   include: [{ association: "brewery" }]

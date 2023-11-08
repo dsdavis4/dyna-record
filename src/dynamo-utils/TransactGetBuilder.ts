@@ -1,8 +1,5 @@
-import {
-  type TransactGetCommandInput,
-  type TransactGetCommandOutput
-} from "@aws-sdk/lib-dynamodb";
-import DynamoClient from "../DynamoClient";
+import { type TransactGetCommandInput } from "@aws-sdk/lib-dynamodb";
+import DynamoClient, { type TransactGetItemResponses } from "../DynamoClient";
 
 type TransactItems = NonNullable<TransactGetCommandInput["TransactItems"]>;
 
@@ -14,9 +11,7 @@ class TransactGetBuilder {
   /**
    * Execute the transaction
    */
-  async executeTransaction(): Promise<
-    NonNullable<TransactGetCommandOutput["Responses"]>
-  > {
+  async executeTransaction(): Promise<TransactGetItemResponses> {
     // TODO remove hard coded name
     const dynamo = new DynamoClient("temp-table");
 

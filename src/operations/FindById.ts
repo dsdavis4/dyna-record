@@ -7,7 +7,7 @@ import Metadata, {
   type EntityClass,
   type BelongsToRelationship
 } from "../metadata";
-import DynamoClient from "../DynamoClient";
+import DynamoClient, { TransactGetItemResponses } from "../DynamoClient";
 import { QueryBuilder, QueryResolver } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
@@ -19,6 +19,9 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { isBelongsToRelationship } from "../metadata/utils";
 import type { StringObj } from "../types";
+import { isKeyOfEntity, tableItemToEntity } from "../utils";
+
+// TODO as part of changing to use transactions... I should refactor  Query Resolver so its not needed anymore...
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
@@ -34,7 +37,7 @@ type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
 interface SortedQueryResults {
   item: QueryItems[number];
   belongsToLinks: QueryItems;
-  // Should it be this?
+  // TODO Should it be this?
   // belongsToLinks: BelongsToLinkDynamoItem;
 }
 
@@ -169,20 +172,34 @@ class FindById<T extends SingleTableDesign> {
       ConsistentRead: true
     });
 
-    this.buildGetIncludedRelationshipsTransaction(queryResults, includedRels);
+    // TODO do I need this?
+    // if (queryResults.length === 0) return null;
 
-    const res = await this.#transactionBuilder.executeTransaction();
+    const sortedQueryResults = this.filterQueryResults(queryResults);
+    const relationsObj = this.buildIncludedRelationsObj(includedRels);
 
-    debugger;
+    this.buildGetIncludedRelationshipsTransaction(
+      sortedQueryResults,
+      relationsObj
+    );
 
-    const queryResolver = new QueryResolver<T>(this.EntityClass);
-    // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
-    return (await queryResolver.resolve(
-      queryResults,
-      includedRels
-    )) as FindByIdResponse<T, FindByIdOptions<T>>;
+    const transactionRes = await this.#transactionBuilder.executeTransaction();
+
+    return this.resolveFindByIdIncludesResults(
+      sortedQueryResults.item,
+      transactionRes,
+      relationsObj.relationsLookup
+    );
+
+    // const queryResolver = new QueryResolver<T>(this.EntityClass);
+    // // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
+    // return (await queryResolver.resolve(
+    //   queryResults,
+    //   includedRels
+    // )) as FindByIdResponse<T, FindByIdOptions<T>>;
   }
 
+  // TODO tsdoc
   private buildFindByIdIncludesQuery(
     id: string,
     includedRelationships: RelationshipMetadata[]
@@ -202,6 +219,7 @@ class FindById<T extends SingleTableDesign> {
     }).build();
   }
 
+  // TODO tsdoc
   private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
@@ -214,21 +232,16 @@ class FindById<T extends SingleTableDesign> {
   }
 
   private buildGetIncludedRelationshipsTransaction(
-    queryResults: QueryItems,
-    includedRelationships: RelationshipMetadata[]
+    sortedQueryResults: SortedQueryResults,
+    relationsObj: RelationshipObj
   ): void {
-    const { item, belongsToLinks } = this.filterQueryResults(queryResults);
-    const relationsObj = this.buildIncludedRelationsObj(includedRelationships);
-
-    debugger;
-
     this.buildGetRelationshipsThroughLinksTransaction(
-      belongsToLinks,
+      sortedQueryResults.belongsToLinks,
       relationsObj.relationsLookup
     );
 
     this.buildGetRelationshipsThroughForeignKeyTransaction(
-      item,
+      sortedQueryResults.item,
       relationsObj.belongsToRelationships
     );
   }
@@ -329,6 +342,40 @@ class FindById<T extends SingleTableDesign> {
       },
       []
     );
+  }
+
+  private resolveFindByIdIncludesResults(
+    entityTableItem: QueryItems[number],
+    transactionResults: TransactGetItemResponses,
+    relationsLookup: RelationshipLookup
+  ): FindByIdResponse<T, FindByIdOptions<T>> {
+    const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
+
+    // TODO Yikes! Clean this up
+    transactionResults.forEach(res => {
+      const tableItem = res.Item;
+
+      if (tableItem !== undefined) {
+        const rel = relationsLookup[tableItem.Type];
+
+        if (isKeyOfEntity(parentEntity, rel.propertyName)) {
+          if (rel.type === "HasMany") {
+            // TODO can I get rid of the "as"
+            parentEntity[rel.propertyName] ??= [] as any;
+            (parentEntity[rel.propertyName] as unknown as any[]).push(
+              tableItemToEntity(rel.target, tableItem)
+            );
+          } else {
+            parentEntity[rel.propertyName] = tableItemToEntity(
+              rel.target,
+              tableItem
+            ) as any;
+          }
+        }
+      }
+    });
+
+    return parentEntity as FindByIdResponse<T, FindByIdOptions<T>>;
   }
 }
 

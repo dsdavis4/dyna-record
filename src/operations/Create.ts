@@ -108,9 +108,7 @@ class Create<T extends SingleTableDesign> {
 
     await this.#transactionBuilder.executeTransaction();
 
-    // TODO using QueryResolver here is not great...
-    //      1. It can be renamed..
-    //      2. Or I need to do a big refactor when I update that function to use FindById...
+    // TODO use tableItemToEntity util
     const queryResolver = new QueryResolver<T>(this.EntityClass);
     return await queryResolver.resolve(putExpression.Item);
   }

@@ -33,3 +33,32 @@ export const entityToTableItem = (
     {}
   );
 };
+
+export const tableItemToEntity = <T extends SingleTableDesign>(
+  EntityClass: new () => T,
+  tableItem: DynamoTableItem
+): T => {
+  const { attributes: attrs } = Metadata.getEntity(EntityClass.name);
+  const entity = new EntityClass();
+
+  Object.keys(tableItem).forEach(attr => {
+    const entityKey = attrs[attr]?.name;
+    if (isKeyOfEntity(entity, entityKey)) {
+      entity[entityKey] = tableItem[attr];
+    }
+  });
+
+  return entity;
+};
+
+// TODO this is duplicated from QueryResolve, make sure to DRY up
+//      This might solve itself when I remove QueryResolver
+/**
+ * Type guard to check if the key is defined on the entity
+ */
+export const isKeyOfEntity = (
+  entity: SingleTableDesign,
+  key: string
+): key is keyof SingleTableDesign => {
+  return key in entity;
+};
