@@ -34,6 +34,8 @@ export type QueryResults<T extends SingleTableDesign> = Array<
   EntityAttributes<T> | BelongsToLink
 >;
 
+// TODO make sure this paginates on dynamo limits
+
 /**
  * Query operations
  */
