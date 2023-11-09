@@ -13,7 +13,6 @@ export type ForeignKey = Brand<string, "ForeignKey">;
 // TODO should this be the native scalar version type?
 export type DynamoTableItem = Record<string, NativeAttributeValue>;
 
-// TODO this is duplicated
 export type StringObj = Record<string, string>;
 
 export interface BelongsToLinkDynamoItem {
