@@ -6,16 +6,16 @@ import Metadata, {
   type EntityClass,
   type BelongsToRelationship
 } from "../metadata";
-import DynamoClient, { type TransactGetItemResponses } from "../DynamoClient";
+import DynamoClient, {
+  type TransactGetItemResponses,
+  type QueryItems
+} from "../DynamoClient";
 import { QueryBuilder } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
 import { TransactGetBuilder } from "../dynamo-utils";
 import { BelongsToLink } from "../relationships";
-import {
-  type QueryCommandInput,
-  type QueryCommandOutput
-} from "@aws-sdk/lib-dynamodb";
+import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { isBelongsToRelationship } from "../metadata/utils";
 import type { StringObj } from "../types";
 import { isKeyOfEntity, tableItemToEntity } from "../utils";
@@ -23,9 +23,6 @@ import { isKeyOfEntity, tableItemToEntity } from "../utils";
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
 }
-
-// TODO is this duplicated?
-type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
 
 type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
   FindByIdOptions<T>["include"]

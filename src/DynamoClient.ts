@@ -19,6 +19,8 @@ export type TransactGetItemResponses = NonNullable<
   TransactGetCommandOutput["Responses"]
 >;
 
+export type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
+
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })
 // );
@@ -51,9 +53,7 @@ class DynamoClient {
     return response.Item ?? null;
   }
 
-  public async query(
-    params: QueryCommandInput
-  ): Promise<NonNullable<QueryCommandOutput["Items"]>> {
+  public async query(params: QueryCommandInput): Promise<QueryItems> {
     console.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
