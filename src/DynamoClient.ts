@@ -7,13 +7,13 @@ import {
   TransactGetCommand,
   type QueryCommandInput,
   type QueryCommandOutput,
+  type GetCommandInput,
   type GetCommandOutput,
   type TransactWriteCommandInput,
   type TransactWriteCommandOutput,
   type TransactGetCommandInput,
   type TransactGetCommandOutput
 } from "@aws-sdk/lib-dynamodb";
-import { type KeyConditions } from "./query-utils";
 
 export type TransactGetItemResponses = NonNullable<
   TransactGetCommandOutput["Responses"]
@@ -48,21 +48,11 @@ class DynamoClient {
     this.tableName = tableName;
   }
 
-  // TODO should this be updated so it gets all the items in a BatchGetItems?
-  // TransctGetItems likely wont work due to limitation of 100 records and will fail if writes happen at same time
-  public async findById(
-    key: KeyConditions
+  public async getItem(
+    params: GetCommandInput
   ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {
-    console.log("findById", { key });
-
-    const response = await dynamo.send(
-      new GetCommand({
-        TableName: this.tableName,
-        Key: key
-        // ConsistentRead: true // TODO should I implement this? Maybe on the caller?
-      })
-    );
-
+    console.log("findById", { params });
+    const response = await dynamo.send(new GetCommand(params));
     return response.Item ?? null;
   }
 

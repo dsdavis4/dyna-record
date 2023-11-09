@@ -126,9 +126,12 @@ class FindById<T extends SingleTableDesign> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
-    const res = await dynamo.findById({
-      [primaryKey]: this.EntityClass.primaryKeyValue(id),
-      [sortKey]: this.EntityClass.name
+    const res = await dynamo.getItem({
+      TableName: tableName,
+      Key: {
+        [primaryKey]: this.EntityClass.primaryKeyValue(id),
+        [sortKey]: this.EntityClass.name
+      }
     });
 
     if (res === null) {
