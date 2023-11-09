@@ -7,7 +7,7 @@ import Metadata, {
   type EntityClass,
   type BelongsToRelationship
 } from "../metadata";
-import DynamoClient, { TransactGetItemResponses } from "../DynamoClient";
+import DynamoClient, { type TransactGetItemResponses } from "../DynamoClient";
 import { QueryBuilder, QueryResolver } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
@@ -20,6 +20,10 @@ import {
 import { isBelongsToRelationship } from "../metadata/utils";
 import type { StringObj } from "../types";
 import { isKeyOfEntity, tableItemToEntity } from "../utils";
+
+// TODO start here. I just got everything working with transactions.
+//     Now I need to address TODOs and fix tests
+//     Likely a good idea to fix tests first
 
 // TODO as part of changing to use transactions... I should refactor  Query Resolver so its not needed anymore...
 
@@ -367,9 +371,7 @@ class FindById<T extends SingleTableDesign> {
               entities.push(entity);
             }
 
-            Object.assign(parentEntity, {
-              [rel.propertyName]: entities
-            });
+            Object.assign(parentEntity, { [rel.propertyName]: entities });
           } else {
             Object.assign(parentEntity, {
               [rel.propertyName]: tableItemToEntity(rel.target, tableItem)

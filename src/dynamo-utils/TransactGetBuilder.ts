@@ -5,6 +5,7 @@ type TransactItems = NonNullable<TransactGetCommandInput["TransactItems"]>;
 
 export type Get = NonNullable<TransactItems[number]["Get"]>;
 
+// TODO need to handle more than 100 requests
 class TransactGetBuilder {
   private readonly transactionItems: TransactItems = [];
 
