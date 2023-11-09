@@ -3,22 +3,24 @@ import {
   Customer,
   PaymentMethod,
   Order,
-  PaymentMethodProvider,
-  ContactInformation
+  PaymentMethodProvider
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  QueryCommand
+  QueryCommand,
+  TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
+const mockTransactGetItems = jest.fn();
 const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -41,6 +43,9 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
             if (command.name === "QueryCommand") {
               return await Promise.resolve(mockQuery());
             }
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
+            }
           })
         };
       })
@@ -51,8 +56,8 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     QueryCommand: jest.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
     }),
-    TransactWriteCommand: jest.fn().mockImplementationOnce(() => {
-      return { name: "TransactWriteCommand" };
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
     })
   };
 });
@@ -212,31 +217,33 @@ describe("FindById", () => {
       ]
     });
 
-    orderLinks.forEach(link => {
-      mockGet.mockResolvedValueOnce({
-        Item: {
-          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-          SK: link.ForeignEntityType,
-          Id: link.ForeignKey,
-          PaymentMethodId: "116",
-          CustomerId: link.PK.split("#")[1],
-          OrderDate: "2022-12-15T09:31:15.148Z",
-          UpdatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      });
-    });
+    const orders = orderLinks.map(link => ({
+      Item: {
+        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+        SK: link.ForeignEntityType,
+        Id: link.ForeignKey,
+        Type: link.ForeignEntityType,
+        PaymentMethodId: "116",
+        CustomerId: link.PK.split("#")[1],
+        OrderDate: "2022-12-15T09:31:15.148Z",
+        UpdatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    }));
 
-    paymentMethodLinks.forEach((link, idx) => {
-      mockGet.mockResolvedValueOnce({
-        Item: {
-          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-          SK: link.ForeignEntityType,
-          Id: link.ForeignKey,
-          CustomerId: link.PK.split("#")[1],
-          LastFour: `000${idx}`,
-          UpdatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      });
+    const paymentMethods = paymentMethodLinks.map((link, idx) => ({
+      Item: {
+        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+        SK: link.ForeignEntityType,
+        Id: link.ForeignKey,
+        Type: link.ForeignEntityType,
+        CustomerId: link.PK.split("#")[1],
+        LastFour: `000${idx}`,
+        UpdatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    }));
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [...orders, ...paymentMethods]
     });
 
     const result = await Customer.findById("123", {
@@ -256,6 +263,7 @@ describe("FindById", () => {
           pk: "Order#111",
           sk: "Order",
           id: "111",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "116",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -265,6 +273,7 @@ describe("FindById", () => {
           pk: "Order#112",
           sk: "Order",
           id: "112",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "116",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -274,6 +283,7 @@ describe("FindById", () => {
           pk: "Order#113",
           sk: "Order",
           id: "113",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "116",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -285,6 +295,7 @@ describe("FindById", () => {
           pk: "PaymentMethod#116",
           sk: "PaymentMethod",
           id: "116",
+          type: "PaymentMethod",
           lastFour: "0000",
           customerId: "123",
           updatedAt: "2023-02-15T08:31:15.148Z"
@@ -293,6 +304,7 @@ describe("FindById", () => {
           pk: "PaymentMethod#117",
           sk: "PaymentMethod",
           id: "117",
+          type: "PaymentMethod",
           lastFour: "0001",
           customerId: "123",
           updatedAt: "2023-02-15T08:31:15.148Z"
@@ -324,38 +336,57 @@ describe("FindById", () => {
             ":Type2": "BelongsToLink",
             ":ForeignEntityType3": "Order",
             ":ForeignEntityType4": "PaymentMethod"
-          }
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([
-      [{ TableName: "mock-table", Key: { PK: "Order#111", SK: "Order" } }],
-      [{ TableName: "mock-table", Key: { PK: "Order#112", SK: "Order" } }],
-      [{ TableName: "mock-table", Key: { PK: "Order#113", SK: "Order" } }],
+    expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          Key: { PK: "PaymentMethod#116", SK: "PaymentMethod" }
-        }
-      ],
-      [
-        {
-          TableName: "mock-table",
-          Key: { PK: "PaymentMethod#117", SK: "PaymentMethod" }
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#111", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#112", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#113", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#116", SK: "PaymentMethod" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#117", SK: "PaymentMethod" }
+              }
+            }
+          ]
         }
       ]
     ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }]
+      [{ name: "TransactGetCommand" }]
     ]);
   });
 
   // TODO this test should pass
+  // Its also out of date since the transactGetItems refactor
   // TODO there should be an equivalent for not found HasOne or BelongsTo
   it.skip("will set HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(4);
@@ -417,6 +448,7 @@ describe("FindById", () => {
       PK: "Order#123",
       SK: "Order",
       Id: "123",
+      Type: "Order",
       CustomerId: "456",
       PaymentMethodId: "789",
       OrderDate: "2023-09-15T04:26:31.148Z"
@@ -437,15 +469,16 @@ describe("FindById", () => {
       PK: "PaymentMethod#789",
       SK: "PaymentMethod",
       Id: "789",
+      Type: "PaymentMethod",
       LastFour: "0000",
       CustomerId: "123",
       UpdatedAt: "2023-02-15T08:31:15.148Z"
     };
 
     mockQuery.mockResolvedValueOnce({ Items: [orderRes] });
-    mockGet
-      .mockResolvedValueOnce({ Item: customerRes })
-      .mockResolvedValueOnce({ Item: paymentMethodRes });
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: customerRes }, { Item: paymentMethodRes }]
+    });
 
     const result = await Order.findById("123", {
       include: [{ association: "customer" }, { association: "paymentMethod" }]
@@ -455,14 +488,15 @@ describe("FindById", () => {
       pk: "Order#123",
       sk: "Order",
       id: "123",
+      type: "Order",
       customerId: "456",
       paymentMethodId: "789",
       orderDate: "2023-09-15T04:26:31.148Z",
       customer: {
-        type: "Customer",
         pk: "Customer#456",
         sk: "Customer",
         id: "456",
+        type: "Customer",
         name: "Some Customer",
         address: "11 Some St",
         updatedAt: "2022-09-15T04:26:31.148Z"
@@ -471,6 +505,7 @@ describe("FindById", () => {
         pk: "PaymentMethod#789",
         sk: "PaymentMethod",
         id: "789",
+        type: "PaymentMethod",
         lastFour: "0000",
         customerId: "123",
         updatedAt: "2023-02-15T08:31:15.148Z"
@@ -489,28 +524,34 @@ describe("FindById", () => {
           ExpressionAttributeValues: {
             ":PK2": "Order#123",
             ":Type1": "Order"
-          }
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([
+    expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          Key: { PK: "Customer#456", SK: "Customer" }
-        }
-      ],
-      [
-        {
-          TableName: "mock-table",
-          Key: { PK: "PaymentMethod#789", SK: "PaymentMethod" }
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Customer#456", SK: "Customer" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#789", SK: "PaymentMethod" }
+              }
+            }
+          ]
         }
       ]
     ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }]
+      [{ name: "TransactGetCommand" }]
     ]);
   });
 
@@ -521,7 +562,8 @@ describe("FindById", () => {
       PK: "PaymentMethodProvider#123",
       SK: "PaymentMethodProvider",
       Id: "123",
-      Name: "Vida",
+      Type: "PaymentMethodProvider",
+      Name: "Visa",
       PaymentMethodId: "789"
     };
 
@@ -529,13 +571,16 @@ describe("FindById", () => {
       PK: "PaymentMethod#789",
       SK: "PaymentMethod",
       Id: "789",
+      Type: "PaymentMethod",
       LastFour: "0000",
       CustomerId: "123",
       UpdatedAt: "2023-02-15T08:31:15.148Z"
     };
 
     mockQuery.mockResolvedValueOnce({ Items: [paymentMethodProviderRes] });
-    mockGet.mockResolvedValueOnce({ Item: paymentMethodRes });
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: paymentMethodRes }]
+    });
 
     const result = await PaymentMethodProvider.findById("123", {
       include: [{ association: "paymentMethod" }]
@@ -545,12 +590,14 @@ describe("FindById", () => {
       pk: "PaymentMethodProvider#123",
       sk: "PaymentMethodProvider",
       id: "123",
-      name: "Vida",
+      type: "PaymentMethodProvider",
+      name: "Visa",
       paymentMethodId: "789",
       paymentMethod: {
         pk: "PaymentMethod#789",
         sk: "PaymentMethod",
         id: "789",
+        type: "PaymentMethod",
         lastFour: "0000",
         customerId: "123",
         updatedAt: "2023-02-15T08:31:15.148Z"
@@ -568,21 +615,28 @@ describe("FindById", () => {
           ExpressionAttributeValues: {
             ":PK2": "PaymentMethodProvider#123",
             ":Type1": "PaymentMethodProvider"
-          }
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([
+    expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          Key: { PK: "PaymentMethod#789", SK: "PaymentMethod" }
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#789", SK: "PaymentMethod" }
+              }
+            }
+          ]
         }
       ]
     ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
-      [{ name: "GetCommand" }]
+      [{ name: "TransactGetCommand" }]
     ]);
   });
 
@@ -593,6 +647,7 @@ describe("FindById", () => {
       PK: "PaymentMethod#789",
       SK: "PaymentMethod",
       Id: "789",
+      Type: "PaymentMethod",
       LastFour: "0000",
       CustomerId: "123",
       UpdatedAt: "2023-02-15T08:31:15.148Z"
@@ -613,14 +668,17 @@ describe("FindById", () => {
       PK: "PaymentMethodProvider#123",
       SK: "PaymentMethodProvider",
       Id: "123",
-      Name: "Vida",
+      Type: "PaymentMethodProvider",
+      Name: "Visa",
       PaymentMethodId: "789"
     };
 
     mockQuery.mockResolvedValueOnce({
       Items: [paymentMethodRes, paymentMethodProviderLink]
     });
-    mockGet.mockResolvedValueOnce({ Item: paymentMethodProviderRes });
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: paymentMethodProviderRes }]
+    });
 
     const result = await PaymentMethod.findById("789", {
       include: [{ association: "paymentMethodProvider" }]
@@ -630,6 +688,7 @@ describe("FindById", () => {
       pk: "PaymentMethod#789",
       sk: "PaymentMethod",
       id: "789",
+      type: "PaymentMethod",
       lastFour: "0000",
       customerId: "123",
       updatedAt: "2023-02-15T08:31:15.148Z",
@@ -637,7 +696,8 @@ describe("FindById", () => {
         pk: "PaymentMethodProvider#123",
         sk: "PaymentMethodProvider",
         id: "123",
-        name: "Vida",
+        type: "PaymentMethodProvider",
+        name: "Visa",
         paymentMethodId: "789"
       }
     });
@@ -660,24 +720,31 @@ describe("FindById", () => {
             ":Type1": "PaymentMethod",
             ":Type2": "BelongsToLink",
             ":ForeignEntityType3": "PaymentMethodProvider"
-          }
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([
+    expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          Key: {
-            PK: "PaymentMethodProvider#123",
-            SK: "PaymentMethodProvider"
-          }
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: {
+                  PK: "PaymentMethodProvider#123",
+                  SK: "PaymentMethodProvider"
+                }
+              }
+            }
+          ]
         }
       ]
     ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
-      [{ name: "GetCommand" }]
+      [{ name: "TransactGetCommand" }]
     ]);
   });
 
@@ -688,6 +755,7 @@ describe("FindById", () => {
       PK: "PaymentMethod#789",
       SK: "PaymentMethod",
       Id: "789",
+      Type: "PaymentMethod",
       LastFour: "0000",
       CustomerId: "123",
       UpdatedAt: "2023-02-15T08:31:15.148Z"
@@ -741,19 +809,21 @@ describe("FindById", () => {
       Items: [paymentMethodRes, ...orderLinks]
     });
 
-    mockGet.mockResolvedValueOnce({ Item: customerRes });
-    orderLinks.forEach(link => {
-      mockGet.mockResolvedValueOnce({
-        Item: {
-          PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-          SK: link.ForeignEntityType,
-          Id: link.ForeignKey,
-          PaymentMethodId: link.PK.split("#")[1],
-          CustomerId: "123",
-          OrderDate: "2022-12-15T09:31:15.148Z",
-          UpdatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      });
+    const orders = orderLinks.map(link => ({
+      Item: {
+        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+        SK: link.ForeignEntityType,
+        Id: link.ForeignKey,
+        Type: link.ForeignEntityType,
+        PaymentMethodId: link.PK.split("#")[1],
+        CustomerId: "123",
+        OrderDate: "2022-12-15T09:31:15.148Z",
+        UpdatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    }));
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: customerRes }, ...orders]
     });
 
     const result = await PaymentMethod.findById("789", {
@@ -764,14 +834,15 @@ describe("FindById", () => {
       pk: "PaymentMethod#789",
       sk: "PaymentMethod",
       id: "789",
+      type: "PaymentMethod",
       lastFour: "0000",
       customerId: "123",
       updatedAt: "2023-02-15T08:31:15.148Z",
       customer: {
-        type: "Customer",
         pk: "Customer#123",
         sk: "Customer",
         id: "123",
+        type: "Customer",
         name: "Some Customer",
         address: "11 Some St",
         updatedAt: "2023-09-15T04:26:31.148Z"
@@ -781,6 +852,7 @@ describe("FindById", () => {
           pk: "Order#111",
           sk: "Order",
           id: "111",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "789",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -790,6 +862,7 @@ describe("FindById", () => {
           pk: "Order#112",
           sk: "Order",
           id: "112",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "789",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -799,6 +872,7 @@ describe("FindById", () => {
           pk: "Order#113",
           sk: "Order",
           id: "113",
+          type: "Order",
           customerId: "123",
           paymentMethodId: "789",
           orderDate: "2022-12-15T09:31:15.148Z",
@@ -827,29 +901,50 @@ describe("FindById", () => {
             ":Type2": "BelongsToLink",
             ":ForeignEntityType3": "Order",
             ":ForeignEntityType4": "Customer"
-          }
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([
+    expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          Key: { PK: "Customer#123", SK: "Customer" }
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#111", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#112", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Order#113", SK: "Order" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Customer#123", SK: "Customer" }
+              }
+            }
+          ]
         }
-      ],
-      [{ TableName: "mock-table", Key: { PK: "Order#111", SK: "Order" } }],
-      [{ TableName: "mock-table", Key: { PK: "Order#112", SK: "Order" } }],
-      [{ TableName: "mock-table", Key: { PK: "Order#113", SK: "Order" } }]
+      ]
     ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }],
-      [{ name: "GetCommand" }]
+      [{ name: "TransactGetCommand" }]
     ]);
   });
+
+  // TODO here......
 
   describe("types", () => {
     describe("operation results", () => {
@@ -857,6 +952,7 @@ describe("FindById", () => {
         expect.assertions(1);
 
         mockQuery.mockResolvedValueOnce({ Items: [] });
+        mockTransactGetItems.mockResolvedValueOnce({});
 
         const result = await Customer.findById("123", {
           include: [{ association: "contactInformation" }]
@@ -873,8 +969,10 @@ describe("FindById", () => {
         }
       });
     });
+
     it("will allow options with include options that are associations/relationships defined on the model", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       await PaymentMethod.findById("789", {
         include: [
@@ -890,6 +988,7 @@ describe("FindById", () => {
 
     it("will not allow include options with attributes that do not exist on the entity", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       await PaymentMethod.findById("789", {
         include: [
@@ -901,6 +1000,7 @@ describe("FindById", () => {
 
     it("(BelongsTo HasMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "customer" }]
@@ -930,6 +1030,7 @@ describe("FindById", () => {
 
     it("(BelongsTo HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethodProvider.findById("789", {
         include: [{ association: "paymentMethod" }]
@@ -955,6 +1056,7 @@ describe("FindById", () => {
 
     it("(HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "paymentMethodProvider" }]
@@ -984,6 +1086,7 @@ describe("FindById", () => {
 
     it("(HasMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "orders" }]
@@ -1013,6 +1116,7 @@ describe("FindById", () => {
 
     it("(BelongsTo) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "customer" }]
@@ -1028,6 +1132,7 @@ describe("FindById", () => {
 
     it("(HasMany) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "orders" }]

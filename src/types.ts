@@ -1,4 +1,5 @@
 import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type BelongsToLink } from "./relationships";
 
 // TODO Jsdoc for everything in here
 
@@ -12,5 +13,9 @@ export type ForeignKey = Brand<string, "ForeignKey">;
 // TODO should this be the native scalar version type?
 export type DynamoTableItem = Record<string, NativeAttributeValue>;
 
-// TODO this is duplicated
 export type StringObj = Record<string, string>;
+
+export interface BelongsToLinkDynamoItem {
+  Type: typeof BelongsToLink.name;
+  [key: string]: NativeAttributeValue;
+}

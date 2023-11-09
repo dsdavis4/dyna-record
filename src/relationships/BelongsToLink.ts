@@ -1,6 +1,7 @@
 import { Entity, Attribute } from "../decorators";
 
-// TODO is belongs to link accurate? Or EntityLink? Its used by HasOne...
+export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
+export const FOREIGN_KEY_ALIAS = "ForeignKey";
 
 @Entity
 class BelongsToLink {
@@ -21,10 +22,10 @@ class BelongsToLink {
   @Attribute({ alias: "Type" })
   public type: string;
 
-  @Attribute({ alias: "ForeignEntityType" })
+  @Attribute({ alias: FOREIGN_ENTITY_TYPE_ALIAS })
   public foreignEntityType: string;
 
-  @Attribute({ alias: "ForeignKey" })
+  @Attribute({ alias: FOREIGN_KEY_ALIAS })
   public foreignKey: string;
 
   // TODO how to get this dynamically? This is a default field

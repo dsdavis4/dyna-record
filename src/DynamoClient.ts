@@ -4,13 +4,22 @@ import {
   GetCommand,
   QueryCommand,
   TransactWriteCommand,
+  TransactGetCommand,
   type QueryCommandInput,
   type QueryCommandOutput,
+  type GetCommandInput,
   type GetCommandOutput,
   type TransactWriteCommandInput,
-  type TransactWriteCommandOutput
+  type TransactWriteCommandOutput,
+  type TransactGetCommandInput,
+  type TransactGetCommandOutput
 } from "@aws-sdk/lib-dynamodb";
-import { type KeyConditions } from "./query-utils";
+
+export type TransactGetItemResponses = NonNullable<
+  TransactGetCommandOutput["Responses"]
+>;
+
+export type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
 
 // const dynamo = DynamoDBDocumentClient.from(
 //   new DynamoDBClient({ region: "us-west-2" })
@@ -33,37 +42,29 @@ const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
 
+// TODO should these all be static?
+
 class DynamoClient {
-  private readonly tableName: string;
-
-  // TODO remove table name from here...
-  constructor(tableName: string) {
-    this.tableName = tableName;
-  }
-
-  // TODO should this be updated so it gets all the items in a BatchGetItems?
-  // TransctGetItems likely wont work due to limitation of 100 records and will fail if writes happen at same time
-  public async findById(
-    key: KeyConditions
+  public async getItem(
+    params: GetCommandInput
   ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {
-    console.log("findById", { key });
-
-    const response = await dynamo.send(
-      new GetCommand({
-        TableName: this.tableName,
-        Key: key
-      })
-    );
-
+    console.log("findById", { params });
+    const response = await dynamo.send(new GetCommand(params));
     return response.Item ?? null;
   }
 
-  public async query(
-    params: QueryCommandInput
-  ): Promise<NonNullable<QueryCommandOutput["Items"]>> {
+  public async query(params: QueryCommandInput): Promise<QueryItems> {
     console.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
+  }
+
+  public async transactGetItems(
+    params: TransactGetCommandInput
+  ): Promise<TransactGetItemResponses> {
+    console.log("transactGetItems", { params });
+    const response = await dynamo.send(new TransactGetCommand(params));
+    return response.Responses ?? [];
   }
 
   public async transactWriteItems(

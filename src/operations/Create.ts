@@ -10,9 +10,8 @@ import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { Brand, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
-import { QueryResolver } from "../query-utils";
-import { TransactionBuilder, type ConditionCheck } from "../dynamo-utils";
-import { entityToTableItem } from "../utils";
+import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
+import { entityToTableItem, tableItemToEntity } from "../utils";
 import {
   isBelongsToRelationship,
   isHasManyRelationship,
@@ -76,7 +75,7 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 class Create<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
-  readonly #transactionBuilder: TransactionBuilder;
+  readonly #transactionBuilder: TransactWriteBuilder;
 
   private readonly EntityClass: EntityClass<T>;
 
@@ -86,7 +85,7 @@ class Create<T extends SingleTableDesign> {
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
-    this.#transactionBuilder = new TransactionBuilder();
+    this.#transactionBuilder = new TransactWriteBuilder();
   }
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
@@ -108,11 +107,7 @@ class Create<T extends SingleTableDesign> {
 
     await this.#transactionBuilder.executeTransaction();
 
-    // TODO using QueryResolver here is not great...
-    //      1. It can be renamed..
-    //      2. Or I need to do a big refactor when I update that function to use FindById...
-    const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(putExpression.Item);
+    return tableItemToEntity<T>(this.EntityClass, putExpression.Item);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {

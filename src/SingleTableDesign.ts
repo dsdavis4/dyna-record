@@ -4,7 +4,7 @@ import { Attribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
-  type FindByIdResponse,
+  type FindByIdIncludesRes,
   Query,
   type QueryOptions,
   type EntityKeyConditions,
@@ -48,7 +48,7 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<FindByIdResponse<T, Opts> | null> {
+  ): Promise<T | FindByIdIncludesRes<T, Opts> | null> {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
