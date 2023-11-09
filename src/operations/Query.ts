@@ -79,15 +79,13 @@ class Query<T extends SingleTableDesign> {
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
   ): Promise<QueryResults<T>> {
-    const { name: tableName } = this.#tableMetadata;
-
     const params = new QueryBuilder({
       entityClassName: this.EntityClass.name,
       key,
       options
     }).build();
 
-    const dynamo = new DynamoClient(tableName);
+    const dynamo = new DynamoClient();
     const queryResults = await dynamo.query(params);
 
     return this.resolveQueryResults(queryResults);
@@ -106,7 +104,7 @@ class Query<T extends SingleTableDesign> {
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
     const entityMetadata = this.#entityMetadata;
-    const { primaryKey, sortKey, name: tableName } = this.#tableMetadata;
+    const { primaryKey, sortKey } = this.#tableMetadata;
 
     const modelPk = entityMetadata.attributes[primaryKey].name;
     const modelSk = entityMetadata.attributes[sortKey].name;
@@ -124,7 +122,7 @@ class Query<T extends SingleTableDesign> {
       options
     }).build();
 
-    const dynamo = new DynamoClient(tableName);
+    const dynamo = new DynamoClient();
     const queryResults = await dynamo.query(params);
 
     return this.resolveQueryResults(queryResults);

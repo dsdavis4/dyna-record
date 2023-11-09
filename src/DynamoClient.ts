@@ -40,14 +40,9 @@ const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
 
+// TODO should these all be static?
+
 class DynamoClient {
-  private readonly tableName: string;
-
-  // TODO remove table name from here...
-  constructor(tableName: string) {
-    this.tableName = tableName;
-  }
-
   public async getItem(
     params: GetCommandInput
   ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {

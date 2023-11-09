@@ -13,8 +13,7 @@ class TransactGetBuilder {
    * Execute the transaction
    */
   async executeTransaction(): Promise<TransactGetItemResponses> {
-    // TODO remove hard coded name
-    const dynamo = new DynamoClient("temp-table");
+    const dynamo = new DynamoClient();
 
     return await dynamo.transactGetItems({
       TransactItems: this.transactionItems

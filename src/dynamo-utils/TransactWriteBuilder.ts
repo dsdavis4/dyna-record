@@ -21,8 +21,7 @@ class TransactionBuilder {
    * Execute the transaction
    */
   public async executeTransaction(): Promise<void> {
-    // TODO remove hard coded name
-    const dynamo = new DynamoClient("temp-table");
+    const dynamo = new DynamoClient();
 
     try {
       const response = await dynamo.transactWriteItems({

@@ -125,7 +125,7 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdOnly(id: string): Promise<T | null> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const dynamo = new DynamoClient(tableName);
+    const dynamo = new DynamoClient();
     const res = await dynamo.getItem({
       TableName: tableName,
       Key: {
@@ -152,12 +152,10 @@ class FindById<T extends SingleTableDesign> {
     id: string,
     includedAssociations: IncludedAssociations<T>
   ): Promise<FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
-    const { name: tableName } = this.#tableMetadata;
-
     const includedRels = this.getIncludedRelationships(includedAssociations);
     const params = this.buildFindByIdIncludesQuery(id, includedRels);
 
-    const dynamo = new DynamoClient(tableName);
+    const dynamo = new DynamoClient();
     const queryResults = await dynamo.query({
       ...params,
       ConsistentRead: true
