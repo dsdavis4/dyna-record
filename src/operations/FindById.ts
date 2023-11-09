@@ -8,7 +8,7 @@ import Metadata, {
   type BelongsToRelationship
 } from "../metadata";
 import DynamoClient, { type TransactGetItemResponses } from "../DynamoClient";
-import { QueryBuilder, QueryResolver } from "../query-utils";
+import { QueryBuilder } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
 import { TransactGetBuilder } from "../dynamo-utils";
@@ -63,7 +63,7 @@ type EntityKeysWithIncludedAssociations<
     : T[K];
 };
 
-export type FindByIdResponse<
+export type FindByIdIncludesRes<
   T extends SingleTableDesign,
   Opts extends FindByIdOptions<T>
 > = EntityKeysWithIncludedAssociations<
@@ -118,7 +118,7 @@ class FindById<T extends SingleTableDesign> {
   public async run(
     id: string,
     options?: FindByIdOptions<T>
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
+  ): Promise<T | FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
     if (options?.include === undefined) {
       return await this.findByIdOnly(id);
     } else {
@@ -131,9 +131,7 @@ class FindById<T extends SingleTableDesign> {
    * @param {string} id - Entity Id
    * @returns An entity object or null
    */
-  private async findByIdOnly(
-    id: string
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
+  private async findByIdOnly(id: string): Promise<T | null> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const dynamo = new DynamoClient(tableName);
@@ -145,12 +143,7 @@ class FindById<T extends SingleTableDesign> {
     if (res === null) {
       return null;
     } else {
-      const queryResolver = new QueryResolver<T>(this.EntityClass);
-      // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
-      return (await queryResolver.resolve(res)) as FindByIdResponse<
-        T,
-        FindByIdOptions<T>
-      >;
+      return tableItemToEntity<T>(this.EntityClass, res);
     }
   }
 
@@ -164,7 +157,7 @@ class FindById<T extends SingleTableDesign> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: IncludedAssociations<T>
-  ): Promise<FindByIdResponse<T, FindByIdOptions<T>> | null> {
+  ): Promise<FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
     const { name: tableName } = this.#tableMetadata;
 
     const includedRels = this.getIncludedRelationships(includedAssociations);
@@ -194,13 +187,6 @@ class FindById<T extends SingleTableDesign> {
       transactionRes,
       relationsObj.relationsLookup
     );
-
-    // const queryResolver = new QueryResolver<T>(this.EntityClass);
-    // // TODO dont use type assertion. Should I break query resolver up so FindById and Query classes own their own resolvers?
-    // return (await queryResolver.resolve(
-    //   queryResults,
-    //   includedRels
-    // )) as FindByIdResponse<T, FindByIdOptions<T>>;
   }
 
   // TODO tsdoc
@@ -352,7 +338,7 @@ class FindById<T extends SingleTableDesign> {
     entityTableItem: QueryItems[number],
     transactionResults: TransactGetItemResponses,
     relationsLookup: RelationshipLookup
-  ): FindByIdResponse<T, FindByIdOptions<T>> {
+  ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
     const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
 
     // TODO Yikes! Clean this up
@@ -381,7 +367,7 @@ class FindById<T extends SingleTableDesign> {
       }
     });
 
-    return parentEntity as FindByIdResponse<T, FindByIdOptions<T>>;
+    return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
   }
 }
 

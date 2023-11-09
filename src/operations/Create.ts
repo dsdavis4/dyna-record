@@ -10,9 +10,8 @@ import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { Brand, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
-import { QueryResolver } from "../query-utils";
 import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
-import { entityToTableItem } from "../utils";
+import { entityToTableItem, tableItemToEntity } from "../utils";
 import {
   isBelongsToRelationship,
   isHasManyRelationship,
@@ -108,9 +107,7 @@ class Create<T extends SingleTableDesign> {
 
     await this.#transactionBuilder.executeTransaction();
 
-    // TODO use tableItemToEntity util
-    const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(putExpression.Item);
+    return tableItemToEntity<T>(this.EntityClass, putExpression.Item);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
