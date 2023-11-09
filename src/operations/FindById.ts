@@ -220,7 +220,11 @@ class FindById<T extends SingleTableDesign> {
     );
   }
 
-  // TODO Tsdoc to include this is for HasOne of HasMany - really anything from a link
+  /**
+   * Builds transactions to get an associated entity via a BelongsToLink (HasOne or HasMany)
+   * @param belongsToLinks
+   * @param relationsLookup
+   */
   private buildGetRelationshipsThroughLinksTransaction(
     belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipObj["relationsLookup"]
@@ -242,7 +246,11 @@ class FindById<T extends SingleTableDesign> {
     });
   }
 
-  // TODO tsdoc this is for lookign up relationships where the forgein key is on the parent item
+  /**
+   * Builds transactions to get an associated entity using a foreign key on the parent model (BelongsTo)
+   * @param belongsToLinks
+   * @param relationsLookup
+   */
   private buildGetRelationshipsThroughForeignKeyTransaction(
     item: QueryItems[number],
     belongsToRelationships: RelationshipObj["belongsToRelationships"]
