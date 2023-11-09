@@ -22,6 +22,11 @@ import {
   isKeyOfEntity,
   tableItemToEntity
 } from "../utils";
+import { BelongsToLink } from "../relationships";
+import {
+  FOREIGN_ENTITY_TYPE_ALIAS,
+  FOREIGN_KEY_ALIAS
+} from "../relationships/BelongsToLink";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
@@ -223,15 +228,14 @@ class FindById<T extends SingleTableDesign> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     belongsToLinks.forEach(link => {
-      // TODO make these type safe... they are type any... Goal is that if something changed in BelongsToLink then there is a type error here...
-      //      Can maybe do this by using BelongsToLinkDynamoItem...
-      const { ForeignKey, ForeignEntityType } = link;
-      const includedRel = relationsLookup[ForeignEntityType];
+      const foreignKey = link[FOREIGN_KEY_ALIAS];
+      const foreignEntityType = link[FOREIGN_ENTITY_TYPE_ALIAS];
+      const includedRel = relationsLookup[foreignEntityType];
 
       this.#transactionBuilder.addGet({
         TableName: tableName,
         Key: {
-          [primaryKey]: includedRel.target.primaryKeyValue(ForeignKey),
+          [primaryKey]: includedRel.target.primaryKeyValue(foreignKey),
           [sortKey]: includedRel.target.name
         }
       });

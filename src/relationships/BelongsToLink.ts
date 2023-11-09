@@ -1,5 +1,8 @@
 import { Entity, Attribute } from "../decorators";
 
+export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
+export const FOREIGN_KEY_ALIAS = "ForeignKey";
+
 @Entity
 class BelongsToLink {
   // // TODO how to obtain the pk and sk... maybe throught the new type?
@@ -19,10 +22,10 @@ class BelongsToLink {
   @Attribute({ alias: "Type" })
   public type: string;
 
-  @Attribute({ alias: "ForeignEntityType" })
+  @Attribute({ alias: FOREIGN_ENTITY_TYPE_ALIAS })
   public foreignEntityType: string;
 
-  @Attribute({ alias: "ForeignKey" })
+  @Attribute({ alias: FOREIGN_KEY_ALIAS })
   public foreignKey: string;
 
   // TODO how to get this dynamically? This is a default field
