@@ -172,7 +172,12 @@ class FindById<T extends SingleTableDesign> {
     );
   }
 
-  // TODO tsdoc
+  /**
+   * Build the query to find the entity, and any of the BelongsToLinks for the included models
+   * @param id
+   * @param includedRelationships
+   * @returns
+   */
   private buildFindByIdIncludesQuery(
     id: string,
     includedRelationships: RelationshipMetadata[]
@@ -192,7 +197,13 @@ class FindById<T extends SingleTableDesign> {
     }).build();
   }
 
-  // TODO tsdoc
+  /**
+   * Sort query results into an object containing:
+   *  - item: The FindById DynamoItem
+   *  - belongsToLinks: BelongsToLinkDynamoItem records for each of the included relationships
+   * @param queryResults
+   * @returns
+   */
   private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
