@@ -14,7 +14,6 @@ import { QueryBuilder } from "../query-utils";
 import { includedRelationshipsFilter } from "../query-utils/Filters";
 import type { EntityAttributes, RelationshipAttributeNames } from "./types";
 import { TransactGetBuilder } from "../dynamo-utils";
-import { BelongsToLink } from "../relationships";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { isBelongsToRelationship } from "../metadata/utils";
 import type { StringObj, BelongsToLinkDynamoItem } from "../types";
@@ -63,10 +62,8 @@ export type FindByIdIncludesRes<
   keyof EntityAttributes<T> | IncludedKeys<T, Opts>
 >;
 
-// TODO this is duplicated from QueryResolve, can I delete from there
 type RelationshipLookup = Record<string, RelationshipMetadata>;
 
-// TODO this is duplicated from QueryResolve, can I delete from there
 interface RelationshipObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
@@ -153,9 +150,6 @@ class FindById<T extends SingleTableDesign> {
       ...params,
       ConsistentRead: true
     });
-
-    // TODO do I need this?
-    // if (queryResults.length === 0) return null;
 
     const sortedQueryResults = this.filterQueryResults(queryResults);
     const relationsObj = this.buildIncludedRelationsObj(includedRels);
@@ -282,7 +276,13 @@ class FindById<T extends SingleTableDesign> {
     );
   }
 
-  // TODO tsdoc
+  /**
+   * Creates an object including
+   *  - relationsLookup: Object to look up RelationshipMetadata by Entity name
+   *  -  belongsToRelationships: An array of BelongsTo relationships
+   * @param includedRelationships
+   * @returns
+   */
   private buildIncludedRelationsObj(
     includedRelationships: RelationshipMetadata[]
   ): RelationshipObj {
