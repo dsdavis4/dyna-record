@@ -301,7 +301,7 @@ class FindById<T extends SingleTableDesign> {
   /**
    * Creates an object including
    *  - relationsLookup: Object to look up RelationshipMetadata by Entity name
-   *  -  belongsToRelationships: An array of BelongsTo relationships
+   *  - belongsToRelationships: An array of BelongsTo relationships
    * @param includedRelationships
    * @returns
    */
