@@ -51,8 +51,6 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   return entity;
 };
 
-// TODO this is duplicated from QueryResolve, make sure to DRY up
-//      This might solve itself when I remove QueryResolver
 /**
  * Type guard to check if the key is defined on the entity
  */

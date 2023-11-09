@@ -1,5 +1,4 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, {
   type RelationshipMetadata,
   type EntityMetadata,
@@ -75,18 +74,10 @@ export type FindByIdIncludesRes<
 type RelationshipLookup = Record<string, RelationshipMetadata>;
 
 // TODO this is duplicated from QueryResolve, can I delete from there
-interface BelongsToLinkDynamoItem {
-  Type: typeof BelongsToLink.name;
-  [key: string]: NativeAttributeValue;
-}
-
-// TODO this is duplicated from QueryResolve, can I delete from there
 interface RelationshipObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
 }
-
-// Clean up the QueryResolver class... I moved most of the code here
 
 /**
  * FindById operations

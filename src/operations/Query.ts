@@ -6,14 +6,21 @@ import Metadata, {
 } from "../metadata";
 import {
   QueryBuilder,
-  QueryResolver,
   type KeyConditions,
   type QueryOptions as QueryBuilderOptions,
   type SortKeyCondition
 } from "../query-utils";
 import DynamoClient from "../DynamoClient";
-import { type BelongsToLink } from "../relationships";
+import { BelongsToLink } from "../relationships";
 import type { EntityAttributes } from "./types";
+import { type DynamoTableItem } from "../types";
+import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import { tableItemToEntity } from "../utils";
+
+interface BelongsToLinkDynamoItem {
+  Type: typeof BelongsToLink.name;
+  [key: string]: NativeAttributeValue;
+}
 
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
@@ -83,8 +90,7 @@ class Query<T extends SingleTableDesign> {
     const dynamo = new DynamoClient(tableName);
     const queryResults = await dynamo.query(params);
 
-    const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(queryResults);
+    return this.resolveQueryResults(queryResults);
   }
 
   /**
@@ -121,8 +127,28 @@ class Query<T extends SingleTableDesign> {
     const dynamo = new DynamoClient(tableName);
     const queryResults = await dynamo.query(params);
 
-    const queryResolver = new QueryResolver<T>(this.EntityClass);
-    return await queryResolver.resolve(queryResults);
+    return this.resolveQueryResults(queryResults);
+  }
+
+  private resolveQueryResults(
+    queryResults: DynamoTableItem[]
+  ): QueryResults<T> {
+    return queryResults.map(res =>
+      this.isBelongsToLinkDynamoItem(res)
+        ? tableItemToEntity(BelongsToLink, res)
+        : tableItemToEntity<T>(this.EntityClass, res)
+    );
+  }
+
+  /**
+   * Type guard to check if the DynamoTableItem is a BelongsToLink
+   * @param res DynamoTableItem
+   * @returns boolean
+   */
+  private isBelongsToLinkDynamoItem(
+    res: DynamoTableItem
+  ): res is BelongsToLinkDynamoItem {
+    return res.Type === BelongsToLink.name;
   }
 }
 
