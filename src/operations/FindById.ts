@@ -17,8 +17,12 @@ import { TransactGetBuilder } from "../dynamo-utils";
 import { BelongsToLink } from "../relationships";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { isBelongsToRelationship } from "../metadata/utils";
-import type { StringObj } from "../types";
-import { isKeyOfEntity, tableItemToEntity } from "../utils";
+import type { StringObj, BelongsToLinkDynamoItem } from "../types";
+import {
+  isBelongsToLinkDynamoItem,
+  isKeyOfEntity,
+  tableItemToEntity
+} from "../utils";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
@@ -30,9 +34,7 @@ type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
 
 interface SortedQueryResults {
   item: QueryItems[number];
-  belongsToLinks: QueryItems;
-  // TODO Should it be this?
-  // belongsToLinks: BelongsToLinkDynamoItem;
+  belongsToLinks: BelongsToLinkDynamoItem[];
 }
 
 type IncludedKeys<
@@ -197,10 +199,10 @@ class FindById<T extends SingleTableDesign> {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
         if (res.Type === this.EntityClass.name) acc.item = res;
-        if (res.Type === BelongsToLink.name) acc.belongsToLinks.push(res);
+        if (isBelongsToLinkDynamoItem(res)) acc.belongsToLinks.push(res);
         return acc;
       },
-      { item: {}, belongsToLinks: [] }
+      { item: {}, belongsToLinks: [] as BelongsToLinkDynamoItem[] }
     );
   }
 
@@ -221,7 +223,7 @@ class FindById<T extends SingleTableDesign> {
 
   // TODO Tsdoc to include this is for HasOne of HasMany - really anything from a link
   private buildGetRelationshipsThroughLinksTransaction(
-    belongsToLinks: QueryItems,
+    belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipObj["relationsLookup"]
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;

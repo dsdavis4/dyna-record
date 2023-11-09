@@ -13,14 +13,8 @@ import {
 import DynamoClient from "../DynamoClient";
 import { BelongsToLink } from "../relationships";
 import type { EntityAttributes } from "./types";
-import { type DynamoTableItem } from "../types";
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import { tableItemToEntity } from "../utils";
-
-interface BelongsToLinkDynamoItem {
-  Type: typeof BelongsToLink.name;
-  [key: string]: NativeAttributeValue;
-}
+import { type DynamoTableItem, type BelongsToLinkDynamoItem } from "../types";
+import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
 
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
@@ -134,21 +128,10 @@ class Query<T extends SingleTableDesign> {
     queryResults: DynamoTableItem[]
   ): QueryResults<T> {
     return queryResults.map(res =>
-      this.isBelongsToLinkDynamoItem(res)
+      isBelongsToLinkDynamoItem(res)
         ? tableItemToEntity(BelongsToLink, res)
         : tableItemToEntity<T>(this.EntityClass, res)
     );
-  }
-
-  /**
-   * Type guard to check if the DynamoTableItem is a BelongsToLink
-   * @param res DynamoTableItem
-   * @returns boolean
-   */
-  private isBelongsToLinkDynamoItem(
-    res: DynamoTableItem
-  ): res is BelongsToLinkDynamoItem {
-    return res.Type === BelongsToLink.name;
   }
 }
 

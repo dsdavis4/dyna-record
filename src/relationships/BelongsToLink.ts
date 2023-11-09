@@ -1,7 +1,5 @@
 import { Entity, Attribute } from "../decorators";
 
-// TODO is belongs to link accurate? Or EntityLink? Its used by HasOne...
-
 @Entity
 class BelongsToLink {
   // // TODO how to obtain the pk and sk... maybe throught the new type?

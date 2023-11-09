@@ -1,5 +1,9 @@
 import type SingleTableDesign from "./SingleTableDesign";
-import { type DynamoTableItem, type StringObj } from "./types";
+import {
+  type DynamoTableItem,
+  type BelongsToLinkDynamoItem,
+  type StringObj
+} from "./types";
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
 
@@ -59,6 +63,17 @@ export const isKeyOfEntity = (
   key: string
 ): key is keyof SingleTableDesign => {
   return key in entity;
+};
+
+/**
+ * Type guard to check if the DynamoTableItem is a BelongsToLink
+ * @param res DynamoTableItem
+ * @returns boolean
+ */
+export const isBelongsToLinkDynamoItem = (
+  res: DynamoTableItem
+): res is BelongsToLinkDynamoItem => {
+  return res.Type === BelongsToLink.name;
 };
 
 /**
