@@ -22,7 +22,6 @@ import {
   isKeyOfEntity,
   tableItemToEntity
 } from "../utils";
-import { BelongsToLink } from "../relationships";
 import {
   FOREIGN_ENTITY_TYPE_ALIAS,
   FOREIGN_KEY_ALIAS
@@ -331,6 +330,13 @@ class FindById<T extends SingleTableDesign> {
     );
   }
 
+  /**
+   * Serialize the FindById item to its class, serialize results from included relationships query onto the entity
+   * @param entityTableItem
+   * @param transactionResults
+   * @param relationsLookup
+   * @returns
+   */
   private resolveFindByIdIncludesResults(
     entityTableItem: QueryItems[number],
     transactionResults: TransactGetItemResponses,
@@ -338,7 +344,6 @@ class FindById<T extends SingleTableDesign> {
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
     const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
 
-    // TODO Yikes! Clean this up
     transactionResults.forEach(res => {
       const tableItem = res.Item;
 
