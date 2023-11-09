@@ -15,8 +15,6 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { type KeyConditions } from "./query-utils";
 
-// TODO should this move into dynamo-utils...?
-
 export type TransactGetItemResponses = NonNullable<
   TransactGetCommandOutput["Responses"]
 >;
