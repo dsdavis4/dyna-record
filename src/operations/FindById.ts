@@ -20,12 +20,6 @@ import { isBelongsToRelationship } from "../metadata/utils";
 import type { StringObj } from "../types";
 import { isKeyOfEntity, tableItemToEntity } from "../utils";
 
-// TODO start here. I just got everything working with transactions.
-//     Now I need to address TODOs and fix tests
-//     Likely a good idea to fix tests first
-
-// TODO as part of changing to use transactions... I should refactor  Query Resolver so its not needed anymore...
-
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
 }
