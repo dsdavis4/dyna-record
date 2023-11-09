@@ -60,3 +60,15 @@ export const isKeyOfEntity = (
 ): key is keyof SingleTableDesign => {
   return key in entity;
 };
+
+/**
+ * Break an array into chunks
+ * @param array
+ * @param size
+ * @returns Array split into chunks of given  size
+ */
+export const chunkArray = <T>(array: T[], size: number): T[][] => {
+  return Array.from({ length: Math.ceil(array.length / size) }, (_, index) =>
+    array.slice(index * size, (index + 1) * size)
+  );
+};
