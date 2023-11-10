@@ -15,6 +15,8 @@ import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
+// TODO start here... onto update
+
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods

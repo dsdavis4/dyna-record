@@ -13,7 +13,7 @@ import {
 import DynamoClient from "../DynamoClient";
 import { BelongsToLink } from "../relationships";
 import type { EntityAttributes } from "./types";
-import { type DynamoTableItem, type BelongsToLinkDynamoItem } from "../types";
+import { type DynamoTableItem } from "../types";
 import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
 
 export interface QueryOptions extends QueryBuilderOptions {
