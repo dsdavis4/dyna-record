@@ -13,6 +13,7 @@ export type ConditionCheck = NonNullable<
 >;
 export type Put = NonNullable<TransactItems[number]["Put"]>;
 export type Update = NonNullable<TransactItems[number]["Update"]>;
+export type Delete = NonNullable<TransactItems[number]["Delete"]>;
 
 class TransactionBuilder {
   private readonly transactionItems: TransactItems = [];
@@ -61,6 +62,7 @@ class TransactionBuilder {
     this.transactionItems.push({ Put: item });
   }
 
+  // TODO do I use the friednly error message? If so.. make a method and DRY up
   /**
    * Add an update operation to the transaction
    * @param item
@@ -70,6 +72,18 @@ class TransactionBuilder {
       this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
     }
     this.transactionItems.push({ Update: item });
+  }
+
+  // TODO do I use the friednly error message? If so.. make a method and DRY up
+  /**
+   * Add a delete operation to the transaction
+   * @param item
+   */
+  public addDelete(item: Delete, conditionFailedMsg?: string): void {
+    if (conditionFailedMsg !== undefined) {
+      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
+    }
+    this.transactionItems.push({ Delete: item });
   }
 
   /**

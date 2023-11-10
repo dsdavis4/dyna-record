@@ -15,8 +15,6 @@ import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
-// TODO start here... onto update
-
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods
@@ -200,6 +198,13 @@ class WsToken extends DrewsBrewsTable {
     // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
     //   include: [{ association: "brewery" }]
     // });
+
+    const updatedBeer = await Beer.update(
+      "ceb34f08-3472-45e8-b78c-9fa503b70637",
+      { breweryId: "bad", name: "updated beer name" }
+    );
+
+    debugger;
 
     // const beer = await Beer.create({
     //   style: "lager",
