@@ -7,6 +7,12 @@ import {
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
 
+/**
+ * Convert an entity to its aliased table item fields to for dynamo interactions
+ * @param entityClassName
+ * @param entityData
+ * @returns
+ */
 export const entityToTableItem = (
   entityClassName: string,
   entityData: SingleTableDesign
@@ -38,6 +44,12 @@ export const entityToTableItem = (
   );
 };
 
+/**
+ * Serialize a table item to its associated Entity class, using the class attribute property names
+ * @param EntityClass
+ * @param tableItem
+ * @returns
+ */
 export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem

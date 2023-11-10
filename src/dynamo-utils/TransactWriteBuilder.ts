@@ -12,6 +12,7 @@ export type ConditionCheck = NonNullable<
   TransactItems[number]["ConditionCheck"]
 >;
 export type Put = NonNullable<TransactItems[number]["Put"]>;
+export type Update = NonNullable<TransactItems[number]["Update"]>;
 
 class TransactionBuilder {
   private readonly transactionItems: TransactItems = [];
@@ -58,6 +59,17 @@ class TransactionBuilder {
       this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
     }
     this.transactionItems.push({ Put: item });
+  }
+
+  /**
+   * Add an update operation to the transaction
+   * @param item
+   */
+  public addUpdate(item: Update, conditionFailedMsg?: string): void {
+    if (conditionFailedMsg !== undefined) {
+      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
+    }
+    this.transactionItems.push({ Update: item });
   }
 
   /**

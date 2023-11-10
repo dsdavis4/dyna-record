@@ -8,7 +8,7 @@ import Metadata, {
 } from "../metadata";
 import { type RelationshipAttributeNames } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { Brand, PrimaryKey, SortKey } from "../types";
+import type { Brand, DynamoTableItem, PrimaryKey, SortKey } from "../types";
 import { BelongsToLink } from "../relationships";
 import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../utils";
@@ -54,6 +54,9 @@ type ForeignKeyToValue<T> = {
   [K in keyof T]: ExtractForeignKeyType<T[K]> extends never ? T[K] : string;
 };
 
+/**
+ * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
+ */
 export type CreateOptions<T extends SingleTableDesign> = Omit<
   ForeignKeyToValue<T>,
   | DefaultFields
@@ -90,24 +93,22 @@ class Create<T extends SingleTableDesign> {
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
 
-  // TODO tsdoc
-  // TODO add friendly error handling for failed transactions
+  /**
+   * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
+   * @param attributes
+   * @returns
+   */
   public async run(attributes: CreateOptions<T>): Promise<T> {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
     const entityData = this.buildEntityData(attributes);
 
-    const putExpression = {
-      TableName: tableName,
-      Item: entityToTableItem(this.EntityClass.name, entityData),
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
-    this.#transactionBuilder.addPut(putExpression);
+    const tableItem = entityToTableItem(this.EntityClass.name, entityData);
 
+    this.buildPutItemTransaction(tableItem);
     this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
 
-    return tableItemToEntity<T>(this.EntityClass, putExpression.Item);
+    return tableItemToEntity<T>(this.EntityClass, tableItem);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
@@ -133,6 +134,21 @@ class Create<T extends SingleTableDesign> {
     };
 
     return { ...keys, ...attributes, ...defaultAttrs };
+  }
+
+  /**
+   * Build the transaction for the parent entity Create item request
+   * @param tableItem
+   */
+  private buildPutItemTransaction(tableItem: DynamoTableItem): void {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+
+    const putExpression = {
+      TableName: tableName,
+      Item: tableItem,
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+    this.#transactionBuilder.addPut(putExpression);
   }
 
   /**
