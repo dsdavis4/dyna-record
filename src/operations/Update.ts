@@ -51,8 +51,6 @@ class Update<T extends SingleTableDesign> {
     id: string,
     attributes: Partial<CreateOptions<T>>
   ): Promise<T> {
-    // TODO start here...
-
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
@@ -77,7 +75,6 @@ class Update<T extends SingleTableDesign> {
 
     // debugger;
 
-    // TODO here
     this.#transactionBuilder.addUpdate(
       {
         TableName: tableName,
