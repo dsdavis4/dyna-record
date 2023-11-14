@@ -50,7 +50,7 @@ class Update<T extends SingleTableDesign> {
   public async run(
     id: string,
     attributes: Partial<CreateOptions<T>>
-  ): Promise<T> {
+  ): Promise<void> {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
@@ -87,8 +87,6 @@ class Update<T extends SingleTableDesign> {
     );
 
     await this.#transactionBuilder.executeTransaction();
-
-    return "bla" as any;
   }
 
   private expressionBuilder(tableAttrs: DynamoTableItem): Expression {

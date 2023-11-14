@@ -104,9 +104,9 @@ abstract class SingleTableDesign {
     this: EntityClass<T>,
     id: string,
     attributes: Partial<CreateOptions<T>> // TODO update this when I dry up
-  ): Promise<T> {
+  ): Promise<void> {
     const op = new Update<T>(this);
-    return await op.run(id, attributes);
+    await op.run(id, attributes);
   }
 
   /**
