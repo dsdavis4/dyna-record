@@ -201,7 +201,7 @@ class WsToken extends DrewsBrewsTable {
 
     const updatedBeer = await Beer.update(
       "ceb34f08-3472-45e8-b78c-9fa503b70637",
-      { breweryId: "bad", name: "updated beer name" }
+      { name: "Serrano Pale Ale 4" }
     );
 
     debugger;

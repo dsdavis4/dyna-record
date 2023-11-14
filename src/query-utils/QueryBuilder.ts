@@ -191,9 +191,9 @@ class QueryBuilder {
     let condition;
     let values: Record<string, NativeScalarAttributeValue> = {};
     if (Array.isArray(value)) {
-      const mappings = value.reduce<string[]>((acc, value) => {
+      const mappings = value.reduce<string[]>((acc, val) => {
         const attr = `${tableKey}${++this.attrCounter}`;
-        values[attr] = value;
+        values[attr] = val;
         return acc.concat(`:${attr}`);
       }, []);
       condition = `#${tableKey} IN (${mappings.join()})`;
