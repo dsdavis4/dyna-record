@@ -25,9 +25,11 @@ import { BelongsToLink } from "../src/relationships";
 //    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
 @Table({ name: "temp-table", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
+  // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 
+  // TODO add a test that this can be whatever value the user wants: Ex: public mySortKey: mySortKey
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
 
