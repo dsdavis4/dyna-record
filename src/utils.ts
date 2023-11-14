@@ -16,7 +16,7 @@ import { BelongsToLink } from "./relationships";
  */
 export const entityToTableItem = (
   entityClassName: string,
-  entityData: Partial<SingleTableDesign> // TODO is this the right type? Entity class?
+  entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
   const entityMetadata = Metadata.getEntity(entityClassName);
 
