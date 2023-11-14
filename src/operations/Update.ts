@@ -1,11 +1,11 @@
-import { UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
+import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
 import type SingleTableDesign from "../SingleTableDesign";
 import { TransactWriteBuilder } from "../dynamo-utils";
 import type { EntityClass, EntityMetadata, TableMetadata } from "../metadata";
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type CreateOptions } from "./Create";
-import { DynamoTableItem, StringObj } from "../types";
+import { type DynamoTableItem } from "../types";
 
 // TODO dry up this class from other operation classes
 
@@ -73,8 +73,6 @@ class Update<T extends SingleTableDesign> {
 
     const expression = this.expressionBuilder(tableAttrs);
 
-    // debugger;
-
     this.#transactionBuilder.addUpdate(
       {
         TableName: tableName,
@@ -83,42 +81,14 @@ class Update<T extends SingleTableDesign> {
         ExpressionAttributeValues: expression.ExpressionAttributeValues,
         UpdateExpression: expression.UpdateExpression,
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
-        // UpdateExpression: this.updateExpressio(expression)
       },
       `${this.EntityClass.name} with ID ${id} does not exist`
     );
 
-    debugger;
-
     await this.#transactionBuilder.executeTransaction();
-
-    debugger;
-
-    // this.#transactionBuilder.addUpdate({});
 
     return "bla" as any;
   }
-
-  // private updateExpressio(
-  //   expression: Expression
-  // ): NonNullable<UpdateCommandInput["UpdateExpression"]> {
-  //   // debugger;
-  //   const entries = Object.entries(expression.ExpressionAttributeValues);
-  //   const bla = entries.reduce((acc, [key, val], idx) => {
-  //     // if (idx < entries.length - 1) acc = acc.concat(` ${key},`);
-  //     // else acc.slice(0, -1);
-
-  //     acc = acc.concat(` ${key},`);
-
-  //     if (idx === entries.length - 1) acc = acc.slice(0, -1);
-
-  //     return acc;
-  //   }, "SET");
-
-  //   debugger;
-
-  //   return bla;
-  // }
 
   private expressionBuilder(tableAttrs: DynamoTableItem): Expression {
     const entries = Object.entries(tableAttrs);
@@ -145,8 +115,6 @@ class Update<T extends SingleTableDesign> {
       }
     );
   }
-
-  // private
 }
 
 export default Update;
