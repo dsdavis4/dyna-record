@@ -103,6 +103,7 @@ class Update<T extends SingleTableDesign> {
         );
 
         if (idx === entries.length - 1) {
+          // Remove trailing comma from the expression
           acc.UpdateExpression = acc.UpdateExpression.slice(0, -1);
         }
 
