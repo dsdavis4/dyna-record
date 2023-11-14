@@ -82,6 +82,7 @@ class Update<T extends SingleTableDesign> {
         UpdateExpression: expression.UpdateExpression,
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
+      // TODO add unit test for error message
       `${this.EntityClass.name} with ID ${id} does not exist`
     );
 
