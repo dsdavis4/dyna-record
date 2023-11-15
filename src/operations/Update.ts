@@ -86,7 +86,7 @@ class Update<T extends SingleTableDesign> {
       `${this.EntityClass.name} with ID ${id} does not exist`
     );
 
-    // TODO start here... Start working on managing relationship entities. See conditions at top
+    // TODO start here...... Start working on managing relationship entities. See conditions at top
 
     await this.#transactionBuilder.executeTransaction();
   }

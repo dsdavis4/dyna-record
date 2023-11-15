@@ -6,6 +6,8 @@ interface BelongsToProps<T extends SingleTableDesign> {
   foreignKey: ForeignEntityAttribute<T>;
 }
 
+// TODO should this be BelongsToOne?
+//      In the future there could be a BelongsToMany which handles denormalizing links differently
 function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<K>,
