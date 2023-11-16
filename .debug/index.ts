@@ -232,12 +232,12 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    // await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
-    //   scaleId: "f32254e6-36ea-4d27-a7a7-f2705cfcff8b", // Has no scale, should process
-    //   // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
-    //   // scaleId: "bad",
-    //   currentState: "bla"
-    // });
+    await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
+      scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab", // Has no scale, should process
+      // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
+      // scaleId: "bad",
+      currentState: "bla"
+    });
 
     debugger;
 

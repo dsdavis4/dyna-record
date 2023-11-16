@@ -152,7 +152,6 @@ class Update<T extends SingleTableDesign> {
               relationshipId,
               entity
             );
-            debugger;
           }
         }
       }
@@ -290,15 +289,7 @@ class Update<T extends SingleTableDesign> {
     }
 
     // TODO Below is copied from create and can be cleaned up
-    const createdAt = new Date();
-    const link: BelongsToLink = {
-      id: uuidv4(),
-      type: BelongsToLink.name,
-      foreignEntityType: this.EntityClass.name,
-      foreignKey: entityId,
-      createdAt,
-      updatedAt: createdAt
-    };
+    const link = BelongsToLink.build(this.EntityClass.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
@@ -315,8 +306,6 @@ class Update<T extends SingleTableDesign> {
       putExpression,
       `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
     );
-
-    debugger;
   }
 
   /**

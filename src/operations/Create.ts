@@ -263,15 +263,7 @@ class Create<T extends SingleTableDesign> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const createdAt = new Date();
-    const link: BelongsToLink = {
-      id: uuidv4(),
-      type: BelongsToLink.name,
-      foreignKey: entityId,
-      foreignEntityType: this.EntityClass.name,
-      createdAt,
-      updatedAt: createdAt
-    };
+    const link = BelongsToLink.build(this.EntityClass.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
@@ -301,15 +293,7 @@ class Create<T extends SingleTableDesign> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const createdAt = new Date();
-    const link: BelongsToLink = {
-      id: uuidv4(),
-      type: BelongsToLink.name,
-      foreignEntityType: this.EntityClass.name,
-      foreignKey: entityId,
-      createdAt,
-      updatedAt: createdAt
-    };
+    const link = BelongsToLink.build(this.EntityClass.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
