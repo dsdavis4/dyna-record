@@ -74,9 +74,6 @@ class Update<T extends SingleTableDesign> {
   ): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
-
-    // TODO start here........ Start working on managing relationship entities. See conditions at top
-
     await this.#transactionBuilder.executeTransaction();
   }
 
