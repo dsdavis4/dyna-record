@@ -125,7 +125,7 @@ describe("Create", () => {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Customer#123",
-                  SK: "Order#uuid2",
+                  SK: "Order#uuid1",
                   Id: "uuid2",
                   ForeignKey: "uuid1",
                   ForeignEntityType: "Order",
@@ -153,7 +153,7 @@ describe("Create", () => {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "PaymentMethod#456",
-                  SK: "Order#uuid3",
+                  SK: "Order#uuid1",
                   Id: "uuid3",
                   ForeignKey: "uuid1",
                   ForeignEntityType: "Order",

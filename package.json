@@ -9,7 +9,8 @@
     "test": "jest",
     "debug-invoke": "npx ts-node .debug/index.ts",
     "seed-test-table": "npx ts-node seeds/seed-test-table.ts",
-    "seed-links": "npx ts-node seeds/re-format-belongs-to-links.ts",
+    "seed-links-first": "npx ts-node seeds/re-format-belongs-to-links-first.ts",
+    "seed-links-second": "npx ts-node seeds/re-format-belongs-to-links-second.ts",
     "eslint": "npx eslint . --ext .ts",
     "eslint-fix": "npx eslint . --ext .ts --fix",
     "prettier": "npx prettier . --write"

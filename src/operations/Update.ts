@@ -1,11 +1,19 @@
 import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
 import type SingleTableDesign from "../SingleTableDesign";
-import { TransactWriteBuilder } from "../dynamo-utils";
-import type { EntityClass, EntityMetadata, TableMetadata } from "../metadata";
+import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
+import type {
+  EntityClass,
+  EntityMetadata,
+  TableMetadata,
+  RelationshipMetadata
+} from "../metadata";
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type CreateOptions } from "./Create";
 import { type DynamoTableItem } from "../types";
+import { isBelongsToRelationship } from "../metadata/utils";
+
+// TODO tsdoc for everything in here
 
 // TODO dry up this class from other operation classes
 
@@ -13,6 +21,7 @@ import { type DynamoTableItem } from "../types";
 /**
  * if a foreign key for a HasOne/HasMany is changed:
  *      - remove the existing BelongsToLink in that associaterd partition
+ *          - or fail...
  *      - check that the new one exists
  *      - create the new BelongsToLink
  */
@@ -51,6 +60,18 @@ class Update<T extends SingleTableDesign> {
     id: string,
     attributes: Partial<CreateOptions<T>>
   ): Promise<void> {
+    this.buildUpdateItemTransaction(id, attributes);
+    this.buildRelationshipTransactions(attributes);
+
+    // TODO start here........ Start working on managing relationship entities. See conditions at top
+
+    await this.#transactionBuilder.executeTransaction();
+  }
+
+  private buildUpdateItemTransaction(
+    id: string,
+    attributes: Partial<CreateOptions<T>>
+  ): void {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
@@ -67,7 +88,6 @@ class Update<T extends SingleTableDesign> {
       ...attributes,
       updatedAt: new Date()
     };
-
     const tableKeys = entityToTableItem(this.EntityClass.name, keys);
     const tableAttrs = entityToTableItem(this.EntityClass.name, updatedAttrs);
 
@@ -83,12 +103,30 @@ class Update<T extends SingleTableDesign> {
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
       // TODO add unit test for error message
-      `${this.EntityClass.name} with ID ${id} does not exist`
+      `${this.EntityClass.name} with ID '${id}' does not exist`
     );
+  }
 
-    // TODO start here...... Start working on managing relationship entities. See conditions at top
+  // TODO can any of this be DRY'd up with create?
+  private buildRelationshipTransactions(
+    attributes: Partial<SingleTableDesign>
+  ): void {
+    const { relationships } = this.#entityMetadata;
 
-    await this.#transactionBuilder.executeTransaction();
+    Object.values(relationships).forEach(rel => {
+      const isBelongsTo = isBelongsToRelationship(rel);
+
+      if (isBelongsTo) {
+        const relationshipId = attributes[rel.foreignKey];
+        const isUpdatingRelationshipId = relationshipId !== undefined;
+
+        if (isUpdatingRelationshipId && typeof relationshipId === "string") {
+          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
+          debugger;
+        }
+      }
+    });
+    debugger;
   }
 
   private expressionBuilder(tableAttrs: DynamoTableItem): Expression {
@@ -117,6 +155,35 @@ class Update<T extends SingleTableDesign> {
       }
     );
   }
+
+  // TODO this is copied from Create. DRY up
+  /**
+   * Builds a ConditionCheck transaction that ensures the associated relationship exists
+   * @param rel
+   * @param relationshipId
+   * @returns
+   */
+  private buildRelationshipExistsConditionTransaction(
+    rel: RelationshipMetadata,
+    relationshipId: string
+  ): void {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
+
+    const conditionCheck: ConditionCheck = {
+      TableName: tableName,
+      Key: {
+        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+        [sortKey]: rel.target.name
+      },
+      ConditionExpression: `attribute_exists(${primaryKey})`
+    };
+
+    this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
+  }
+
+  // private build
 }
 
 export default Update;

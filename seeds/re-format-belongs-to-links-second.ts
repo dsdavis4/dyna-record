@@ -8,6 +8,8 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
 // TODO delete this AND script in package.json
 
+// TODO run this AND AFTER run re-format-belongs-to-links-second
+
 // Use this class to update the belongs to links to fit new format
 
 const dynamo = DynamoDBDocumentClient.from(
@@ -32,27 +34,41 @@ void (async () => {
   console.log(belongsToLinks.length);
 
   if (belongsToLinks.length > 0) {
-    const deletes = belongsToLinks.map(
-      link =>
-        new DeleteCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: link.PK, SK: link.SK }
-        })
-    );
+    const deletes = belongsToLinks.map((link, idx) => {
+      // if (idx < 2) {
+      //   console.log({
+      //     TableName: TABLE_NAME,
+      //     Key: { PK: link.PK, SK: link.SK }
+      //   });
+      // }
 
-    const puts = belongsToLinks.map(link => {
+      return new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: link.PK, SK: link.SK }
+      });
+    });
+
+    const puts = belongsToLinks.map((link, idx) => {
       const [linkedModelName, linkedModelId] = link.SK.split("#");
+      const isHasOne = linkedModelId === undefined;
+
+      // if (idx < 2) {
+      //   console.log(isHasOne);
+      // }
+
       return new PutCommand({
         TableName: TABLE_NAME,
         Item: {
           PK: link.PK,
-          SK: `${linkedModelName}#${link.Id}`,
+          SK: isHasOne
+            ? linkedModelName
+            : `${linkedModelName}#${link.ForeignKey}`,
           Id: link.Id,
           CreatedAt: link.CreatedAt,
           UpdatedAt: link.UpdatedAt,
           Type: link.Type,
           ForeignEntityType: linkedModelName,
-          ForeignKey: linkedModelId
+          ForeignKey: link.ForeignKey
         }
       });
     });

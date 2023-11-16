@@ -275,7 +275,7 @@ class Create<T extends SingleTableDesign> {
 
     const keys = {
       pk: rel.target.primaryKeyValue(relationshipId),
-      sk: this.EntityClass.primaryKeyValue(link.id)
+      sk: this.EntityClass.primaryKeyValue(link.foreignKey)
     };
 
     const putExpression = {

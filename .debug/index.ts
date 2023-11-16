@@ -15,6 +15,8 @@ import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
+// TODO delete temp tables
+
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods
@@ -201,10 +203,22 @@ class WsToken extends DrewsBrewsTable {
     //   include: [{ association: "brewery" }]
     // });
 
+    // const bla = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    // debugger;
+
+    // const a = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+    //   include: [{ association: "beers" }]
+    // });
+
+    // debugger;
+
     await Beer.update(
       "ceb34f08-3472-45e8-b78c-9fa503b70637",
       // "bad",
-      { name: "Serrano Pale Ale 5" }
+      { name: "Serrano Pale Ale 6", breweryId: "bad" }
     );
 
     debugger;
@@ -214,15 +228,27 @@ class WsToken extends DrewsBrewsTable {
     //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
     //   breweryId: "bad",
     //   abv: 1,
-    //   name: "Test 11"
+    //   name: "Test 20"
     // });
+
+    // const a = await Beer.findById("1ed26b25-a3f9-4838-8809-a8762622e5fa", {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    // debugger;
+
+    // const b = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+    //   include: [{ association: "beers" }]
+    // });
+
+    // debugger;
 
     // const newProcess = await Process.create({
     //   name: "somename",
     //   currentState: "state",
     //   currentStateStatus: "status",
     //   currentUserInput: "input",
-    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    //   scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab"
     // });
 
     // const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
@@ -263,10 +289,10 @@ class WsToken extends DrewsBrewsTable {
 
     // debugger;
 
-    const test = await Brewery.findById(
-      "157cc981-1be2-4ecc-a257-07d9a6037559",
-      { include: [{ association: "beers" }] }
-    );
+    // const test = await Brewery.findById(
+    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   { include: [{ association: "beers" }] }
+    // );
 
     debugger;
 
@@ -295,7 +321,7 @@ class WsToken extends DrewsBrewsTable {
       // deleteMeArr: ["scales"]
     });
 
-    debugger;
+    // debugger;
 
     // const scale1 = await Scale.findById(
     //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
@@ -310,7 +336,7 @@ class WsToken extends DrewsBrewsTable {
     //   { include: [{ association: "process" }] }
     // );
 
-    debugger;
+    // debugger;
 
     if (room) {
       room.type;
