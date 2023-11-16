@@ -114,8 +114,9 @@ describe("FindById", () => {
     expect(mockedGetCommand.mock.calls).toEqual([
       [
         {
+          TableName: "mock-table",
           Key: { PK: "Customer#123", SK: "Customer" },
-          TableName: "mock-table"
+          ConsistentRead: true
         }
       ]
     ]);
@@ -133,8 +134,9 @@ describe("FindById", () => {
     expect(mockedGetCommand.mock.calls).toEqual([
       [
         {
+          TableName: "mock-table",
           Key: { PK: "Customer#123", SK: "Customer" },
-          TableName: "mock-table"
+          ConsistentRead: true
         }
       ]
     ]);

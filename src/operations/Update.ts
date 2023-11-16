@@ -10,10 +10,20 @@ import type {
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type CreateOptions } from "./Create";
-import { type DynamoTableItem } from "../types";
-import { isBelongsToRelationship } from "../metadata/utils";
+import { type ForeignKey, type DynamoTableItem } from "../types";
+import { v4 as uuidv4 } from "uuid";
+import {
+  isBelongsToRelationship,
+  isHasManyRelationship,
+  isHasOneRelationship
+} from "../metadata/utils";
+import { BelongsToLink } from "../relationships";
 
 // TODO tsdoc for everything in here
+
+// TODO unit test for changing foreign key on HasMany
+
+// TODO unit test for changing foreign key on HasOne
 
 // TODO dry up this class from other operation classes
 
@@ -40,7 +50,9 @@ class Update<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
+  #entity: T | null = null; // TODO add test for this, its only fetched if a key is updated
 
+  // TODO should this be an accessor with #? Same with other operation classes...
   private readonly EntityClass: EntityClass<T>;
 
   constructor(Entity: EntityClass<T>) {
@@ -61,7 +73,7 @@ class Update<T extends SingleTableDesign> {
     attributes: Partial<CreateOptions<T>>
   ): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
-    this.buildRelationshipTransactions(attributes);
+    await this.buildRelationshipTransactions(id, attributes);
 
     // TODO start here........ Start working on managing relationship entities. See conditions at top
 
@@ -108,12 +120,13 @@ class Update<T extends SingleTableDesign> {
   }
 
   // TODO can any of this be DRY'd up with create?
-  private buildRelationshipTransactions(
+  private async buildRelationshipTransactions(
+    id: string,
     attributes: Partial<SingleTableDesign>
-  ): void {
+  ): Promise<void> {
     const { relationships } = this.#entityMetadata;
 
-    Object.values(relationships).forEach(rel => {
+    for (const rel of Object.values(relationships)) {
       const isBelongsTo = isBelongsToRelationship(rel);
 
       if (isBelongsTo) {
@@ -121,11 +134,53 @@ class Update<T extends SingleTableDesign> {
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
         if (isUpdatingRelationshipId && typeof relationshipId === "string") {
+          const entity = await this.getEntity(id);
+
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
-          debugger;
+
+          // Return early if the item is not found, it will fail the transaction
+          if (entity === null) return; // TODO add a test for this
+
+          if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+            debugger;
+          }
+
+          if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+            this.buildBelongsToHasOneTransaction(
+              rel,
+              id,
+              relationshipId,
+              entity
+            );
+            debugger;
+          }
         }
       }
-    });
+    }
+
+    // Object.values(relationships).forEach(rel => {
+    //   const isBelongsTo = isBelongsToRelationship(rel);
+
+    //   if (isBelongsTo) {
+    //     const relationshipId = attributes[rel.foreignKey];
+    //     const isUpdatingRelationshipId = relationshipId !== undefined;
+
+    //     // const entity = await this.getEntity(id)
+
+    //     if (isUpdatingRelationshipId && typeof relationshipId === "string") {
+    //       this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
+
+    //       if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+    //         debugger;
+    //       }
+
+    //       if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+    //         this.buildBelongsToHasOneTransaction();
+    //         debugger;
+    //       }
+    //     }
+    //   }
+    // });
     debugger;
   }
 
@@ -183,7 +238,117 @@ class Update<T extends SingleTableDesign> {
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
-  // private build
+  // TODO this is copied from Create. Dry up
+  /**
+   * Returns true if the entity being created BelongsTo a HasMany
+   * @param rel
+   * @param foreignKey
+   * @returns
+   */
+  private doesEntityBelongToHasMany(
+    rel: RelationshipMetadata,
+    foreignKey: string
+  ): boolean {
+    const relMetadata = Metadata.getEntity(rel.target.name);
+
+    return Object.values(relMetadata.relationships).some(
+      rel =>
+        isHasManyRelationship(rel) &&
+        rel.target === this.EntityClass &&
+        rel.foreignKey === foreignKey
+    );
+  }
+
+  // TODO this is copied from Create. Dry up
+  /**
+   * Returns true if the entity being created BelongsTo a HasOne
+   * @param rel
+   * @param foreignKey
+   * @returns
+   */
+  private doesEntityBelongToHasOne(
+    rel: RelationshipMetadata,
+    foreignKey: string
+  ): boolean {
+    const relMetadata = Metadata.getEntity(rel.target.name);
+
+    return Object.values(relMetadata.relationships).some(
+      rel =>
+        isHasOneRelationship(rel) &&
+        rel.target === this.EntityClass &&
+        rel.foreignKey === foreignKey
+    );
+  }
+
+  /**
+   * Creates the transaction to:
+   *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
+   *    - Creates the new BelongsToLink if the item its being linked to does not already have an association
+   * @param rel
+   * @param entityId
+   * @param relationshipId
+   * @param entity
+   */
+  private buildBelongsToHasOneTransaction(
+    rel: RelationshipMetadata,
+    entityId: string,
+    relationshipId: string,
+    entity: T
+  ): void {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    const currentId = entity[rel.foreignKey] as ForeignKey; // TODO can I avoid using "as", how can I update t
+
+    // TODO add unit test that this only happens when the currentId exists
+    if (currentId !== undefined) {
+      const oldLinkKeys = {
+        [primaryKey]: rel.target.primaryKeyValue(currentId),
+        [sortKey]: this.EntityClass.name
+      };
+
+      this.#transactionBuilder.addDelete({
+        TableName: tableName,
+        Key: oldLinkKeys
+      });
+    }
+
+    // TODO Below is copied from create and can be cleaned up
+    const createdAt = new Date();
+    const link: BelongsToLink = {
+      id: uuidv4(),
+      type: BelongsToLink.name,
+      foreignEntityType: this.EntityClass.name,
+      foreignKey: entityId,
+      createdAt,
+      updatedAt: createdAt
+    };
+
+    const keys = {
+      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+      [sortKey]: this.EntityClass.name
+    };
+
+    const putExpression = {
+      TableName: tableName,
+      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+
+    this.#transactionBuilder.addPut(
+      putExpression,
+      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+    );
+
+    debugger;
+  }
+
+  /**
+   * If updating a ForeignKey, look up the current state of the item to build transactions
+   */
+  private async getEntity(id: string): Promise<T | null> {
+    if (this.#entity !== null) return this.#entity;
+    return (await this.EntityClass.findById(id)) as T; // TODO can I avoid the "as"
+  }
 }
 
 export default Update;

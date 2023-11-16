@@ -17,6 +17,8 @@ import { BelongsToLink } from "../src/relationships";
 
 // TODO delete temp tables
 
+// TODO add tests where primary key and sort key are not PK and SK
+
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods
@@ -215,11 +217,47 @@ class WsToken extends DrewsBrewsTable {
 
     // debugger;
 
-    await Beer.update(
-      "ceb34f08-3472-45e8-b78c-9fa503b70637",
-      // "bad",
-      { name: "Serrano Pale Ale 6", breweryId: "bad" }
-    );
+    // const scale1 = await Scale.findById(
+    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale3 = await Scale.findById(
+    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+    //   { include: [{ association: "process" }] }
+    // );
+
+    debugger;
+
+    // await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
+    //   scaleId: "f32254e6-36ea-4d27-a7a7-f2705cfcff8b", // Has no scale, should process
+    //   // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
+    //   // scaleId: "bad",
+    //   currentState: "bla"
+    // });
+
+    debugger;
+
+    const bla = await Process.findById("e0d82399-7180-4214-b5ab-df844f7c9813", {
+      include: [{ association: "scale" }]
+    });
+
+    debugger;
+
+    const abc = await Scale.findById("f32254e6-36ea-4d27-a7a7-f2705cfcff8b", {
+      include: [{ association: "process" }]
+    });
+
+    debugger;
+
+    // await Beer.update(
+    //   "ceb34f08-3472-45e8-b78c-9fa503b70637",
+    //   // "bad",
+    //   { name: "Serrano Pale Ale 7", breweryId: "bad" }
+    // );
 
     debugger;
 

@@ -261,7 +261,7 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const createdAt = new Date();
     const link: BelongsToLink = {
@@ -274,13 +274,13 @@ class Create<T extends SingleTableDesign> {
     };
 
     const keys = {
-      pk: rel.target.primaryKeyValue(relationshipId),
-      sk: this.EntityClass.primaryKeyValue(link.foreignKey)
+      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+      [sortKey]: this.EntityClass.primaryKeyValue(link.foreignKey)
     };
 
     const putExpression = {
       TableName: tableName,
-      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
+      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
@@ -299,7 +299,7 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     const createdAt = new Date();
     const link: BelongsToLink = {
@@ -312,13 +312,13 @@ class Create<T extends SingleTableDesign> {
     };
 
     const keys = {
-      pk: rel.target.primaryKeyValue(relationshipId),
-      sk: `${this.EntityClass.name}`
+      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+      [sortKey]: this.EntityClass.name
     };
 
     const putExpression = {
       TableName: tableName,
-      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
+      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
