@@ -129,6 +129,7 @@ class Update<T extends SingleTableDesign> {
     for (const rel of Object.values(relationships)) {
       const isBelongsTo = isBelongsToRelationship(rel);
 
+      // TODO add test that none of below is called if only updating non foreign key attributes
       if (isBelongsTo) {
         const relationshipId = attributes[rel.foreignKey];
         const isUpdatingRelationshipId = relationshipId !== undefined;
@@ -142,6 +143,12 @@ class Update<T extends SingleTableDesign> {
           if (entity === null) return; // TODO add a test for this
 
           if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+            this.buildBelongsToHasManyTransaction(
+              rel,
+              id,
+              relationshipId,
+              entity
+            );
             debugger;
           }
 
@@ -256,6 +263,7 @@ class Update<T extends SingleTableDesign> {
     );
   }
 
+  // TODO I dont need to pass entityId and entity. Entity has the id
   /**
    * Creates the transaction to:
    *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
@@ -275,20 +283,24 @@ class Update<T extends SingleTableDesign> {
 
     const currentId = entity[rel.foreignKey] as ForeignKey; // TODO can I avoid using "as", how can I update t
 
+    // TODO this is duplicated in the buildBelongsToHasManyTransaction function
     // TODO add unit test that this only happens when the currentId exists
+    // TODO add a check that the breweryId is not equal to itself
+    //      and  test for that
     if (currentId !== undefined) {
       const oldLinkKeys = {
         [primaryKey]: rel.target.primaryKeyValue(currentId),
         [sortKey]: this.EntityClass.name
       };
 
+      // TODO do these need conditions?
       this.#transactionBuilder.addDelete({
         TableName: tableName,
         Key: oldLinkKeys
       });
     }
 
-    // TODO Below is copied from create and can be cleaned up
+    // TODO Everything below is copied from Create and can be cleaned up
     const link = BelongsToLink.build(this.EntityClass.name, entityId);
 
     const keys = {
@@ -302,9 +314,60 @@ class Update<T extends SingleTableDesign> {
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
+    // TODO add test for error
     this.#transactionBuilder.addPut(
       putExpression,
       `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+    );
+  }
+
+  // TODO I dont need to pass entityId and entity. Entity has the id
+  private buildBelongsToHasManyTransaction(
+    rel: RelationshipMetadata,
+    entityId: string,
+    relationshipId: string,
+    entity: T
+  ): void {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    const currentId = entity[rel.foreignKey] as ForeignKey; // TODO can I avoid using "as", how can I update t
+
+    // TODO this is duplicated in the buildBelongsToHasOneTransaction function
+    // TODO add unit test that this only happens when the currentId exists
+    // TODO add a check that the breweryId is not equal to itself
+    //      and  test for that
+    if (currentId !== relationshipId) {
+      const oldLinkKeys = {
+        [primaryKey]: rel.target.primaryKeyValue(currentId),
+        [sortKey]: this.EntityClass.primaryKeyValue(entityId)
+      };
+
+      // TODO do these need conditions?
+      this.#transactionBuilder.addDelete({
+        TableName: tableName,
+        Key: oldLinkKeys
+      });
+    }
+
+    // TODO Everything below is copied from Create and can be cleaned up  }
+
+    const link = BelongsToLink.build(this.EntityClass.name, entityId);
+
+    const keys = {
+      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+      [sortKey]: this.EntityClass.primaryKeyValue(link.foreignKey)
+    };
+
+    const putExpression = {
+      TableName: tableName,
+      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+
+    // TODO add test for error
+    this.#transactionBuilder.addPut(
+      putExpression,
+      `${this.EntityClass.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
     );
   }
 

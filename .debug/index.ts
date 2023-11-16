@@ -230,34 +230,53 @@ class WsToken extends DrewsBrewsTable {
     //   { include: [{ association: "process" }] }
     // );
 
+    // debugger;
+
+    // await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
+    //   // scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab", // Has no scale, should process
+    //   // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
+    //   scaleId: "bad",
+    //   currentState: "bla"
+    // });
+
+    // debugger;
+
+    // const bla = await Process.findById("e0d82399-7180-4214-b5ab-df844f7c9813", {
+    //   include: [{ association: "scale" }]
+    // });
+
+    // debugger;
+
+    // const abc = await Scale.findById("f32254e6-36ea-4d27-a7a7-f2705cfcff8b", {
+    //   include: [{ association: "process" }]
+    // });
+
     debugger;
 
-    await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
-      scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab", // Has no scale, should process
-      // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
-      // scaleId: "bad",
-      currentState: "bla"
+    await Beer.update(
+      "ceb34f08-3472-45e8-b78c-9fa503b70637",
+      // "bad",
+      {
+        // breweryId: "bad", // doesnt exist, should error
+        // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
+        breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
+        name: "Serrano Pale Ale 9"
+      }
+    );
+
+    debugger;
+
+    const a1 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+      include: [{ association: "brewery" }]
     });
 
-    debugger;
-
-    const bla = await Process.findById("e0d82399-7180-4214-b5ab-df844f7c9813", {
-      include: [{ association: "scale" }]
+    const a2 = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+      include: [{ association: "beers" }]
     });
 
-    debugger;
-
-    const abc = await Scale.findById("f32254e6-36ea-4d27-a7a7-f2705cfcff8b", {
-      include: [{ association: "process" }]
+    const a3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
+      include: [{ association: "beers" }]
     });
-
-    debugger;
-
-    // await Beer.update(
-    //   "ceb34f08-3472-45e8-b78c-9fa503b70637",
-    //   // "bad",
-    //   { name: "Serrano Pale Ale 7", breweryId: "bad" }
-    // );
 
     debugger;
 
