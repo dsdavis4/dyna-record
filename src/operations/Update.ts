@@ -158,29 +158,6 @@ class Update<T extends SingleTableDesign> {
       }
     }
 
-    // Object.values(relationships).forEach(rel => {
-    //   const isBelongsTo = isBelongsToRelationship(rel);
-
-    //   if (isBelongsTo) {
-    //     const relationshipId = attributes[rel.foreignKey];
-    //     const isUpdatingRelationshipId = relationshipId !== undefined;
-
-    //     // const entity = await this.getEntity(id)
-
-    //     if (isUpdatingRelationshipId && typeof relationshipId === "string") {
-    //       this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
-
-    //       if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
-    //         debugger;
-    //       }
-
-    //       if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
-    //         this.buildBelongsToHasOneTransaction();
-    //         debugger;
-    //       }
-    //     }
-    //   }
-    // });
     debugger;
   }
 
