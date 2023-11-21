@@ -137,7 +137,7 @@ class Update<T extends SingleTableDesign> {
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
 
           // Return early if the item is not found, it will fail the transaction
-          if (entity === null) return; // TODO add a test for this
+          // if (entity === null) return; // TODO add a test for this
 
           if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
             this.buildBelongsToHasManyTransaction(
@@ -146,7 +146,6 @@ class Update<T extends SingleTableDesign> {
               relationshipId,
               entity
             );
-            debugger;
           }
 
           if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
@@ -160,8 +159,6 @@ class Update<T extends SingleTableDesign> {
         }
       }
     }
-
-    debugger;
   }
 
   private expressionBuilder(tableAttrs: DynamoTableItem): Expression {
@@ -274,11 +271,13 @@ class Update<T extends SingleTableDesign> {
     rel: RelationshipMetadata,
     entityId: string,
     relationshipId: string,
-    entity: T
+    entity?: T
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const currentId = entity[rel.foreignKey] as ForeignKey; // TODO can I avoid using "as", how can I update t
+    // TODO can I avoid using "as", how can I update t
+    const currentId =
+      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
 
     // TODO this is duplicated in the buildBelongsToHasManyTransaction function
     // TODO add unit test that this only happens when the currentId exists
@@ -323,17 +322,19 @@ class Update<T extends SingleTableDesign> {
     rel: RelationshipMetadata,
     entityId: string,
     relationshipId: string,
-    entity: T
+    entity?: T
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const currentId = entity[rel.foreignKey] as ForeignKey; // TODO can I avoid using "as", how can I update t
+    // TODO can I avoid using "as", how can I update t
+    const currentId =
+      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
 
-    // TODO this is duplicated in the buildBelongsToHasOneTransaction function
+    // TODO this is MOSTLY duplicated in the buildBelongsToHasOneTransaction function
     // TODO add unit test that this only happens when the currentId exists
     // TODO add a check that the breweryId is not equal to itself
     //      and  test for that
-    if (currentId !== relationshipId) {
+    if (currentId !== undefined && currentId !== relationshipId) {
       const oldLinkKeys = {
         [primaryKey]: rel.target.primaryKeyValue(currentId),
         [sortKey]: this.EntityClass.primaryKeyValue(entityId)
@@ -371,9 +372,10 @@ class Update<T extends SingleTableDesign> {
   /**
    * If updating a ForeignKey, look up the current state of the item to build transactions
    */
-  private async getEntity(id: string): Promise<T | null> {
+  private async getEntity(id: string): Promise<T | undefined> {
     if (this.#entity !== null) return this.#entity;
-    return (await this.EntityClass.findById(id)) as T; // TODO can I avoid the "as"
+    const res = (await this.EntityClass.findById(id)) as T; // TODO can I avoid the "as"
+    return res ?? undefined;
   }
 }
 

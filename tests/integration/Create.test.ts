@@ -13,6 +13,10 @@ import { Attribute, Entity } from "../../src/decorators";
 // TODO is everything awaited properly in these tests? Do I need to mock resolved value in other tests?
 //      Check all operations tests...
 //      Look at what I did in Update tests for 'return await Promise.resolve(mockTransact());
+// I might need to add below to the mockSend (see update)
+// if (command.name === "TransactWriteCommand") {
+//   return await Promise.resolve(mockTransact());
+// }
 
 jest.mock("uuid");
 
