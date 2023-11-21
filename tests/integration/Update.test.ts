@@ -135,6 +135,7 @@ describe("Update", () => {
           Item: {
             PK: "ContactInformation#123",
             SK: "ContactInformation",
+            Id: "123",
             Email: "old-email@example.com",
             Phone: "555-555-5555",
             CustomerId: undefined // Does not already belong to customer
@@ -437,6 +438,7 @@ describe("Update", () => {
           Item: {
             PK: "ContactInformation#123",
             SK: "ContactInformation",
+            Id: "123",
             Email: "old-email@example.com",
             Phone: "555-555-5555",
             CustomerId: "789" // Already belongs to customer
@@ -760,6 +762,7 @@ describe("Update", () => {
           Item: {
             PK: "ContactInformation#123",
             SK: "ContactInformation",
+            Id: "123",
             Email: "old-email@example.com",
             Phone: "555-555-5555",
             CustomerId: "456" // Already belongs to customer, the same being updated
@@ -886,6 +889,7 @@ describe("Update", () => {
           Item: {
             PK: "PaymentMethod#123",
             SK: "PaymentMethod",
+            Id: "123",
             lastFour: "1234",
             CustomerId: undefined // Does not already belong to customer
           }
@@ -1171,6 +1175,7 @@ describe("Update", () => {
           Item: {
             PK: "PaymentMethod#123",
             SK: "PaymentMethod",
+            Id: "123",
             lastFour: "1234",
             CustomerId: "789" // Already belongs to customer
           }
@@ -1478,6 +1483,7 @@ describe("Update", () => {
           Item: {
             PK: "PaymentMethod#123",
             SK: "PaymentMethod",
+            Id: "123",
             lastFour: "1234",
             CustomerId: "456" // Already belongs to customer, the same being updated
           }

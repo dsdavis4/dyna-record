@@ -5,7 +5,9 @@ import type {
   EntityClass,
   EntityMetadata,
   TableMetadata,
-  RelationshipMetadata
+  RelationshipMetadata,
+  HasOneRelationship,
+  HasManyRelationship
 } from "../metadata";
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
@@ -135,9 +137,6 @@ class Update<T extends SingleTableDesign> {
           const entity = await this.getEntity(id);
 
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
-
-          // Return early if the item is not found, it will fail the transaction
-          // if (entity === null) return; // TODO add a test for this
 
           if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
             this.buildBelongsToHasManyTransaction(
@@ -275,26 +274,7 @@ class Update<T extends SingleTableDesign> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    // TODO can I avoid using "as", how can I update t
-    const currentId =
-      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
-
-    // TODO this is duplicated in the buildBelongsToHasManyTransaction function
-    // TODO add unit test that this only happens when the currentId exists
-    // TODO add a check that the breweryId is not equal to itself
-    //      and  test for that
-    if (currentId !== undefined) {
-      const oldLinkKeys = {
-        [primaryKey]: rel.target.primaryKeyValue(currentId),
-        [sortKey]: this.EntityClass.name
-      };
-
-      // TODO do these need conditions?
-      this.#transactionBuilder.addDelete({
-        TableName: tableName,
-        Key: oldLinkKeys
-      });
-    }
+    this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
 
     // TODO Everything below is copied from Create and can be cleaned up
     const link = BelongsToLink.build(this.EntityClass.name, entityId);
@@ -326,26 +306,7 @@ class Update<T extends SingleTableDesign> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    // TODO can I avoid using "as", how can I update t
-    const currentId =
-      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
-
-    // TODO this is MOSTLY duplicated in the buildBelongsToHasOneTransaction function
-    // TODO add unit test that this only happens when the currentId exists
-    // TODO add a check that the breweryId is not equal to itself
-    //      and  test for that
-    if (currentId !== undefined) {
-      const oldLinkKeys = {
-        [primaryKey]: rel.target.primaryKeyValue(currentId),
-        [sortKey]: this.EntityClass.primaryKeyValue(entityId)
-      };
-
-      // TODO do these need conditions?
-      this.#transactionBuilder.addDelete({
-        TableName: tableName,
-        Key: oldLinkKeys
-      });
-    }
+    this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
 
     // TODO Everything below is copied from Create and can be cleaned up  }
 
@@ -367,6 +328,40 @@ class Update<T extends SingleTableDesign> {
       putExpression,
       `${this.EntityClass.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
     );
+  }
+
+  /**
+   * When updating the foreign key of an entity, delete the BelongsToLink in the previous relationships partition
+   * @param rel
+   * @param relType
+   * @param entity
+   */
+  private buildDeleteOldBelongsToLinkTransaction(
+    rel: RelationshipMetadata,
+    relType: HasOneRelationship["type"] | HasManyRelationship["type"],
+    entity?: T
+  ): void {
+    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    // TODO can I avoid using "as", how can I update t
+    const currentId =
+      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
+
+    if (entity !== undefined && currentId !== undefined) {
+      const oldLinkKeys = {
+        [primaryKey]: rel.target.primaryKeyValue(currentId),
+        [sortKey]:
+          relType === "HasMany"
+            ? this.EntityClass.primaryKeyValue(entity.id)
+            : this.EntityClass.name
+      };
+
+      // TODO do these need conditions?
+      this.#transactionBuilder.addDelete({
+        TableName: tableName,
+        Key: oldLinkKeys
+      });
+    }
   }
 
   /**
