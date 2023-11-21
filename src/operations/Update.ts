@@ -334,7 +334,7 @@ class Update<T extends SingleTableDesign> {
     // TODO add unit test that this only happens when the currentId exists
     // TODO add a check that the breweryId is not equal to itself
     //      and  test for that
-    if (currentId !== undefined && currentId !== relationshipId) {
+    if (currentId !== undefined) {
       const oldLinkKeys = {
         [primaryKey]: rel.target.primaryKeyValue(currentId),
         [sortKey]: this.EntityClass.primaryKeyValue(entityId)
