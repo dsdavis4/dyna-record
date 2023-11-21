@@ -10,6 +10,7 @@ import {
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { Attribute, Entity } from "../../src/decorators";
 
 // TODO start here
 // After wrting tests, refactor and dry everything up.
@@ -1584,6 +1585,61 @@ describe("Update", () => {
             ]
           ]);
         }
+      });
+    });
+  });
+
+  describe("types", () => {
+    it("will not accept relationship attributes on update", async () => {
+      await Order.update("123", {
+        orderDate: new Date(),
+        paymentMethodId: "123",
+        customerId: "456",
+        // @ts-expect-error relationship attributes are not allowed
+        customer: new Customer()
+      });
+    });
+
+    it("will not accept function attributes on update", async () => {
+      expect.assertions(1);
+
+      @Entity
+      class MyModel extends MockTable {
+        @Attribute({ alias: "MyAttribute" })
+        public myAttribute: string;
+
+        public someMethod(): string {
+          return "abc123";
+        }
+      }
+
+      try {
+        await MyModel.update("123", {
+          myAttribute: "someVal",
+          // @ts-expect-error function attributes are not allowed
+          someMethod: () => "123"
+        });
+      } catch (e) {
+        expect(true).toEqual(true);
+      }
+    });
+
+    it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {
+      await Order.update("123", {
+        orderDate: new Date(),
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        paymentMethodId: "123",
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        customerId: "456"
+      });
+    });
+
+    it("does not require all of an entity attributes to be passed", async () => {
+      await Order.update("123", {
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        paymentMethodId: "123",
+        // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+        customerId: "456"
       });
     });
   });
