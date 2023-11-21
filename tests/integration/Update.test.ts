@@ -4,15 +4,13 @@ import {
   Customer,
   MockTable,
   Order,
-  PaymentMethod,
-  PaymentMethodProvider
+  PaymentMethod
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { Attribute, Entity } from "../../src/decorators";
 
-// TODO start here
 // After wrting tests, refactor and dry everything up.
 // and clean up
 

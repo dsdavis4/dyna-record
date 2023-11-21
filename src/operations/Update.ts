@@ -13,7 +13,6 @@ import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type CreateOptions } from "./Create";
 import { type ForeignKey, type DynamoTableItem } from "../types";
-import { v4 as uuidv4 } from "uuid";
 import {
   isBelongsToRelationship,
   isHasManyRelationship,
