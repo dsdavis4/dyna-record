@@ -9,10 +9,16 @@ import {
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { Attribute, Entity } from "../../src/decorators";
+import {
+  Attribute,
+  BelongsTo,
+  Entity,
+  HasMany,
+  HasOne
+} from "../../src/decorators";
+import { ForeignKey } from "../../src/types";
 
-// After wrting tests, refactor and dry everything up.
-// and clean up
+// TODO add a test that it can do a update on belogns to link for HasOne and HasMany in the same transaction...
 
 jest.mock("uuid");
 
@@ -1590,6 +1596,160 @@ describe("Update", () => {
           ]);
         }
       });
+    });
+  });
+
+  describe("A model is updating mutiple ForeignKeys of different relationship types", () => {
+    @Entity
+    class Model1 extends MockTable {
+      @HasOne(() => Model3, { foreignKey: "model1Id" })
+      public model3: Model3;
+    }
+
+    @Entity
+    class Model2 extends MockTable {
+      @HasMany(() => Model3, { foreignKey: "model2Id" })
+      public model3: Model3[];
+    }
+
+    @Entity
+    class Model3 extends MockTable {
+      @Attribute({ alias: "Name" })
+      public name: string;
+
+      @Attribute({ alias: "Model1Id" })
+      public model1Id: ForeignKey;
+
+      @Attribute({ alias: "Model2Id" })
+      public model2Id: ForeignKey;
+
+      @BelongsTo(() => Model1, { foreignKey: "model1Id" })
+      public model1: Model1;
+
+      @BelongsTo(() => Model2, { foreignKey: "model2Id" })
+      public model2: Model2;
+    }
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("belongsToLinkId1")
+        .mockReturnValueOnce("belongsToLinkId2");
+    });
+
+    it("can update foreign keys for an enitity that includes both HasMany and Belongs to relationships", async () => {
+      expect.assertions(6);
+
+      mockGet.mockResolvedValue({
+        Item: {
+          PK: "Model3#123",
+          SK: "Model3",
+          Id: "123",
+          Name: "originalName",
+          Phone: "555-555-5555",
+          Model1Id: undefined,
+          Model2Id: undefined
+        }
+      });
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Model3.update("123", {
+          name: "newName",
+          model1Id: "model1-ID",
+          model2Id: "model2-ID"
+        })
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "GetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockGet.mock.calls).toEqual([[]]);
+      expect(mockedGetCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            Key: { PK: "Model3#123", SK: "Model3" },
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model3#123", SK: "Model3" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Model1Id": "Model1Id",
+                    "#Model2Id": "Model2Id",
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Model1Id": "model1-ID",
+                    ":Model2Id": "model2-ID",
+                    ":Name": "newName",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model1#model1-ID", SK: "Model1" },
+                  ConditionExpression: "attribute_exists(PK)"
+                }
+              },
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Model1#model1-ID",
+                    SK: "Model3",
+                    Id: "belongsToLinkId1",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "Model3",
+                    ForeignKey: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model2#model2-ID", SK: "Model2" },
+                  ConditionExpression: "attribute_exists(PK)"
+                }
+              },
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Model2#model2-ID",
+                    SK: "Model3#123",
+                    Id: "belongsToLinkId2",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "Model3",
+                    ForeignKey: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 

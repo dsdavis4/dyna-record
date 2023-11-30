@@ -20,22 +20,12 @@ import {
 } from "../metadata/utils";
 import { BelongsToLink } from "../relationships";
 
+// TODO start here... I just finished tests for update. Start addressing all the TODOs in this branch and do cleanup
+// TODO before finishing update, run through manual tests again
+
 // TODO tsdoc for everything in here
 
-// TODO unit test for changing foreign key on HasMany
-
-// TODO unit test for changing foreign key on HasOne
-
 // TODO dry up this class from other operation classes
-
-// TODO
-/**
- * if a foreign key for a HasOne/HasMany is changed:
- *      - remove the existing BelongsToLink in that associaterd partition
- *          - or fail...
- *      - check that the new one exists
- *      - create the new BelongsToLink
- */
 
 interface Expression {
   UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
@@ -51,13 +41,12 @@ class Update<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
-  #entity: T | null = null; // TODO add test for this, its only fetched if a key is updated
+  readonly #EntityClass: EntityClass<T>;
 
-  // TODO should this be an accessor with #? Same with other operation classes...
-  private readonly EntityClass: EntityClass<T>;
+  #entity?: T; // TODO add test for this (by updating multiple foreign keys), its only fetched if a key is updated
 
   constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
+    this.#EntityClass = Entity;
     this.#entityMetadata = Metadata.getEntity(Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
@@ -90,16 +79,16 @@ class Update<T extends SingleTableDesign> {
 
     // TODO if this is copied make a function on eventual base class
     const keys = {
-      [pk]: this.EntityClass.primaryKeyValue(id),
-      [sk]: this.EntityClass.name
+      [pk]: this.#EntityClass.primaryKeyValue(id),
+      [sk]: this.#EntityClass.name
     };
 
     const updatedAttrs: Partial<SingleTableDesign> = {
       ...attributes,
       updatedAt: new Date()
     };
-    const tableKeys = entityToTableItem(this.EntityClass.name, keys);
-    const tableAttrs = entityToTableItem(this.EntityClass.name, updatedAttrs);
+    const tableKeys = entityToTableItem(this.#EntityClass.name, keys);
+    const tableAttrs = entityToTableItem(this.#EntityClass.name, updatedAttrs);
 
     const expression = this.expressionBuilder(tableAttrs);
 
@@ -113,7 +102,7 @@ class Update<T extends SingleTableDesign> {
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
       // TODO add unit test for error message
-      `${this.EntityClass.name} with ID '${id}' does not exist`
+      `${this.#EntityClass.name} with ID '${id}' does not exist`
     );
   }
 
@@ -229,7 +218,7 @@ class Update<T extends SingleTableDesign> {
     return Object.values(relMetadata.relationships).some(
       rel =>
         isHasManyRelationship(rel) &&
-        rel.target === this.EntityClass &&
+        rel.target === this.#EntityClass &&
         rel.foreignKey === foreignKey
     );
   }
@@ -250,7 +239,7 @@ class Update<T extends SingleTableDesign> {
     return Object.values(relMetadata.relationships).some(
       rel =>
         isHasOneRelationship(rel) &&
-        rel.target === this.EntityClass &&
+        rel.target === this.#EntityClass &&
         rel.foreignKey === foreignKey
     );
   }
@@ -276,11 +265,11 @@ class Update<T extends SingleTableDesign> {
     this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
 
     // TODO Everything below is copied from Create and can be cleaned up
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
+    const link = BelongsToLink.build(this.#EntityClass.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.name
+      [sortKey]: this.#EntityClass.name
     };
 
     const putExpression = {
@@ -292,7 +281,11 @@ class Update<T extends SingleTableDesign> {
     // TODO add test for error
     this.#transactionBuilder.addPut(
       putExpression,
-      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+      `${
+        rel.target.name
+      } with id: ${relationshipId} already has an associated ${
+        this.#EntityClass.name
+      }`
     );
   }
 
@@ -309,11 +302,11 @@ class Update<T extends SingleTableDesign> {
 
     // TODO Everything below is copied from Create and can be cleaned up  }
 
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
+    const link = BelongsToLink.build(this.#EntityClass.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.primaryKeyValue(link.foreignKey)
+      [sortKey]: this.#EntityClass.primaryKeyValue(link.foreignKey)
     };
 
     const putExpression = {
@@ -325,7 +318,9 @@ class Update<T extends SingleTableDesign> {
     // TODO add test for error
     this.#transactionBuilder.addPut(
       putExpression,
-      `${this.EntityClass.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
+      `${this.#EntityClass.name} with ID '${entityId}' already belongs to ${
+        rel.target.name
+      } with Id '${relationshipId}'`
     );
   }
 
@@ -351,8 +346,8 @@ class Update<T extends SingleTableDesign> {
         [primaryKey]: rel.target.primaryKeyValue(currentId),
         [sortKey]:
           relType === "HasMany"
-            ? this.EntityClass.primaryKeyValue(entity.id)
-            : this.EntityClass.name
+            ? this.#EntityClass.primaryKeyValue(entity.id)
+            : this.#EntityClass.name
       };
 
       // TODO do these need conditions?
@@ -367,9 +362,11 @@ class Update<T extends SingleTableDesign> {
    * If updating a ForeignKey, look up the current state of the item to build transactions
    */
   private async getEntity(id: string): Promise<T | undefined> {
-    if (this.#entity !== null) return this.#entity;
-    const res = (await this.EntityClass.findById(id)) as T; // TODO can I avoid the "as"
-    return res ?? undefined;
+    // Only get the item once per transaction
+    if (this.#entity !== undefined) return this.#entity;
+    const res: T = (await this.#EntityClass.findById(id)) as T;
+    this.#entity = res ?? undefined;
+    return this.#entity;
   }
 }
 

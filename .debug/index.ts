@@ -15,6 +15,9 @@ import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
+// TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
+//      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
+
 // TODO delete temp tables
 
 // TODO add tests where primary key and sort key are not PK and SK
@@ -169,7 +172,10 @@ class WsToken extends DrewsBrewsTable {
   }
 }
 
+// TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
+
+// TODO add dependabot once this is public
 
 /* TODO post mvp
 - add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
@@ -201,9 +207,9 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
-    //   include: [{ association: "brewery" }]
-    // });
+    const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+      include: [{ association: "brewery" }]
+    });
 
     // const bla = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
     //   include: [{ association: "brewery" }]
