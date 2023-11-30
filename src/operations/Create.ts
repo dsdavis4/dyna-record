@@ -6,9 +6,9 @@ import Metadata, {
   type RelationshipMetadata,
   type BelongsToRelationship
 } from "../metadata";
-import { type RelationshipAttributeNames } from "./types";
+import type { EntityDefinedAttributes } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { Brand, DynamoTableItem, PrimaryKey, SortKey } from "../types";
+import type { DynamoTableItem } from "../types";
 import { BelongsToLink } from "../relationships";
 import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../utils";
@@ -18,53 +18,11 @@ import {
   isHasOneRelationship
 } from "../metadata/utils";
 
-// TODO type might be too generic
-// TODO how to make the fields shared so they arent repeeated in other files?
-type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
-
-type PrimaryKeyAttribute<T> = {
-  [K in keyof T]: T[K] extends PrimaryKey ? K : never;
-}[keyof T];
-
-type SortKeyAttribute<T> = {
-  [K in keyof T]: T[K] extends SortKey ? K : never;
-}[keyof T];
-
-// TODO add unit test for this
-type FunctionFields<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T]: T[K] extends Function ? K : never;
-}[keyof T];
-
-/**
- * Infer the primitive type of the branded type
- */
-type ExtractForeignKeyType<T> = T extends Brand<infer U, "ForeignKey">
-  ? U
-  : never;
-
-/**
- * Allow ForeignKey attributes to be passes to the create method by using their inferred primitive type
- * Ex:
- *  If ModelA has: attr1: ForeignKey
- *  This allows" ModelA.create({ attr1: "someVal" })
- *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
- */
-type ForeignKeyToValue<T> = {
-  [K in keyof T]: ExtractForeignKeyType<T[K]> extends never ? T[K] : string;
-};
-
 /**
  * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
  */
-export type CreateOptions<T extends SingleTableDesign> = Omit<
-  ForeignKeyToValue<T>,
-  | DefaultFields
-  | RelationshipAttributeNames<T>
-  | FunctionFields<T>
-  | PrimaryKeyAttribute<T>
-  | SortKeyAttribute<T>
->;
+export type CreateOptions<T extends SingleTableDesign> =
+  EntityDefinedAttributes<T>;
 
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point

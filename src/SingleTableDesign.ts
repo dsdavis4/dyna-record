@@ -11,7 +11,8 @@ import {
   type QueryResults,
   Create,
   type CreateOptions,
-  Update
+  Update,
+  type UpdateOptions
 } from "./operations";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -113,7 +114,7 @@ abstract class SingleTableDesign {
   public static async update<T extends SingleTableDesign>(
     this: EntityClass<T>,
     id: string,
-    attributes: Partial<CreateOptions<T>> // TODO update this when I dry up
+    attributes: UpdateOptions<T>
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes);

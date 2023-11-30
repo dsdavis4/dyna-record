@@ -19,6 +19,7 @@ import {
   isHasOneRelationship
 } from "../metadata/utils";
 import { BelongsToLink } from "../relationships";
+import type { EntityDefinedAttributes } from "./types";
 
 // TODO start here...... I just finished tests for update. Start addressing all the TODOs in this branch and do cleanup
 // TODO before finishing update, run through manual tests again
@@ -36,6 +37,10 @@ interface Expression {
     UpdateCommandInput["ExpressionAttributeValues"]
   >;
 }
+
+export type UpdateOptions<T extends SingleTableDesign> = Partial<
+  EntityDefinedAttributes<T>
+>;
 
 class Update<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
@@ -58,10 +63,7 @@ class Update<T extends SingleTableDesign> {
   // TODO add tests that all fields are optional,
   // TODO add tests that it only updateable fields are updateable
   // TODO dont use CreateOptions... if they end up being the sanme then find a way to share them
-  public async run(
-    id: string,
-    attributes: Partial<CreateOptions<T>>
-  ): Promise<void> {
+  public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
     await this.#transactionBuilder.executeTransaction();
@@ -69,7 +71,7 @@ class Update<T extends SingleTableDesign> {
 
   private buildUpdateItemTransaction(
     id: string,
-    attributes: Partial<CreateOptions<T>>
+    attributes: UpdateOptions<T>
   ): void {
     const { attributes: entityAttrs } = this.#entityMetadata;
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
