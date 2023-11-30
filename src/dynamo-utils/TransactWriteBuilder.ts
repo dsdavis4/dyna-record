@@ -47,7 +47,7 @@ class TransactionBuilder {
     item: ConditionCheck,
     conditionFailedMsg: string
   ): void {
-    this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ ConditionCheck: item });
   }
 
@@ -56,34 +56,38 @@ class TransactionBuilder {
    * @param item
    */
   public addPut(item: Put, conditionFailedMsg?: string): void {
-    if (conditionFailedMsg !== undefined) {
-      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
-    }
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ Put: item });
   }
 
-  // TODO do I use the friednly error message? If so.. make a method and DRY up
   /**
    * Add an update operation to the transaction
    * @param item
    */
   public addUpdate(item: Update, conditionFailedMsg?: string): void {
-    if (conditionFailedMsg !== undefined) {
-      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
-    }
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ Update: item });
   }
 
-  // TODO do I use the friednly error message? If so.. make a method and DRY up
   /**
    * Add a delete operation to the transaction
    * @param item
    */
   public addDelete(item: Delete, conditionFailedMsg?: string): void {
-    if (conditionFailedMsg !== undefined) {
-      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
-    }
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ Delete: item });
+  }
+
+  /**
+   * Track error messages to return if there is a ConditionalCheckFailed exception
+   *
+   * IMPORTANT - Call this before adding the transaction to this.transactionItems
+   * @param errMsg The custom error message to return if there is a ConditionalCheckFailed exception
+   */
+  private trackErrorMessage(errMsg?: string): void {
+    if (errMsg !== undefined) {
+      this.errorMessages[this.transactionItems.length] = errMsg;
+    }
   }
 
   /**
