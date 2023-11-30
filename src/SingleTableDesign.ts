@@ -90,7 +90,11 @@ abstract class SingleTableDesign {
     return await op.run(key, options);
   }
 
-  // TODO add tsdoc
+  /**
+   * Create an entity. If foreign keys are included in the attributes then BelongsToLinks will be demoralized accordingly
+   * @param attributes - Attributes of the model to create
+   * @returns The new Entity
+   */
   public static async create<T extends SingleTableDesign>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>
@@ -99,7 +103,13 @@ abstract class SingleTableDesign {
     return await op.run(attributes);
   }
 
-  // TODO add tsdoc
+  /**
+   * Update an entity. If foreign keys are included in the attribute then:
+   *   - BelongsToLinks will be created accordingly
+   *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
+   * @param id - The id of the entity to update
+   * @param attributes - Att
+   */
   public static async update<T extends SingleTableDesign>(
     this: EntityClass<T>,
     id: string,
