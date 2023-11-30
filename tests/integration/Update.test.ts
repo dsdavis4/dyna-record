@@ -16,7 +16,7 @@ import {
   HasMany,
   HasOne
 } from "../../src/decorators";
-import { ForeignKey } from "../../src/types";
+import { type ForeignKey } from "../../src/types";
 
 // TODO add a test that it can do a update on belogns to link for HasOne and HasMany in the same transaction...
 
