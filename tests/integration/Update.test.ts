@@ -27,7 +27,7 @@ const mockedGetCommand = jest.mocked(GetCommand);
 
 const mockSend = jest.fn();
 const mockGet = jest.fn();
-const mockTransact = jest.fn(); // TODO is this used?
+const mockTransact = jest.fn();
 
 const mockedUuidv4 = jest.mocked(uuidv4);
 
