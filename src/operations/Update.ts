@@ -350,7 +350,7 @@ class Update<T extends SingleTableDesign> {
             : this.#EntityClass.name
       };
 
-      // TODO do these need conditions?
+      // TODO does this need a custom error message?
       this.#transactionBuilder.addDelete({
         TableName: tableName,
         Key: oldLinkKeys
