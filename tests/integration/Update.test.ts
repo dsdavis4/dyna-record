@@ -18,8 +18,6 @@ import {
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
 
-// TODO add a test that it can do a update on belogns to link for HasOne and HasMany in the same transaction...
-
 jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
