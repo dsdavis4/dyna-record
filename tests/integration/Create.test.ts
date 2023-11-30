@@ -526,5 +526,27 @@ describe("Create", () => {
         customerId: "456"
       });
     });
+
+    it("will not accept DefaultFields on create because they are managed by no-orm", async () => {
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        id: "123"
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        type: "456"
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        createdAt: new Date()
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        updatedAt: new Date()
+      });
+    });
   });
 });

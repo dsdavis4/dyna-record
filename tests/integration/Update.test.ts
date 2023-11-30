@@ -1796,6 +1796,28 @@ describe("Update", () => {
       });
     });
 
+    it("will not accept DefaultFields on update because they are managed by no-orm", async () => {
+      await Order.update("123", {
+        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        id: "123"
+      });
+
+      await Order.update("123", {
+        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        type: "456"
+      });
+
+      await Order.update("123", {
+        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        createdAt: new Date()
+      });
+
+      await Order.update("123", {
+        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        updatedAt: new Date()
+      });
+    });
+
     it("does not require all of an entity attributes to be passed", async () => {
       await Order.update("123", {
         // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey

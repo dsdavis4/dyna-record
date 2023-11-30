@@ -1,13 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
+import { type DefaultFields } from "../SingleTableDesign";
 import type { Brand, PrimaryKey, SortKey } from "../types";
-
-// TODO does this belong in this file?
-// TODO "type" key might be too generic
-// TODO how to make the fields shared so they arent repeeated in other files?
-/**
- * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
- */
-type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
 
 type PrimaryKeyAttribute<T> = {
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;

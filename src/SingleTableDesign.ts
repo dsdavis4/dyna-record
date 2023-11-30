@@ -20,20 +20,31 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
+// TODO "type" key might be too generic
+// TODO Make sure that these values are not repeated in other files, without using this type
+/**
+ * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
+ */
+export type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
+const idField: DefaultFields = "id";
+const typeField: DefaultFields = "type";
+const createdAtField: DefaultFields = "createdAt";
+const updatedAtField: DefaultFields = "updatedAt";
+
 abstract class SingleTableDesign {
   @Attribute({ alias: "Id" })
-  public id: string;
+  public [idField]: string;
 
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
   @Attribute({ alias: "Type" })
-  public type: string;
+  public [typeField]: string;
 
   @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date; // TODO this should serialize to date
+  public [createdAtField]: Date; // TODO this should serialize to date
 
   @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
+  public [updatedAtField]: Date; // TODO this should serialize to date
 
   /**
    * Find an entity by Id and optionally include associations
