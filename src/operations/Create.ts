@@ -27,7 +27,7 @@ export type CreateOptions<T extends SingleTableDesign> =
 // And they have the same public entry point
 
 class Create<T extends SingleTableDesign> {
-  private readonly EntityClass: EntityClass<T>;
+  readonly #EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
@@ -35,7 +35,7 @@ class Create<T extends SingleTableDesign> {
   readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
+    this.#EntityClass = Entity;
     this.#entityMetadata = Metadata.getEntity(Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
@@ -54,14 +54,14 @@ class Create<T extends SingleTableDesign> {
   public async run(attributes: CreateOptions<T>): Promise<T> {
     const entityData = this.buildEntityData(attributes);
 
-    const tableItem = entityToTableItem(this.EntityClass.name, entityData);
+    const tableItem = entityToTableItem(this.#EntityClass.name, entityData);
 
     this.buildPutItemTransaction(tableItem);
     this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
 
-    return tableItemToEntity<T>(this.EntityClass, tableItem);
+    return tableItemToEntity<T>(this.#EntityClass, tableItem);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
@@ -75,13 +75,13 @@ class Create<T extends SingleTableDesign> {
     const sk = entityAttrs[sortKey].name;
 
     const keys = {
-      [pk]: this.EntityClass.primaryKeyValue(id),
-      [sk]: this.EntityClass.name
+      [pk]: this.#EntityClass.primaryKeyValue(id),
+      [sk]: this.#EntityClass.name
     };
 
     const defaultAttrs: SingleTableDesign = {
       id,
-      type: this.EntityClass.name,
+      type: this.#EntityClass.name,
       createdAt,
       updatedAt: createdAt
     };
@@ -125,11 +125,11 @@ class Create<T extends SingleTableDesign> {
 
           const transactionOpts = [rel, entityData.id, relationshipId] as const;
 
-          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasMany(this.#EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(...transactionOpts);
           }
 
-          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasOne(this.#EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
@@ -198,7 +198,11 @@ class Create<T extends SingleTableDesign> {
 
     this.#transactionBuilder.addPut(
       putExpression,
-      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+      `${
+        rel.target.name
+      } with id: ${relationshipId} already has an associated ${
+        this.#EntityClass.name
+      }`
     );
   }
 }

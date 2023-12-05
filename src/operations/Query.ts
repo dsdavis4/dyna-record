@@ -34,13 +34,12 @@ export type QueryResults<T extends SingleTableDesign> = Array<
  * Query operations
  */
 class Query<T extends SingleTableDesign> {
-  private readonly EntityClass: EntityClass<T>;
-
+  readonly #EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
 
   constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
+    this.#EntityClass = Entity;
     this.#entityMetadata = Metadata.getEntity(Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
@@ -76,7 +75,7 @@ class Query<T extends SingleTableDesign> {
     options?: QueryBuilderOptions
   ): Promise<QueryResults<T>> {
     const params = new QueryBuilder({
-      entityClassName: this.EntityClass.name,
+      entityClassName: this.#EntityClass.name,
       key,
       options
     }).build();
@@ -106,14 +105,14 @@ class Query<T extends SingleTableDesign> {
     const modelSk = entityMetadata.attributes[sortKey].name;
 
     const keyCondition = {
-      [modelPk]: this.EntityClass.primaryKeyValue(id),
+      [modelPk]: this.#EntityClass.primaryKeyValue(id),
       ...(options?.skCondition !== undefined && {
         [modelSk]: options?.skCondition
       })
     };
 
     const params = new QueryBuilder({
-      entityClassName: this.EntityClass.name,
+      entityClassName: this.#EntityClass.name,
       key: keyCondition,
       options
     }).build();
@@ -130,7 +129,7 @@ class Query<T extends SingleTableDesign> {
     return queryResults.map(res =>
       isBelongsToLinkDynamoItem(res)
         ? tableItemToEntity(BelongsToLink, res)
-        : tableItemToEntity<T>(this.EntityClass, res)
+        : tableItemToEntity<T>(this.#EntityClass, res)
     );
   }
 }

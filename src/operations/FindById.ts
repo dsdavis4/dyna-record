@@ -77,14 +77,13 @@ interface RelationshipObj {
  * FindById operations
  */
 class FindById<T extends SingleTableDesign> {
-  private readonly EntityClass: EntityClass<T>;
-
+  readonly #EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactGetBuilder;
 
   constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
+    this.#EntityClass = Entity;
     this.#entityMetadata = Metadata.getEntity(Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
@@ -123,8 +122,8 @@ class FindById<T extends SingleTableDesign> {
     const res = await dynamo.getItem({
       TableName: tableName,
       Key: {
-        [primaryKey]: this.EntityClass.primaryKeyValue(id),
-        [sortKey]: this.EntityClass.name
+        [primaryKey]: this.#EntityClass.primaryKeyValue(id),
+        [sortKey]: this.#EntityClass.name
       },
       ConsistentRead: true
     });
@@ -132,7 +131,7 @@ class FindById<T extends SingleTableDesign> {
     if (res === null) {
       return null;
     } else {
-      return tableItemToEntity<T>(this.EntityClass, res);
+      return tableItemToEntity<T>(this.#EntityClass, res);
     }
   }
 
@@ -187,13 +186,13 @@ class FindById<T extends SingleTableDesign> {
     const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
 
     const partitionFilter = includedRelationshipsFilter(
-      this.EntityClass.name,
+      this.#EntityClass.name,
       includedRelationships
     );
 
     return new QueryBuilder({
-      entityClassName: this.EntityClass.name,
-      key: { [modelPrimaryKey]: this.EntityClass.primaryKeyValue(id) },
+      entityClassName: this.#EntityClass.name,
+      key: { [modelPrimaryKey]: this.#EntityClass.primaryKeyValue(id) },
       options: { filter: partitionFilter }
     }).build();
   }
@@ -208,7 +207,7 @@ class FindById<T extends SingleTableDesign> {
   private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
-        if (res.Type === this.EntityClass.name) acc.item = res;
+        if (res.Type === this.#EntityClass.name) acc.item = res;
         if (isBelongsToLinkDynamoItem(res)) acc.belongsToLinks.push(res);
         return acc;
       },
@@ -354,7 +353,7 @@ class FindById<T extends SingleTableDesign> {
     transactionResults: TransactGetItemResponses,
     relationsLookup: RelationshipLookup
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
-    const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
+    const parentEntity = tableItemToEntity(this.#EntityClass, entityTableItem);
 
     transactionResults.forEach(res => {
       const tableItem = res.Item;
