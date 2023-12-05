@@ -1,31 +1,16 @@
-import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
-import type SingleTableDesign from "../SingleTableDesign";
-import { TransactWriteBuilder } from "../dynamo-utils";
+import type SingleTableDesign from "../../SingleTableDesign";
+import { TransactWriteBuilder } from "../../dynamo-utils";
 import type {
   EntityClass,
   RelationshipMetadata,
   HasOneRelationship,
   HasManyRelationship
-} from "../metadata";
-import { entityToTableItem } from "../utils";
-import { type ForeignKey, type DynamoTableItem } from "../types";
-import type { EntityDefinedAttributes } from "./types";
-import { RelationshipTransactions } from "./utils";
-import OperationBase from "./OperationBase";
-
-interface Expression {
-  UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
-  ExpressionAttributeNames: NonNullable<
-    UpdateCommandInput["ExpressionAttributeNames"]
-  >;
-  ExpressionAttributeValues: NonNullable<
-    UpdateCommandInput["ExpressionAttributeValues"]
-  >;
-}
-
-export type UpdateOptions<T extends SingleTableDesign> = Partial<
-  EntityDefinedAttributes<T>
->;
+} from "../../metadata";
+import { entityToTableItem } from "../../utils";
+import type { ForeignKey, DynamoTableItem } from "../../types";
+import { RelationshipTransactions } from "../utils";
+import OperationBase from "../OperationBase";
+import type { UpdateOptions, Expression } from "./types";
 
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
