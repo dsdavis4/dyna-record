@@ -20,23 +20,34 @@ import { entityToTableItem } from "../../utils";
 
 type EntityData<T extends SingleTableDesign> = Pick<T, "id"> & Partial<T>;
 
-// TODO delete if this is not used
-// export const isEntityData = <T extends SingleTableDesign>(
-//   data: any
-// ): data is EntityData<T> =>
-//   typeof data?.id !== "undefined" && data instanceof SingleTableDesign;
-
-// export const isEntityData = (data: )
-
-// TODO tsdoc on each of these
 interface RelationshipTransactionsProps<T extends SingleTableDesign> {
+  /**
+   * Entity for which relationships are being persisted
+   */
   readonly Entity: EntityClass<T>;
+  /**
+   * TransactionBuilder instance to add relationship transactions to
+   */
   readonly transactionBuilder: TransactWriteBuilder;
+  /**
+   * Optional callback to add logic to persisting BelongsTo HasMany relationships
+   * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasMany of
+   * @param entityId The ID of the entity
+   * @param relationshipId The ID of the relationship being persisted
+   * @returns
+   */
   belongsToHasManyCb?: (
     rel: BelongsToRelationship,
     entityId: string,
     relationshipId: string
   ) => Promise<void>;
+  /**
+   * Optional callback to add logic to persisting BelongsTo HasOne relationships
+   * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasOne of
+   * @param entityId The ID of the entity
+   * @param relationshipId The ID of the relationship being persisted
+   * @returns
+   */
   belongsToHasOneCb?: (
     rel: BelongsToRelationship,
     entityId: string,
