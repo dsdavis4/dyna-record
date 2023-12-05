@@ -51,6 +51,8 @@ class Create<T extends SingleTableDesign> {
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
 
+  // TODO can I handle the situation where the foreign key of a relationship is already set?
+
   /**
    * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
    * @param attributes
