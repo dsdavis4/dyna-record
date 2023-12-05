@@ -12,6 +12,8 @@ export type ConditionCheck = NonNullable<
   TransactItems[number]["ConditionCheck"]
 >;
 export type Put = NonNullable<TransactItems[number]["Put"]>;
+export type Update = NonNullable<TransactItems[number]["Update"]>;
+export type Delete = NonNullable<TransactItems[number]["Delete"]>;
 
 class TransactionBuilder {
   private readonly transactionItems: TransactItems = [];
@@ -45,7 +47,7 @@ class TransactionBuilder {
     item: ConditionCheck,
     conditionFailedMsg: string
   ): void {
-    this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ ConditionCheck: item });
   }
 
@@ -54,10 +56,38 @@ class TransactionBuilder {
    * @param item
    */
   public addPut(item: Put, conditionFailedMsg?: string): void {
-    if (conditionFailedMsg !== undefined) {
-      this.errorMessages[this.transactionItems.length] = conditionFailedMsg;
-    }
+    this.trackErrorMessage(conditionFailedMsg);
     this.transactionItems.push({ Put: item });
+  }
+
+  /**
+   * Add an update operation to the transaction
+   * @param item
+   */
+  public addUpdate(item: Update, conditionFailedMsg?: string): void {
+    this.trackErrorMessage(conditionFailedMsg);
+    this.transactionItems.push({ Update: item });
+  }
+
+  /**
+   * Add a delete operation to the transaction
+   * @param item
+   */
+  public addDelete(item: Delete, conditionFailedMsg?: string): void {
+    this.trackErrorMessage(conditionFailedMsg);
+    this.transactionItems.push({ Delete: item });
+  }
+
+  /**
+   * Track error messages to return if there is a ConditionalCheckFailed exception
+   *
+   * IMPORTANT - Call this before adding the transaction to this.transactionItems
+   * @param errMsg The custom error message to return if there is a ConditionalCheckFailed exception
+   */
+  private trackErrorMessage(errMsg?: string): void {
+    if (errMsg !== undefined) {
+      this.errorMessages[this.transactionItems.length] = errMsg;
+    }
   }
 
   /**

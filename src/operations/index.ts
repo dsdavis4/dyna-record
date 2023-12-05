@@ -6,3 +6,6 @@ export * from "./Query";
 
 export { default as Create } from "./Create";
 export * from "./Create";
+
+export { default as Update } from "./Update";
+export * from "./Update";

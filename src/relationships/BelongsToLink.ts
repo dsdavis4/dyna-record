@@ -1,10 +1,20 @@
 import { Entity, Attribute } from "../decorators";
+import { v4 as uuidv4 } from "uuid";
 
 export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
 export const FOREIGN_KEY_ALIAS = "ForeignKey";
 
+interface BelongsToLinkProps {
+  id: string;
+  type: string;
+  foreignEntityType: string;
+  foreignKey: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Entity
-class BelongsToLink {
+class BelongsToLink implements BelongsToLinkProps {
   // // TODO how to obtain the pk and sk... maybe throught the new type?
   // @Attribute({ alias: "PK" })
   // public pk: string;
@@ -26,7 +36,7 @@ class BelongsToLink {
   public foreignEntityType: string;
 
   @Attribute({ alias: FOREIGN_KEY_ALIAS })
-  public foreignKey: string;
+  public foreignKey: string; // TODO should this be of type ForeignKey?
 
   // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "CreatedAt" })
@@ -35,6 +45,22 @@ class BelongsToLink {
   // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
+
+  public static build(
+    foreignEntityType: string,
+    foreignKey: string
+  ): BelongsToLinkProps {
+    const createdAt = new Date();
+
+    return {
+      id: uuidv4(),
+      type: BelongsToLink.name,
+      foreignKey,
+      foreignEntityType,
+      createdAt,
+      updatedAt: createdAt
+    };
+  }
 }
 
 export default BelongsToLink;

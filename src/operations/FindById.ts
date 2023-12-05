@@ -125,7 +125,8 @@ class FindById<T extends SingleTableDesign> {
       Key: {
         [primaryKey]: this.EntityClass.primaryKeyValue(id),
         [sortKey]: this.EntityClass.name
-      }
+      },
+      ConsistentRead: true
     });
 
     if (res === null) {

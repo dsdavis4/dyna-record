@@ -15,7 +15,12 @@ import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
-// TODO start here... onto update
+// TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
+//      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
+
+// TODO delete temp tables
+
+// TODO add tests where primary key and sort key are not PK and SK
 
 // TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
 //  the accepted comment has conversations about getting class name on class field decorators
@@ -27,9 +32,11 @@ import { BelongsToLink } from "../src/relationships";
 //    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
 @Table({ name: "temp-table", delimiter: "#" })
 abstract class DrewsBrewsTable extends SingleTableDesign {
+  // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 
+  // TODO add a test that this can be whatever value the user wants: Ex: public mySortKey: mySortKey
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
 
@@ -165,7 +172,10 @@ class WsToken extends DrewsBrewsTable {
   }
 }
 
+// TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
+
+// TODO add dependabot once this is public
 
 /* TODO post mvp
 - add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
@@ -201,20 +211,107 @@ class WsToken extends DrewsBrewsTable {
     //   include: [{ association: "brewery" }]
     // });
 
+    // const bla = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    // debugger;
+
+    // const a = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+    //   include: [{ association: "beers" }]
+    // });
+
+    // debugger;
+
+    // const scale1 = await Scale.findById(
+    //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale2 = await Scale.findById(
+    //   "035188db-de1f-4452-b76b-77849445a4dd",
+    //   { include: [{ association: "process" }] }
+    // );
+    // const scale3 = await Scale.findById(
+    //   "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab",
+    //   { include: [{ association: "process" }] }
+    // );
+
+    // debugger;
+
+    // await Process.update("e0d82399-7180-4214-b5ab-df844f7c9813", {
+    //   // scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab", // Has no scale, should process
+    //   // scaleId: "035188db-de1f-4452-b76b-77849445a4dd", // Already has a process and should fail
+    //   scaleId: "bad",
+    //   currentState: "bla"
+    // });
+
+    // debugger;
+
+    // const bla = await Process.findById("e0d82399-7180-4214-b5ab-df844f7c9813", {
+    //   include: [{ association: "scale" }]
+    // });
+
+    // debugger;
+
+    // const abc = await Scale.findById("f32254e6-36ea-4d27-a7a7-f2705cfcff8b", {
+    //   include: [{ association: "process" }]
+    // });
+
+    debugger;
+
+    await Beer.update(
+      "ceb34f08-3472-45e8-b78c-9fa503b70637",
+      // "bad",
+      {
+        // breweryId: "bad", // doesnt exist, should error
+        // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
+        breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
+        name: "Serrano Pale Ale 9"
+      }
+    );
+
+    debugger;
+
+    const a1 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
+      include: [{ association: "brewery" }]
+    });
+
+    const a2 = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+      include: [{ association: "beers" }]
+    });
+
+    const a3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
+      include: [{ association: "beers" }]
+    });
+
+    debugger;
+
     // const beer = await Beer.create({
     //   style: "lager",
     //   // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559",
     //   breweryId: "bad",
     //   abv: 1,
-    //   name: "Test 11"
+    //   name: "Test 20"
     // });
+
+    // const a = await Beer.findById("1ed26b25-a3f9-4838-8809-a8762622e5fa", {
+    //   include: [{ association: "brewery" }]
+    // });
+
+    // debugger;
+
+    // const b = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
+    //   include: [{ association: "beers" }]
+    // });
+
+    // debugger;
 
     // const newProcess = await Process.create({
     //   name: "somename",
     //   currentState: "state",
     //   currentStateStatus: "status",
     //   currentUserInput: "input",
-    //   scaleId: "035188db-de1f-4452-b76b-77849445a4dd"
+    //   scaleId: "d7cc77b5-dfdf-4f27-9dcd-53d9bd49c0ab"
     // });
 
     // const bla = await Scale.findById("40f17163-f444-4afc-8b22-eebb82aa51a8", {
@@ -255,10 +352,10 @@ class WsToken extends DrewsBrewsTable {
 
     // debugger;
 
-    const test = await Brewery.findById(
-      "157cc981-1be2-4ecc-a257-07d9a6037559",
-      { include: [{ association: "beers" }] }
-    );
+    // const test = await Brewery.findById(
+    //   "157cc981-1be2-4ecc-a257-07d9a6037559",
+    //   { include: [{ association: "beers" }] }
+    // );
 
     debugger;
 
@@ -287,7 +384,7 @@ class WsToken extends DrewsBrewsTable {
       // deleteMeArr: ["scales"]
     });
 
-    debugger;
+    // debugger;
 
     // const scale1 = await Scale.findById(
     //   "f32254e6-36ea-4d27-a7a7-f2705cfcff8b",
@@ -302,7 +399,7 @@ class WsToken extends DrewsBrewsTable {
     //   { include: [{ association: "process" }] }
     // );
 
-    debugger;
+    // debugger;
 
     if (room) {
       room.type;

@@ -10,6 +10,14 @@ import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { Attribute, Entity } from "../../src/decorators";
 
+// TODO is everything awaited properly in these tests? Do I need to mock resolved value in other tests?
+//      Check all operations tests...
+//      Look at what I did in Update tests for 'return await Promise.resolve(mockTransact());
+// I might need to add below to the mockSend (see update)
+// if (command.name === "TransactWriteCommand") {
+//   return await Promise.resolve(mockTransact());
+// }
+
 jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
@@ -48,6 +56,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 });
 
 // TODO add types test
+// TODO add test for creating entity without relationships
 describe("Create", () => {
   beforeAll(() => {
     jest.useFakeTimers();
@@ -125,7 +134,7 @@ describe("Create", () => {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Customer#123",
-                  SK: "Order#uuid2",
+                  SK: "Order#uuid1",
                   Id: "uuid2",
                   ForeignKey: "uuid1",
                   ForeignEntityType: "Order",
@@ -153,7 +162,7 @@ describe("Create", () => {
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "PaymentMethod#456",
-                  SK: "Order#uuid3",
+                  SK: "Order#uuid1",
                   Id: "uuid3",
                   ForeignKey: "uuid1",
                   ForeignEntityType: "Order",
@@ -515,6 +524,28 @@ describe("Create", () => {
         paymentMethodId: "123",
         // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
         customerId: "456"
+      });
+    });
+
+    it("will not accept DefaultFields on create because they are managed by no-orm", async () => {
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        id: "123"
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        type: "456"
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        createdAt: new Date()
+      });
+
+      await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        updatedAt: new Date()
       });
     });
   });

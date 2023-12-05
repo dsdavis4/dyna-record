@@ -7,9 +7,16 @@ import {
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
 
+// TODO should I pass the entity class instead of the name?
+/**
+ * Convert an entity to its aliased table item fields to for dynamo interactions
+ * @param entityClassName
+ * @param entityData
+ * @returns
+ */
 export const entityToTableItem = (
   entityClassName: string,
-  entityData: SingleTableDesign
+  entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
   const entityMetadata = Metadata.getEntity(entityClassName);
 
@@ -38,6 +45,12 @@ export const entityToTableItem = (
   );
 };
 
+/**
+ * Serialize a table item to its associated Entity class, using the class attribute property names
+ * @param EntityClass
+ * @param tableItem
+ * @returns
+ */
 export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem

@@ -3,65 +3,27 @@ import Metadata, {
   type EntityMetadata,
   type TableMetadata,
   type EntityClass,
-  type RelationshipMetadata,
   type BelongsToRelationship
 } from "../metadata";
-import { type RelationshipAttributeNames } from "./types";
+import type { EntityDefinedAttributes } from "./types";
 import { v4 as uuidv4 } from "uuid";
-import type { Brand, PrimaryKey, SortKey } from "../types";
-import { BelongsToLink } from "../relationships";
-import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
+import type { DynamoTableItem } from "../types";
+import { TransactWriteBuilder } from "../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../utils";
 import {
-  isBelongsToRelationship,
-  isHasManyRelationship,
-  isHasOneRelationship
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
+  isBelongsToRelationship
 } from "../metadata/utils";
+import { RelationshipTransactions } from "./utils";
 
-// TODO type might be too generic
-// TODO how to make the fields shared so they arent repeeated in other files?
-type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
-
-type PrimaryKeyAttribute<T> = {
-  [K in keyof T]: T[K] extends PrimaryKey ? K : never;
-}[keyof T];
-
-type SortKeyAttribute<T> = {
-  [K in keyof T]: T[K] extends SortKey ? K : never;
-}[keyof T];
-
-// TODO add unit test for this
-type FunctionFields<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T]: T[K] extends Function ? K : never;
-}[keyof T];
+// TODO do I need to handle the situation where the foreign key being set has already been set on another entity?
 
 /**
- * Infer the primitive type of the branded type
+ * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
  */
-type ExtractForeignKeyType<T> = T extends Brand<infer U, "ForeignKey">
-  ? U
-  : never;
-
-/**
- * Allow ForeignKey attributes to be passes to the create method by using their inferred primitive type
- * Ex:
- *  If ModelA has: attr1: ForeignKey
- *  This allows" ModelA.create({ attr1: "someVal" })
- *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
- */
-type ForeignKeyToValue<T> = {
-  [K in keyof T]: ExtractForeignKeyType<T[K]> extends never ? T[K] : string;
-};
-
-export type CreateOptions<T extends SingleTableDesign> = Omit<
-  ForeignKeyToValue<T>,
-  | DefaultFields
-  | RelationshipAttributeNames<T>
-  | FunctionFields<T>
-  | PrimaryKeyAttribute<T>
-  | SortKeyAttribute<T>
->;
+export type CreateOptions<T extends SingleTableDesign> =
+  EntityDefinedAttributes<T>;
 
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
@@ -73,11 +35,12 @@ export type CreateOptions<T extends SingleTableDesign> = Omit<
 // TODO DRY up this class where I can
 
 class Create<T extends SingleTableDesign> {
+  private readonly EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
 
-  private readonly EntityClass: EntityClass<T>;
+  readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   constructor(Entity: EntityClass<T>) {
     this.EntityClass = Entity;
@@ -86,28 +49,27 @@ class Create<T extends SingleTableDesign> {
       this.#entityMetadata.tableClassName
     );
     this.#transactionBuilder = new TransactWriteBuilder();
+    this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
 
-  // TODO tsdoc
-  // TODO add friendly error handling for failed transactions
+  /**
+   * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
+   * @param attributes
+   * @returns
+   */
   public async run(attributes: CreateOptions<T>): Promise<T> {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
     const entityData = this.buildEntityData(attributes);
 
-    const putExpression = {
-      TableName: tableName,
-      Item: entityToTableItem(this.EntityClass.name, entityData),
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
-    this.#transactionBuilder.addPut(putExpression);
+    const tableItem = entityToTableItem(this.EntityClass.name, entityData);
 
+    this.buildPutItemTransaction(tableItem);
     this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
 
-    return tableItemToEntity<T>(this.EntityClass, putExpression.Item);
+    return tableItemToEntity<T>(this.EntityClass, tableItem);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
@@ -136,6 +98,21 @@ class Create<T extends SingleTableDesign> {
   }
 
   /**
+   * Build the transaction for the parent entity Create item request
+   * @param tableItem
+   */
+  private buildPutItemTransaction(tableItem: DynamoTableItem): void {
+    const { name: tableName, primaryKey } = this.#tableMetadata;
+
+    const putExpression = {
+      TableName: tableName,
+      Item: tableItem,
+      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+    };
+    this.#transactionBuilder.addPut(putExpression);
+  }
+
+  /**
    * Build transaction items for associations
    * @param entityData
    */
@@ -156,56 +133,16 @@ class Create<T extends SingleTableDesign> {
 
           const transactionOpts = [rel, entityData.id, relationshipId] as const;
 
-          if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(...transactionOpts);
           }
 
-          if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
       }
     });
-  }
-
-  /**
-   * Returns true if the entity being created BelongsTo a HasMany
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasMany(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasManyRelationship(rel) &&
-        rel.target === this.EntityClass &&
-        rel.foreignKey === foreignKey
-    );
-  }
-
-  /**
-   * Returns true if the entity being created BelongsTo a HasOne
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasOne(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasOneRelationship(rel) &&
-        rel.target === this.EntityClass &&
-        rel.foreignKey === foreignKey
-    );
   }
 
   /**
@@ -215,21 +152,16 @@ class Create<T extends SingleTableDesign> {
    * @returns
    */
   private buildRelationshipExistsConditionTransaction(
-    rel: RelationshipMetadata,
+    rel: BelongsToRelationship,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
-    const conditionCheck: ConditionCheck = {
-      TableName: tableName,
-      Key: {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: rel.target.name
-      },
-      ConditionExpression: `attribute_exists(${primaryKey})`
-    };
+    const conditionCheck =
+      this.#relationshipTransactions.buildRelationshipExistsCondition(
+        rel,
+        relationshipId
+      );
 
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
@@ -245,28 +177,11 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
-
-    const createdAt = new Date();
-    const link: BelongsToLink = {
-      id: uuidv4(),
-      type: BelongsToLink.name,
-      foreignKey: entityId,
-      foreignEntityType: this.EntityClass.name,
-      createdAt,
-      updatedAt: createdAt
-    };
-
-    const keys = {
-      pk: rel.target.primaryKeyValue(relationshipId),
-      sk: this.EntityClass.primaryKeyValue(link.id)
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasMany(
+      rel,
+      entityId,
+      relationshipId
+    );
 
     this.#transactionBuilder.addPut(putExpression);
   }
@@ -283,28 +198,11 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
-
-    const createdAt = new Date();
-    const link: BelongsToLink = {
-      id: uuidv4(),
-      type: BelongsToLink.name,
-      foreignEntityType: this.EntityClass.name,
-      foreignKey: entityId,
-      createdAt,
-      updatedAt: createdAt
-    };
-
-    const keys = {
-      pk: rel.target.primaryKeyValue(relationshipId),
-      sk: `${this.EntityClass.name}`
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: entityToTableItem(rel.target.name, { ...link, ...keys }),
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasOne(
+      rel,
+      entityId,
+      relationshipId
+    );
 
     this.#transactionBuilder.addPut(
       putExpression,

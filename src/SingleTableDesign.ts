@@ -10,7 +10,9 @@ import {
   type EntityKeyConditions,
   type QueryResults,
   Create,
-  type CreateOptions
+  type CreateOptions,
+  Update,
+  type UpdateOptions
 } from "./operations";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -18,20 +20,31 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
+// TODO "type" key might be too generic
+// TODO Make sure that these values are not repeated in other files, without using this type
+/**
+ * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
+ */
+export type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
+const idField: DefaultFields = "id";
+const typeField: DefaultFields = "type";
+const createdAtField: DefaultFields = "createdAt";
+const updatedAtField: DefaultFields = "updatedAt";
+
 abstract class SingleTableDesign {
   @Attribute({ alias: "Id" })
-  public id: string;
+  public [idField]: string;
 
   // TODO this is too generic. Consuming models would want to use this
   // Maybe EntityType? Would require data migration....
   @Attribute({ alias: "Type" })
-  public type: string;
+  public [typeField]: string;
 
   @Attribute({ alias: "CreatedAt" })
-  public createdAt: Date; // TODO this should serialize to date
+  public [createdAtField]: Date; // TODO this should serialize to date
 
   @Attribute({ alias: "UpdatedAt" })
-  public updatedAt: Date; // TODO this should serialize to date
+  public [updatedAtField]: Date; // TODO this should serialize to date
 
   /**
    * Find an entity by Id and optionally include associations
@@ -89,13 +102,33 @@ abstract class SingleTableDesign {
     return await op.run(key, options);
   }
 
-  // TODO add tsdoc
+  /**
+   * Create an entity. If foreign keys are included in the attributes then BelongsToLinks will be demoralized accordingly
+   * @param attributes - Attributes of the model to create
+   * @returns The new Entity
+   */
   public static async create<T extends SingleTableDesign>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>
   ): Promise<T> {
     const op = new Create<T>(this);
     return await op.run(attributes);
+  }
+
+  /**
+   * Update an entity. If foreign keys are included in the attribute then:
+   *   - BelongsToLinks will be created accordingly
+   *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
+   * @param id - The id of the entity to update
+   * @param attributes - Att
+   */
+  public static async update<T extends SingleTableDesign>(
+    this: EntityClass<T>,
+    id: string,
+    attributes: UpdateOptions<T>
+  ): Promise<void> {
+    const op = new Update<T>(this);
+    await op.run(id, attributes);
   }
 
   /**
