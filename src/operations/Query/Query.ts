@@ -1,29 +1,14 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type SingleTableDesign from "../../SingleTableDesign";
 import {
   QueryBuilder,
-  type KeyConditions,
-  type QueryOptions as QueryBuilderOptions,
-  type SortKeyCondition
-} from "../query-utils";
-import DynamoClient from "../DynamoClient";
-import { BelongsToLink } from "../relationships";
-import type { EntityAttributes } from "./types";
-import { type DynamoTableItem } from "../types";
-import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
-import OperationBase from "./OperationBase";
-
-// TODO make folder with types like I did with FindById
-export interface QueryOptions extends QueryBuilderOptions {
-  skCondition?: SortKeyCondition;
-}
-
-export type EntityKeyConditions<T> = {
-  [K in keyof T]?: KeyConditions;
-};
-
-export type QueryResults<T extends SingleTableDesign> = Array<
-  EntityAttributes<T> | BelongsToLink
->;
+  type QueryOptions as QueryBuilderOptions
+} from "../../query-utils";
+import DynamoClient from "../../DynamoClient";
+import { BelongsToLink } from "../../relationships";
+import type { DynamoTableItem } from "../../types";
+import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../../utils";
+import OperationBase from "../OperationBase";
+import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 
 // TODO make sure this paginates on dynamo limits
 

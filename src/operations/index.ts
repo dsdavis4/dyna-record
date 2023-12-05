@@ -1,6 +1,4 @@
 export * from "./FindById";
-
-export { default as Query } from "./Query";
 export * from "./Query";
 
 export { default as Create } from "./Create";
