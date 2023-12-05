@@ -1,75 +1,36 @@
-import type SingleTableDesign from "../SingleTableDesign";
-import type {
-  RelationshipMetadata,
-  EntityClass,
-  BelongsToRelationship
-} from "../metadata";
+import type SingleTableDesign from "../../SingleTableDesign";
+import type { RelationshipMetadata, EntityClass } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
-} from "../DynamoClient";
-import { QueryBuilder } from "../query-utils";
-import { includedRelationshipsFilter } from "../query-utils/Filters";
-import type { EntityAttributes, RelationshipAttributeNames } from "./types";
-import { TransactGetBuilder } from "../dynamo-utils";
+} from "../../DynamoClient";
+import { QueryBuilder } from "../../query-utils";
+import { includedRelationshipsFilter } from "../../query-utils/Filters";
+import type { RelationshipAttributeNames } from "../types";
+import { TransactGetBuilder } from "../../dynamo-utils";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { isBelongsToRelationship } from "../metadata/utils";
-import type { StringObj, BelongsToLinkDynamoItem } from "../types";
+import { isBelongsToRelationship } from "../../metadata/utils";
+import type { StringObj, BelongsToLinkDynamoItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
   isKeyOfEntity,
   tableItemToEntity
-} from "../utils";
+} from "../../utils";
 import {
   FOREIGN_ENTITY_TYPE_ALIAS,
   FOREIGN_KEY_ALIAS
-} from "../relationships/BelongsToLink";
-import OperationBase from "./OperationBase";
+} from "../../relationships/BelongsToLink";
+import OperationBase from "../OperationBase";
+import type {
+  FindByIdIncludesRes,
+  IncludedAssociations,
+  RelationshipLookup,
+  RelationshipObj,
+  SortedQueryResults
+} from "./types";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
-}
-
-type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
-  FindByIdOptions<T>["include"]
->;
-
-interface SortedQueryResults {
-  item: QueryItems[number];
-  belongsToLinks: BelongsToLinkDynamoItem[];
-}
-
-type IncludedKeys<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
-> = Opts extends Required<FindByIdOptions<T>>
-  ? [...NonNullable<Opts>["include"]][number]["association"]
-  : never;
-
-type EntityKeysWithIncludedAssociations<
-  T extends SingleTableDesign,
-  P extends keyof T
-> = {
-  [K in P]: T[K] extends SingleTableDesign
-    ? EntityAttributes<T>
-    : T[K] extends SingleTableDesign[]
-    ? Array<EntityAttributes<T>>
-    : T[K];
-};
-
-export type FindByIdIncludesRes<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
-> = EntityKeysWithIncludedAssociations<
-  T,
-  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
->;
-
-type RelationshipLookup = Record<string, RelationshipMetadata>;
-
-interface RelationshipObj {
-  relationsLookup: RelationshipLookup;
-  belongsToRelationships: BelongsToRelationship[];
 }
 
 /**
