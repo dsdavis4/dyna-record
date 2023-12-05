@@ -11,7 +11,6 @@ import type {
 } from "../metadata";
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
-import { type CreateOptions } from "./Create";
 import { type ForeignKey, type DynamoTableItem } from "../types";
 import {
   isBelongsToRelationship,
@@ -56,7 +55,6 @@ class Update<T extends SingleTableDesign> {
     this.#transactionBuilder = new TransactWriteBuilder();
   }
 
-  // TODO should this return void? OR get the new item?
   public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
@@ -97,7 +95,6 @@ class Update<T extends SingleTableDesign> {
         UpdateExpression: expression.UpdateExpression,
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
-      // TODO add unit test for error message
       `${this.#EntityClass.name} with ID '${id}' does not exist`
     );
   }
@@ -112,7 +109,6 @@ class Update<T extends SingleTableDesign> {
     for (const rel of Object.values(relationships)) {
       const isBelongsTo = isBelongsToRelationship(rel);
 
-      // TODO add test that none of below is called if only updating non foreign key attributes
       if (isBelongsTo) {
         const relationshipId = attributes[rel.foreignKey];
         const isUpdatingRelationshipId = relationshipId !== undefined;
@@ -311,7 +307,6 @@ class Update<T extends SingleTableDesign> {
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
-    // TODO add test for error
     this.#transactionBuilder.addPut(
       putExpression,
       `${this.#EntityClass.name} with ID '${entityId}' already belongs to ${
@@ -333,7 +328,6 @@ class Update<T extends SingleTableDesign> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    // TODO can I avoid using "as", how can I update t
     const currentId =
       entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
 
