@@ -1,52 +1,21 @@
-import type SingleTableDesign from "../SingleTableDesign";
-import Metadata, {
-  type EntityMetadata,
-  type TableMetadata,
-  type EntityClass
-} from "../metadata";
+import type SingleTableDesign from "../../SingleTableDesign";
 import {
   QueryBuilder,
-  type KeyConditions,
-  type QueryOptions as QueryBuilderOptions,
-  type SortKeyCondition
-} from "../query-utils";
-import DynamoClient from "../DynamoClient";
-import { BelongsToLink } from "../relationships";
-import type { EntityAttributes } from "./types";
-import { type DynamoTableItem } from "../types";
-import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
-
-export interface QueryOptions extends QueryBuilderOptions {
-  skCondition?: SortKeyCondition;
-}
-
-export type EntityKeyConditions<T> = {
-  [K in keyof T]?: KeyConditions;
-};
-
-export type QueryResults<T extends SingleTableDesign> = Array<
-  EntityAttributes<T> | BelongsToLink
->;
+  type QueryOptions as QueryBuilderOptions
+} from "../../query-utils";
+import DynamoClient from "../../DynamoClient";
+import { BelongsToLink } from "../../relationships";
+import type { DynamoTableItem } from "../../types";
+import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../../utils";
+import OperationBase from "../OperationBase";
+import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 
 // TODO make sure this paginates on dynamo limits
 
 /**
  * Query operations
  */
-class Query<T extends SingleTableDesign> {
-  private readonly EntityClass: EntityClass<T>;
-
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
-
-  constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
-    this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(
-      this.#entityMetadata.tableClassName
-    );
-  }
-
+class Query<T extends SingleTableDesign> extends OperationBase<T> {
   /**
    *
    * @param key EntityId or object with PrimaryKey and optional SortKey conditions
@@ -99,8 +68,8 @@ class Query<T extends SingleTableDesign> {
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
-    const entityMetadata = this.#entityMetadata;
-    const { primaryKey, sortKey } = this.#tableMetadata;
+    const entityMetadata = this.entityMetadata;
+    const { primaryKey, sortKey } = this.tableMetadata;
 
     const modelPk = entityMetadata.attributes[primaryKey].name;
     const modelSk = entityMetadata.attributes[sortKey].name;

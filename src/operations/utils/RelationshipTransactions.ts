@@ -1,22 +1,98 @@
 import type SingleTableDesign from "../../SingleTableDesign";
+import type {
+  ConditionCheck,
+  Put,
+  TransactWriteBuilder
+} from "../../dynamo-utils";
 import Metadata, {
+  type TableMetadata,
   type BelongsToRelationship,
   type EntityClass,
-  type TableMetadata
+  type EntityMetadata
 } from "../../metadata";
-import type { ConditionCheck, Put } from "../../dynamo-utils";
+import {
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
+  isBelongsToRelationship
+} from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
 import { entityToTableItem } from "../../utils";
 
-/**
- * Builds transactions for persisting relationships
- */
+type EntityData<T extends SingleTableDesign> = Pick<T, "id"> & Partial<T>;
+
+interface RelationshipTransactionsProps<T extends SingleTableDesign> {
+  /**
+   * Entity for which relationships are being persisted
+   */
+  readonly Entity: EntityClass<T>;
+  /**
+   * TransactionBuilder instance to add relationship transactions to
+   */
+  readonly transactionBuilder: TransactWriteBuilder;
+  /**
+   * Optional callback to add logic to persisting BelongsTo HasMany relationships
+   * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasMany of
+   * @param entityId The ID of the entity
+   * @param relationshipId The ID of the relationship being persisted
+   * @returns
+   */
+  belongsToHasManyCb?: (
+    rel: BelongsToRelationship,
+    entityId: string,
+    relationshipId: string
+  ) => Promise<void>;
+  /**
+   * Optional callback to add logic to persisting BelongsTo HasOne relationships
+   * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasOne of
+   * @param entityId The ID of the entity
+   * @param relationshipId The ID of the relationship being persisted
+   * @returns
+   */
+  belongsToHasOneCb?: (
+    rel: BelongsToRelationship,
+    entityId: string,
+    relationshipId: string
+  ) => Promise<void>;
+}
+
 class RelationshipTransactions<T extends SingleTableDesign> {
+  readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
 
-  constructor(private readonly EntityClass: EntityClass<T>) {
-    const entityMetadata = Metadata.getEntity(EntityClass.name);
-    this.#tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
+  constructor(private readonly props: RelationshipTransactionsProps<T>) {
+    this.#entityMetadata = Metadata.getEntity(props.Entity.name);
+    this.#tableMetadata = Metadata.getTable(
+      this.#entityMetadata.tableClassName
+    );
+  }
+
+  public async build<T extends SingleTableDesign>(
+    entityData: EntityData<T>
+  ): Promise<void> {
+    const { relationships } = this.#entityMetadata;
+
+    for (const rel of Object.values(relationships)) {
+      const isBelongsTo = isBelongsToRelationship(rel);
+
+      if (isBelongsTo) {
+        const relationshipId = entityData[rel.foreignKey];
+        const isUpdatingRelationshipId = relationshipId !== undefined;
+
+        if (isUpdatingRelationshipId && typeof relationshipId === "string") {
+          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
+
+          const callbackParams = [rel, entityData.id, relationshipId] as const;
+
+          if (doesEntityBelongToRelAsHasMany(this.props.Entity, rel)) {
+            await this.buildBelongsToHasMany(...callbackParams);
+          }
+
+          if (doesEntityBelongToRelAsHasOne(this.props.Entity, rel)) {
+            await this.buildBelongsToHasOne(...callbackParams);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -25,11 +101,13 @@ class RelationshipTransactions<T extends SingleTableDesign> {
    * @param relationshipId
    * @returns
    */
-  public buildRelationshipExistsCondition(
+  private buildRelationshipExistsConditionTransaction(
     rel: BelongsToRelationship,
     relationshipId: string
-  ): ConditionCheck {
+  ): void {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+
+    const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
     const conditionCheck: ConditionCheck = {
       TableName: tableName,
@@ -40,7 +118,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       ConditionExpression: `attribute_exists(${primaryKey})`
     };
 
-    return conditionCheck;
+    this.props.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
   /**
@@ -50,18 +128,22 @@ class RelationshipTransactions<T extends SingleTableDesign> {
    * @param rel BelongsTo relationship metadata for which the entity being persisted is a BelongsTo HasOne
    * @param relationshipId Id of the parent entity of which the entity being persisted BelongsTo
    */
-  public buildBelongsToHasOne(
+  private async buildBelongsToHasOne(
     rel: BelongsToRelationship,
     entityId: string,
     relationshipId: string
-  ): Put {
+  ): Promise<void> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
+    if (this.props.belongsToHasOneCb !== undefined) {
+      await this.props.belongsToHasOneCb(rel, entityId, relationshipId);
+    }
+
+    const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.name
+      [sortKey]: this.props.Entity.name
     };
 
     const putExpression: Put = {
@@ -70,7 +152,10 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
-    return putExpression;
+    this.props.transactionBuilder.addPut(
+      putExpression,
+      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.props.Entity.name}`
+    );
   }
 
   /**
@@ -79,18 +164,22 @@ class RelationshipTransactions<T extends SingleTableDesign> {
    * @param entityId Id of the entity being persisted
    * @param relationshipId Id of the parent entity of which the entity being persisted BelongsTo
    */
-  public buildBelongsToHasMany(
+  private async buildBelongsToHasMany(
     rel: BelongsToRelationship,
     entityId: string,
     relationshipId: string
-  ): Put {
+  ): Promise<void> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
+    if (this.props.belongsToHasManyCb !== undefined) {
+      await this.props.belongsToHasManyCb(rel, entityId, relationshipId);
+    }
+
+    const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
     const keys = {
       [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.primaryKeyValue(link.foreignKey)
+      [sortKey]: this.props.Entity.primaryKeyValue(link.foreignKey)
     };
 
     const putExpression: Put = {
@@ -99,7 +188,10 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
     };
 
-    return putExpression;
+    this.props.transactionBuilder.addPut(
+      putExpression,
+      `${this.props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
+    );
   }
 }
 

@@ -1,94 +1,42 @@
-import type SingleTableDesign from "../SingleTableDesign";
-import Metadata, {
-  type RelationshipMetadata,
-  type EntityMetadata,
-  type TableMetadata,
-  type EntityClass,
-  type BelongsToRelationship
-} from "../metadata";
+import type SingleTableDesign from "../../SingleTableDesign";
+import type { RelationshipMetadata, EntityClass } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
-} from "../DynamoClient";
-import { QueryBuilder } from "../query-utils";
-import { includedRelationshipsFilter } from "../query-utils/Filters";
-import type { EntityAttributes, RelationshipAttributeNames } from "./types";
-import { TransactGetBuilder } from "../dynamo-utils";
+} from "../../DynamoClient";
+import { QueryBuilder } from "../../query-utils";
+import { includedRelationshipsFilter } from "../../query-utils/Filters";
+import { TransactGetBuilder } from "../../dynamo-utils";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { isBelongsToRelationship } from "../metadata/utils";
-import type { StringObj, BelongsToLinkDynamoItem } from "../types";
+import { isBelongsToRelationship } from "../../metadata/utils";
+import type { StringObj, BelongsToLinkDynamoItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
   isKeyOfEntity,
   tableItemToEntity
-} from "../utils";
+} from "../../utils";
 import {
   FOREIGN_ENTITY_TYPE_ALIAS,
   FOREIGN_KEY_ALIAS
-} from "../relationships/BelongsToLink";
-
-export interface FindByIdOptions<T extends SingleTableDesign> {
-  include?: Array<{ association: RelationshipAttributeNames<T> }>;
-}
-
-type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
-  FindByIdOptions<T>["include"]
->;
-
-interface SortedQueryResults {
-  item: QueryItems[number];
-  belongsToLinks: BelongsToLinkDynamoItem[];
-}
-
-type IncludedKeys<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
-> = Opts extends Required<FindByIdOptions<T>>
-  ? [...NonNullable<Opts>["include"]][number]["association"]
-  : never;
-
-type EntityKeysWithIncludedAssociations<
-  T extends SingleTableDesign,
-  P extends keyof T
-> = {
-  [K in P]: T[K] extends SingleTableDesign
-    ? EntityAttributes<T>
-    : T[K] extends SingleTableDesign[]
-    ? Array<EntityAttributes<T>>
-    : T[K];
-};
-
-export type FindByIdIncludesRes<
-  T extends SingleTableDesign,
-  Opts extends FindByIdOptions<T>
-> = EntityKeysWithIncludedAssociations<
-  T,
-  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
->;
-
-type RelationshipLookup = Record<string, RelationshipMetadata>;
-
-interface RelationshipObj {
-  relationsLookup: RelationshipLookup;
-  belongsToRelationships: BelongsToRelationship[];
-}
+} from "../../relationships/BelongsToLink";
+import OperationBase from "../OperationBase";
+import type {
+  FindByIdOptions,
+  FindByIdIncludesRes,
+  IncludedAssociations,
+  RelationshipLookup,
+  RelationshipObj,
+  SortedQueryResults
+} from "./types";
 
 /**
  * FindById operations
  */
-class FindById<T extends SingleTableDesign> {
-  private readonly EntityClass: EntityClass<T>;
-
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
+class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactGetBuilder;
 
   constructor(Entity: EntityClass<T>) {
-    this.EntityClass = Entity;
-    this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(
-      this.#entityMetadata.tableClassName
-    );
+    super(Entity);
     this.#transactionBuilder = new TransactGetBuilder();
   }
 
@@ -117,7 +65,7 @@ class FindById<T extends SingleTableDesign> {
    * @returns An entity object or null
    */
   private async findByIdOnly(id: string): Promise<T | null> {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
     const res = await dynamo.getItem({
@@ -183,8 +131,8 @@ class FindById<T extends SingleTableDesign> {
     id: string,
     includedRelationships: RelationshipMetadata[]
   ): QueryCommandInput {
-    const { primaryKey } = this.#tableMetadata;
-    const modelPrimaryKey = this.#entityMetadata.attributes[primaryKey].name;
+    const { primaryKey } = this.tableMetadata;
+    const modelPrimaryKey = this.entityMetadata.attributes[primaryKey].name;
 
     const partitionFilter = includedRelationshipsFilter(
       this.EntityClass.name,
@@ -240,7 +188,7 @@ class FindById<T extends SingleTableDesign> {
     belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipObj["relationsLookup"]
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
       const foreignKey = link[FOREIGN_KEY_ALIAS];
@@ -267,7 +215,7 @@ class FindById<T extends SingleTableDesign> {
     belongsToRelationships: RelationshipObj["belongsToRelationships"]
   ): void {
     if (belongsToRelationships.length > 0) {
-      const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+      const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
       const tableKeyLookup = this.buildTableKeyLookup();
 
@@ -290,7 +238,7 @@ class FindById<T extends SingleTableDesign> {
    * Create a lookup object to lookup a table key attribute name by the entities attribute key
    */
   private buildTableKeyLookup(): StringObj {
-    return Object.entries(this.#entityMetadata.attributes).reduce<StringObj>(
+    return Object.entries(this.entityMetadata.attributes).reduce<StringObj>(
       (acc, [tableKey, meta]) => {
         acc[meta.name] = tableKey;
         return acc;
@@ -334,7 +282,7 @@ class FindById<T extends SingleTableDesign> {
     return includedAssociations.reduce<RelationshipMetadata[]>(
       (acc, includedRel) => {
         const key = includedRel.association as string;
-        const included = this.#entityMetadata.relationships[key];
+        const included = this.entityMetadata.relationships[key];
         if (included !== undefined) acc.push(included);
         return acc;
       },

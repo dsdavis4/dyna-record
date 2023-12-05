@@ -5,8 +5,6 @@ interface SortKeyAttributeProps {
   alias: string;
 }
 
-// TODO Share logic with Attribute
-// TODO dry up with primary key
 function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
   return function (
     _value: undefined,
