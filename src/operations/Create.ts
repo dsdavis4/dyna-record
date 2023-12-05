@@ -6,7 +6,7 @@ import type { DynamoTableItem } from "../types";
 import { TransactWriteBuilder } from "../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../utils";
 import OperationBase from "./OperationBase";
-import { RelationshipPersistor } from "./utils";
+import { RelationshipTransactions } from "./utils";
 
 /**
  * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
@@ -89,12 +89,12 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
   private async buildRelationshipTransactions(
     entityData: SingleTableDesign
   ): Promise<void> {
-    const relationshipPersistor = new RelationshipPersistor({
+    const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder
     });
 
-    await relationshipPersistor.persist(entityData);
+    await relationshipTransactions.build(entityData);
   }
 }
 

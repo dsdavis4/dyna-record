@@ -10,13 +10,8 @@ import type {
 import { entityToTableItem } from "../utils";
 import { type ForeignKey, type DynamoTableItem } from "../types";
 import type { EntityDefinedAttributes } from "./types";
-import { RelationshipPersistor } from "./utils";
+import { RelationshipTransactions } from "./utils";
 import OperationBase from "./OperationBase";
-
-// TODO start here... do I like what I did here for DRY up the relationship persistor?
-//       It certainly dries things up, but is it too rigid?
-//       Is it readable?
-//       If I keep it, take a close look at uncommited branch, and fix todos first
 
 // TODO tsdoc for everything in here
 
@@ -113,7 +108,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
   ): Promise<void> {
     const entityData = { id, ...attributes };
 
-    const relationshipPersistor = new RelationshipPersistor({
+    const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
       belongsToHasManyCb: async (rel, entityId) => {
@@ -126,7 +121,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
       }
     });
 
-    await relationshipPersistor.persist(entityData);
+    await relationshipTransactions.build(entityData);
   }
 
   /**

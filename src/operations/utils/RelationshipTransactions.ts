@@ -29,7 +29,7 @@ type EntityData<T extends SingleTableDesign> = Pick<T, "id"> & Partial<T>;
 // export const isEntityData = (data: )
 
 // TODO tsdoc on each of these
-interface RelationshipPersistorProps<T extends SingleTableDesign> {
+interface RelationshipTransactionsProps<T extends SingleTableDesign> {
   readonly Entity: EntityClass<T>;
   readonly transactionBuilder: TransactWriteBuilder;
   belongsToHasManyCb?: (
@@ -44,19 +44,18 @@ interface RelationshipPersistorProps<T extends SingleTableDesign> {
   ) => Promise<void>;
 }
 
-// TODO is this named right? It doesnt really persist.. it adds to the transactions...
-class RelationshipPersistor<T extends SingleTableDesign> {
+class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
 
-  constructor(private readonly props: RelationshipPersistorProps<T>) {
+  constructor(private readonly props: RelationshipTransactionsProps<T>) {
     this.#entityMetadata = Metadata.getEntity(props.Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
   }
 
-  public async persist<T extends SingleTableDesign>(
+  public async build<T extends SingleTableDesign>(
     entityData: EntityData<T>
   ): Promise<void> {
     const { relationships } = this.#entityMetadata;
@@ -185,4 +184,4 @@ class RelationshipPersistor<T extends SingleTableDesign> {
   }
 }
 
-export default RelationshipPersistor;
+export default RelationshipTransactions;

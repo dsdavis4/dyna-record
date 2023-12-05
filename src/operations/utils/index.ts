@@ -1,1 +1,1 @@
-export { default as RelationshipPersistor } from "./RelationshipPersistor";
+export { default as RelationshipTransactions } from "./RelationshipTransactions";
