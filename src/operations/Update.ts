@@ -37,6 +37,9 @@ export type UpdateOptions<T extends SingleTableDesign> = Partial<
   EntityDefinedAttributes<T>
 >;
 
+/**
+ * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
+ */
 class Update<T extends SingleTableDesign> {
   readonly #EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
