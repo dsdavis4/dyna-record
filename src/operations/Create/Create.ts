@@ -1,18 +1,12 @@
-import type SingleTableDesign from "../SingleTableDesign";
-import { type EntityClass } from "../metadata";
-import type { EntityDefinedAttributes } from "./types";
+import type SingleTableDesign from "../../SingleTableDesign";
+import { type EntityClass } from "../../metadata";
 import { v4 as uuidv4 } from "uuid";
-import type { DynamoTableItem } from "../types";
-import { TransactWriteBuilder } from "../dynamo-utils";
-import { entityToTableItem, tableItemToEntity } from "../utils";
-import OperationBase from "./OperationBase";
-import { RelationshipTransactions } from "./utils";
-
-/**
- * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
- */
-export type CreateOptions<T extends SingleTableDesign> =
-  EntityDefinedAttributes<T>;
+import type { DynamoTableItem } from "../../types";
+import { TransactWriteBuilder } from "../../dynamo-utils";
+import { entityToTableItem, tableItemToEntity } from "../../utils";
+import OperationBase from "../OperationBase";
+import { RelationshipTransactions } from "../utils";
+import type { CreateOptions } from "./types";
 
 class Create<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
