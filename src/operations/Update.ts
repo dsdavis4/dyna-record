@@ -56,12 +56,22 @@ class Update<T extends SingleTableDesign> {
     this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
 
+  /**
+   * Update entity transactions, including transactions to create/update BelongsToLinks
+   * @param id The id of the entity being updated
+   * @param attributes Attributes on the model to update.
+   */
   public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
     await this.#transactionBuilder.executeTransaction();
   }
 
+  /**
+   * Build the transaction to update the entity
+   * @param id The id of the entity being updated
+   * @param attributes Attributes on the model to update.
+   */
   private buildUpdateItemTransaction(
     id: string,
     attributes: UpdateOptions<T>
@@ -99,6 +109,13 @@ class Update<T extends SingleTableDesign> {
     );
   }
 
+  /**
+   * Builds the transactions to persist relationships
+   *   - Creates BelongsToLinks when a foreign key changes
+   *   - Removes outdated BelongsToLinks if the entity previously was associated with a different entity
+   * @param id The id of the entity being updated
+   * @param attributes Attributes on the model to update.
+   */
   private async buildRelationshipTransactions(
     id: string,
     attributes: Partial<SingleTableDesign>
@@ -139,6 +156,11 @@ class Update<T extends SingleTableDesign> {
     }
   }
 
+  /**
+   * Builds a dynamo expression given the table attributes
+   * @param tableAttrs The table aliases of the entity attributes
+   * @returns
+   */
   private expressionBuilder(tableAttrs: DynamoTableItem): Expression {
     const entries = Object.entries(tableAttrs);
     return entries.reduce<Expression>(

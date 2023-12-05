@@ -186,7 +186,6 @@ class Create<T extends SingleTableDesign> {
     this.#transactionBuilder.addPut(putExpression);
   }
 
-  // TODO this tsdoc is copied
   /**
    * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasOne association
    * Adds conditional check to ensure the parent doesn't already have one of the entity being associated
