@@ -13,8 +13,6 @@ import type { EntityDefinedAttributes } from "./types";
 import { RelationshipTransactions } from "./utils";
 import OperationBase from "./OperationBase";
 
-// TODO tsdoc for everything in here
-
 interface Expression {
   UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
   ExpressionAttributeNames: NonNullable<

@@ -12,6 +12,7 @@ import { type DynamoTableItem } from "../types";
 import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
 import OperationBase from "./OperationBase";
 
+// TODO make folder with types like I did with FindById
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
 }
