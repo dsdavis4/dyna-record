@@ -56,8 +56,6 @@ export interface TableMetadata {
 
 export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 
-// TODO make jsdoc in this class better. See SingleTableDesign
-
 class Metadata {
   private readonly tables: Record<string, TableMetadata> = {};
   private readonly entities: Record<string, EntityMetadata> = {};
