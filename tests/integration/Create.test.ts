@@ -55,7 +55,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
   };
 });
 
-// TODO add types test
 // TODO add test for creating entity without relationships
 describe("Create", () => {
   beforeAll(() => {
