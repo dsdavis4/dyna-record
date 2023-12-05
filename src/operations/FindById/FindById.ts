@@ -6,7 +6,6 @@ import DynamoClient, {
 } from "../../DynamoClient";
 import { QueryBuilder } from "../../query-utils";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
-import type { RelationshipAttributeNames } from "../types";
 import { TransactGetBuilder } from "../../dynamo-utils";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { isBelongsToRelationship } from "../../metadata/utils";
@@ -22,16 +21,13 @@ import {
 } from "../../relationships/BelongsToLink";
 import OperationBase from "../OperationBase";
 import type {
+  FindByIdOptions,
   FindByIdIncludesRes,
   IncludedAssociations,
   RelationshipLookup,
   RelationshipObj,
   SortedQueryResults
 } from "./types";
-
-export interface FindByIdOptions<T extends SingleTableDesign> {
-  include?: Array<{ association: RelationshipAttributeNames<T> }>;
-}
 
 /**
  * FindById operations

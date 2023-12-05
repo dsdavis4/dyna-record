@@ -1,12 +1,15 @@
 import type { QueryItems } from "../../DynamoClient";
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { EntityAttributes } from "../types";
+import type { EntityAttributes, RelationshipAttributeNames } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
-import type { FindByIdOptions } from "./FindById";
 import type {
   BelongsToRelationship,
   RelationshipMetadata
 } from "../../metadata";
+
+export interface FindByIdOptions<T extends SingleTableDesign> {
+  include?: Array<{ association: RelationshipAttributeNames<T> }>;
+}
 
 export type IncludedAssociations<T extends SingleTableDesign> = NonNullable<
   FindByIdOptions<T>["include"]
