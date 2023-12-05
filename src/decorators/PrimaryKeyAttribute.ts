@@ -5,9 +5,6 @@ interface PrimaryKeyAttributeProps {
   alias: string;
 }
 
-// TODO Share logic with Attribute
-// TODO Share logic with Attribute
-// TODO dry up with sort key
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   props: PrimaryKeyAttributeProps
 ) {

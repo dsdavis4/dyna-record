@@ -26,10 +26,6 @@ export type CreateOptions<T extends SingleTableDesign> =
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
 
-// TODO add good error messages in here...
-
-// TODO DRY up this class where I can
-
 class Create<T extends SingleTableDesign> {
   private readonly EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
