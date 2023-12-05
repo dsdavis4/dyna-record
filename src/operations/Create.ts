@@ -17,8 +17,6 @@ import {
 } from "../metadata/utils";
 import { RelationshipTransactions } from "./utils";
 
-// TODO do I need to handle the situation where the foreign key being set has already been set on another entity?
-
 /**
  * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
  */
@@ -27,8 +25,6 @@ export type CreateOptions<T extends SingleTableDesign> =
 
 // TODO should I make an operations base since they all have the same constructor?
 // And they have the same public entry point
-
-// TODO make sure to add a unit test that optional properties dont have to be included
 
 // TODO add good error messages in here...
 

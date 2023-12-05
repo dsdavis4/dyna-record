@@ -517,6 +517,28 @@ describe("Create", () => {
       }
     });
 
+    it("optional attributes are not required", async () => {
+      expect.assertions(1);
+
+      @Entity
+      class SomeModel extends MockTable {
+        @Attribute({ alias: "MyAttribute1" })
+        public myAttribute1: string;
+
+        @Attribute({ alias: "mMAttribute2" })
+        public myAttribute2?: string;
+      }
+
+      try {
+        await SomeModel.create({
+          // @ts-expect-no-error Optional attributes do not have to be included
+          myAttribute1: "someVal"
+        });
+      } catch (e) {
+        expect(true).toEqual(true);
+      }
+    });
+
     it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {
       await Order.create({
         orderDate: new Date(),
