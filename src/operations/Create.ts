@@ -3,20 +3,21 @@ import Metadata, {
   type EntityMetadata,
   type TableMetadata,
   type EntityClass,
-  type RelationshipMetadata,
   type BelongsToRelationship
 } from "../metadata";
 import type { EntityDefinedAttributes } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem } from "../types";
-import { BelongsToLink } from "../relationships";
-import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
+import { TransactWriteBuilder } from "../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../utils";
 import {
-  isBelongsToRelationship,
-  isHasManyRelationship,
-  isHasOneRelationship
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
+  isBelongsToRelationship
 } from "../metadata/utils";
+import { RelationshipTransactions } from "./utils";
+
+// TODO do I need to handle the situation where the foreign key being set has already been set on another entity?
 
 /**
  * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
@@ -34,11 +35,12 @@ export type CreateOptions<T extends SingleTableDesign> =
 // TODO DRY up this class where I can
 
 class Create<T extends SingleTableDesign> {
+  private readonly EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
 
-  private readonly EntityClass: EntityClass<T>;
+  readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   constructor(Entity: EntityClass<T>) {
     this.EntityClass = Entity;
@@ -47,11 +49,10 @@ class Create<T extends SingleTableDesign> {
       this.#entityMetadata.tableClassName
     );
     this.#transactionBuilder = new TransactWriteBuilder();
+    this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
 
   // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
-
-  // TODO can I handle the situation where the foreign key of a relationship is already set?
 
   /**
    * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
@@ -132,56 +133,16 @@ class Create<T extends SingleTableDesign> {
 
           const transactionOpts = [rel, entityData.id, relationshipId] as const;
 
-          if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(...transactionOpts);
           }
 
-          if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
       }
     });
-  }
-
-  /**
-   * Returns true if the entity being created BelongsTo a HasMany
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasMany(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasManyRelationship(rel) &&
-        rel.target === this.EntityClass &&
-        rel.foreignKey === foreignKey
-    );
-  }
-
-  /**
-   * Returns true if the entity being created BelongsTo a HasOne
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasOne(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasOneRelationship(rel) &&
-        rel.target === this.EntityClass &&
-        rel.foreignKey === foreignKey
-    );
   }
 
   /**
@@ -191,21 +152,16 @@ class Create<T extends SingleTableDesign> {
    * @returns
    */
   private buildRelationshipExistsConditionTransaction(
-    rel: RelationshipMetadata,
+    rel: BelongsToRelationship,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
-    const conditionCheck: ConditionCheck = {
-      TableName: tableName,
-      Key: {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: rel.target.name
-      },
-      ConditionExpression: `attribute_exists(${primaryKey})`
-    };
+    const conditionCheck =
+      this.#relationshipTransactions.buildRelationshipExistsCondition(
+        rel,
+        relationshipId
+      );
 
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
@@ -221,24 +177,16 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
-
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.primaryKeyValue(link.foreignKey)
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasMany(
+      rel,
+      entityId,
+      relationshipId
+    );
 
     this.#transactionBuilder.addPut(putExpression);
   }
 
+  // TODO this tsdoc is copied
   /**
    * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasOne association
    * Adds conditional check to ensure the parent doesn't already have one of the entity being associated
@@ -251,20 +199,11 @@ class Create<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
-    const link = BelongsToLink.build(this.EntityClass.name, entityId);
-
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.EntityClass.name
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasOne(
+      rel,
+      entityId,
+      relationshipId
+    );
 
     this.#transactionBuilder.addPut(
       putExpression,

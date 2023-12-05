@@ -1,28 +1,27 @@
 import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
 import type SingleTableDesign from "../SingleTableDesign";
-import { TransactWriteBuilder, type ConditionCheck } from "../dynamo-utils";
+import { TransactWriteBuilder } from "../dynamo-utils";
 import type {
   EntityClass,
   EntityMetadata,
   TableMetadata,
   RelationshipMetadata,
   HasOneRelationship,
-  HasManyRelationship
+  HasManyRelationship,
+  BelongsToRelationship
 } from "../metadata";
 import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type ForeignKey, type DynamoTableItem } from "../types";
 import {
-  isBelongsToRelationship,
-  isHasManyRelationship,
-  isHasOneRelationship
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
+  isBelongsToRelationship
 } from "../metadata/utils";
-import { BelongsToLink } from "../relationships";
 import type { EntityDefinedAttributes } from "./types";
+import { RelationshipTransactions } from "./utils";
 
 // TODO tsdoc for everything in here
-
-// TODO dry up this class from other operation classes
 
 interface Expression {
   UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
@@ -39,10 +38,11 @@ export type UpdateOptions<T extends SingleTableDesign> = Partial<
 >;
 
 class Update<T extends SingleTableDesign> {
+  readonly #EntityClass: EntityClass<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #transactionBuilder: TransactWriteBuilder;
-  readonly #EntityClass: EntityClass<T>;
+  readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   #entity?: T;
 
@@ -53,6 +53,7 @@ class Update<T extends SingleTableDesign> {
       this.#entityMetadata.tableClassName
     );
     this.#transactionBuilder = new TransactWriteBuilder();
+    this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
 
   public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
@@ -71,7 +72,6 @@ class Update<T extends SingleTableDesign> {
     const pk = entityAttrs[primaryKey].name;
     const sk = entityAttrs[sortKey].name;
 
-    // TODO if this is copied make a function on eventual base class
     const keys = {
       [pk]: this.#EntityClass.primaryKeyValue(id),
       [sk]: this.#EntityClass.name
@@ -99,7 +99,6 @@ class Update<T extends SingleTableDesign> {
     );
   }
 
-  // TODO can any of this be DRY'd up with create?
   private async buildRelationshipTransactions(
     id: string,
     attributes: Partial<SingleTableDesign>
@@ -118,7 +117,7 @@ class Update<T extends SingleTableDesign> {
 
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
 
-          if (this.doesEntityBelongToHasMany(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasMany(this.#EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(
               rel,
               id,
@@ -127,7 +126,7 @@ class Update<T extends SingleTableDesign> {
             );
           }
 
-          if (this.doesEntityBelongToHasOne(rel, rel.foreignKey)) {
+          if (doesEntityBelongToRelAsHasOne(this.#EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(
               rel,
               id,
@@ -167,7 +166,6 @@ class Update<T extends SingleTableDesign> {
     );
   }
 
-  // TODO this is copied from Create. DRY up
   /**
    * Builds a ConditionCheck transaction that ensures the associated relationship exists
    * @param rel
@@ -175,102 +173,43 @@ class Update<T extends SingleTableDesign> {
    * @returns
    */
   private buildRelationshipExistsConditionTransaction(
-    rel: RelationshipMetadata,
+    rel: BelongsToRelationship,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
-    const conditionCheck: ConditionCheck = {
-      TableName: tableName,
-      Key: {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: rel.target.name
-      },
-      ConditionExpression: `attribute_exists(${primaryKey})`
-    };
+    const conditionCheck =
+      this.#relationshipTransactions.buildRelationshipExistsCondition(
+        rel,
+        relationshipId
+      );
 
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
-  // TODO this is copied from Create. Dry up
-  /**
-   * Returns true if the entity being created BelongsTo a HasMany
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasMany(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasManyRelationship(rel) &&
-        rel.target === this.#EntityClass &&
-        rel.foreignKey === foreignKey
-    );
-  }
-
-  // TODO this is copied from Create. Dry up
-  /**
-   * Returns true if the entity being created BelongsTo a HasOne
-   * @param rel
-   * @param foreignKey
-   * @returns
-   */
-  private doesEntityBelongToHasOne(
-    rel: RelationshipMetadata,
-    foreignKey: string
-  ): boolean {
-    const relMetadata = Metadata.getEntity(rel.target.name);
-
-    return Object.values(relMetadata.relationships).some(
-      rel =>
-        isHasOneRelationship(rel) &&
-        rel.target === this.#EntityClass &&
-        rel.foreignKey === foreignKey
-    );
-  }
-
-  // TODO I dont need to pass entityId and entity. Entity has the id
   /**
    * Creates the transaction to:
    *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
    *    - Creates the new BelongsToLink if the item its being linked to does not already have an association
-   * @param rel
-   * @param entityId
-   * @param relationshipId
-   * @param entity
+   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasOne
+   * @param entityId Id of the entity being created
+   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
+   * @param entity The actual entity of the item being updated, used to delete outdated BelongsToLinks
    */
   private buildBelongsToHasOneTransaction(
-    rel: RelationshipMetadata,
+    rel: BelongsToRelationship,
     entityId: string,
     relationshipId: string,
     entity?: T
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
     this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
 
-    // TODO Everything below is copied from Create and can be cleaned up
-    const link = BelongsToLink.build(this.#EntityClass.name, entityId);
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasOne(
+      rel,
+      entityId,
+      relationshipId
+    );
 
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.#EntityClass.name
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
-
-    // TODO add test for error
     this.#transactionBuilder.addPut(
       putExpression,
       `${
@@ -281,31 +220,28 @@ class Update<T extends SingleTableDesign> {
     );
   }
 
-  // TODO I dont need to pass entityId and entity. Entity has the id
+  /**
+   * Creates the transaction to:
+   *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
+   *    - Creates the new BelongsToLink if the item its being linked to does not already have an association
+   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasMany
+   * @param entityId Id of the entity being created
+   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
+   * @param entity The actual entity of the item being updated, used to delete outdated BelongsToLinks
+   */
   private buildBelongsToHasManyTransaction(
-    rel: RelationshipMetadata,
+    rel: BelongsToRelationship,
     entityId: string,
     relationshipId: string,
     entity?: T
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
-
     this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
 
-    // TODO Everything below is copied from Create and can be cleaned up  }
-
-    const link = BelongsToLink.build(this.#EntityClass.name, entityId);
-
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.#EntityClass.primaryKeyValue(link.foreignKey)
-    };
-
-    const putExpression = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+    const putExpression = this.#relationshipTransactions.buildBelongsToHasMany(
+      rel,
+      entityId,
+      relationshipId
+    );
 
     this.#transactionBuilder.addPut(
       putExpression,
@@ -340,7 +276,6 @@ class Update<T extends SingleTableDesign> {
             : this.#EntityClass.name
       };
 
-      // TODO does this need a custom error message?
       this.#transactionBuilder.addDelete({
         TableName: tableName,
         Key: oldLinkKeys
