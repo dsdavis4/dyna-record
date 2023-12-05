@@ -94,8 +94,7 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
       transactionBuilder: this.#transactionBuilder
     });
 
-    // TODO dont use any...
-    await relationshipPersistor.persist(entityData as any);
+    await relationshipPersistor.persist(entityData);
   }
 }
 

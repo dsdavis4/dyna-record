@@ -56,7 +56,9 @@ class RelationshipPersistor<T extends SingleTableDesign> {
     );
   }
 
-  public async persist(entityData: EntityData<T>): Promise<void> {
+  public async persist<T extends SingleTableDesign>(
+    entityData: EntityData<T>
+  ): Promise<void> {
     const { relationships } = this.#entityMetadata;
 
     for (const rel of Object.values(relationships)) {

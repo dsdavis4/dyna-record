@@ -126,8 +126,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
       }
     });
 
-    // TODO dont use any...
-    await relationshipPersistor.persist(entityData as any);
+    await relationshipPersistor.persist(entityData);
   }
 
   /**
