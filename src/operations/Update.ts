@@ -21,9 +21,6 @@ import {
 import { BelongsToLink } from "../relationships";
 import type { EntityDefinedAttributes } from "./types";
 
-// TODO start here...... I just finished tests for update. Start addressing all the TODOs in this branch and do cleanup
-// TODO before finishing update, run through manual tests again
-
 // TODO tsdoc for everything in here
 
 // TODO dry up this class from other operation classes
@@ -48,7 +45,7 @@ class Update<T extends SingleTableDesign> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #EntityClass: EntityClass<T>;
 
-  #entity?: T; // TODO add test for this (by updating multiple foreign keys), its only fetched if a key is updated
+  #entity?: T;
 
   constructor(Entity: EntityClass<T>) {
     this.#EntityClass = Entity;
@@ -60,9 +57,6 @@ class Update<T extends SingleTableDesign> {
   }
 
   // TODO should this return void? OR get the new item?
-  // TODO add tests that all fields are optional,
-  // TODO add tests that it only updateable fields are updateable
-  // TODO dont use CreateOptions... if they end up being the sanme then find a way to share them
   public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
