@@ -5,19 +5,18 @@ import type {
   EntityClass,
   RelationshipMetadata,
   HasOneRelationship,
-  HasManyRelationship,
-  BelongsToRelationship
+  HasManyRelationship
 } from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type ForeignKey, type DynamoTableItem } from "../types";
-import {
-  doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne,
-  isBelongsToRelationship
-} from "../metadata/utils";
 import type { EntityDefinedAttributes } from "./types";
-import { RelationshipTransactions } from "./utils";
+import { RelationshipPersistor } from "./utils";
 import OperationBase from "./OperationBase";
+
+// TODO start here... do I like what I did here for DRY up the relationship persistor?
+//       It certainly dries things up, but is it too rigid?
+//       Is it readable?
+//       If I keep it, take a close look at uncommited branch, and fix todos first
 
 // TODO tsdoc for everything in here
 
@@ -40,14 +39,12 @@ export type UpdateOptions<T extends SingleTableDesign> = Partial<
  */
 class Update<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
-  readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   #entity?: T;
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
-    this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
 
   /**
@@ -114,40 +111,23 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     id: string,
     attributes: Partial<SingleTableDesign>
   ): Promise<void> {
-    const { relationships } = this.entityMetadata;
+    const entityData = { id, ...attributes };
 
-    for (const rel of Object.values(relationships)) {
-      const isBelongsTo = isBelongsToRelationship(rel);
-
-      if (isBelongsTo) {
-        const relationshipId = attributes[rel.foreignKey];
-        const isUpdatingRelationshipId = relationshipId !== undefined;
-
-        if (isUpdatingRelationshipId && typeof relationshipId === "string") {
-          const entity = await this.getEntity(id);
-
-          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
-
-          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
-            this.buildBelongsToHasManyTransaction(
-              rel,
-              id,
-              relationshipId,
-              entity
-            );
-          }
-
-          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
-            this.buildBelongsToHasOneTransaction(
-              rel,
-              id,
-              relationshipId,
-              entity
-            );
-          }
-        }
+    const relationshipPersistor = new RelationshipPersistor({
+      Entity: this.EntityClass,
+      transactionBuilder: this.#transactionBuilder,
+      belongsToHasManyCb: async (rel, entityId) => {
+        const entity = await this.getEntity(entityId);
+        this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
+      },
+      belongsToHasOneCb: async (rel, entityId) => {
+        const entity = await this.getEntity(entityId);
+        this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
       }
-    }
+    });
+
+    // TODO dont use any...
+    await relationshipPersistor.persist(entityData as any);
   }
 
   /**
@@ -179,85 +159,6 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
         ExpressionAttributeValues: {},
         UpdateExpression: "SET"
       }
-    );
-  }
-
-  /**
-   * Builds a ConditionCheck transaction that ensures the associated relationship exists
-   * @param rel
-   * @param relationshipId
-   * @returns
-   */
-  private buildRelationshipExistsConditionTransaction(
-    rel: BelongsToRelationship,
-    relationshipId: string
-  ): void {
-    const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
-
-    const conditionCheck =
-      this.#relationshipTransactions.buildRelationshipExistsCondition(
-        rel,
-        relationshipId
-      );
-
-    this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
-  }
-
-  /**
-   * Creates the transaction to:
-   *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
-   *    - Creates the new BelongsToLink if the item its being linked to does not already have an association
-   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasOne
-   * @param entityId Id of the entity being created
-   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
-   * @param entity The actual entity of the item being updated, used to delete outdated BelongsToLinks
-   */
-  private buildBelongsToHasOneTransaction(
-    rel: BelongsToRelationship,
-    entityId: string,
-    relationshipId: string,
-    entity?: T
-  ): void {
-    this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
-
-    const putExpression = this.#relationshipTransactions.buildBelongsToHasOne(
-      rel,
-      entityId,
-      relationshipId
-    );
-
-    this.#transactionBuilder.addPut(
-      putExpression,
-      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
-    );
-  }
-
-  /**
-   * Creates the transaction to:
-   *    - If the entity already is linked to a model, it creates a delete transaction to delete the current BelongsToLink
-   *    - Creates the new BelongsToLink if the item its being linked to does not already have an association
-   * @param rel BelongsTo relationship metadata for which the entity being created is a BelongsTo HasMany
-   * @param entityId Id of the entity being created
-   * @param relationshipId Id of the parent entity of which the entity being created BelongsTo
-   * @param entity The actual entity of the item being updated, used to delete outdated BelongsToLinks
-   */
-  private buildBelongsToHasManyTransaction(
-    rel: BelongsToRelationship,
-    entityId: string,
-    relationshipId: string,
-    entity?: T
-  ): void {
-    this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
-
-    const putExpression = this.#relationshipTransactions.buildBelongsToHasMany(
-      rel,
-      entityId,
-      relationshipId
-    );
-
-    this.#transactionBuilder.addPut(
-      putExpression,
-      `${this.EntityClass.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
     );
   }
 
