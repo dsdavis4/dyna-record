@@ -3,14 +3,11 @@ import type SingleTableDesign from "../SingleTableDesign";
 import { TransactWriteBuilder } from "../dynamo-utils";
 import type {
   EntityClass,
-  EntityMetadata,
-  TableMetadata,
   RelationshipMetadata,
   HasOneRelationship,
   HasManyRelationship,
   BelongsToRelationship
 } from "../metadata";
-import Metadata from "../metadata";
 import { entityToTableItem } from "../utils";
 import { type ForeignKey, type DynamoTableItem } from "../types";
 import {
@@ -20,6 +17,7 @@ import {
 } from "../metadata/utils";
 import type { EntityDefinedAttributes } from "./types";
 import { RelationshipTransactions } from "./utils";
+import OperationBase from "./OperationBase";
 
 // TODO tsdoc for everything in here
 
@@ -40,21 +38,14 @@ export type UpdateOptions<T extends SingleTableDesign> = Partial<
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
  */
-class Update<T extends SingleTableDesign> {
-  readonly #EntityClass: EntityClass<T>;
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
+class Update<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   #entity?: T;
 
   constructor(Entity: EntityClass<T>) {
-    this.#EntityClass = Entity;
-    this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(
-      this.#entityMetadata.tableClassName
-    );
+    super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
     this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
@@ -79,23 +70,23 @@ class Update<T extends SingleTableDesign> {
     id: string,
     attributes: UpdateOptions<T>
   ): void {
-    const { attributes: entityAttrs } = this.#entityMetadata;
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { attributes: entityAttrs } = this.entityMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     const pk = entityAttrs[primaryKey].name;
     const sk = entityAttrs[sortKey].name;
 
     const keys = {
-      [pk]: this.#EntityClass.primaryKeyValue(id),
-      [sk]: this.#EntityClass.name
+      [pk]: this.EntityClass.primaryKeyValue(id),
+      [sk]: this.EntityClass.name
     };
 
     const updatedAttrs: Partial<SingleTableDesign> = {
       ...attributes,
       updatedAt: new Date()
     };
-    const tableKeys = entityToTableItem(this.#EntityClass.name, keys);
-    const tableAttrs = entityToTableItem(this.#EntityClass.name, updatedAttrs);
+    const tableKeys = entityToTableItem(this.EntityClass.name, keys);
+    const tableAttrs = entityToTableItem(this.EntityClass.name, updatedAttrs);
 
     const expression = this.expressionBuilder(tableAttrs);
 
@@ -108,7 +99,7 @@ class Update<T extends SingleTableDesign> {
         UpdateExpression: expression.UpdateExpression,
         ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
-      `${this.#EntityClass.name} with ID '${id}' does not exist`
+      `${this.EntityClass.name} with ID '${id}' does not exist`
     );
   }
 
@@ -123,7 +114,7 @@ class Update<T extends SingleTableDesign> {
     id: string,
     attributes: Partial<SingleTableDesign>
   ): Promise<void> {
-    const { relationships } = this.#entityMetadata;
+    const { relationships } = this.entityMetadata;
 
     for (const rel of Object.values(relationships)) {
       const isBelongsTo = isBelongsToRelationship(rel);
@@ -137,7 +128,7 @@ class Update<T extends SingleTableDesign> {
 
           this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
 
-          if (doesEntityBelongToRelAsHasMany(this.#EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(
               rel,
               id,
@@ -146,7 +137,7 @@ class Update<T extends SingleTableDesign> {
             );
           }
 
-          if (doesEntityBelongToRelAsHasOne(this.#EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(
               rel,
               id,
@@ -237,11 +228,7 @@ class Update<T extends SingleTableDesign> {
 
     this.#transactionBuilder.addPut(
       putExpression,
-      `${
-        rel.target.name
-      } with id: ${relationshipId} already has an associated ${
-        this.#EntityClass.name
-      }`
+      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
     );
   }
 
@@ -270,9 +257,7 @@ class Update<T extends SingleTableDesign> {
 
     this.#transactionBuilder.addPut(
       putExpression,
-      `${this.#EntityClass.name} with ID '${entityId}' already belongs to ${
-        rel.target.name
-      } with Id '${relationshipId}'`
+      `${this.EntityClass.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
     );
   }
 
@@ -287,7 +272,7 @@ class Update<T extends SingleTableDesign> {
     relType: HasOneRelationship["type"] | HasManyRelationship["type"],
     entity?: T
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     const currentId =
       entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
@@ -297,8 +282,8 @@ class Update<T extends SingleTableDesign> {
         [primaryKey]: rel.target.primaryKeyValue(currentId),
         [sortKey]:
           relType === "HasMany"
-            ? this.#EntityClass.primaryKeyValue(entity.id)
-            : this.#EntityClass.name
+            ? this.EntityClass.primaryKeyValue(entity.id)
+            : this.EntityClass.name
       };
 
       this.#transactionBuilder.addDelete({
@@ -314,7 +299,7 @@ class Update<T extends SingleTableDesign> {
   private async getEntity(id: string): Promise<T | undefined> {
     // Only get the item once per transaction
     if (this.#entity !== undefined) return this.#entity;
-    const res: T = (await this.#EntityClass.findById(id)) as T;
+    const res: T = (await this.EntityClass.findById(id)) as T;
     this.#entity = res ?? undefined;
     return this.#entity;
   }

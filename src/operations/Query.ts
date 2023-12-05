@@ -1,9 +1,4 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import Metadata, {
-  type EntityMetadata,
-  type TableMetadata,
-  type EntityClass
-} from "../metadata";
 import {
   QueryBuilder,
   type KeyConditions,
@@ -15,6 +10,7 @@ import { BelongsToLink } from "../relationships";
 import type { EntityAttributes } from "./types";
 import { type DynamoTableItem } from "../types";
 import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../utils";
+import OperationBase from "./OperationBase";
 
 export interface QueryOptions extends QueryBuilderOptions {
   skCondition?: SortKeyCondition;
@@ -33,19 +29,7 @@ export type QueryResults<T extends SingleTableDesign> = Array<
 /**
  * Query operations
  */
-class Query<T extends SingleTableDesign> {
-  readonly #EntityClass: EntityClass<T>;
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
-
-  constructor(Entity: EntityClass<T>) {
-    this.#EntityClass = Entity;
-    this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(
-      this.#entityMetadata.tableClassName
-    );
-  }
-
+class Query<T extends SingleTableDesign> extends OperationBase<T> {
   /**
    *
    * @param key EntityId or object with PrimaryKey and optional SortKey conditions
@@ -75,7 +59,7 @@ class Query<T extends SingleTableDesign> {
     options?: QueryBuilderOptions
   ): Promise<QueryResults<T>> {
     const params = new QueryBuilder({
-      entityClassName: this.#EntityClass.name,
+      entityClassName: this.EntityClass.name,
       key,
       options
     }).build();
@@ -98,21 +82,21 @@ class Query<T extends SingleTableDesign> {
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
-    const entityMetadata = this.#entityMetadata;
-    const { primaryKey, sortKey } = this.#tableMetadata;
+    const entityMetadata = this.entityMetadata;
+    const { primaryKey, sortKey } = this.tableMetadata;
 
     const modelPk = entityMetadata.attributes[primaryKey].name;
     const modelSk = entityMetadata.attributes[sortKey].name;
 
     const keyCondition = {
-      [modelPk]: this.#EntityClass.primaryKeyValue(id),
+      [modelPk]: this.EntityClass.primaryKeyValue(id),
       ...(options?.skCondition !== undefined && {
         [modelSk]: options?.skCondition
       })
     };
 
     const params = new QueryBuilder({
-      entityClassName: this.#EntityClass.name,
+      entityClassName: this.EntityClass.name,
       key: keyCondition,
       options
     }).build();
@@ -129,7 +113,7 @@ class Query<T extends SingleTableDesign> {
     return queryResults.map(res =>
       isBelongsToLinkDynamoItem(res)
         ? tableItemToEntity(BelongsToLink, res)
-        : tableItemToEntity<T>(this.#EntityClass, res)
+        : tableItemToEntity<T>(this.EntityClass, res)
     );
   }
 }

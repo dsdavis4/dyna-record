@@ -1,10 +1,5 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import Metadata, {
-  type EntityMetadata,
-  type TableMetadata,
-  type EntityClass,
-  type BelongsToRelationship
-} from "../metadata";
+import { type EntityClass, type BelongsToRelationship } from "../metadata";
 import type { EntityDefinedAttributes } from "./types";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem } from "../types";
@@ -16,6 +11,7 @@ import {
   isBelongsToRelationship
 } from "../metadata/utils";
 import { RelationshipTransactions } from "./utils";
+import OperationBase from "./OperationBase";
 
 /**
  * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
@@ -23,23 +19,12 @@ import { RelationshipTransactions } from "./utils";
 export type CreateOptions<T extends SingleTableDesign> =
   EntityDefinedAttributes<T>;
 
-// TODO should I make an operations base since they all have the same constructor?
-// And they have the same public entry point
-
-class Create<T extends SingleTableDesign> {
-  readonly #EntityClass: EntityClass<T>;
-  readonly #entityMetadata: EntityMetadata;
-  readonly #tableMetadata: TableMetadata;
+class Create<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
-
   readonly #relationshipTransactions: RelationshipTransactions<T>;
 
   constructor(Entity: EntityClass<T>) {
-    this.#EntityClass = Entity;
-    this.#entityMetadata = Metadata.getEntity(Entity.name);
-    this.#tableMetadata = Metadata.getTable(
-      this.#entityMetadata.tableClassName
-    );
+    super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
     this.#relationshipTransactions = new RelationshipTransactions(Entity);
   }
@@ -54,19 +39,19 @@ class Create<T extends SingleTableDesign> {
   public async run(attributes: CreateOptions<T>): Promise<T> {
     const entityData = this.buildEntityData(attributes);
 
-    const tableItem = entityToTableItem(this.#EntityClass.name, entityData);
+    const tableItem = entityToTableItem(this.EntityClass.name, entityData);
 
     this.buildPutItemTransaction(tableItem);
     this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
 
-    return tableItemToEntity<T>(this.#EntityClass, tableItem);
+    return tableItemToEntity<T>(this.EntityClass, tableItem);
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
-    const { attributes: entityAttrs } = this.#entityMetadata;
-    const { primaryKey, sortKey } = this.#tableMetadata;
+    const { attributes: entityAttrs } = this.entityMetadata;
+    const { primaryKey, sortKey } = this.tableMetadata;
 
     const id = uuidv4();
     const createdAt = new Date();
@@ -75,13 +60,13 @@ class Create<T extends SingleTableDesign> {
     const sk = entityAttrs[sortKey].name;
 
     const keys = {
-      [pk]: this.#EntityClass.primaryKeyValue(id),
-      [sk]: this.#EntityClass.name
+      [pk]: this.EntityClass.primaryKeyValue(id),
+      [sk]: this.EntityClass.name
     };
 
     const defaultAttrs: SingleTableDesign = {
       id,
-      type: this.#EntityClass.name,
+      type: this.EntityClass.name,
       createdAt,
       updatedAt: createdAt
     };
@@ -94,7 +79,7 @@ class Create<T extends SingleTableDesign> {
    * @param tableItem
    */
   private buildPutItemTransaction(tableItem: DynamoTableItem): void {
-    const { name: tableName, primaryKey } = this.#tableMetadata;
+    const { name: tableName, primaryKey } = this.tableMetadata;
 
     const putExpression = {
       TableName: tableName,
@@ -109,7 +94,7 @@ class Create<T extends SingleTableDesign> {
    * @param entityData
    */
   private buildRelationshipTransactions(entityData: SingleTableDesign): void {
-    const { relationships } = this.#entityMetadata;
+    const { relationships } = this.entityMetadata;
 
     Object.values(relationships).forEach(rel => {
       const isBelongsTo = isBelongsToRelationship(rel);
@@ -125,11 +110,11 @@ class Create<T extends SingleTableDesign> {
 
           const transactionOpts = [rel, entityData.id, relationshipId] as const;
 
-          if (doesEntityBelongToRelAsHasMany(this.#EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasMany(this.EntityClass, rel)) {
             this.buildBelongsToHasManyTransaction(...transactionOpts);
           }
 
-          if (doesEntityBelongToRelAsHasOne(this.#EntityClass, rel)) {
+          if (doesEntityBelongToRelAsHasOne(this.EntityClass, rel)) {
             this.buildBelongsToHasOneTransaction(...transactionOpts);
           }
         }
@@ -198,11 +183,7 @@ class Create<T extends SingleTableDesign> {
 
     this.#transactionBuilder.addPut(
       putExpression,
-      `${
-        rel.target.name
-      } with id: ${relationshipId} already has an associated ${
-        this.#EntityClass.name
-      }`
+      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
     );
   }
 }
