@@ -55,6 +55,11 @@ interface RelationshipTransactionsProps<T extends SingleTableDesign> {
   ) => Promise<void>;
 }
 
+// TODO should this be renamed to indicate that its create/update transactions?
+//      I dont want it to be confused with the delete transactions
+//      Or I make it work for all?
+
+// TODO tsdoc
 class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -66,6 +71,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     );
   }
 
+  // TODO tsdoc
   public async build<T extends SingleTableDesign>(
     entityData: EntityData<T>
   ): Promise<void> {
