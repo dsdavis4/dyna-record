@@ -9,6 +9,7 @@ import OperationBase from "../OperationBase";
  * - Make sure to update foreign keys linked on linked models
  * - If the foreign key is a required attribute, and as a value then I should throw an error through transactions.
  *      - I beleive I can get this info from the attribute decorator....
+ *      - But should this even be allowed? In a SQL database what would happen?
  */
 
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {
