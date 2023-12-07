@@ -12,7 +12,8 @@ import {
   Create,
   type CreateOptions,
   Update,
-  type UpdateOptions
+  type UpdateOptions,
+  Delete
 } from "./operations";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -99,7 +100,7 @@ abstract class SingleTableDesign {
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
-    return await op.run(key, options);
+    return op.run(key, options);
   }
 
   /**
@@ -112,7 +113,7 @@ abstract class SingleTableDesign {
     attributes: CreateOptions<T>
   ): Promise<T> {
     const op = new Create<T>(this);
-    return await op.run(attributes);
+    return op.run(attributes);
   }
 
   /**
@@ -129,6 +130,21 @@ abstract class SingleTableDesign {
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes);
+  }
+
+  /**
+   * TODO Add/ check this
+   * Delete an entity by ID
+   *   - Delete all BelongsToLinks
+   *   - Disassociate all foreign keys of linked models
+   * @param id - The id of the entity to update
+   */
+  public static async delete<T extends SingleTableDesign>(
+    this: EntityClass<T>,
+    id: string
+  ): Promise<void> {
+    const op = new Delete<T>(this);
+    await op.run(id);
   }
 
   /**

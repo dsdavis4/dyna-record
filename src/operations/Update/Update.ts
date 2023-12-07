@@ -12,6 +12,8 @@ import { RelationshipTransactions } from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdateOptions, Expression } from "./types";
 
+// TODO Do I need or How would to handle a scenario where the foreign key being removed from an entity through the update is a required field...
+
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
  */

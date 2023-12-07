@@ -259,16 +259,18 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    await Beer.update(
-      "ceb34f08-3472-45e8-b78c-9fa503b70637",
-      // "bad",
-      {
-        // breweryId: "bad", // doesnt exist, should error
-        // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
-        breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
-        name: "Serrano Pale Ale 9"
-      }
-    );
+    // await Beer.update(
+    //   "ceb34f08-3472-45e8-b78c-9fa503b70637",
+    //   // "bad",
+    //   {
+    //     // breweryId: "bad", // doesnt exist, should error
+    //     // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
+    //     breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
+    //     name: "Serrano Pale Ale 9"
+    //   }
+    // );
+
+    await Beer.delete("2cb10b5b-cf75-44b3-960c-0d8da78ca7ac");
 
     debugger;
 
@@ -276,9 +278,13 @@ class WsToken extends DrewsBrewsTable {
       include: [{ association: "brewery" }]
     });
 
+    debugger;
+
     const a2 = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
       include: [{ association: "beers" }]
     });
+
+    debugger;
 
     const a3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
       include: [{ association: "beers" }]
