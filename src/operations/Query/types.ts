@@ -18,3 +18,5 @@ export type EntityKeyConditions<T> = {
 export type QueryResults<T extends SingleTableDesign> = Array<
   EntityAttributes<T> | BelongsToLink
 >;
+
+export type QueryResult<T extends SingleTableDesign> = QueryResults<T>[number];

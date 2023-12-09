@@ -241,6 +241,10 @@ class WsToken extends DrewsBrewsTable {
     //   }
     // }
 
+    await Beer.delete("a16d0c40-5be6-476e-bf4d-dbcc0601e737");
+
+    debugger;
+
     await Brewery.delete("62fcad82-3f3c-424c-abf9-425050a1bb99");
 
     debugger;

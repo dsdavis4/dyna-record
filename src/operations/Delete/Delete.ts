@@ -1,14 +1,24 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
-import Metadata, { type EntityClass } from "../../metadata";
-import { isBelongsToRelationship } from "../../metadata/utils";
+import Metadata, {
+  BelongsToRelationship,
+  type EntityClass
+} from "../../metadata";
+import {
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
+  isBelongsToRelationship
+} from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
 import { DynamoTableItem } from "../../types";
 import { entityToTableItem } from "../../utils";
 import OperationBase from "../OperationBase";
-import { QueryResults } from "../Query";
+import { QueryResult } from "../Query";
 import type { RelationshipLookup } from "../types";
 import { expressionBuilder } from "../utils";
+
+// TODO makes type file like I did for the others
+type ItemKeys<T extends SingleTableDesign> = Partial<QueryResult<T>>;
 
 /**
  * TODO
@@ -19,6 +29,12 @@ import { expressionBuilder } from "../utils";
  *      - But should this even be allowed? In a SQL database what would happen?
  */
 
+// TODO this is copied from types FindById. Find a way to clean this up. Utils or soemthing. REname approprtiatl
+interface RelationshipObj {
+  relationsLookup: RelationshipLookup;
+  belongsToRelationships: BelongsToRelationship[];
+}
+
 // TODO tsdoc for everything in here
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
@@ -26,6 +42,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #primaryKeyField: string;
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
+  readonly #belongsToRelationships: BelongsToRelationship[];
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
@@ -36,12 +53,25 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     this.#tableName = tableName;
     this.#primaryKeyField = this.entityMetadata.attributes[primaryKey].name;
     this.#sortKeyField = this.entityMetadata.attributes[sortKey].name;
-    this.#relationsLookup = Object.values(
+
+    // TODO this is copied from FindById. Make a util
+    const relationsObj = Object.values(
       this.entityMetadata.relationships
-    ).reduce<RelationshipLookup>((acc, meta) => {
-      acc[meta.target.name] = meta;
-      return acc;
-    }, {});
+    ).reduce<RelationshipObj>(
+      (acc, rel) => {
+        if (isBelongsToRelationship(rel)) {
+          acc.belongsToRelationships.push(rel);
+        }
+
+        acc.relationsLookup[rel.target.name] = rel;
+
+        return acc;
+      },
+      { relationsLookup: {}, belongsToRelationships: [] }
+    );
+
+    this.#relationsLookup = relationsObj.relationsLookup;
+    this.#belongsToRelationships = relationsObj.belongsToRelationships;
   }
 
   /**
@@ -53,26 +83,27 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    // TODO start here......
-
     const items = await this.EntityClass.query(id);
 
     for (const item of items) {
+      // TODO does this need a condition added?
       this.buildDeleteItemTransaction(item);
+
+      if (this.isEntityClass(item)) {
+        this.buildDeleteAssociatedBelongsToLinkTransaction(id, item);
+      }
 
       if (item instanceof BelongsToLink) {
         this.buildNullifyForeignKeyTransaction(item);
       }
     }
-
-    debugger;
   }
 
   /**
    * Deletes an item in the parent Entity's partition
    * @param item
    */
-  private buildDeleteItemTransaction(item: QueryResults<T>[number]): void {
+  private buildDeleteItemTransaction(item: ItemKeys<T>): void {
     const pkField = this.#primaryKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
 
@@ -108,8 +139,76 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       ExpressionAttributeNames: expression.ExpressionAttributeNames,
       ExpressionAttributeValues: expression.ExpressionAttributeValues,
       UpdateExpression: expression.UpdateExpression
+      // TODO is this meeded
       // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
     });
+  }
+
+  /**
+   * Deletes associated BelongsToLinks for each ForeignKey of the item being deleted
+   * @param entityId
+   * @param item
+   */
+  private buildDeleteAssociatedBelongsToLinkTransaction(
+    entityId: string,
+    item: EntityClass<T>
+  ): void {
+    this.#belongsToRelationships.forEach(relMeta => {
+      const foreignKeyValue = item[relMeta.foreignKey as keyof EntityClass<T>];
+
+      if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
+        this.buildDeleteBelongsToHasManyTransaction(
+          relMeta,
+          entityId,
+          foreignKeyValue
+        );
+      }
+
+      if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
+        this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
+      }
+    });
+  }
+
+  /**
+   * Deletes associated BelongsToLink for a BelongsTo HasMany relationship
+   * @param relMeta
+   * @param entityId
+   * @param foreignKeyValue
+   */
+  private buildDeleteBelongsToHasManyTransaction(
+    relMeta: BelongsToRelationship,
+    entityId: string,
+    foreignKeyValue: string
+  ): void {
+    const belongsToLinksKeys: ItemKeys<T> = {
+      [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
+      [this.#sortKeyField]: this.EntityClass.primaryKeyValue(entityId)
+    };
+
+    // TODO does this need a condition added?
+    this.buildDeleteItemTransaction(belongsToLinksKeys);
+  }
+
+  /**
+   * * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
+   * @param relMeta
+   * @param foreignKeyValue
+   */
+  private buildDeleteBelongsToHasOneTransaction(
+    relMeta: BelongsToRelationship,
+    foreignKeyValue: string
+  ): void {
+    const belongsToLinksKeys: ItemKeys<T> = {
+      [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
+      [this.#sortKeyField]: relMeta.target.name
+    };
+    // TODO does this need a condition added?
+    this.buildDeleteItemTransaction(belongsToLinksKeys);
+  }
+
+  private isEntityClass(item: any): item is typeof this.EntityClass {
+    return item instanceof this.EntityClass;
   }
 }
 
