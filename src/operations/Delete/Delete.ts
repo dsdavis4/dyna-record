@@ -21,7 +21,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   public async run(id: string): Promise<void> {
-    // TODO start here...
+    // TODO start here......
 
     debugger;
   }
