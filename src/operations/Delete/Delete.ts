@@ -55,6 +55,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     this.#sortKeyField = this.entityMetadata.attributes[sortKey].name;
 
     // TODO this is copied from FindById. Make a util
+    //     - when I do this I should make `RelationshipObj` a better name
     const relationsObj = Object.values(
       this.entityMetadata.relationships
     ).reduce<RelationshipObj>(
