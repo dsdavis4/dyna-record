@@ -1,7 +1,10 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import type { EntityClass } from "../../metadata";
+import { isBelongsToRelationship } from "../../metadata/utils";
+import { BelongsToLink } from "../../relationships";
 import OperationBase from "../OperationBase";
+import type { RelationshipLookup } from "../types";
 
 /**
  * TODO
@@ -23,7 +26,22 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   public async run(id: string): Promise<void> {
     // TODO start here......
 
-    debugger;
+    const items = await this.EntityClass.query(id);
+
+    const relationsLookup = Object.values(
+      this.entityMetadata.relationships
+    ).reduce<RelationshipLookup>((acc, meta) => {
+      acc[meta.target.name] = meta;
+      return acc;
+    }, {});
+
+    for (const item of items) {
+      // if (item.type === BelongsToLink.name) {
+      //   const a = item.type;
+      //   // TODO
+      // }
+      debugger;
+    }
   }
 }
 

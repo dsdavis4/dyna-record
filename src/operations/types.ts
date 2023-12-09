@@ -1,5 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import { type DefaultFields } from "../SingleTableDesign";
+import type { DefaultFields } from "../SingleTableDesign";
+import type { RelationshipMetadata } from "../metadata";
 import type { Brand, PrimaryKey, SortKey } from "../types";
 
 type PrimaryKeyAttribute<T> = {
@@ -68,3 +69,8 @@ export type EntityDefinedAttributes<T extends SingleTableDesign> = Omit<
   | PrimaryKeyAttribute<T>
   | SortKeyAttribute<T>
 >;
+
+/**
+ * Object to lookup up Relationship metadata by entity name
+ */
+export type RelationshipLookup = Record<string, RelationshipMetadata>;

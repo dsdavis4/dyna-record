@@ -1,11 +1,12 @@
 import type { QueryItems } from "../../DynamoClient";
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { EntityAttributes, RelationshipAttributeNames } from "../types";
-import type { BelongsToLinkDynamoItem } from "../../types";
 import type {
-  BelongsToRelationship,
-  RelationshipMetadata
-} from "../../metadata";
+  EntityAttributes,
+  RelationshipAttributeNames,
+  RelationshipLookup
+} from "../types";
+import type { BelongsToLinkDynamoItem } from "../../types";
+import type { BelongsToRelationship } from "../../metadata";
 
 export interface FindByIdOptions<T extends SingleTableDesign> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
@@ -45,8 +46,6 @@ export type FindByIdIncludesRes<
   T,
   keyof EntityAttributes<T> | IncludedKeys<T, Opts>
 >;
-
-export type RelationshipLookup = Record<string, RelationshipMetadata>;
 
 export interface RelationshipObj {
   relationsLookup: RelationshipLookup;

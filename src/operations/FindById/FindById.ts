@@ -24,10 +24,13 @@ import type {
   FindByIdOptions,
   FindByIdIncludesRes,
   IncludedAssociations,
-  RelationshipLookup,
   RelationshipObj,
   SortedQueryResults
 } from "./types";
+import type { RelationshipLookup } from "../types";
+
+// TODO if the item is not found it should return null
+// TODO if relationships are not found it should return an array for has many and null for has one or belongs to
 
 /**
  * FindById operations

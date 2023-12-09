@@ -207,6 +207,44 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    // Setup
+
+    const brewery = await Brewery.findById(
+      "62fcad82-3f3c-424c-abf9-425050a1bb99",
+      {
+        include: [
+          { association: "beers" },
+          { association: "rooms" },
+          { association: "scales" }
+        ]
+      }
+    );
+
+    debugger;
+
+    // for (let i = 0; i < 3; i++) {
+    //   if (brewery) {
+    //     const idx = i + 1;
+    //     await Beer.create({
+    //       name: `Beer-${idx}`,
+    //       breweryId: brewery.id,
+    //       style: "fake",
+    //       abv: 1.1
+    //     });
+
+    //     const room = await Room.create({
+    //       name: `Room-${idx}`,
+    //       breweryId: brewery.id
+    //     });
+
+    //     await Scale.create({ breweryId: b.rewery.id, roomId: room.id });
+    //   }
+    // }
+
+    await Brewery.delete("62fcad82-3f3c-424c-abf9-425050a1bb99");
+
+    debugger;
+
     // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
     //   include: [{ association: "brewery" }]
     // });
@@ -454,6 +492,7 @@ class WsToken extends DrewsBrewsTable {
       bla.scales;
     } else {
       results[0].foreignEntityType;
+      results[0].type;
     }
 
     const wsTokens = await WsToken.getAllByRoomId(
