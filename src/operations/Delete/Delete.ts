@@ -1,19 +1,15 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
-import Metadata, {
-  BelongsToRelationship,
-  type EntityClass
-} from "../../metadata";
+import { type BelongsToRelationship, type EntityClass } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
   isBelongsToRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import { DynamoTableItem } from "../../types";
 import { entityToTableItem } from "../../utils";
 import OperationBase from "../OperationBase";
-import { QueryResult } from "../Query";
+import { type QueryResult } from "../Query";
 import type { RelationshipLookup } from "../types";
 import { expressionBuilder } from "../utils";
 
@@ -36,6 +32,9 @@ interface RelationshipObj {
 }
 
 // TODO start here....
+
+// start by writng tests for everything hre before impleneting the Null exception validations for ootional fields being set to null
+
 //      At the end of last time I am pretty sure I have it building delete transactions correct
 //       - I have not ran a delete yet, just inspected the built transactions
 //       - I I have not added non-nulltable foreignKeys yet
