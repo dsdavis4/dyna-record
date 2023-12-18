@@ -13,6 +13,12 @@ import { type QueryResult } from "../Query";
 import type { RelationshipLookup } from "../types";
 import { expressionBuilder } from "../utils";
 
+// TODO move types to their own file like I did for other operation classes
+
+interface DeleteOptions {
+  errorMessage: string;
+}
+
 // TODO makes type file like I did for the others
 type ItemKeys<T extends SingleTableDesign> = Partial<QueryResult<T>>;
 
@@ -103,13 +109,19 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     }
 
     for (const item of items) {
-      this.buildDeleteItemTransaction(item);
-
       if (this.isEntityClass(item)) {
+        this.buildDeleteItemTransaction(item, {
+          errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
+        });
         this.buildDeleteAssociatedBelongsToLinkTransaction(id, item);
       }
 
       if (item instanceof BelongsToLink) {
+        this.buildDeleteItemTransaction(item, {
+          errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+            { [this.#primaryKeyField]: item.pk, [this.#sortKeyField]: item.sk }
+          )}`
+        });
         this.buildNullifyForeignKeyTransaction(item);
       }
     }
@@ -118,10 +130,13 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   /**
-   * Deletes an item in the parent Entity's partition
+   * Deletes an item
    * @param item
    */
-  private buildDeleteItemTransaction(item: ItemKeys<SingleTableDesign>): void {
+  private buildDeleteItemTransaction(
+    item: BelongsToLink | ItemKeys<T>,
+    options: DeleteOptions
+  ): void {
     const { primaryKey, sortKey } = this.tableMetadata;
 
     const pkField = this.#primaryKeyField as keyof typeof item;
@@ -135,8 +150,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
           [sortKey]: item[skField]
         }
       },
-      // TODO add test for this
-      `Failed to delete item with ID: ${item.id}`
+      options.errorMessage
     );
   }
 
@@ -165,7 +179,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
         // TODO is this meeded
         // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
-      // TODO test for this
       `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
     );
   }
@@ -212,8 +225,11 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       [this.#sortKeyField]: this.EntityClass.primaryKeyValue(entityId)
     };
 
-    // TODO does this need a condition added?
-    this.buildDeleteItemTransaction(belongsToLinksKeys);
+    this.buildDeleteItemTransaction(belongsToLinksKeys, {
+      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        belongsToLinksKeys
+      )}`
+    });
   }
 
   /**
@@ -227,11 +243,14 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   ): void {
     const belongsToLinksKeys: ItemKeys<T> = {
       [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
-      // TODO test that this is workign correctly
       [this.#sortKeyField]: this.EntityClass.name
     };
-    // TODO does this need a condition added?
-    this.buildDeleteItemTransaction(belongsToLinksKeys);
+
+    this.buildDeleteItemTransaction(belongsToLinksKeys, {
+      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        belongsToLinksKeys
+      )}`
+    });
   }
 
   private isEntityClass(item: any): item is typeof this.EntityClass {
