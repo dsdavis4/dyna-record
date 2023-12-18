@@ -1,6 +1,6 @@
 import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
 
-export interface Expression {
+export interface UpdateSetExpression {
   UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
   ExpressionAttributeNames: NonNullable<
     UpdateCommandInput["ExpressionAttributeNames"]
@@ -9,3 +9,12 @@ export interface Expression {
     UpdateCommandInput["ExpressionAttributeValues"]
   >;
 }
+
+export interface UpdateRemoveExpression {
+  UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
+  ExpressionAttributeNames: NonNullable<
+    UpdateCommandInput["ExpressionAttributeNames"]
+  >;
+}
+
+export type UpdateExpression = UpdateSetExpression | UpdateRemoveExpression;

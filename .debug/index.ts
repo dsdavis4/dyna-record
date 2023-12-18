@@ -241,9 +241,15 @@ class WsToken extends DrewsBrewsTable {
     //   }
     // }
 
-    await Beer.delete("a16d0c40-5be6-476e-bf4d-dbcc0601e737");
+    // await Beer.delete("a16d0c40-5be6-476e-bf4d-dbcc0601e737");
+
+    // debugger;
+
+    // await Room.delete("46554971-2c00-4a00-b7f4-7e81612684c6");
 
     debugger;
+
+    // const rooms = await Promise,
 
     await Brewery.delete("62fcad82-3f3c-424c-abf9-425050a1bb99");
 
@@ -312,7 +318,7 @@ class WsToken extends DrewsBrewsTable {
     //   }
     // );
 
-    await Beer.delete("2cb10b5b-cf75-44b3-960c-0d8da78ca7ac");
+    // await Beer.delete("2cb10b5b-cf75-44b3-960c-0d8da78ca7ac");
 
     debugger;
 

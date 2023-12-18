@@ -78,10 +78,8 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
       {
         TableName: tableName,
         Key: tableKeys,
-        ExpressionAttributeNames: expression.ExpressionAttributeNames,
-        ExpressionAttributeValues: expression.ExpressionAttributeValues,
-        UpdateExpression: expression.UpdateExpression,
-        ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${primaryKey})`, // Only update the item if it exists
+        ...expression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
     );

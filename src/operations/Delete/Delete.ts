@@ -35,6 +35,17 @@ interface RelationshipObj {
   belongsToRelationships: BelongsToRelationship[];
 }
 
+// TODO start here....
+//      At the end of last time I am pretty sure I have it building delete transactions correct
+//       - I have not ran a delete yet, just inspected the built transactions
+//       - I I have not added non-nulltable foreignKeys yet
+//           - See TODO in types for ideas how to do this
+//           - IMPORTANT - if I cant figure out how to do it with a dynamo transaction then I can make a method in transaction builder which allows me to force an error. I could pass it a NonNullableException or something (but see what the normal error name is) and it will aggregate it in the error response
+//       -         - !!! Similar to how AWS transactions have validation exceptions. I could make a pubic method on transactionwritebuilder where I store ValidationErrors. This is checked before comitting a transaction. If there are any validation errors I dont commit the transaction
+//       -                  - Aggregate all validator errors and throw
+//       -                  - this has added benefits because I can reduce the amount of transactions to by validating ahead of time
+//       - Do I need conditions on any of the operations in here
+
 // TODO tsdoc for everything in here
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
@@ -86,8 +97,13 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   public async run(id: string): Promise<void> {
     const items = await this.EntityClass.query(id);
 
+    // TODO add test for this
+    if (items.length === 0) {
+      // TODO should this be a custom error type?
+      throw new Error(`Item does not exist: ${id}`);
+    }
+
     for (const item of items) {
-      // TODO does this need a condition added?
       this.buildDeleteItemTransaction(item);
 
       if (this.isEntityClass(item)) {
@@ -98,6 +114,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
         this.buildNullifyForeignKeyTransaction(item);
       }
     }
+
+    await this.#transactionBuilder.executeTransaction();
   }
 
   /**
@@ -105,14 +123,16 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @param item
    */
   private buildDeleteItemTransaction(item: ItemKeys<T>): void {
+    const { primaryKey, sortKey } = this.tableMetadata;
+
     const pkField = this.#primaryKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
 
     this.#transactionBuilder.addDelete({
       TableName: this.#tableName,
       Key: {
-        [pkField]: item[pkField],
-        [skField]: item[skField]
+        [primaryKey]: item[pkField],
+        [sortKey]: item[skField]
       }
     });
   }
@@ -132,14 +152,12 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       [relMeta.foreignKey]: null
     });
 
-    const expression = expressionBuilder(tableAttrs);
+    const expression = expressionBuilder(tableAttrs, "REMOVE");
 
     this.#transactionBuilder.addUpdate({
       TableName: this.#tableName,
       Key: tableKeys,
-      ExpressionAttributeNames: expression.ExpressionAttributeNames,
-      ExpressionAttributeValues: expression.ExpressionAttributeValues,
-      UpdateExpression: expression.UpdateExpression
+      ...expression
       // TODO is this meeded
       // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
     });
@@ -192,7 +210,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   /**
-   * * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
+   * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
    * @param relMeta
    * @param foreignKeyValue
    */

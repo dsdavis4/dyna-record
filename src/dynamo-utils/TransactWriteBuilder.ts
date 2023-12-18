@@ -114,6 +114,7 @@ class TransactionBuilder {
 
       if (conditionFailedErrs.length > 0) {
         console.error(conditionFailedErrs.map(err => err.message));
+        // TODO should I make this a custom error? TransactionError
         return new AggregateError(
           conditionFailedErrs,
           "Failed Conditional Checks",
