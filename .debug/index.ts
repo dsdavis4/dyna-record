@@ -207,20 +207,60 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    // Setup
+    const bla = await Brewery.create({ name: "test delete" });
 
-    const brewery = await Brewery.findById(
-      "62fcad82-3f3c-424c-abf9-425050a1bb99",
-      {
-        include: [
-          { association: "beers" },
-          { association: "rooms" },
-          { association: "scales" }
-        ]
-      }
-    );
+    const beer = await Beer.create({
+      name: "bla",
+      abv: 1,
+      style: "testing",
+      breweryId: bla.id
+    });
+
+    const room2222 = await Room.create({ name: "my room", breweryId: bla.id });
+
+    const scale = await Scale.create({
+      breweryId: bla.id,
+      roomId: room2222.id
+    });
+
+    const process = await Process.create({
+      name: "test process",
+      scaleId: scale.id,
+      currentUserInput: "",
+      currentState: "",
+      currentStateStatus: ""
+    });
 
     debugger;
+
+    await Process.delete(process.id);
+
+    debugger;
+
+    await Scale.delete(scale.id);
+
+    debugger;
+
+    await Beer.delete(beer.id);
+
+    debugger;
+
+    await Brewery.delete(bla.id);
+
+    debugger;
+
+    // Setup
+
+    // const brewery = await Brewery.findById(
+    //   "62fcad82-3f3c-424c-abf9-425050a1bb99",
+    //   {
+    //     include: [
+    //       { association: "beers" },
+    //       { association: "rooms" },
+    //       { association: "scales" }
+    //     ]
+    //   }
+    // );
 
     // for (let i = 0; i < 3; i++) {
     //   if (brewery) {

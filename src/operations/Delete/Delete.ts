@@ -121,19 +121,23 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * Deletes an item in the parent Entity's partition
    * @param item
    */
-  private buildDeleteItemTransaction(item: ItemKeys<T>): void {
+  private buildDeleteItemTransaction(item: ItemKeys<SingleTableDesign>): void {
     const { primaryKey, sortKey } = this.tableMetadata;
 
     const pkField = this.#primaryKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
 
-    this.#transactionBuilder.addDelete({
-      TableName: this.#tableName,
-      Key: {
-        [primaryKey]: item[pkField],
-        [sortKey]: item[skField]
-      }
-    });
+    this.#transactionBuilder.addDelete(
+      {
+        TableName: this.#tableName,
+        Key: {
+          [primaryKey]: item[pkField],
+          [sortKey]: item[skField]
+        }
+      },
+      // TODO add test for this
+      `Failed to delete item with ID: ${item.id}`
+    );
   }
 
   /**
@@ -153,13 +157,17 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
 
     const expression = expressionBuilder(tableAttrs, "REMOVE");
 
-    this.#transactionBuilder.addUpdate({
-      TableName: this.#tableName,
-      Key: tableKeys,
-      ...expression
-      // TODO is this meeded
-      // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
-    });
+    this.#transactionBuilder.addUpdate(
+      {
+        TableName: this.#tableName,
+        Key: tableKeys,
+        ...expression
+        // TODO is this meeded
+        // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
+      },
+      // TODO test for this
+      `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
+    );
   }
 
   /**
@@ -219,7 +227,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   ): void {
     const belongsToLinksKeys: ItemKeys<T> = {
       [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
-      [this.#sortKeyField]: relMeta.target.name
+      // TODO test that this is workign correctly
+      [this.#sortKeyField]: this.EntityClass.name
     };
     // TODO does this need a condition added?
     this.buildDeleteItemTransaction(belongsToLinksKeys);
