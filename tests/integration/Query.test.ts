@@ -118,30 +118,40 @@ describe("Query", () => {
           updatedAt: "2022-09-15T04:26:31.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
           updatedAt: "2022-10-15T09:31:15.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
           createdAt: "2021-11-01T23:31:21.148Z",
           updatedAt: "2022-11-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
           createdAt: "2021-09-01T23:31:21.148Z",
           updatedAt: "2022-09-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#116",
           id: "007",
           type: "BelongsToLink",
           createdAt: "2021-10-01T12:31:21.148Z",
           updatedAt: "2022-10-01T12:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
           createdAt: "2021-11-21T12:31:21.148Z",
@@ -190,6 +200,8 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
@@ -256,18 +268,24 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
           updatedAt: "2022-10-15T09:31:15.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
           createdAt: "2021-11-01T23:31:21.148Z",
           updatedAt: "2022-11-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
           createdAt: "2021-09-01T23:31:21.148Z",
@@ -323,6 +341,8 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
           createdAt: "2021-11-21T12:31:21.148Z",
@@ -487,18 +507,24 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
           updatedAt: "2022-10-15T09:31:15.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
           createdAt: "2021-11-01T23:31:21.148Z",
           updatedAt: "2022-11-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
           createdAt: "2021-09-01T23:31:21.148Z",
@@ -631,30 +657,40 @@ describe("Query", () => {
           updatedAt: "2022-09-15T04:26:31.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
           updatedAt: "2022-10-15T09:31:15.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
           createdAt: "2021-11-01T23:31:21.148Z",
           updatedAt: "2022-11-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
           createdAt: "2021-09-01T23:31:21.148Z",
           updatedAt: "2022-09-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#116",
           id: "007",
           type: "BelongsToLink",
           createdAt: "2021-10-01T12:31:21.148Z",
           updatedAt: "2022-10-01T12:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
           createdAt: "2021-11-21T12:31:21.148Z",
@@ -702,6 +738,8 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
@@ -767,18 +805,24 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
           createdAt: "2021-10-15T09:31:15.148Z",
           updatedAt: "2022-10-15T09:31:15.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
           createdAt: "2021-11-01T23:31:21.148Z",
           updatedAt: "2022-11-01T23:31:21.148Z"
         },
         {
+          pk: "Customer#123",
+          sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
           createdAt: "2021-09-01T23:31:21.148Z",
@@ -831,6 +875,8 @@ describe("Query", () => {
 
       expect(result).toEqual([
         {
+          pk: "Customer#123",
+          sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
           createdAt: "2021-11-21T12:31:21.148Z",
