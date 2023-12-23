@@ -18,7 +18,7 @@ export type ForeignKey = Brand<string, "ForeignKey">;
 //       - Which takes an option of nullable true false, and stores that in meta data
 //      - Only accepts one a type of ForeignKey or nullable Foreign key
 //       - For the nullable ones it requires attributes to be optional
-export type NullableForeignKey = Brand<NonNullable<string>, "ForeignKey">;
+// export type NullableForeignKey = Brand<NonNullable<string>, "ForeignKey">;
 
 // TODO move this back to where it was before if its  not used
 // TODO should this be the native scalar version type?
