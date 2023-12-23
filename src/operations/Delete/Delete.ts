@@ -37,9 +37,9 @@ interface RelationshipObj {
   belongsToRelationships: BelongsToRelationship[];
 }
 
-// TODO start here....
-
-// start by writng tests for everything hre before impleneting the Null exception validations for ootional fields being set to null
+// TODO start here.......
+// I ended last time having just added unit tests for the current delete functionality
+// Start now by handling the NullException handling
 
 //      At the end of last time I am pretty sure I have it building delete transactions correct
 //       - I have not ran a delete yet, just inspected the built transactions
