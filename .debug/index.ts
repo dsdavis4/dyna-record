@@ -5,12 +5,19 @@ import {
   PrimaryKeyAttribute,
   SortKeyAttribute,
   Attribute,
+  ForeignKeyAttribute,
   HasMany,
   BelongsTo,
-  HasOne
+  HasOne,
+  NullableForeignKeyAttribute
 } from "../src/decorators";
 
-import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
+import {
+  PrimaryKey,
+  SortKey,
+  ForeignKey,
+  NullableForeignKey
+} from "../src/types";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
@@ -61,10 +68,10 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
 @Entity
 class Scale extends DrewsBrewsTable {
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
-  @Attribute({ alias: "RoomId" })
+  @ForeignKeyAttribute({ alias: "RoomId" })
   public roomId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
@@ -79,7 +86,7 @@ class Scale extends DrewsBrewsTable {
 
 @Entity
 class Beer extends DrewsBrewsTable {
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
   @Attribute({ alias: "Style" })
@@ -119,7 +126,7 @@ class Room extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
@@ -143,8 +150,21 @@ class Process extends DrewsBrewsTable {
   @Attribute({ alias: "CurrentUserInput" })
   public currentUserInput: string;
 
-  @Attribute({ alias: "ScaleId" })
-  public scaleId: ForeignKey;
+  // TODO start here... check other start here in operation types...
+  // I might have made a break through... see error below in this file. Is it working right?
+  // what if I focused on null instead of undefined...
+  // A couple things wrong here...
+  // 1. Why does this have an error if I make it optional
+  //     - See line 19 of NullableForeignKeyAttribute... its commented out, will this help?
+  // 2. When i try to access the instance.scaleId it should know its optional
+  // 3. There is an error below, I think I saw this before with ForeignKey
+  //    - Look into how I solved this for foreign key..
+  // 4. did my change to "type ForeignEntityAttribute" work as expected?
+  // 5. this should be allowed to be denoted as optional
+  // 6 this decorator should require NullableForeignKey and error if type is ForeignKey
+
+  @NullableForeignKeyAttribute({ alias: "ScaleId" })
+  public scaleId: NullableForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
   public scale: Scale;
@@ -155,7 +175,7 @@ class WsToken extends DrewsBrewsTable {
   @Attribute({ alias: "ConnectionId" })
   public connectionId: string;
 
-  @Attribute({ alias: "RoomId" })
+  @ForeignKeyAttribute({ alias: "RoomId" })
   public roomId: ForeignKey;
 
   /**
@@ -229,13 +249,31 @@ class WsToken extends DrewsBrewsTable {
 
     const process = await Process.create({
       name: "test process",
+      // scaleId: undefined,
       scaleId: scale.id,
       currentUserInput: "",
       currentState: "",
       currentStateStatus: ""
     });
 
-    debugger;
+    const method = (bla: string) => {
+      console.log(bla);
+    };
+
+    method(process.scaleId);
+    method(process.id);
+
+    await Process.update(process.id, {
+      currentUserInput: "11",
+      scaleId: undefined
+    });
+
+    // await Beer.update("123", {
+    //   name: "bla"
+    //   // breweryId: undefined
+    // });
+
+    process.scaleId = undefined;
 
     await Process.delete(process.id);
 

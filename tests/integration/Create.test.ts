@@ -1,5 +1,6 @@
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
+  ContactInformation,
   Customer,
   MockTable,
   Order,
@@ -8,7 +9,14 @@ import {
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { Attribute, Entity } from "../../src/decorators";
+import {
+  Attribute,
+  BelongsTo,
+  Entity,
+  HasOne,
+  NullableForeignKeyAttribute
+} from "../../src/decorators";
+import type { NullableForeignKey } from "../../src/types";
 
 // TODO is everything awaited properly in these tests? Do I need to mock resolved value in other tests?
 //      Check all operations tests...
@@ -545,6 +553,58 @@ describe("Create", () => {
         paymentMethodId: "123",
         // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
         customerId: "456"
+      });
+    });
+
+    it("will allow NullableForeignKey attributes to be passed at their inferred type without casting to type NullableForeignKey", async () => {
+      await ContactInformation.create({
+        email: "test@example.com",
+        phone: "555-555-5555",
+        // @ts-expect-no-error NullableForeignKey is of type string so it can be passed as such without casing to NullableForeignKey
+        customerId: "123"
+      });
+    });
+
+    it("will allow NullableForeignKey attributes to be passed at undefined", async () => {
+      await ContactInformation.create({
+        email: "test@example.com",
+        phone: "555-555-5555",
+        // @ts-expect-no-error NullableForeignKey can be passed as undefined
+        customerId: undefined
+      });
+    });
+
+    it("will allow a NullableForeignKey attribute to be omitted if its defined as optional on the model", async () => {
+      @Entity
+      class ContactInformationLocal extends MockTable {
+        @Attribute({ alias: "Email" })
+        public email: string;
+
+        @Attribute({ alias: "Phone" })
+        public phone: string;
+
+        @NullableForeignKeyAttribute({ alias: "CustomerId" })
+        public customerId?: NullableForeignKey;
+
+        @BelongsTo(() => CustomerLocal, { foreignKey: "customerId" })
+        public customer: CustomerLocal;
+
+        // mock method
+        public static override create(bla: any): any {
+          return "bla " as any;
+        }
+      }
+
+      @Entity
+      class CustomerLocal extends MockTable {
+        @HasOne(() => ContactInformation, { foreignKey: "customerId" })
+        public contactInformation?: ContactInformation;
+      }
+
+      // @ts-expect-no-error NullableForeignKey can be omitted if its defined as optional
+      await ContactInformationLocal.create({
+        email: "test@example.com",
+        phone: "555-555-5555"
       });
     });
 

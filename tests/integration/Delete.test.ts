@@ -2,6 +2,7 @@ import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { MockTable } from "./mockModels";
 import {
   Attribute,
+  ForeignKeyAttribute,
   BelongsTo,
   Entity,
   HasMany,
@@ -36,7 +37,7 @@ class Pet extends MockTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @Attribute({ alias: "OwnerId" })
+  @ForeignKeyAttribute({ alias: "OwnerId" })
   public ownerId: ForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
@@ -48,7 +49,7 @@ class Address extends MockTable {
   @Attribute({ alias: "State" })
   public state: string;
 
-  @Attribute({ alias: "PersonId" })
+  @ForeignKeyAttribute({ alias: "PersonId" })
   public personId: ForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "personId" })

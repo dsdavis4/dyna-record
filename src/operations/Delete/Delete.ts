@@ -37,7 +37,6 @@ interface RelationshipObj {
   belongsToRelationships: BelongsToRelationship[];
 }
 
-// TODO start here.......
 // I ended last time having just added unit tests for the current delete functionality
 // Start now by handling the NullException handling
 

@@ -1,4 +1,10 @@
-import { Entity, Attribute, HasMany, BelongsTo } from "../../src/decorators";
+import {
+  Entity,
+  Attribute,
+  ForeignKeyAttribute,
+  HasMany,
+  BelongsTo
+} from "../../src/decorators";
 import type { ForeignKey } from "../../src/types";
 import { MockTable } from "../integration/mockModels";
 
@@ -7,7 +13,7 @@ describe("HasMany", () => {
     it("will allow the foreign key to be an attribute on the associated entities model", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1" })
         public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
@@ -44,7 +50,7 @@ describe("HasMany", () => {
     it("will not allow the foreign key to be an attribute defined on itself", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1" })
         public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
@@ -84,7 +90,7 @@ describe("HasMany", () => {
     it("will not allow relationship attributes as the foreign key", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1" })
         public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
@@ -102,7 +108,7 @@ describe("HasMany", () => {
     it("will not allow function attributes as the foreign key", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1" })
         public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
@@ -124,7 +130,7 @@ describe("HasMany", () => {
     it("requires the attribute of HasMany to be an array", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1" })
         public key1: ForeignKey;
 
         @BelongsTo(() => ModelTwo, { foreignKey: "key1" })

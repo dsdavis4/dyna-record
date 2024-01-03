@@ -5,11 +5,18 @@ import {
   PrimaryKeyAttribute,
   SortKeyAttribute,
   Attribute,
+  ForeignKeyAttribute,
   HasMany,
   BelongsTo,
-  HasOne
+  HasOne,
+  NullableForeignKeyAttribute
 } from "../../src/decorators";
-import type { PrimaryKey, SortKey, ForeignKey } from "../../src/types";
+import type {
+  PrimaryKey,
+  SortKey,
+  ForeignKey,
+  NullableForeignKey
+} from "../../src/types";
 
 @Table({ name: "mock-table", delimiter: "#" })
 abstract class MockTable extends SingleTableDesign {
@@ -22,10 +29,10 @@ abstract class MockTable extends SingleTableDesign {
 
 @Entity
 class Order extends MockTable {
-  @Attribute({ alias: "CustomerId" })
+  @ForeignKeyAttribute({ alias: "CustomerId" })
   public customerId: ForeignKey;
 
-  @Attribute({ alias: "PaymentMethodId" })
+  @ForeignKeyAttribute({ alias: "PaymentMethodId" })
   public paymentMethodId: ForeignKey;
 
   @Attribute({ alias: "OrderDate" })
@@ -43,7 +50,7 @@ class PaymentMethodProvider extends MockTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @Attribute({ alias: "PaymentMethodId" })
+  @ForeignKeyAttribute({ alias: "PaymentMethodId" })
   public paymentMethodId: ForeignKey;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
@@ -55,7 +62,7 @@ class PaymentMethod extends MockTable {
   @Attribute({ alias: "LastFour" })
   public lastFour: string;
 
-  @Attribute({ alias: "CustomerId" })
+  @ForeignKeyAttribute({ alias: "CustomerId" })
   public customerId: ForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
@@ -84,6 +91,7 @@ class Customer extends MockTable {
   @HasMany(() => PaymentMethod, { foreignKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
+  // TODO I need the type system to error if the type is not defined as optional because its linked through a nullable foreign key
   @HasOne(() => ContactInformation, { foreignKey: "customerId" })
   public contactInformation?: ContactInformation;
 
@@ -100,8 +108,8 @@ class ContactInformation extends MockTable {
   @Attribute({ alias: "Phone" })
   public phone: string;
 
-  @Attribute({ alias: "CustomerId" })
-  public customerId: ForeignKey;
+  @NullableForeignKeyAttribute({ alias: "CustomerId" })
+  public customerId: NullableForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;

@@ -1,7 +1,14 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import type { DefaultFields } from "../SingleTableDesign";
 import type { RelationshipMetadata } from "../metadata";
-import type { Brand, PrimaryKey, SortKey } from "../types";
+import type {
+  Brand,
+  ForeignKey,
+  NullableForeignKey,
+  Optional,
+  PrimaryKey,
+  SortKey
+} from "../types";
 
 type PrimaryKeyAttribute<T> = {
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;
@@ -17,13 +24,6 @@ type FunctionFields<T> = {
 }[keyof T];
 
 /**
- * Infer the primitive type of the branded type
- */
-type ExtractForeignKeyType<T> = T extends Brand<infer U, "ForeignKey">
-  ? U
-  : never;
-
-/**
  * Allow ForeignKey attributes to be passes to the create method by using their inferred primitive type
  * Ex:
  *  If ModelA has: attr1: ForeignKey
@@ -31,7 +31,11 @@ type ExtractForeignKeyType<T> = T extends Brand<infer U, "ForeignKey">
  *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
  */
 type ForeignKeyToValue<T> = {
-  [K in keyof T]: ExtractForeignKeyType<T[K]> extends never ? T[K] : string;
+  [K in keyof T]: T[K] extends NullableForeignKey
+    ? Optional<string>
+    : T[K] extends ForeignKey
+    ? string
+    : T[K];
 };
 
 /**

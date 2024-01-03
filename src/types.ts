@@ -5,9 +5,31 @@ import { type BelongsToLink } from "./relationships";
 
 export type Brand<K, T> = K & { __brand: T };
 
+// TODO can I use symbols here?
+// const ForeignKeyBrand = Symbol('ForeignKey');
+// export type Brand<K, T extends symbol> = K & { readonly [P in T]: true };
+// export type ForeignKey = Brand<string, typeof ForeignKeyBrand>;
+
 export type SortKey = Brand<string, "SortKey">;
 export type PrimaryKey = Brand<string, "PrimaryKey">;
 export type ForeignKey = Brand<string, "ForeignKey">;
+
+// TODO I dont think this is what I want but check
+export type NullableForeignKey =
+  | Brand<string, "NullableForeignKey">
+  | undefined;
+
+// class MyClass {
+//   key1: ForeignKey;
+//   key2: NullableForeignKey;
+// }
+
+// const instance = new MyClass();
+// instance.key1 = "bla" as ForeignKey;
+// instance.key2 = "bla" as NullableForeignKey;
+
+// instance.key1 = undefined as ForeignKey;
+// instance.key2 = undefined as NullableForeignKey;
 
 // TODO would something like this help with determing if a foreign key is required? or not?
 //     - If so I would want to update the name of the ForeignKey type to indicate its nullable
@@ -30,3 +52,5 @@ export interface BelongsToLinkDynamoItem {
   Type: typeof BelongsToLink.name;
   [key: string]: NativeAttributeValue;
 }
+
+export type Optional<T> = T | undefined;

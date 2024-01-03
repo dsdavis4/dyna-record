@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   Attribute,
+  ForeignKeyAttribute,
   BelongsTo,
   Entity,
   HasMany,
@@ -1621,10 +1622,10 @@ describe("Update", () => {
       @Attribute({ alias: "Name" })
       public name: string;
 
-      @Attribute({ alias: "Model1Id" })
+      @ForeignKeyAttribute({ alias: "Model1Id" })
       public model1Id: ForeignKey;
 
-      @Attribute({ alias: "Model2Id" })
+      @ForeignKeyAttribute({ alias: "Model2Id" })
       public model2Id: ForeignKey;
 
       @BelongsTo(() => Model1, { foreignKey: "model1Id" })
