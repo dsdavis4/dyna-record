@@ -80,6 +80,7 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        // TODO... should this NOT allow to be defined as undefined because its linked through a (nullable) ForeignKey
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
