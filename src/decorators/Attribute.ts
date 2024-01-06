@@ -1,13 +1,18 @@
 import Metadata from "../metadata";
-import type { ForeignKey } from "../types";
+import type { ForeignKey, NullableForeignKey, Optional } from "../types";
 
 interface AttributeProps {
   alias: string;
 }
 
-// TODO add test for this, that attributes cant be of Type foreign key...
-// TODO this should include NullableForeignKey, can I leverage exclude?
-type NotForeignKey<T> = T extends ForeignKey ? never : T;
+/**
+ * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
+ */
+type NotForeignKey<T> = T extends ForeignKey
+  ? never
+  : T extends NullableForeignKey
+  ? never
+  : Optional<T>;
 
 // TODO... Since I started, typescript released metadata property of deraotrs. Can I use it?
 //        https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#decorator-metadata

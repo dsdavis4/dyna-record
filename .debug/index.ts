@@ -150,7 +150,6 @@ class Process extends DrewsBrewsTable {
   @Attribute({ alias: "CurrentUserInput" })
   public currentUserInput: string;
 
-  // TODO start here... check other start here in operation types...
   // I might have made a break through... see error below in this file. Is it working right?
   // what if I focused on null instead of undefined...
   // A couple things wrong here...
@@ -164,10 +163,10 @@ class Process extends DrewsBrewsTable {
   // 6 this decorator should require NullableForeignKey and error if type is ForeignKey
 
   @NullableForeignKeyAttribute({ alias: "ScaleId" })
-  public scaleId: NullableForeignKey;
+  public scaleId?: NullableForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
-  public scale: Scale;
+  public scale?: Scale;
 }
 
 @Entity
@@ -255,13 +254,6 @@ class WsToken extends DrewsBrewsTable {
       currentState: "",
       currentStateStatus: ""
     });
-
-    const method = (bla: string) => {
-      console.log(bla);
-    };
-
-    method(process.scaleId);
-    method(process.id);
 
     await Process.update(process.id, {
       currentUserInput: "11",

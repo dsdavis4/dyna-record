@@ -13,8 +13,6 @@ export type Brand<K, T> = K & { __brand: T };
 export type SortKey = Brand<string, "SortKey">;
 export type PrimaryKey = Brand<string, "PrimaryKey">;
 export type ForeignKey = Brand<string, "ForeignKey">;
-
-// TODO I dont think this is what I want but check
 export type NullableForeignKey =
   | Brand<string, "NullableForeignKey">
   | undefined;

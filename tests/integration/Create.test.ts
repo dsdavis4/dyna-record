@@ -532,7 +532,7 @@ describe("Create", () => {
         @Attribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
-        @Attribute({ alias: "mMAttribute2" })
+        @Attribute({ alias: "MyAttribute2" })
         public myAttribute2?: string;
       }
 
