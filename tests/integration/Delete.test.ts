@@ -6,11 +6,13 @@ import {
   BelongsTo,
   Entity,
   HasMany,
-  HasOne
+  HasOne,
+  NullableForeignKeyAttribute
 } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import type { ForeignKey } from "../../src/types";
+import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { NullConstraintViolationError } from "../../src/errors";
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
@@ -28,8 +30,8 @@ class Person extends MockTable {
   @HasMany(() => Pet, { foreignKey: "ownerId" })
   public pets: Pet[];
 
-  @HasOne(() => Address, { foreignKey: "personId" })
-  public address: Address;
+  @HasOne(() => Home, { foreignKey: "personId" })
+  public home: Home;
 }
 
 @Entity
@@ -37,11 +39,26 @@ class Pet extends MockTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @ForeignKeyAttribute({ alias: "OwnerId" })
-  public ownerId: ForeignKey;
+  @NullableForeignKeyAttribute({ alias: "OwnerId" })
+  public ownerId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
-  public owner: Person;
+  public owner?: Person;
+}
+
+@Entity
+class Home extends MockTable {
+  @Attribute({ alias: "MLS#" })
+  public mlsNum: string;
+
+  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  public personId?: NullableForeignKey;
+
+  @BelongsTo(() => Person, { foreignKey: "personId" })
+  public person?: Person;
+
+  @HasOne(() => Address, { foreignKey: "homeId" })
+  public address: Address; // TODO if this is optional then it should not be able to be set to null...
 }
 
 @Entity
@@ -49,11 +66,26 @@ class Address extends MockTable {
   @Attribute({ alias: "State" })
   public state: string;
 
-  @ForeignKeyAttribute({ alias: "PersonId" })
-  public personId: ForeignKey;
+  @ForeignKeyAttribute({ alias: "HomeId" })
+  public homeId: ForeignKey;
 
-  @BelongsTo(() => Person, { foreignKey: "personId" })
-  public person: Person;
+  @BelongsTo(() => Home, { foreignKey: "homeId" })
+  public home: Home;
+
+  @ForeignKeyAttribute({ alias: "PhoneBookId" })
+  public phoneBookId: ForeignKey;
+
+  @BelongsTo(() => PhoneBook, { foreignKey: "phoneBookId" })
+  public phoneBook: PhoneBook;
+}
+
+@Entity
+class PhoneBook extends MockTable {
+  @Attribute({ alias: "Edition" })
+  public edition: string;
+
+  @HasMany(() => Address, { foreignKey: "phoneBookId" })
+  public address: Address[];
 }
 
 @Entity
@@ -234,18 +266,18 @@ describe("Delete", () => {
     mockQuery.mockResolvedValueOnce({
       Items: [
         {
-          PK: "Address#123",
-          SK: "Address",
+          PK: "Home#123",
+          SK: "Home",
           Id: "123",
-          Type: "Address",
-          State: "CO",
+          Type: "Home",
+          "MLS#": "MLS-XXX",
           PersonId: "456"
         }
       ]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-    const res = await Address.delete("123");
+    const res = await Home.delete("123");
 
     expect(res).toEqual(undefined);
     expect(mockSend.mock.calls).toEqual([
@@ -259,7 +291,7 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Address#123" }
+          ExpressionAttributeValues: { ":PK1": "Home#123" }
         }
       ]
     ]);
@@ -271,14 +303,14 @@ describe("Delete", () => {
             {
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Address#123", SK: "Address" }
+                Key: { PK: "Home#123", SK: "Home" }
               }
             },
             {
               // Delete belongs to link for associated HasOne
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Person#456", SK: "Address" }
+                Key: { PK: "Person#456", SK: "Home" }
               }
             }
           ]
@@ -312,13 +344,13 @@ describe("Delete", () => {
           CreatedAt: "2021-10-15T09:31:15.148Z",
           UpdatedAt: "2022-10-15T09:31:15.148Z"
         },
-        // HasOne address
+        // HasOne Home
         {
           PK: "Person#123",
-          SK: "Address",
+          SK: "Home",
           Id: "002",
           Type: "BelongsToLink",
-          ForeignEntityType: "Address",
+          ForeignEntityType: "Home",
           ForeignKey: "222",
           CreatedAt: "2021-10-15T09:31:15.148Z",
           UpdatedAt: "2022-10-15T09:31:15.148Z"
@@ -377,14 +409,14 @@ describe("Delete", () => {
               // Delete BelongsToLink for HasOne
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Person#123", SK: "Address" }
+                Key: { PK: "Person#123", SK: "Home" }
               }
             },
             {
               // Remove ForeignKey id for HasOne link
               Update: {
                 TableName: "mock-table",
-                Key: { PK: "Address#222", SK: "Address" },
+                Key: { PK: "Home#222", SK: "Home" },
                 ExpressionAttributeNames: { "#PersonId": "PersonId" },
                 UpdateExpression: "REMOVE #PersonId"
               }
@@ -574,11 +606,11 @@ describe("Delete", () => {
       mockQuery.mockResolvedValueOnce({
         Items: [
           {
-            PK: "Address#123",
-            SK: "Address",
+            PK: "Home#123",
+            SK: "Home",
             Id: "123",
-            Type: "Address",
-            State: "CO",
+            Type: "Home",
+            "MLS#": "MLS-XXX",
             PersonId: "456"
           }
         ]
@@ -597,12 +629,12 @@ describe("Delete", () => {
       });
 
       try {
-        await Address.delete("123");
+        await Home.delete("123");
       } catch (e: any) {
         expect(e.constructor.name).toEqual("AggregateError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Address"}'
+            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Home"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -616,7 +648,7 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "Address#123" }
+              ExpressionAttributeValues: { ":PK1": "Home#123" }
             }
           ]
         ]);
@@ -628,14 +660,14 @@ describe("Delete", () => {
                 {
                   Delete: {
                     TableName: "mock-table",
-                    Key: { PK: "Address#123", SK: "Address" }
+                    Key: { PK: "Home#123", SK: "Home" }
                   }
                 },
                 {
                   // Delete belongs to link for associated HasOne
                   Delete: {
                     TableName: "mock-table",
-                    Key: { PK: "Person#456", SK: "Address" }
+                    Key: { PK: "Person#456", SK: "Home" }
                   }
                 }
               ]
@@ -670,13 +702,13 @@ describe("Delete", () => {
             CreatedAt: "2021-10-15T09:31:15.148Z",
             UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
-          // HasOne address
+          // HasOne Home
           {
             PK: "Person#123",
-            SK: "Address",
+            SK: "Home",
             Id: "002",
             Type: "BelongsToLink",
-            ForeignEntityType: "Address",
+            ForeignEntityType: "Home",
             ForeignKey: "222",
             CreatedAt: "2021-10-15T09:31:15.148Z",
             UpdatedAt: "2022-10-15T09:31:15.148Z"
@@ -708,7 +740,7 @@ describe("Delete", () => {
             "ConditionalCheckFailed: Failed to remove foreign key attribute from Pet with Id: 111"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Failed to remove foreign key attribute from Address with Id: 222"
+            "ConditionalCheckFailed: Failed to remove foreign key attribute from Home with Id: 222"
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -758,14 +790,14 @@ describe("Delete", () => {
                   // Delete BelongsToLink for HasOne
                   Delete: {
                     TableName: "mock-table",
-                    Key: { PK: "Person#123", SK: "Address" }
+                    Key: { PK: "Person#123", SK: "Home" }
                   }
                 },
                 {
                   // Remove ForeignKey id for HasOne link
                   Update: {
                     TableName: "mock-table",
-                    Key: { PK: "Address#222", SK: "Address" },
+                    Key: { PK: "Home#222", SK: "Home" },
                     ExpressionAttributeNames: { "#PersonId": "PersonId" },
                     UpdateExpression: "REMOVE #PersonId"
                   }
@@ -775,6 +807,147 @@ describe("Delete", () => {
           ]
         ]);
       }
+    });
+
+    it("will throw NullConstraintViolationError error if its trying to unlink a HasMany association (nullify the foreign key) on a related entity that is linked by a NullableForeignKey", async () => {
+      expect.assertions(7);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "PhoneBook#123",
+            SK: "PhoneBook",
+            Id: "123",
+            Type: "PhoneBook",
+            State: "CO",
+            CreatedAt: "2021-10-15T08:31:15.148Z",
+            UpdatedAt: "2022-10-15T08:31:15.148Z"
+          },
+          // HasOne Address
+          {
+            PK: "PhoneBook#123",
+            SK: "Address",
+            Id: "002",
+            Type: "BelongsToLink",
+            ForeignEntityType: "Address",
+            ForeignKey: "123",
+            CreatedAt: "2021-10-15T09:31:15.148Z",
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
+          },
+          {
+            PK: "PhoneBook#123",
+            SK: "Address",
+            Id: "003",
+            Type: "BelongsToLink",
+            ForeignEntityType: "Address",
+            ForeignKey: "123",
+            CreatedAt: "2021-10-15T09:31:15.148Z",
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
+          }
+        ]
+      });
+
+      try {
+        await PhoneBook.delete("123");
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new NullConstraintViolationError(
+            `Cannot set Address with id: '002' attribute 'phoneBookId' to null`
+          ),
+          new NullConstraintViolationError(
+            `Cannot set Address with id: '003' attribute 'phoneBookId' to null`
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+        expect(mockQuery.mock.calls).toEqual([[]]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              ExpressionAttributeNames: {
+                "#PK": "PK"
+              },
+              ExpressionAttributeValues: {
+                ":PK1": "PhoneBook#123"
+              },
+              KeyConditionExpression: "#PK = :PK1",
+              TableName: "mock-table"
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it.skip("TODO should haandle this, its the opposite of the test above", () => {
+      // TODO What to do here? The Phonebook has address as not nullable... do I need to catch this via a validation?
+      //      If so I need to enforce it via types
+      // await Address.delete("123")
+    });
+
+    it("will throw NullConstraintViolationError error if its trying to unlink a HasOne association (nullify the foreign key) on a related entity that is linked by a NullableForeignKey", async () => {
+      expect.assertions(7);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "Home#123",
+            SK: "Home",
+            Id: "123",
+            Type: "Home",
+            State: "CO",
+            CreatedAt: "2021-10-15T08:31:15.148Z",
+            UpdatedAt: "2022-10-15T08:31:15.148Z"
+          },
+          // HasOne Address
+          {
+            PK: "Home#123",
+            SK: "Address",
+            Id: "002",
+            Type: "BelongsToLink",
+            ForeignEntityType: "Address",
+            ForeignKey: "123",
+            CreatedAt: "2021-10-15T09:31:15.148Z",
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
+          }
+        ]
+      });
+
+      try {
+        await Home.delete("123");
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new NullConstraintViolationError(
+            `Cannot set Address with id: '002' attribute 'homeId' to null`
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+        expect(mockQuery.mock.calls).toEqual([[]]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              ExpressionAttributeNames: {
+                "#PK": "PK"
+              },
+              ExpressionAttributeValues: {
+                ":PK1": "Home#123"
+              },
+              KeyConditionExpression: "#PK = :PK1",
+              TableName: "mock-table"
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    // What if the attribute on the other side is set as not optional?
+    it.skip("TODO should allow entities to be deleted", () => {
+      // await Address.delete("")
+      // Deleting an address should be ok ... right?
     });
 
     it("will throw an error if it fails to delete BelongsToLinks in its own partition", async () => {
@@ -802,13 +975,13 @@ describe("Delete", () => {
             CreatedAt: "2021-10-15T09:31:15.148Z",
             UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
-          // HasOne address
+          // HasOne Home
           {
             PK: "Person#123",
-            SK: "Address",
+            SK: "Home",
             Id: "002",
             Type: "BelongsToLink",
-            ForeignEntityType: "Address",
+            ForeignEntityType: "Home",
             ForeignKey: "222",
             CreatedAt: "2021-10-15T09:31:15.148Z",
             UpdatedAt: "2022-10-15T09:31:15.148Z"
@@ -840,7 +1013,7 @@ describe("Delete", () => {
             'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Pet#111"}'
           ),
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Address"}'
+            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Home"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -890,14 +1063,14 @@ describe("Delete", () => {
                   // Delete BelongsToLink for HasOne
                   Delete: {
                     TableName: "mock-table",
-                    Key: { PK: "Person#123", SK: "Address" }
+                    Key: { PK: "Person#123", SK: "Home" }
                   }
                 },
                 {
                   // Remove ForeignKey id for HasOne link
                   Update: {
                     TableName: "mock-table",
-                    Key: { PK: "Address#222", SK: "Address" },
+                    Key: { PK: "Home#222", SK: "Home" },
                     ExpressionAttributeNames: { "#PersonId": "PersonId" },
                     UpdateExpression: "REMOVE #PersonId"
                   }

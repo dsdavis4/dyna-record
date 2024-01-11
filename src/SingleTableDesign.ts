@@ -23,6 +23,7 @@ import {
 
 // TODO "type" key might be too generic
 // TODO Make sure that these values are not repeated in other files, without using this type
+
 /**
  * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
  */
@@ -100,7 +101,7 @@ abstract class SingleTableDesign {
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
-    return op.run(key, options);
+    return await op.run(key, options);
   }
 
   /**
@@ -113,7 +114,7 @@ abstract class SingleTableDesign {
     attributes: CreateOptions<T>
   ): Promise<T> {
     const op = new Create<T>(this);
-    return op.run(attributes);
+    return await op.run(attributes);
   }
 
   /**

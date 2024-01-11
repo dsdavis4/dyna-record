@@ -2,12 +2,14 @@ import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import DynamoClient from "../DynamoClient";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 
+// TODO shouyld this move to errors class?
 export class ConditionalCheckFailedError extends Error {
   public readonly code: "ConditionalCheckFailedError";
 }
 
 type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
 
+// TODO move these to a types class with similiar pattern to how I did for Operation classes
 export type ConditionCheck = NonNullable<
   TransactItems[number]["ConditionCheck"]
 >;

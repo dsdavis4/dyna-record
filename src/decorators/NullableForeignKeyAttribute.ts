@@ -29,7 +29,8 @@ function NullableForeignKeyAttribute<T>(
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          alias: props.alias,
+          nullable: true
         });
       });
     }

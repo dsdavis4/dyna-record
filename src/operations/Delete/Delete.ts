@@ -1,6 +1,10 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
-import { type BelongsToRelationship, type EntityClass } from "../../metadata";
+import { NullConstraintViolationError } from "../../errors";
+import Metadata, {
+  type BelongsToRelationship,
+  type EntityClass
+} from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
@@ -14,6 +18,8 @@ import type { RelationshipLookup } from "../types";
 import { expressionBuilder } from "../utils";
 
 // TODO move types to their own file like I did for other operation classes
+
+// TODO this should move to shared place
 
 interface DeleteOptions {
   errorMessage: string;
@@ -58,6 +64,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
   readonly #belongsToRelationships: BelongsToRelationship[];
+  // readonly #attributesLookup: AttributeLookup;
+  readonly #validationErrors: Error[] = [];
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
@@ -85,6 +93,13 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       },
       { relationsLookup: {}, belongsToRelationships: [] }
     );
+
+    // this.#attributesLookup = Object.values(
+    //   this.entityMetadata.attributes
+    // ).reduce<AttributeLookup>((acc, rel) => {
+    //   acc[rel.name] = rel;
+    //   return acc;
+    // }, {});
 
     this.#relationsLookup = relationsObj.relationsLookup;
     this.#belongsToRelationships = relationsObj.belongsToRelationships;
@@ -125,7 +140,11 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       }
     }
 
-    await this.#transactionBuilder.executeTransaction();
+    if (this.#validationErrors.length === 0) {
+      await this.#transactionBuilder.executeTransaction();
+    } else {
+      throw new AggregateError(this.#validationErrors, "Failed Validations");
+    }
   }
 
   /**
@@ -153,12 +172,32 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     );
   }
 
+  // TODO I need to do the same thing on update... Maybe via the update method
   /**
    * Nullify the associated relationship's ForeignKey attribute TODO add details about how it handles non nullable
    * @param item
    */
   private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
+    const entityMeta = Metadata.getEntity(relMeta.target.name);
+    // const attrMeta = this.#attributesLookup[relMeta.foreignKey];
+
+    const attrMeta = Object.values(entityMeta.attributes).find(
+      attr => attr.name === relMeta.foreignKey
+    );
+
+    if (attrMeta?.nullable === false) {
+      // TODO is this a good error case? I am not actually setting to null. Maybe I need to serialize nullable attributes as null?
+      // TODO this should for for belongs to links for HasMany and HasOne
+      //       Add a unit test for HasMany and HasOne
+      //       There should be one in a HasMany that has nullable attributes
+
+      this.trackValidationError(
+        new NullConstraintViolationError(
+          `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
+        )
+      );
+    }
 
     const tableKeys = entityToTableItem(this.EntityClass.name, {
       [this.#primaryKeyField]: relMeta.target.primaryKeyValue(item.foreignKey),
@@ -170,6 +209,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
 
     const expression = expressionBuilder(tableAttrs, "REMOVE");
 
+    // TODO maybe I should call the entities update method... Then I can work the nullable checks in there...
+    //  do that ^ but first add support for setting attributes to null
     this.#transactionBuilder.addUpdate(
       {
         TableName: this.#tableName,
@@ -254,6 +295,11 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
 
   private isEntityClass(item: any): item is typeof this.EntityClass {
     return item instanceof this.EntityClass;
+  }
+
+  // TODO tsdoc
+  private trackValidationError(err: Error): void {
+    this.#validationErrors.push(err);
   }
 }
 

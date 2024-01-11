@@ -20,7 +20,8 @@ function ForeignKeyAttribute<T>(props: ForeignKeyAttributeProps) {
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          alias: props.alias,
+          nullable: false
         });
       });
     }

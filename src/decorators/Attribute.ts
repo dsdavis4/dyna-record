@@ -28,7 +28,9 @@ function Attribute<T, K>(props: AttributeProps) {
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          alias: props.alias,
+          // TODO should support and enforce nullable properties. This is currently ignored. Check how I did for nullable foreign key attributes
+          nullable: false
         });
       });
     }

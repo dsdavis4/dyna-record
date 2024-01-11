@@ -162,11 +162,11 @@ class Process extends DrewsBrewsTable {
   // 5. this should be allowed to be denoted as optional
   // 6 this decorator should require NullableForeignKey and error if type is ForeignKey
 
-  @NullableForeignKeyAttribute({ alias: "ScaleId" })
-  public scaleId?: NullableForeignKey;
+  @ForeignKeyAttribute({ alias: "ScaleId" })
+  public scaleId: ForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
-  public scale?: Scale;
+  public scale: Scale;
 }
 
 @Entity
@@ -226,60 +226,77 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
 
+// TODO... start here. Work on implementing nullable checks in the delete method
+
 (async () => {
   try {
     const metadata = Metadata;
 
-    const bla = await Brewery.create({ name: "test delete" });
+    // const bla = await Brewery.create({ name: "test delete" });
 
-    const beer = await Beer.create({
-      name: "bla",
-      abv: 1,
-      style: "testing",
-      breweryId: bla.id
-    });
+    // const beer = await Beer.create({
+    //   name: "bla",
+    //   abv: 1,
+    //   style: "testing",
+    //   breweryId: bla.id
+    // });
 
-    const room2222 = await Room.create({ name: "my room", breweryId: bla.id });
+    // const room2222 = await Room.create({ name: "my room", breweryId: bla.id });
 
-    const scale = await Scale.create({
-      breweryId: bla.id,
-      roomId: room2222.id
-    });
+    // const scale = await Scale.create({
+    //   breweryId: bla.id,
+    //   roomId: room2222.id
+    // });
 
-    const process = await Process.create({
-      name: "test process",
-      // scaleId: undefined,
-      scaleId: scale.id,
-      currentUserInput: "",
-      currentState: "",
-      currentStateStatus: ""
-    });
+    // const process = await Process.create({
+    //   name: "test process",
+    //   // scaleId: undefined,
+    //   scaleId: scale.id,
+    //   currentUserInput: "",
+    //   currentState: "",
+    //   currentStateStatus: ""
+    // });
 
-    await Process.update(process.id, {
-      currentUserInput: "11",
-      scaleId: undefined
-    });
+    debugger;
+
+    // const process = await Process.findById(
+    //   "0f07cf1b-2c2c-4b8d-a446-2e921003ab1f",
+    //   { include: [{ association: "scale" }] }
+    // );
+
+    // await Process.delete("0f07cf1b-2c2c-4b8d-a446-2e921003ab1f");
+
+    // TODO I need this to fail if the process is not deleted first
+    //     So that the process is
+    await Scale.delete("1cbeb7d5-d291-4e18-95ca-8f1caaa7742c");
+
+    debugger;
+
+    // await Process.update(process.id, {
+    //   currentUserInput: "11",
+    //   // scaleId: undefined
+    // });
 
     // await Beer.update("123", {
     //   name: "bla"
     //   // breweryId: undefined
     // });
 
-    process.scaleId = undefined;
+    // process.scaleId = undefined;
 
-    await Process.delete(process.id);
+    // await Process.delete(process.id);
 
-    debugger;
+    // debugger;
 
-    await Scale.delete(scale.id);
+    // await Scale.delete(scale.id);
 
-    debugger;
+    // debugger;
 
-    await Beer.delete(beer.id);
+    // await Beer.delete(beer.id);
 
-    debugger;
+    // debugger;
 
-    await Brewery.delete(bla.id);
+    // await Brewery.delete(bla.id);
 
     debugger;
 

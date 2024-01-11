@@ -1,8 +1,7 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import type { DefaultFields } from "../SingleTableDesign";
-import type { RelationshipMetadata } from "../metadata";
+import type { AttributeMetadata, RelationshipMetadata } from "../metadata";
 import type {
-  Brand,
   ForeignKey,
   NullableForeignKey,
   Optional,
@@ -75,6 +74,12 @@ export type EntityDefinedAttributes<T extends SingleTableDesign> = Omit<
 >;
 
 /**
- * Object to lookup up Relationship metadata by entity name
+ * Object to lookup up Relationship metadata by related entity name (As defined by property key for the relationship)
  */
 export type RelationshipLookup = Record<string, RelationshipMetadata>;
+
+// TODO delete if not used
+/**
+ * Object to lookup up Attribute metadata by name (As defined by property key)
+ */
+export type AttributeLookup = Record<string, AttributeMetadata>;
