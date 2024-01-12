@@ -1,16 +1,7 @@
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { MockTable } from "./mockModels";
-import {
-  Attribute,
-  ForeignKeyAttribute,
-  BelongsTo,
-  Entity,
-  HasMany,
-  HasOne,
-  NullableForeignKeyAttribute
-} from "../../src/decorators";
+import { MockTable, Person, Pet, Home, PhoneBook } from "./mockModels";
+import { Attribute, Entity } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { NullConstraintViolationError } from "../../src/errors";
 
@@ -21,72 +12,6 @@ const mockSend = jest.fn();
 const mockQuery = jest.fn();
 const mockDelete = jest.fn();
 const mockTransact = jest.fn();
-
-@Entity
-class Person extends MockTable {
-  @Attribute({ alias: "Name" })
-  public name: string;
-
-  @HasMany(() => Pet, { foreignKey: "ownerId" })
-  public pets: Pet[];
-
-  @HasOne(() => Home, { foreignKey: "personId" })
-  public home: Home;
-}
-
-@Entity
-class Pet extends MockTable {
-  @Attribute({ alias: "Name" })
-  public name: string;
-
-  @NullableForeignKeyAttribute({ alias: "OwnerId" })
-  public ownerId?: NullableForeignKey;
-
-  @BelongsTo(() => Person, { foreignKey: "ownerId" })
-  public owner?: Person;
-}
-
-@Entity
-class Home extends MockTable {
-  @Attribute({ alias: "MLS#" })
-  public mlsNum: string;
-
-  @NullableForeignKeyAttribute({ alias: "PersonId" })
-  public personId?: NullableForeignKey;
-
-  @BelongsTo(() => Person, { foreignKey: "personId" })
-  public person?: Person;
-
-  @HasOne(() => Address, { foreignKey: "homeId" })
-  public address: Address; // TODO if this is optional then it should not be able to be set to null...
-}
-
-@Entity
-class Address extends MockTable {
-  @Attribute({ alias: "State" })
-  public state: string;
-
-  @ForeignKeyAttribute({ alias: "HomeId" })
-  public homeId: ForeignKey;
-
-  @BelongsTo(() => Home, { foreignKey: "homeId" })
-  public home: Home;
-
-  @ForeignKeyAttribute({ alias: "PhoneBookId" })
-  public phoneBookId: ForeignKey;
-
-  @BelongsTo(() => PhoneBook, { foreignKey: "phoneBookId" })
-  public phoneBook: PhoneBook;
-}
-
-@Entity
-class PhoneBook extends MockTable {
-  @Attribute({ alias: "Edition" })
-  public edition: string;
-
-  @HasMany(() => Address, { foreignKey: "phoneBookId" })
-  public address: Address[];
-}
 
 @Entity
 class MockModel extends MockTable {
@@ -880,12 +805,6 @@ describe("Delete", () => {
       }
     });
 
-    it.skip("TODO should haandle this, its the opposite of the test above", () => {
-      // TODO What to do here? The Phonebook has address as not nullable... do I need to catch this via a validation?
-      //      If so I need to enforce it via types
-      // await Address.delete("123")
-    });
-
     it("will throw NullConstraintViolationError error if its trying to unlink a HasOne association (nullify the foreign key) on a related entity that is linked by a NullableForeignKey", async () => {
       expect.assertions(7);
 
@@ -942,12 +861,6 @@ describe("Delete", () => {
         expect(mockTransact.mock.calls).toEqual([]);
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       }
-    });
-
-    // What if the attribute on the other side is set as not optional?
-    it.skip("TODO should allow entities to be deleted", () => {
-      // await Address.delete("")
-      // Deleting an address should be ok ... right?
     });
 
     it("will throw an error if it fails to delete BelongsToLinks in its own partition", async () => {

@@ -4,7 +4,8 @@ import {
   Customer,
   MockTable,
   Order,
-  PaymentMethod
+  PaymentMethod,
+  Pet
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -15,7 +16,8 @@ import {
   BelongsTo,
   Entity,
   HasMany,
-  HasOne
+  HasOne,
+  NullableAttribute
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
 
@@ -69,6 +71,12 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+@Entity
+class MyModelNullableAttribute extends MockTable {
+  @NullableAttribute({ alias: "MyAttribute" })
+  public myAttribute?: string;
+}
 
 // TODO add types test, similiar to create but with optional properties
 describe("Update", () => {
@@ -129,6 +137,50 @@ describe("Update", () => {
     ]);
   });
 
+  it("will update an entity and remove attributes", async () => {
+    expect.assertions(6);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+      await ContactInformation.update("123", {
+        email: "new@example.com",
+        phone: null
+      })
+    ).toBeUndefined();
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#Email": "Email",
+                  "#Phone": "Phone",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Email": "new@example.com",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                },
+                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
     describe("when the entity does not already belong to another entity", () => {
       beforeEach(() => {
@@ -144,6 +196,10 @@ describe("Update", () => {
             CustomerId: undefined // Does not already belong to customer
           }
         });
+      });
+
+      afterEach(() => {
+        mockedUuidv4.mockReset();
       });
 
       it("will update the foreign key if the entity being associated with exists", async () => {
@@ -431,6 +487,62 @@ describe("Update", () => {
           ]);
         }
       });
+
+      it("will remove a nullable foreign key", async () => {
+        expect.assertions(6);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await ContactInformation.update("123", {
+            email: "new-email@example.com",
+            customerId: null
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "GetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockGet.mock.calls).toEqual([[]]);
+        expect(mockedGetCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "ContactInformation#123",
+                      SK: "ContactInformation"
+                    },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeValues: {
+                      ":Email": "new-email@example.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    ExpressionAttributeNames: {
+                      "#Email": "Email",
+                      "#UpdatedAt": "UpdatedAt",
+                      "#CustomerId": "CustomerId"
+                    },
+                    UpdateExpression:
+                      "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
     });
 
     describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
@@ -447,6 +559,10 @@ describe("Update", () => {
             CustomerId: "789" // Already belongs to customer
           }
         });
+      });
+
+      afterEach(() => {
+        mockedUuidv4.mockReset();
       });
 
       it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
@@ -886,6 +1002,68 @@ describe("Update", () => {
           ]);
         }
       });
+
+      it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
+        expect.assertions(6);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await ContactInformation.update("123", {
+            email: "new-email@example.com",
+            customerId: null
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "GetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockGet.mock.calls).toEqual([[]]);
+        expect(mockedGetCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "ContactInformation#123",
+                      SK: "ContactInformation"
+                    },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeValues: {
+                      ":Email": "new-email@example.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    ExpressionAttributeNames: {
+                      "#Email": "Email",
+                      "#UpdatedAt": "UpdatedAt",
+                      "#CustomerId": "CustomerId"
+                    },
+                    UpdateExpression:
+                      "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Customer#789", SK: "ContactInformation" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
     });
   });
 
@@ -903,6 +1081,10 @@ describe("Update", () => {
             CustomerId: undefined // Does not already belong to customer
           }
         });
+      });
+
+      afterEach(() => {
+        mockedUuidv4.mockReset();
       });
 
       it("will update the foreign key if the entity being associated with exists", async () => {
@@ -1174,6 +1356,69 @@ describe("Update", () => {
           ]);
         }
       });
+
+      it("will remove a nullable foreign key", async () => {
+        expect.assertions(6);
+
+        mockGet.mockResolvedValueOnce({
+          Item: {
+            PK: "Pet#123",
+            SK: "Pet",
+            Id: "123",
+            name: "Fido",
+            OwnerId: undefined // Does not already belong an owner
+          }
+        });
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Pet.update("123", {
+            name: "New Name",
+            ownerId: null
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "GetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockGet.mock.calls).toEqual([[]]);
+        expect(mockedGetCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              Key: { PK: "Pet#123", SK: "Pet" },
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Pet#123", SK: "Pet" },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#OwnerId": "OwnerId",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "New Name",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
     });
 
     describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
@@ -1189,6 +1434,10 @@ describe("Update", () => {
             CustomerId: "789" // Already belongs to customer
           }
         });
+      });
+
+      afterEach(() => {
+        mockedUuidv4.mockReset();
       });
 
       it("will update the foreign key if the entity being associated with exists", async () => {
@@ -1601,6 +1850,75 @@ describe("Update", () => {
           ]);
         }
       });
+
+      it("will remove a nullable foreign key and delete the associated BelongsToLinks", async () => {
+        expect.assertions(6);
+
+        mockGet.mockResolvedValueOnce({
+          Item: {
+            PK: "Pet#123",
+            SK: "Pet",
+            Id: "123",
+            name: "Fido",
+            OwnerId: "456" // Does not already belong an owner
+          }
+        });
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Pet.update("123", {
+            name: "New Name",
+            ownerId: null
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "GetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockGet.mock.calls).toEqual([[]]);
+        expect(mockedGetCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              Key: { PK: "Pet#123", SK: "Pet" },
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Pet#123", SK: "Pet" },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#OwnerId": "OwnerId",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "New Name",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#456", SK: "Pet#123" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
     });
   });
 
@@ -1831,6 +2149,20 @@ describe("Update", () => {
         paymentMethodId: "123",
         // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
         customerId: "456"
+      });
+    });
+
+    it("will not allow non nullable attributes to be removed (set to null)", async () => {
+      await Order.update("123", {
+        // @ts-expect-error non-nullable fields cannot be removed (set to null)
+        paymentMethodId: null
+      });
+    });
+
+    it("will allow nullable attributes to be removed (set to null)", async () => {
+      await MyModelNullableAttribute.update("123", {
+        // @ts-expect-no-error non-nullable fields can be removed (set to null)
+        myAttribute: null
       });
     });
   });

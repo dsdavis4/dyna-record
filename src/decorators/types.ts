@@ -13,19 +13,6 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
     : never;
 }[keyof EntityAttributes<T>];
 
-// type Optional<T> = T | undefined;
-// // type NotOptional<T> = NonNullable<T>;
-
-// class MyClass {
-//   val1: Optional<string>;
-//   val2: string; // TODO find out how to enforce this.... EX: if this is optional it shoudl error
-// }
-
-// const instance = new MyClass();
-// instance.val1 = "bla";
-// instance.val1 = undefined; // good....
-// // instance.val3 = "blaaa";
-
-// instance.val2 = "bla";
-// instance.val2 = undefined; // good....
-// // instance.val3 = undefined;
+export interface AttributeProps {
+  alias: string;
+}

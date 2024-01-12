@@ -94,6 +94,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       { relationsLookup: {}, belongsToRelationships: [] }
     );
 
+    // TODO delete this...
     // this.#attributesLookup = Object.values(
     //   this.entityMetadata.attributes
     // ).reduce<AttributeLookup>((acc, rel) => {
@@ -207,15 +208,14 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       [relMeta.foreignKey]: null
     });
 
-    const expression = expressionBuilder(tableAttrs, "REMOVE");
+    const expression = expressionBuilder(tableAttrs);
 
-    // TODO maybe I should call the entities update method... Then I can work the nullable checks in there...
-    //  do that ^ but first add support for setting attributes to null
     this.#transactionBuilder.addUpdate(
       {
         TableName: this.#tableName,
         Key: tableKeys,
-        ...expression
+        UpdateExpression: expression.UpdateExpression,
+        ExpressionAttributeNames: expression.ExpressionAttributeNames
         // TODO is this meeded
         // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },

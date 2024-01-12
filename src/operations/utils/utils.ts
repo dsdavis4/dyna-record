@@ -5,7 +5,13 @@ import type {
   UpdateRemoveExpression
 } from "./types";
 
-type Action = "SET" | "REMOVE";
+/**
+ * Sorted attributes by operand
+ */
+interface AttributesByOperand {
+  remove: DynamoTableItem;
+  set: DynamoTableItem;
+}
 
 /**
  * Builds a dynamo expression given the table attributes
@@ -13,18 +19,59 @@ type Action = "SET" | "REMOVE";
  * @returns
  */
 export const expressionBuilder = (
-  tableAttrs: DynamoTableItem,
-  action: Action = "SET"
+  tableAttrs: DynamoTableItem
 ): UpdateExpression => {
-  return action === "SET"
-    ? buildUpdateSetExpression(tableAttrs)
-    : buildUpdateRemoveExpression(tableAttrs);
+  const sorted = sortAttributesByOperand(tableAttrs);
+
+  const setExpression = buildUpdateSetExpression(sorted.set);
+  const removeExpression = buildUpdateRemoveExpression(sorted.remove);
+
+  const hasSetOperation =
+    Object.keys(setExpression.ExpressionAttributeValues).length > 0;
+
+  return {
+    // If the operation has only REMOVE actions, it will not have expression attribute values
+    ExpressionAttributeValues: hasSetOperation
+      ? setExpression.ExpressionAttributeValues
+      : undefined,
+    ExpressionAttributeNames: {
+      ...setExpression.ExpressionAttributeNames,
+      ...removeExpression.ExpressionAttributeNames
+    },
+    UpdateExpression: [
+      setExpression.UpdateExpression,
+      removeExpression.UpdateExpression
+    ]
+      .filter(expr => expr)
+      .join(" ")
+  };
+};
+
+const sortAttributesByOperand = (
+  tableAttrs: DynamoTableItem
+): AttributesByOperand => {
+  return Object.entries(tableAttrs).reduce<AttributesByOperand>(
+    (acc, [key, value]) => {
+      const isRemovingAttr = value === null;
+      if (isRemovingAttr) {
+        acc.remove[key] = value;
+      } else {
+        acc.set[key] = value;
+      }
+      return acc;
+    },
+    {
+      remove: {},
+      set: {}
+    }
+  );
 };
 
 const buildUpdateSetExpression = (
   tableAttrs: DynamoTableItem
 ): UpdateSetExpression => {
   const entries = Object.entries(tableAttrs);
+  const action = "SET";
   return entries.reduce<UpdateSetExpression>(
     (acc, [key, val], idx) => {
       const attrName = `#${key}`;
@@ -36,6 +83,9 @@ const buildUpdateSetExpression = (
       acc.ExpressionAttributeValues[attrVal] = val;
       acc.UpdateExpression = acc.UpdateExpression.concat(expression);
 
+      // For the first element, add the operand
+      if (idx === 0) acc.UpdateExpression = `${action}${acc.UpdateExpression}`;
+
       if (idx === entries.length - 1) {
         // Remove trailing comma from the expression
         acc.UpdateExpression = acc.UpdateExpression.slice(0, -1);
@@ -46,7 +96,7 @@ const buildUpdateSetExpression = (
     {
       ExpressionAttributeNames: {},
       ExpressionAttributeValues: {},
-      UpdateExpression: "SET"
+      UpdateExpression: ""
     }
   );
 };
@@ -56,6 +106,7 @@ const buildUpdateRemoveExpression = (
   tableAttrs: DynamoTableItem
 ): UpdateRemoveExpression => {
   const entries = Object.entries(tableAttrs);
+  const action = "REMOVE";
   return entries.reduce<UpdateRemoveExpression>(
     (acc, [key], idx) => {
       const attrName = `#${key}`;
@@ -64,6 +115,9 @@ const buildUpdateRemoveExpression = (
 
       acc.ExpressionAttributeNames[attrName] = key;
       acc.UpdateExpression = acc.UpdateExpression.concat(expression);
+
+      // For the first element, add the operand
+      if (idx === 0) acc.UpdateExpression = `${action}${acc.UpdateExpression}`;
 
       if (idx === entries.length - 1) {
         // Remove trailing comma from the expression
@@ -74,7 +128,7 @@ const buildUpdateRemoveExpression = (
     },
     {
       ExpressionAttributeNames: {},
-      UpdateExpression: "REMOVE"
+      UpdateExpression: ""
     }
   );
 };

@@ -9,7 +9,8 @@ import {
   HasMany,
   BelongsTo,
   HasOne,
-  NullableForeignKeyAttribute
+  NullableForeignKeyAttribute,
+  NullableAttribute
 } from "../../src/decorators";
 import type {
   PrimaryKey,
@@ -105,8 +106,8 @@ class ContactInformation extends MockTable {
   @Attribute({ alias: "Email" })
   public email: string;
 
-  @Attribute({ alias: "Phone" })
-  public phone: string;
+  @NullableAttribute({ alias: "Phone" })
+  public phone?: string;
 
   @NullableForeignKeyAttribute({ alias: "CustomerId" })
   public customerId: NullableForeignKey;
@@ -115,11 +116,82 @@ class ContactInformation extends MockTable {
   public customer: Customer;
 }
 
+@Entity
+class Person extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @HasMany(() => Pet, { foreignKey: "ownerId" })
+  public pets: Pet[];
+
+  @HasOne(() => Home, { foreignKey: "personId" })
+  public home: Home;
+}
+
+@Entity
+class Pet extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @NullableForeignKeyAttribute({ alias: "OwnerId" })
+  public ownerId?: NullableForeignKey;
+
+  @BelongsTo(() => Person, { foreignKey: "ownerId" })
+  public owner?: Person;
+}
+
+@Entity
+class Home extends MockTable {
+  @Attribute({ alias: "MLS#" })
+  public mlsNum: string;
+
+  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  public personId?: NullableForeignKey;
+
+  @BelongsTo(() => Person, { foreignKey: "personId" })
+  public person?: Person;
+
+  @HasOne(() => Address, { foreignKey: "homeId" })
+  public address: Address;
+}
+
+@Entity
+class Address extends MockTable {
+  @Attribute({ alias: "State" })
+  public state: string;
+
+  @ForeignKeyAttribute({ alias: "HomeId" })
+  public homeId: ForeignKey;
+
+  @BelongsTo(() => Home, { foreignKey: "homeId" })
+  public home: Home;
+
+  @ForeignKeyAttribute({ alias: "PhoneBookId" })
+  public phoneBookId: ForeignKey;
+
+  @BelongsTo(() => PhoneBook, { foreignKey: "phoneBookId" })
+  public phoneBook: PhoneBook;
+}
+
+@Entity
+class PhoneBook extends MockTable {
+  @Attribute({ alias: "Edition" })
+  public edition: string;
+
+  @HasMany(() => Address, { foreignKey: "phoneBookId" })
+  public address: Address[];
+}
+
 export {
   MockTable,
   Order,
   PaymentMethodProvider,
   PaymentMethod,
   Customer,
-  ContactInformation
+  ContactInformation,
+  Person,
+  Pet,
+  Home,
+  Address,
+  PhoneBook
 };

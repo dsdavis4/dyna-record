@@ -9,7 +9,8 @@ import {
   HasMany,
   BelongsTo,
   HasOne,
-  NullableForeignKeyAttribute
+  NullableForeignKeyAttribute,
+  NullableAttribute
 } from "../src/decorators";
 
 import {
@@ -100,6 +101,10 @@ class Beer extends DrewsBrewsTable {
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
+
+  // TODO should this be inveresed to that it belongsTo keg and keg HasOne Beer
+  @HasOne(() => Keg, { foreignKey: "beerId" })
+  public keg?: Keg;
 }
 
 @Entity
@@ -115,6 +120,9 @@ class Brewery extends DrewsBrewsTable {
 
   @HasMany(() => Room, { foreignKey: "breweryId" })
   public rooms: Room[];
+
+  @HasMany(() => Keg, { foreignKey: "breweryId" })
+  public kegs: Keg[];
 
   public testing() {
     return "hi";
@@ -134,6 +142,9 @@ class Room extends DrewsBrewsTable {
 
   @HasMany(() => Scale, { foreignKey: "roomId" })
   public scales: Scale[];
+
+  @HasMany(() => Keg, { foreignKey: "roomId" })
+  public kegs: Keg[];
 }
 
 @Entity
@@ -147,20 +158,8 @@ class Process extends DrewsBrewsTable {
   @Attribute({ alias: "CurrentStateStatus" })
   public currentStateStatus: string;
 
-  @Attribute({ alias: "CurrentUserInput" })
-  public currentUserInput: string;
-
-  // I might have made a break through... see error below in this file. Is it working right?
-  // what if I focused on null instead of undefined...
-  // A couple things wrong here...
-  // 1. Why does this have an error if I make it optional
-  //     - See line 19 of NullableForeignKeyAttribute... its commented out, will this help?
-  // 2. When i try to access the instance.scaleId it should know its optional
-  // 3. There is an error below, I think I saw this before with ForeignKey
-  //    - Look into how I solved this for foreign key..
-  // 4. did my change to "type ForeignEntityAttribute" work as expected?
-  // 5. this should be allowed to be denoted as optional
-  // 6 this decorator should require NullableForeignKey and error if type is ForeignKey
+  @NullableAttribute({ alias: "CurrentUserInput" })
+  public currentUserInput?: string;
 
   @ForeignKeyAttribute({ alias: "ScaleId" })
   public scaleId: ForeignKey;
@@ -189,6 +188,33 @@ class WsToken extends DrewsBrewsTable {
       (wsToken): wsToken is WsToken => wsToken instanceof WsToken
     );
   }
+}
+
+@Entity
+class Keg extends DrewsBrewsTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "Status" })
+  public status: string;
+
+  @ForeignKeyAttribute({ alias: "BreweryId" })
+  public breweryId: ForeignKey;
+
+  @ForeignKeyAttribute({ alias: "RoomId" })
+  public roomId: ForeignKey;
+
+  @NullableForeignKeyAttribute({ alias: "BeerId" })
+  public beerId?: NullableForeignKey;
+
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
+  public brewery: Brewery;
+
+  @BelongsTo(() => Room, { foreignKey: "roomId" })
+  public room: Room;
+
+  @BelongsTo(() => Beer, { foreignKey: "beerId" })
+  public beer: Beer;
 }
 
 // TODO should I make a types file for types where there a ton in each file?
@@ -232,6 +258,40 @@ class WsToken extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    // debugger;
+
+    // await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", { beerId: null });
+
+    debugger;
+
+    // const keg = await Keg.findById("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
+    //   include: [{ association: "beer" }]
+    // });
+
+    // // debugger;
+
+    // // await Keg.update(keg?.id!, {
+    // //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
+    // // });
+
+    // debugger;
+
+    // const beer = await Beer.findById("1da63136-13fe-4435-b590-313ff1cbd587", {
+    //   include: [{ association: "keg" }]
+    // });
+
+    debugger;
+
+    await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
+      name: "testing 12345",
+      beerId: null
+      // breweryId: null
+    });
+
+    debugger;
+
+    // await Keg.create({ beerId: "12" });
+
     // const bla = await Brewery.create({ name: "test delete" });
 
     // const beer = await Beer.create({
@@ -257,7 +317,11 @@ class WsToken extends DrewsBrewsTable {
     //   currentStateStatus: ""
     // });
 
-    debugger;
+    await Process.update("0f07cf1b-2c2c-4b8d-a446-2e921003ab1f", {
+      currentState: "2",
+      currentUserInput: null
+      // scaleId: undefined
+    });
 
     // const process = await Process.findById(
     //   "0f07cf1b-2c2c-4b8d-a446-2e921003ab1f",
@@ -268,14 +332,9 @@ class WsToken extends DrewsBrewsTable {
 
     // TODO I need this to fail if the process is not deleted first
     //     So that the process is
-    await Scale.delete("1cbeb7d5-d291-4e18-95ca-8f1caaa7742c");
+    // await Scale.delete("1cbeb7d5-d291-4e18-95ca-8f1caaa7742c");
 
     debugger;
-
-    // await Process.update(process.id, {
-    //   currentUserInput: "11",
-    //   // scaleId: undefined
-    // });
 
     // await Beer.update("123", {
     //   name: "bla"

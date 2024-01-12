@@ -14,6 +14,7 @@ import {
   BelongsTo,
   Entity,
   HasOne,
+  NullableAttribute,
   NullableForeignKeyAttribute
 } from "../../src/decorators";
 import type { NullableForeignKey } from "../../src/types";
@@ -62,6 +63,12 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+@Entity
+class MyModelNullableAttribute extends MockTable {
+  @NullableAttribute({ alias: "MyAttribute" })
+  public myAttribute?: string;
+}
 
 // TODO add test for creating entity without relationships
 describe("Create", () => {
@@ -532,7 +539,7 @@ describe("Create", () => {
         @Attribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
-        @Attribute({ alias: "MyAttribute2" })
+        @NullableAttribute({ alias: "MyAttribute2" })
         public myAttribute2?: string;
       }
 
@@ -627,6 +634,13 @@ describe("Create", () => {
       await Order.create({
         // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
         updatedAt: new Date()
+      });
+    });
+
+    it("will not allow nullable attributes to be set to null (they should be left undefined)", async () => {
+      await MyModelNullableAttribute.create({
+        // @ts-expect-error nullable fields cannot be set to null (they should be left undefined)
+        myAttribute: null
       });
     });
   });
