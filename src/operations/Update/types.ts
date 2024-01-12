@@ -23,6 +23,12 @@ type AllowNullForNullable<T> = {
 
 /**
  * Attributes of an entity to update. Not all properties are required. Setting a nullable property to null will remove the attribute from the item
+ *
+ * @example
+ * await MockModel.update("123", {
+ *   nonNullableAttr: "new val", // Sets new value
+ *   nullableAttr: null // Remove the value. This will throw a compile time error if the property is not nullable
+ * })
  */
 export type UpdateOptions<T extends SingleTableDesign> = Partial<
   AllowNullForNullable<EntityDefinedAttributes<T>>
