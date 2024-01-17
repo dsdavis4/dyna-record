@@ -260,7 +260,7 @@ class Keg extends DrewsBrewsTable {
 
     // await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", { beerId: null });
 
-    debugger;
+    // debugger;
 
     // const keg = await Keg.findById("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
     //   include: [{ association: "beer" }]
@@ -278,48 +278,47 @@ class Keg extends DrewsBrewsTable {
     //   include: [{ association: "keg" }]
     // });
 
+    // debugger;
+
+    // await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
+    //   name: "testing 12345",
+    //   beerId: null
+    //   // breweryId: null
+    // });
+
     debugger;
 
-    await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
-      name: "testing 12345",
-      beerId: null
-      // breweryId: null
+    const brewery = await Brewery.create({ name: "test delete" });
+
+    debugger;
+
+    const beer = await Beer.create({
+      name: "bla",
+      abv: 1,
+      style: "testing",
+      breweryId: brewery.id
+    });
+
+    const room2222 = await Room.create({
+      name: "my room",
+      breweryId: brewery.id
+    });
+
+    const scale = await Scale.create({
+      breweryId: brewery.id,
+      roomId: room2222.id
+    });
+
+    const process = await Process.create({
+      name: "test process",
+      // scaleId: undefined,
+      scaleId: scale.id,
+      currentUserInput: "",
+      currentState: "",
+      currentStateStatus: ""
     });
 
     debugger;
-
-    // await Keg.create({ beerId: "12" });
-
-    // const bla = await Brewery.create({ name: "test delete" });
-
-    // const beer = await Beer.create({
-    //   name: "bla",
-    //   abv: 1,
-    //   style: "testing",
-    //   breweryId: bla.id
-    // });
-
-    // const room2222 = await Room.create({ name: "my room", breweryId: bla.id });
-
-    // const scale = await Scale.create({
-    //   breweryId: bla.id,
-    //   roomId: room2222.id
-    // });
-
-    // const process = await Process.create({
-    //   name: "test process",
-    //   // scaleId: undefined,
-    //   scaleId: scale.id,
-    //   currentUserInput: "",
-    //   currentState: "",
-    //   currentStateStatus: ""
-    // });
-
-    await Process.update("0f07cf1b-2c2c-4b8d-a446-2e921003ab1f", {
-      currentState: "2",
-      currentUserInput: null
-      // scaleId: undefined
-    });
 
     // const process = await Process.findById(
     //   "0f07cf1b-2c2c-4b8d-a446-2e921003ab1f",
@@ -330,7 +329,14 @@ class Keg extends DrewsBrewsTable {
 
     // TODO I need this to fail if the process is not deleted first
     //     So that the process is
-    // await Scale.delete("1cbeb7d5-d291-4e18-95ca-8f1caaa7742c");
+
+    debugger;
+
+    await Process.delete(process.id);
+
+    debugger;
+
+    await Scale.delete(scale.id);
 
     debugger;
 
@@ -399,7 +405,7 @@ class Keg extends DrewsBrewsTable {
 
     // const rooms = await Promise,
 
-    await Brewery.delete("62fcad82-3f3c-424c-abf9-425050a1bb99");
+    await Brewery.delete(brewery.id);
 
     debugger;
 
