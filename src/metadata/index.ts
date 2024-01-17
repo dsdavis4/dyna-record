@@ -110,11 +110,7 @@ class Metadata {
    * @param entityName
    * @param tableName
    */
-  public addEntity(
-    // entityClass: typeof SingleTableDesign | typeof BelongsToLink,
-    entityClass: Entity,
-    tableClassName: string
-  ): void {
+  public addEntity(entityClass: Entity, tableClassName: string): void {
     this.entityClasses.push(entityClass);
     this.entities[entityClass.name] = {
       tableClassName,
