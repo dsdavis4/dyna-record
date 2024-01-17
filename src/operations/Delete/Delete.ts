@@ -16,7 +16,10 @@ import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
 
-// TODO tsdoc for everything in here
+/**
+ * Delete operation. Delete an entity, everything in its partition, BelongsToLinks and nullifies ForeignKeys on attributes that BelongTo it
+ * If the foreign key is non nullable than it will throw a NullConstraintViolationError
+ */
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #tableName: string;
@@ -110,9 +113,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     );
   }
 
-  // TODO I need to do the same thing on update... Maybe via the update method
   /**
-   * Nullify the associated relationship's ForeignKey attribute TODO add details about how it handles non nullable
+   * Nullify the associated relationship's ForeignKey attribute
+   * If the ForeignKey is non nullable than it throws a NullConstraintViolationError
    * @param item
    */
   private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
@@ -125,11 +128,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     );
 
     if (attrMeta?.nullable === false) {
-      // TODO is this a good error case? I am not actually setting to null. Maybe I need to serialize nullable attributes as null?
-      // TODO this should for for belongs to links for HasMany and HasOne
-      //       Add a unit test for HasMany and HasOne
-      //       There should be one in a HasMany that has nullable attributes
-
       this.trackValidationError(
         new NullConstraintViolationError(
           `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
