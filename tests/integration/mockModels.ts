@@ -92,7 +92,6 @@ class Customer extends MockTable {
   @HasMany(() => PaymentMethod, { foreignKey: "customerId" })
   public paymentMethods: PaymentMethod[];
 
-  // TODO I need the type system to error if the type is not defined as optional because its linked through a nullable foreign key
   @HasOne(() => ContactInformation, { foreignKey: "customerId" })
   public contactInformation?: ContactInformation;
 
