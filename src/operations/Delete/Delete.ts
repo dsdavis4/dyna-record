@@ -1,6 +1,6 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
-import { NullConstraintViolationError } from "../../errors";
+import { NotFoundError, NullConstraintViolationError } from "../../errors";
 import Metadata, {
   type BelongsToRelationship,
   type EntityClass
@@ -58,9 +58,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     const items = await this.EntityClass.query<SingleTableDesign>(id);
 
     if (items.length === 0) {
-      // TODO should this be a custom error type? It should be consistent among operations where its not found
-      // EX: NotFoundError
-      throw new Error(`Item does not exist: ${id}`);
+      throw new NotFoundError(`Item does not exist: ${id}`);
     }
 
     for (const item of items) {

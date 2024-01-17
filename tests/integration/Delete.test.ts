@@ -3,7 +3,7 @@ import { MockTable, Person, Pet, Home, PhoneBook } from "./mockModels";
 import { Attribute, Entity } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { NullConstraintViolationError } from "../../src/errors";
+import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
@@ -363,7 +363,7 @@ describe("Delete", () => {
       try {
         await Person.delete("123");
       } catch (e) {
-        expect(e).toEqual(new Error("Item does not exist: 123"));
+        expect(e).toEqual(new NotFoundError("Item does not exist: 123"));
         expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
         expect(mockQuery.mock.calls).toEqual([[]]);
         expect(mockedQueryCommand.mock.calls).toEqual([
