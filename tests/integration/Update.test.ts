@@ -78,6 +78,21 @@ class MyModelNullableAttribute extends MockTable {
   public myAttribute?: string;
 }
 
+@Entity
+class MockInformation extends MockTable {
+  @Attribute({ alias: "Address" })
+  public address: string;
+
+  @Attribute({ alias: "Email" })
+  public email: string;
+
+  @NullableAttribute({ alias: "Phone" })
+  public phone?: string;
+
+  @NullableAttribute({ alias: "State" })
+  public state?: string;
+}
+
 // TODO add types test, similiar to create but with optional properties
 describe("Update", () => {
   beforeAll(() => {
@@ -173,6 +188,55 @@ describe("Update", () => {
                 TableName: "mock-table",
                 UpdateExpression:
                   "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will update and remove multiple attributes", async () => {
+    expect.assertions(6);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+      await MockInformation.update("123", {
+        address: "11 Some St",
+        email: "new@example.com",
+        state: null,
+        phone: null
+      })
+    ).toBeUndefined();
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#Address": "Address",
+                  "#Email": "Email",
+                  "#Phone": "Phone",
+                  "#State": "State",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Address": "11 Some St",
+                  ":Email": "new@example.com",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                },
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #State, #Phone"
               }
             }
           ]

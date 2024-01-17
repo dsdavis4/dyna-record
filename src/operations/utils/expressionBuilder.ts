@@ -101,7 +101,6 @@ const buildUpdateSetExpression = (
   );
 };
 
-// TODO add a test for this case with multiple attributes
 const buildUpdateRemoveExpression = (
   tableAttrs: DynamoTableItem
 ): UpdateRemoveExpression => {
