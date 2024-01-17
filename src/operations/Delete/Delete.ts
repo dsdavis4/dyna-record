@@ -57,9 +57,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   public async run(id: string): Promise<void> {
     const items = await this.EntityClass.query<SingleTableDesign>(id);
 
-    // TODO add test for this
     if (items.length === 0) {
-      // TODO should this be a custom error type?
+      // TODO should this be a custom error type? It should be consistent among operations where its not found
+      // EX: NotFoundError
       throw new Error(`Item does not exist: ${id}`);
     }
 
