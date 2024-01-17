@@ -1,5 +1,6 @@
 import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type BelongsToLink } from "./relationships";
+import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 
 // TODO Jsdoc for everything in here
 
@@ -53,3 +54,13 @@ export interface BelongsToLinkDynamoItem {
 
 export type Optional<T> = T | undefined;
 export type Nullable<T> = T | null;
+
+/**
+ * Object to lookup up Relationship metadata by related entity name (As defined by property key for the relationship)
+ */
+export type RelationshipLookup = Record<string, RelationshipMetadata>;
+
+export interface RelationshipMetaObj {
+  relationsLookup: RelationshipLookup;
+  belongsToRelationships: BelongsToRelationship[];
+}

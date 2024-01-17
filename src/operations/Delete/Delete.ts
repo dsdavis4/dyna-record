@@ -7,21 +7,14 @@ import Metadata, {
 } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne,
-  isBelongsToRelationship
+  doesEntityBelongToRelAsHasOne
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
+import type { RelationshipLookup } from "../../types";
 import { entityToTableItem } from "../../utils";
 import OperationBase from "../OperationBase";
-import type { RelationshipLookup } from "../types";
-import { expressionBuilder } from "../utils";
+import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
-
-// TODO this is copied from types FindById. Find a way to clean this up. Utils or soemthing. REname approprtiatl
-interface RelationshipObj {
-  relationsLookup: RelationshipLookup;
-  belongsToRelationships: BelongsToRelationship[];
-}
 
 // TODO tsdoc for everything in here
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {
@@ -31,7 +24,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
   readonly #belongsToRelationships: BelongsToRelationship[];
-  // readonly #attributesLookup: AttributeLookup;
   readonly #validationErrors: Error[] = [];
 
   constructor(Entity: EntityClass<T>) {
@@ -44,31 +36,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     this.#primaryKeyField = this.entityMetadata.attributes[primaryKey].name;
     this.#sortKeyField = this.entityMetadata.attributes[sortKey].name;
 
-    // TODO this is copied from FindById. Make a util
-    //     - when I do this I should make `RelationshipObj` a better name
-    const relationsObj = Object.values(
-      this.entityMetadata.relationships
-    ).reduce<RelationshipObj>(
-      (acc, rel) => {
-        if (isBelongsToRelationship(rel)) {
-          acc.belongsToRelationships.push(rel);
-        }
-
-        acc.relationsLookup[rel.target.name] = rel;
-
-        return acc;
-      },
-      { relationsLookup: {}, belongsToRelationships: [] }
+    const relationsObj = buildEntityRelationshipMetaObj(
+      Object.values(this.entityMetadata.relationships)
     );
-
-    // TODO delete this...
-    // this.#attributesLookup = Object.values(
-    //   this.entityMetadata.attributes
-    // ).reduce<AttributeLookup>((acc, rel) => {
-    //   acc[rel.name] = rel;
-    //   return acc;
-    // }, {});
-
     this.#relationsLookup = relationsObj.relationsLookup;
     this.#belongsToRelationships = relationsObj.belongsToRelationships;
   }

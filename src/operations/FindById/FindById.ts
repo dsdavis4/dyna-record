@@ -8,8 +8,12 @@ import { QueryBuilder } from "../../query-utils";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { TransactGetBuilder } from "../../dynamo-utils";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { isBelongsToRelationship } from "../../metadata/utils";
-import type { StringObj, BelongsToLinkDynamoItem } from "../../types";
+import type {
+  StringObj,
+  BelongsToLinkDynamoItem,
+  RelationshipMetaObj,
+  RelationshipLookup
+} from "../../types";
 import {
   isBelongsToLinkDynamoItem,
   isKeyOfEntity,
@@ -24,10 +28,9 @@ import type {
   FindByIdOptions,
   FindByIdIncludesRes,
   IncludedAssociations,
-  RelationshipObj,
   SortedQueryResults
 } from "./types";
-import type { RelationshipLookup } from "../types";
+import { buildEntityRelationshipMetaObj } from "../utils";
 
 // TODO if the item is not found it should return null
 // TODO if relationships are not found it should return an array for has many and null for has one or belongs to
@@ -108,7 +111,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     const sortedQueryResults = this.filterQueryResults(queryResults);
-    const relationsObj = this.buildIncludedRelationsObj(includedRels);
+    const relationsObj = buildEntityRelationshipMetaObj(includedRels);
 
     this.buildGetIncludedRelationshipsTransaction(
       sortedQueryResults,
@@ -169,7 +172,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
 
   private buildGetIncludedRelationshipsTransaction(
     sortedQueryResults: SortedQueryResults,
-    relationsObj: RelationshipObj
+    relationsObj: RelationshipMetaObj
   ): void {
     this.buildGetRelationshipsThroughLinksTransaction(
       sortedQueryResults.belongsToLinks,
@@ -189,7 +192,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
    */
   private buildGetRelationshipsThroughLinksTransaction(
     belongsToLinks: BelongsToLinkDynamoItem[],
-    relationsLookup: RelationshipObj["relationsLookup"]
+    relationsLookup: RelationshipMetaObj["relationsLookup"]
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
@@ -215,7 +218,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
    */
   private buildGetRelationshipsThroughForeignKeyTransaction(
     item: QueryItems[number],
-    belongsToRelationships: RelationshipObj["belongsToRelationships"]
+    belongsToRelationships: RelationshipMetaObj["belongsToRelationships"]
   ): void {
     if (belongsToRelationships.length > 0) {
       const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
@@ -247,30 +250,6 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         return acc;
       },
       {}
-    );
-  }
-
-  /**
-   * Creates an object including
-   *  - relationsLookup: Object to look up RelationshipMetadata by Entity name
-   *  - belongsToRelationships: An array of BelongsTo relationships
-   * @param includedRelationships
-   * @returns
-   */
-  private buildIncludedRelationsObj(
-    includedRelationships: RelationshipMetadata[]
-  ): RelationshipObj {
-    return includedRelationships.reduce<RelationshipObj>(
-      (acc, rel) => {
-        if (isBelongsToRelationship(rel)) {
-          acc.belongsToRelationships.push(rel);
-        }
-
-        acc.relationsLookup[rel.target.name] = rel;
-
-        return acc;
-      },
-      { relationsLookup: {}, belongsToRelationships: [] }
     );
   }
 
