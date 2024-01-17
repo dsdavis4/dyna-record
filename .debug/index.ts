@@ -327,9 +327,6 @@ class Keg extends DrewsBrewsTable {
 
     // await Process.delete("0f07cf1b-2c2c-4b8d-a446-2e921003ab1f");
 
-    // TODO I need this to fail if the process is not deleted first
-    //     So that the process is
-
     debugger;
 
     await Process.delete(process.id);
