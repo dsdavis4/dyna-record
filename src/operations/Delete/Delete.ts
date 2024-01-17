@@ -148,8 +148,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
         Key: tableKeys,
         UpdateExpression: expression.UpdateExpression,
         ExpressionAttributeNames: expression.ExpressionAttributeNames
-        // TODO is this meeded
-        // ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
       },
       `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
     );
