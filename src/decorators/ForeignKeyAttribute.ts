@@ -1,19 +1,18 @@
 import Metadata from "../metadata";
-import type { ForeignKey, NullableForeignKey } from "../types";
-import type { AttributeProps } from "./types";
+import type { ForeignKey } from "../types";
 
-/**
- * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
- */
-type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
+interface ForeignKeyAttributeProps {
+  alias: string;
+}
 
 // TODO... Since I started, typescript released metadata property of deraotrs. Can I use it?
 //        https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#decorator-metadata
 
-function Attribute<T, K>(props: AttributeProps) {
+// TODO dry up with Attribute
+function ForeignKeyAttribute<T>(props: ForeignKeyAttributeProps) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<T, NotForeignKey<K>>
+    context: ClassFieldDecoratorContext<T, ForeignKey>
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
@@ -29,4 +28,4 @@ function Attribute<T, K>(props: AttributeProps) {
   };
 }
 
-export default Attribute;
+export default ForeignKeyAttribute;

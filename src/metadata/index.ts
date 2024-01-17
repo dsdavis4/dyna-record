@@ -1,13 +1,15 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { type BelongsToLink } from "../relationships";
 
-interface AttributeMetadata {
+export interface AttributeMetadata {
   name: string;
+  nullable: boolean;
 }
 
 interface AttributeMetadataOptions {
   attributeName: string;
   alias: string;
+  nullable: boolean;
 }
 
 type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
@@ -59,9 +61,9 @@ export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 class Metadata {
   private readonly tables: Record<string, TableMetadata> = {};
   private readonly entities: Record<string, EntityMetadata> = {};
+  private readonly entityClasses: Entity[] = [];
 
   private initialized: boolean = false;
-  private readonly entityClasses: Entity[] = [];
 
   /**
    * Returns entity metadata given an entity name
@@ -149,7 +151,8 @@ class Metadata {
 
     if (entityMetadata.attributes[options.alias] === undefined) {
       entityMetadata.attributes[options.alias] = {
-        name: options.attributeName
+        name: options.attributeName,
+        nullable: options.nullable
       };
     }
   }
@@ -161,7 +164,7 @@ class Metadata {
    */
   public addPrimaryKeyAttribute(
     entityClass: SingleTableDesign,
-    options: AttributeMetadataOptions
+    options: Omit<AttributeMetadataOptions, "nullable">
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
@@ -169,7 +172,10 @@ class Metadata {
       tableMetadata.primaryKey = options.alias;
     }
 
-    this.addEntityAttribute(entityClass.constructor.name, options);
+    this.addEntityAttribute(entityClass.constructor.name, {
+      ...options,
+      nullable: false
+    });
   }
 
   /**
@@ -179,7 +185,7 @@ class Metadata {
    */
   public addSortKeyAttribute(
     entityClass: SingleTableDesign,
-    options: AttributeMetadataOptions
+    options: Omit<AttributeMetadataOptions, "nullable">
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
@@ -187,7 +193,10 @@ class Metadata {
       tableMetadata.sortKey = options.alias;
     }
 
-    this.addEntityAttribute(entityClass.constructor.name, options);
+    this.addEntityAttribute(entityClass.constructor.name, {
+      ...options,
+      nullable: false
+    });
   }
 
   /**

@@ -1,5 +1,6 @@
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
+  ContactInformation,
   Customer,
   MockTable,
   Order,
@@ -8,7 +9,15 @@ import {
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { Attribute, Entity } from "../../src/decorators";
+import {
+  Attribute,
+  BelongsTo,
+  Entity,
+  HasOne,
+  NullableAttribute,
+  NullableForeignKeyAttribute
+} from "../../src/decorators";
+import type { NullableForeignKey } from "../../src/types";
 
 // TODO is everything awaited properly in these tests? Do I need to mock resolved value in other tests?
 //      Check all operations tests...
@@ -54,6 +63,12 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+@Entity
+class MyModelNullableAttribute extends MockTable {
+  @NullableAttribute({ alias: "MyAttribute" })
+  public myAttribute?: string;
+}
 
 // TODO add test for creating entity without relationships
 describe("Create", () => {
@@ -524,7 +539,7 @@ describe("Create", () => {
         @Attribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
-        @Attribute({ alias: "mMAttribute2" })
+        @NullableAttribute({ alias: "MyAttribute2" })
         public myAttribute2?: string;
       }
 
@@ -548,6 +563,58 @@ describe("Create", () => {
       });
     });
 
+    it("will allow NullableForeignKey attributes to be passed at their inferred type without casting to type NullableForeignKey", async () => {
+      await ContactInformation.create({
+        email: "test@example.com",
+        phone: "555-555-5555",
+        // @ts-expect-no-error NullableForeignKey is of type string so it can be passed as such without casing to NullableForeignKey
+        customerId: "123"
+      });
+    });
+
+    it("will allow NullableForeignKey attributes to be passed at undefined", async () => {
+      await ContactInformation.create({
+        email: "test@example.com",
+        phone: "555-555-5555",
+        // @ts-expect-no-error NullableForeignKey can be passed as undefined
+        customerId: undefined
+      });
+    });
+
+    it("will allow a NullableForeignKey attribute to be omitted if its defined as optional on the model", async () => {
+      @Entity
+      class ContactInformationLocal extends MockTable {
+        @Attribute({ alias: "Email" })
+        public email: string;
+
+        @Attribute({ alias: "Phone" })
+        public phone: string;
+
+        @NullableForeignKeyAttribute({ alias: "CustomerId" })
+        public customerId?: NullableForeignKey;
+
+        @BelongsTo(() => CustomerLocal, { foreignKey: "customerId" })
+        public customer: CustomerLocal;
+
+        // mock method
+        public static override create(bla: any): any {
+          return "bla " as any;
+        }
+      }
+
+      @Entity
+      class CustomerLocal extends MockTable {
+        @HasOne(() => ContactInformation, { foreignKey: "customerId" })
+        public contactInformation?: ContactInformation;
+      }
+
+      // @ts-expect-no-error NullableForeignKey can be omitted if its defined as optional
+      await ContactInformationLocal.create({
+        email: "test@example.com",
+        phone: "555-555-5555"
+      });
+    });
+
     it("will not accept DefaultFields on create because they are managed by no-orm", async () => {
       await Order.create({
         // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
@@ -567,6 +634,13 @@ describe("Create", () => {
       await Order.create({
         // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
         updatedAt: new Date()
+      });
+    });
+
+    it("will not allow nullable attributes to be set to null (they should be left undefined)", async () => {
+      await MyModelNullableAttribute.create({
+        // @ts-expect-error nullable fields cannot be set to null (they should be left undefined)
+        myAttribute: null
       });
     });
   });

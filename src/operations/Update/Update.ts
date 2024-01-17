@@ -7,10 +7,10 @@ import type {
   HasManyRelationship
 } from "../../metadata";
 import { entityToTableItem } from "../../utils";
-import type { ForeignKey, DynamoTableItem } from "../../types";
-import { RelationshipTransactions } from "../utils";
+import type { ForeignKey } from "../../types";
+import { RelationshipTransactions, expressionBuilder } from "../utils";
 import OperationBase from "../OperationBase";
-import type { UpdateOptions, Expression } from "./types";
+import type { UpdateOptions } from "./types";
 
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
@@ -63,16 +63,14 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     const tableKeys = entityToTableItem(this.EntityClass.name, keys);
     const tableAttrs = entityToTableItem(this.EntityClass.name, updatedAttrs);
 
-    const expression = this.expressionBuilder(tableAttrs);
+    const expression = expressionBuilder(tableAttrs);
 
     this.#transactionBuilder.addUpdate(
       {
         TableName: tableName,
         Key: tableKeys,
-        ExpressionAttributeNames: expression.ExpressionAttributeNames,
-        ExpressionAttributeValues: expression.ExpressionAttributeValues,
-        UpdateExpression: expression.UpdateExpression,
-        ConditionExpression: `attribute_exists(${primaryKey})` // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${primaryKey})`, // Only update the item if it exists
+        ...expression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
     );
@@ -105,38 +103,6 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     await relationshipTransactions.build(entityData);
-  }
-
-  /**
-   * Builds a dynamo expression given the table attributes
-   * @param tableAttrs The table aliases of the entity attributes
-   * @returns
-   */
-  private expressionBuilder(tableAttrs: DynamoTableItem): Expression {
-    const entries = Object.entries(tableAttrs);
-    return entries.reduce<Expression>(
-      (acc, [key, val], idx) => {
-        const attrName = `#${key}`;
-        const attrVal = `:${key}`;
-        acc.ExpressionAttributeNames[attrName] = key;
-        acc.ExpressionAttributeValues[attrVal] = val;
-        acc.UpdateExpression = acc.UpdateExpression.concat(
-          ` ${attrName} = ${attrVal},`
-        );
-
-        if (idx === entries.length - 1) {
-          // Remove trailing comma from the expression
-          acc.UpdateExpression = acc.UpdateExpression.slice(0, -1);
-        }
-
-        return acc;
-      },
-      {
-        ExpressionAttributeNames: {},
-        ExpressionAttributeValues: {},
-        UpdateExpression: "SET"
-      }
-    );
   }
 
   /**

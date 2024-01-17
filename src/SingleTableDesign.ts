@@ -12,7 +12,8 @@ import {
   Create,
   type CreateOptions,
   Update,
-  type UpdateOptions
+  type UpdateOptions,
+  Delete
 } from "./operations";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -22,6 +23,7 @@ import {
 
 // TODO "type" key might be too generic
 // TODO Make sure that these values are not repeated in other files, without using this type
+
 /**
  * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
  */
@@ -129,6 +131,20 @@ abstract class SingleTableDesign {
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes);
+  }
+
+  /**
+   * Delete an entity by ID
+   *   - Delete all BelongsToLinks
+   *   - Disassociate all foreign keys of linked models
+   * @param id - The id of the entity to update
+   */
+  public static async delete<T extends SingleTableDesign>(
+    this: EntityClass<T>,
+    id: string
+  ): Promise<void> {
+    const op = new Delete<T>(this);
+    await op.run(id);
   }
 
   /**

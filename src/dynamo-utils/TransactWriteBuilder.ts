@@ -1,13 +1,11 @@
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import DynamoClient from "../DynamoClient";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-
-export class ConditionalCheckFailedError extends Error {
-  public readonly code: "ConditionalCheckFailedError";
-}
+import { ConditionalCheckFailedError } from "./errors";
 
 type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
 
+// TODO move these to a types file with similiar pattern to how I did for Operation classes
 export type ConditionCheck = NonNullable<
   TransactItems[number]["ConditionCheck"]
 >;
@@ -114,6 +112,7 @@ class TransactionBuilder {
 
       if (conditionFailedErrs.length > 0) {
         console.error(conditionFailedErrs.map(err => err.message));
+        // TODO should I make this a custom error? TransactionError
         return new AggregateError(
           conditionFailedErrs,
           "Failed Conditional Checks",

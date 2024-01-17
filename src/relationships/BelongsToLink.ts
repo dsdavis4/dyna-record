@@ -15,13 +15,20 @@ interface BelongsToLinkProps {
 
 @Entity
 class BelongsToLink implements BelongsToLinkProps {
-  // // TODO how to obtain the pk and sk... maybe throught the new type?
-  // @Attribute({ alias: "PK" })
-  // public pk: string;
+  constructor(item?: BelongsToLink) {
+    if (item !== undefined) {
+      Object.assign(this, item);
+    }
+  }
 
-  // // TODO how to obtain the pk and sk... maybe throught the new type?
-  // @Attribute({ alias: "SK" })
-  // public sk: string;
+  // TODO how to obtain the pk and sk... maybe throught the new type?
+  //    IE - > need the alias dynamically
+  @Attribute({ alias: "PK" })
+  public pk: string;
+
+  // TODO how to obtain the pk and sk... maybe throught the new type?
+  @Attribute({ alias: "SK" })
+  public sk: string;
 
   // TODO how to get this dynamically? This is a default field
   @Attribute({ alias: "Id" })

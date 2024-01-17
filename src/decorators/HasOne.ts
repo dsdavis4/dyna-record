@@ -1,5 +1,6 @@
 import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
+import type { Optional } from "../types";
 import { type ForeignEntityAttribute } from "./types";
 
 interface HasOneProps<T extends SingleTableDesign> {
@@ -13,7 +14,7 @@ function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
 ) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<K, T | undefined>
+    context: ClassFieldDecoratorContext<K, Optional<T>>
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {

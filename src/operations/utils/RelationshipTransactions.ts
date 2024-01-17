@@ -16,6 +16,7 @@ import {
   isBelongsToRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
+import type { Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
 
 type EntityData<T extends SingleTableDesign> = Pick<T, "id"> & Partial<T>;
@@ -33,28 +34,29 @@ interface RelationshipTransactionsProps<T extends SingleTableDesign> {
    * Optional callback to add logic to persisting BelongsTo HasMany relationships
    * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasMany of
    * @param entityId The ID of the entity
-   * @param relationshipId The ID of the relationship being persisted
    * @returns
    */
   belongsToHasManyCb?: (
     rel: BelongsToRelationship,
-    entityId: string,
-    relationshipId: string
+    entityId: string
   ) => Promise<void>;
   /**
    * Optional callback to add logic to persisting BelongsTo HasOne relationships
    * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasOne of
    * @param entityId The ID of the entity
-   * @param relationshipId The ID of the relationship being persisted
    * @returns
    */
   belongsToHasOneCb?: (
     rel: BelongsToRelationship,
-    entityId: string,
-    relationshipId: string
+    entityId: string
   ) => Promise<void>;
 }
 
+/**
+ * Builds transactions for persisting create/update relationships
+ *   - Sets/removes ForeignKeys
+ *   - Adds/removes BelongsToLinks
+ */
 class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -78,8 +80,13 @@ class RelationshipTransactions<T extends SingleTableDesign> {
         const relationshipId = entityData[rel.foreignKey];
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
-        if (isUpdatingRelationshipId && typeof relationshipId === "string") {
-          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
+        if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {
+          if (relationshipId !== null) {
+            this.buildRelationshipExistsConditionTransaction(
+              rel,
+              relationshipId
+            );
+          }
 
           const callbackParams = [rel, entityData.id, relationshipId] as const;
 
@@ -131,31 +138,33 @@ class RelationshipTransactions<T extends SingleTableDesign> {
   private async buildBelongsToHasOne(
     rel: BelongsToRelationship,
     entityId: string,
-    relationshipId: string
+    relationshipId: Nullable<string>
   ): Promise<void> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     if (this.props.belongsToHasOneCb !== undefined) {
-      await this.props.belongsToHasOneCb(rel, entityId, relationshipId);
+      await this.props.belongsToHasOneCb(rel, entityId);
     }
 
-    const link = BelongsToLink.build(this.props.Entity.name, entityId);
+    if (relationshipId !== null) {
+      const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.props.Entity.name
-    };
+      const keys = {
+        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+        [sortKey]: this.props.Entity.name
+      };
 
-    const putExpression: Put = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+      const putExpression: Put = {
+        TableName: tableName,
+        Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+        ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+      };
 
-    this.props.transactionBuilder.addPut(
-      putExpression,
-      `${rel.target.name} with id: ${relationshipId} already has an associated ${this.props.Entity.name}`
-    );
+      this.props.transactionBuilder.addPut(
+        putExpression,
+        `${rel.target.name} with id: ${relationshipId} already has an associated ${this.props.Entity.name}`
+      );
+    }
   }
 
   /**
@@ -167,31 +176,37 @@ class RelationshipTransactions<T extends SingleTableDesign> {
   private async buildBelongsToHasMany(
     rel: BelongsToRelationship,
     entityId: string,
-    relationshipId: string
+    relationshipId: Nullable<string>
   ): Promise<void> {
     const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
 
     if (this.props.belongsToHasManyCb !== undefined) {
-      await this.props.belongsToHasManyCb(rel, entityId, relationshipId);
+      await this.props.belongsToHasManyCb(rel, entityId);
     }
 
-    const link = BelongsToLink.build(this.props.Entity.name, entityId);
+    if (relationshipId !== null) {
+      const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
-    const keys = {
-      [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-      [sortKey]: this.props.Entity.primaryKeyValue(link.foreignKey)
-    };
+      const keys = {
+        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
+        [sortKey]: this.props.Entity.primaryKeyValue(link.foreignKey)
+      };
 
-    const putExpression: Put = {
-      TableName: tableName,
-      Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
-    };
+      const putExpression: Put = {
+        TableName: tableName,
+        Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+        ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+      };
 
-    this.props.transactionBuilder.addPut(
-      putExpression,
-      `${this.props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
-    );
+      this.props.transactionBuilder.addPut(
+        putExpression,
+        `${this.props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
+      );
+    }
+  }
+
+  private isNullableString(val: unknown): val is Nullable<string> {
+    return typeof val === "string" || val === null;
   }
 }
 

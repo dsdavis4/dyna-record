@@ -5,12 +5,20 @@ import {
   PrimaryKeyAttribute,
   SortKeyAttribute,
   Attribute,
+  ForeignKeyAttribute,
   HasMany,
   BelongsTo,
-  HasOne
+  HasOne,
+  NullableForeignKeyAttribute,
+  NullableAttribute
 } from "../src/decorators";
 
-import { PrimaryKey, SortKey, ForeignKey } from "../src/types";
+import {
+  PrimaryKey,
+  SortKey,
+  ForeignKey,
+  NullableForeignKey
+} from "../src/types";
 
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
@@ -61,10 +69,10 @@ abstract class DrewsBrewsTable extends SingleTableDesign {
 
 @Entity
 class Scale extends DrewsBrewsTable {
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
-  @Attribute({ alias: "RoomId" })
+  @ForeignKeyAttribute({ alias: "RoomId" })
   public roomId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
@@ -79,7 +87,7 @@ class Scale extends DrewsBrewsTable {
 
 @Entity
 class Beer extends DrewsBrewsTable {
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
   @Attribute({ alias: "Style" })
@@ -93,6 +101,10 @@ class Beer extends DrewsBrewsTable {
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public brewery: Brewery;
+
+  // TODO should this be inveresed to that it belongsTo keg and keg HasOne Beer
+  @HasOne(() => Keg, { foreignKey: "beerId" })
+  public keg?: Keg;
 }
 
 @Entity
@@ -109,6 +121,9 @@ class Brewery extends DrewsBrewsTable {
   @HasMany(() => Room, { foreignKey: "breweryId" })
   public rooms: Room[];
 
+  @HasMany(() => Keg, { foreignKey: "breweryId" })
+  public kegs: Keg[];
+
   public testing() {
     return "hi";
   }
@@ -119,7 +134,7 @@ class Room extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @Attribute({ alias: "BreweryId" })
+  @ForeignKeyAttribute({ alias: "BreweryId" })
   public breweryId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
@@ -127,6 +142,9 @@ class Room extends DrewsBrewsTable {
 
   @HasMany(() => Scale, { foreignKey: "roomId" })
   public scales: Scale[];
+
+  @HasMany(() => Keg, { foreignKey: "roomId" })
+  public kegs: Keg[];
 }
 
 @Entity
@@ -140,10 +158,10 @@ class Process extends DrewsBrewsTable {
   @Attribute({ alias: "CurrentStateStatus" })
   public currentStateStatus: string;
 
-  @Attribute({ alias: "CurrentUserInput" })
-  public currentUserInput: string;
+  @NullableAttribute({ alias: "CurrentUserInput" })
+  public currentUserInput?: string;
 
-  @Attribute({ alias: "ScaleId" })
+  @ForeignKeyAttribute({ alias: "ScaleId" })
   public scaleId: ForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
@@ -155,7 +173,7 @@ class WsToken extends DrewsBrewsTable {
   @Attribute({ alias: "ConnectionId" })
   public connectionId: string;
 
-  @Attribute({ alias: "RoomId" })
+  @ForeignKeyAttribute({ alias: "RoomId" })
   public roomId: ForeignKey;
 
   /**
@@ -170,6 +188,33 @@ class WsToken extends DrewsBrewsTable {
       (wsToken): wsToken is WsToken => wsToken instanceof WsToken
     );
   }
+}
+
+@Entity
+class Keg extends DrewsBrewsTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "Status" })
+  public status: string;
+
+  @ForeignKeyAttribute({ alias: "BreweryId" })
+  public breweryId: ForeignKey;
+
+  @ForeignKeyAttribute({ alias: "RoomId" })
+  public roomId: ForeignKey;
+
+  @NullableForeignKeyAttribute({ alias: "BeerId" })
+  public beerId?: NullableForeignKey;
+
+  @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
+  public brewery: Brewery;
+
+  @BelongsTo(() => Room, { foreignKey: "roomId" })
+  public room: Room;
+
+  @BelongsTo(() => Beer, { foreignKey: "beerId" })
+  public beer: Beer;
 }
 
 // TODO should I make a types file for types where there a ton in each file?
@@ -203,9 +248,165 @@ class WsToken extends DrewsBrewsTable {
 
 // TODO check that find byId with includes returns null if the parent is not found... I think I saw this happen...
 
+// TODO where possible change code to use Map instead oj objects because it is more efficient (check on this..)
+
+// TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
+
+// TODO find all instances where I throw a plain "Error" and make a custom error
+
 (async () => {
   try {
     const metadata = Metadata;
+
+    // debugger;
+
+    // await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", { beerId: null });
+
+    // debugger;
+
+    // const keg = await Keg.findById("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
+    //   include: [{ association: "beer" }]
+    // });
+
+    // // debugger;
+
+    // // await Keg.update(keg?.id!, {
+    // //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
+    // // });
+
+    // debugger;
+
+    // const beer = await Beer.findById("1da63136-13fe-4435-b590-313ff1cbd587", {
+    //   include: [{ association: "keg" }]
+    // });
+
+    // debugger;
+
+    // await Keg.update("44d10f33-fa60-4470-a72f-7a6c3a500d69", {
+    //   name: "testing 12345",
+    //   beerId: null
+    //   // breweryId: null
+    // });
+
+    debugger;
+
+    const brewery = await Brewery.create({ name: "test delete" });
+
+    debugger;
+
+    const beer = await Beer.create({
+      name: "bla",
+      abv: 1,
+      style: "testing",
+      breweryId: brewery.id
+    });
+
+    const room2222 = await Room.create({
+      name: "my room",
+      breweryId: brewery.id
+    });
+
+    const scale = await Scale.create({
+      breweryId: brewery.id,
+      roomId: room2222.id
+    });
+
+    const process = await Process.create({
+      name: "test process",
+      // scaleId: undefined,
+      scaleId: scale.id,
+      currentUserInput: "",
+      currentState: "",
+      currentStateStatus: ""
+    });
+
+    debugger;
+
+    // const process = await Process.findById(
+    //   "0f07cf1b-2c2c-4b8d-a446-2e921003ab1f",
+    //   { include: [{ association: "scale" }] }
+    // );
+
+    // await Process.delete("0f07cf1b-2c2c-4b8d-a446-2e921003ab1f");
+
+    debugger;
+
+    await Process.delete(process.id);
+
+    debugger;
+
+    await Scale.delete(scale.id);
+
+    debugger;
+
+    // await Beer.update("123", {
+    //   name: "bla"
+    //   // breweryId: undefined
+    // });
+
+    // process.scaleId = undefined;
+
+    // await Process.delete(process.id);
+
+    // debugger;
+
+    // await Scale.delete(scale.id);
+
+    // debugger;
+
+    // await Beer.delete(beer.id);
+
+    // debugger;
+
+    // await Brewery.delete(bla.id);
+
+    debugger;
+
+    // Setup
+
+    // const brewery = await Brewery.findById(
+    //   "62fcad82-3f3c-424c-abf9-425050a1bb99",
+    //   {
+    //     include: [
+    //       { association: "beers" },
+    //       { association: "rooms" },
+    //       { association: "scales" }
+    //     ]
+    //   }
+    // );
+
+    // for (let i = 0; i < 3; i++) {
+    //   if (brewery) {
+    //     const idx = i + 1;
+    //     await Beer.create({
+    //       name: `Beer-${idx}`,
+    //       breweryId: brewery.id,
+    //       style: "fake",
+    //       abv: 1.1
+    //     });
+
+    //     const room = await Room.create({
+    //       name: `Room-${idx}`,
+    //       breweryId: brewery.id
+    //     });
+
+    //     await Scale.create({ breweryId: b.rewery.id, roomId: room.id });
+    //   }
+    // }
+
+    // await Beer.delete("a16d0c40-5be6-476e-bf4d-dbcc0601e737");
+
+    // debugger;
+
+    // await Room.delete("46554971-2c00-4a00-b7f4-7e81612684c6");
+
+    debugger;
+
+    // const rooms = await Promise,
+
+    await Brewery.delete(brewery.id);
+
+    debugger;
 
     // const beer2 = await Beer.findById("ceb34f08-3472-45e8-b78c-9fa503b70637", {
     //   include: [{ association: "brewery" }]
@@ -259,16 +460,18 @@ class WsToken extends DrewsBrewsTable {
 
     debugger;
 
-    await Beer.update(
-      "ceb34f08-3472-45e8-b78c-9fa503b70637",
-      // "bad",
-      {
-        // breweryId: "bad", // doesnt exist, should error
-        // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
-        breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
-        name: "Serrano Pale Ale 9"
-      }
-    );
+    // await Beer.update(
+    //   "ceb34f08-3472-45e8-b78c-9fa503b70637",
+    //   // "bad",
+    //   {
+    //     // breweryId: "bad", // doesnt exist, should error
+    //     // breweryId: "157cc981-1be2-4ecc-a257-07d9a6037559", // Exists, has no other beers
+    //     breweryId: "103417f1-4c42-4b40-86a6-a8930be67c99", // Exists, has other beers
+    //     name: "Serrano Pale Ale 9"
+    //   }
+    // );
+
+    // await Beer.delete("2cb10b5b-cf75-44b3-960c-0d8da78ca7ac");
 
     debugger;
 
@@ -276,9 +479,13 @@ class WsToken extends DrewsBrewsTable {
       include: [{ association: "brewery" }]
     });
 
+    debugger;
+
     const a2 = await Brewery.findById("157cc981-1be2-4ecc-a257-07d9a6037559", {
       include: [{ association: "beers" }]
     });
+
+    debugger;
 
     const a3 = await Brewery.findById("103417f1-4c42-4b40-86a6-a8930be67c99", {
       include: [{ association: "beers" }]
@@ -448,6 +655,7 @@ class WsToken extends DrewsBrewsTable {
       bla.scales;
     } else {
       results[0].foreignEntityType;
+      results[0].type;
     }
 
     const wsTokens = await WsToken.getAllByRoomId(
