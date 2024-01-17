@@ -52,6 +52,11 @@ interface RelationshipTransactionsProps<T extends SingleTableDesign> {
   ) => Promise<void>;
 }
 
+/**
+ * Builds transactions for persisting create/update relationships
+ *   - Sets/removes ForeignKeys
+ *   - Adds/removes BelongsToLinks
+ */
 class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -63,7 +68,6 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     );
   }
 
-  // TODO tsdoc
   public async build<T extends SingleTableDesign>(
     entityData: EntityData<T>
   ): Promise<void> {
