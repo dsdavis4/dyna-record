@@ -13,48 +13,15 @@ import {
 import { BelongsToLink } from "../../relationships";
 import { entityToTableItem } from "../../utils";
 import OperationBase from "../OperationBase";
-import { type QueryResult } from "../Query";
 import type { RelationshipLookup } from "../types";
 import { expressionBuilder } from "../utils";
-
-// TODO move types to their own file like I did for other operation classes
-
-// TODO this should move to shared place
-
-interface DeleteOptions {
-  errorMessage: string;
-}
-
-// TODO makes type file like I did for the others
-type ItemKeys<T extends SingleTableDesign> = Partial<QueryResult<T>>;
-
-/**
- * TODO
- * Delete the entity and everything in its partition
- * - Make sure to update foreign keys linked on linked models
- * - If the foreign key is a required attribute, and as a value then I should throw an error through transactions.
- *      - I beleive I can get this info from the attribute decorator....
- *      - But should this even be allowed? In a SQL database what would happen?
- */
+import type { DeleteOptions, ItemKeys } from "./types";
 
 // TODO this is copied from types FindById. Find a way to clean this up. Utils or soemthing. REname approprtiatl
 interface RelationshipObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
 }
-
-// I ended last time having just added unit tests for the current delete functionality
-// Start now by handling the NullException handling
-
-//      At the end of last time I am pretty sure I have it building delete transactions correct
-//       - I have not ran a delete yet, just inspected the built transactions
-//       - I I have not added non-nulltable foreignKeys yet
-//           - See TODO in types for ideas how to do this
-//           - IMPORTANT - if I cant figure out how to do it with a dynamo transaction then I can make a method in transaction builder which allows me to force an error. I could pass it a NonNullableException or something (but see what the normal error name is) and it will aggregate it in the error response
-//       -         - !!! Similar to how AWS transactions have validation exceptions. I could make a pubic method on transactionwritebuilder where I store ValidationErrors. This is checked before comitting a transaction. If there are any validation errors I dont commit the transaction
-//       -                  - Aggregate all validator errors and throw
-//       -                  - this has added benefits because I can reduce the amount of transactions to by validating ahead of time
-//       - Do I need conditions on any of the operations in here
 
 // TODO tsdoc for everything in here
 class Delete<T extends SingleTableDesign> extends OperationBase<T> {

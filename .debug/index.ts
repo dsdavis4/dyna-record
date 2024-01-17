@@ -252,8 +252,6 @@ class Keg extends DrewsBrewsTable {
 
 // TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
 
-// TODO... start here. Work on implementing nullable checks in the delete method
-
 (async () => {
   try {
     const metadata = Metadata;

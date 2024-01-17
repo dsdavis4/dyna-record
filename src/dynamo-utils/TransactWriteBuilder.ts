@@ -9,7 +9,7 @@ export class ConditionalCheckFailedError extends Error {
 
 type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
 
-// TODO move these to a types class with similiar pattern to how I did for Operation classes
+// TODO move these to a types file with similiar pattern to how I did for Operation classes
 export type ConditionCheck = NonNullable<
   TransactItems[number]["ConditionCheck"]
 >;

@@ -20,7 +20,6 @@ function NullableForeignKeyAttribute<T>(
 ) {
   return function (
     _value: undefined,
-    // TODO context: ClassFieldDecoratorContext<T, Optional<NullableForeignKey>>
     context: ClassFieldDecoratorContext<T, NullableForeignKey>
   ) {
     if (context.kind === "field") {
