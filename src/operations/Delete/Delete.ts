@@ -55,7 +55,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    const items = await this.EntityClass.query(id);
+    const items = await this.EntityClass.query<SingleTableDesign>(id);
 
     // TODO add test for this
     if (items.length === 0) {
@@ -64,7 +64,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     }
 
     for (const item of items) {
-      if (this.isEntityClass(item)) {
+      if (item.id === id && this.isEntityClass(item)) {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
         });
@@ -121,7 +121,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
     const entityMeta = Metadata.getEntity(relMeta.target.name);
-    // const attrMeta = this.#attributesLookup[relMeta.foreignKey];
 
     const attrMeta = Object.values(entityMeta.attributes).find(
       attr => attr.name === relMeta.foreignKey
@@ -228,11 +227,19 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     });
   }
 
+  /**
+   * Type guard to check if the item being evaluated is the currentClass
+   * @param item
+   * @returns
+   */
   private isEntityClass(item: any): item is typeof this.EntityClass {
     return item instanceof this.EntityClass;
   }
 
-  // TODO tsdoc
+  /**
+   * Track validation errors and throw AggregateError after all validations have been run
+   * @param err
+   */
   private trackValidationError(err: Error): void {
     this.#validationErrors.push(err);
   }
