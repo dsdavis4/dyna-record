@@ -51,7 +51,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    *   - Deletes the given entity
    *   - Deletes each item in the entity's partition
    *   - For each item in the entity's partition which is of type 'BelongsToLink' it:
-   *     - Will nullify the associated relationship's ForeignKey attribute
+   *     - Will nullify the associated relationship's ForeignKey attribute if the attribute is nullable
    * @param id
    */
   public async run(id: string): Promise<void> {
