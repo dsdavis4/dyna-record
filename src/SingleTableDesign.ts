@@ -134,7 +134,6 @@ abstract class SingleTableDesign {
   }
 
   /**
-   * TODO Add/ check this
    * Delete an entity by ID
    *   - Delete all BelongsToLinks
    *   - Disassociate all foreign keys of linked models
