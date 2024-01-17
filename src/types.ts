@@ -36,6 +36,9 @@ export type Nullable<T> = T | null;
  */
 export type RelationshipLookup = Record<string, RelationshipMetadata>;
 
+/**
+ * Relationship metadata object to perform lookups and reduce iteration during processing
+ */
 export interface RelationshipMetaObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
