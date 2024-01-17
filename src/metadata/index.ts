@@ -61,11 +61,9 @@ export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 class Metadata {
   private readonly tables: Record<string, TableMetadata> = {};
   private readonly entities: Record<string, EntityMetadata> = {};
+  private readonly entityClasses: Entity[] = [];
 
   private initialized: boolean = false;
-
-  // TODO is this used? I dont think it is...
-  private readonly entityClasses: Entity[] = [];
 
   /**
    * Returns entity metadata given an entity name
