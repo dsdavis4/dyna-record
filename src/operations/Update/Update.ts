@@ -12,15 +12,6 @@ import { RelationshipTransactions, expressionBuilder } from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdateOptions } from "./types";
 
-// TODO I need to handle nullable foreign keys not updating....
-//      But then how do I move an entity from one place to another?
-//      is that ok?
-//      I would likely need a bulk update operation...
-//      wait...  is this needed? It doesnt set foreign keys to null on associated entityes
-//        but it does remove links
-//        I think instead I need to make it so:
-//          If a foreign key is optional, the associated field on the HasMany or HasOne must be optional
-
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
  */
