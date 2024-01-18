@@ -36,15 +36,6 @@ const createdAtField: DefaultFields = "createdAt";
 const updatedAtField: DefaultFields = "updatedAt";
 
 abstract class SingleTableDesign {
-  // [x: string]:
-  //   | ForeignKey
-  //   | NullableForeignKey
-  //   | NativeScalarAttributeValue
-  //   | Date
-  //   | SingleTableDesign
-  //   | null
-  //   | undefined;
-
   @Attribute({ alias: "Id" })
   public [idField]: string;
 

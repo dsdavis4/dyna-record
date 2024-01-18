@@ -80,7 +80,12 @@ export const isKeyOfEntity = (
   return key in entity;
 };
 
-// TODO tsdoc
+/**
+ * Type guard to check if the key is a defined property on the entity
+ * @param entity
+ * @param key
+ * @returns
+ */
 export const isKeyOfObject = <T>(
   entity: Partial<SingleTableDesign>,
   key: any

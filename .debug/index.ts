@@ -41,6 +41,9 @@ import { BelongsToLink } from "../src/relationships";
 //   this would make it so I dont have to have addInitializer methods
 //
 
+// TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
+//       I think I had a medium article about a library that does this
+
 // TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
 //    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
 //    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
