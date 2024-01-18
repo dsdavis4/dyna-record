@@ -27,7 +27,6 @@ function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
           type: "HasOne",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
-          // TODO can I find a way to not requrie casting?
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });
       });
