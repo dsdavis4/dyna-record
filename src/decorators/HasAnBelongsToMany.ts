@@ -1,10 +1,17 @@
 import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
-import { type ForeignEntityAttribute } from "./types";
 
 interface HasAndBelongsToManyProps<T extends SingleTableDesign> {
-  TODO: ForeignEntityAttribute<T>;
+  // TODO I should do something like this to the other relationship types so that relationships are always set up correctly
+  targetKey: keyof T;
 }
+
+// TODO add unit test that:
+//     -   the value this is applied to put match the target
+//     -    not undefined
+//     -     an array
+
+// TODO add a test that both side of the relationship is defined. EX => target key must exist on target
 
 function HasAndBelongsToMany<
   T extends SingleTableDesign,

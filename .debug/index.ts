@@ -10,7 +10,8 @@ import {
   BelongsTo,
   HasOne,
   NullableForeignKeyAttribute,
-  NullableAttribute
+  NullableAttribute,
+  HasAnBelongsToMany
 } from "../src/decorators";
 
 import {
@@ -133,6 +134,9 @@ class Brewery extends DrewsBrewsTable {
   @HasMany(() => Keg, { foreignKey: "breweryId" })
   public kegs: Keg[];
 
+  @HasAnBelongsToMany(() => User, { targetKey: "breweries" })
+  public users: User[];
+
   public testing() {
     return "hi";
   }
@@ -224,6 +228,24 @@ class Keg extends DrewsBrewsTable {
 
   @BelongsTo(() => Beer, { foreignKey: "beerId" })
   public beer: Beer;
+}
+
+@Entity
+class User extends SingleTableDesign {
+  @Attribute({ alias: "FirstName" })
+  public firstName: string;
+
+  @Attribute({ alias: "LastName" })
+  public lastName: string;
+
+  @Attribute({ alias: "Email" })
+  public email: string;
+
+  @Attribute({ alias: "CognitoId" })
+  public cognitoId: string;
+
+  @HasAnBelongsToMany(() => Brewery, { targetKey: "users" })
+  public breweries: Brewery[];
 }
 
 // TODO should I make a types file for types where there a ton in each file?
