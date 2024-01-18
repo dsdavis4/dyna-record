@@ -19,7 +19,7 @@ function HasAndBelongsToMany<
 >(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
-  props: HasAndBelongsToManyProps<T>
+  _props: HasAndBelongsToManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
