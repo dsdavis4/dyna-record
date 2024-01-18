@@ -1,4 +1,4 @@
-import Metadata, { type EntityClass } from "../metadata";
+import Metadata, { ForeignKeyAttribute, type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { NullableForeignKey, Optional } from "../types";
 import { type ForeignEntityAttribute } from "./types";
@@ -58,7 +58,7 @@ function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
           type: "BelongsTo",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
-          foreignKey: props.foreignKey as keyof SingleTableDesign
+          foreignKey: props.foreignKey as ForeignKeyAttribute
         });
       });
     }

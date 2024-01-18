@@ -23,6 +23,12 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink } from "../src/relationships";
 
+// TODO START HERE... Work on HasAndBelongsToMany
+//      Does this need to be its own decorator? Can it use BelongsTo and HasMany as they are today? If I do that make sure to add tests for each operation
+//      Would it be cleaner to make its own?
+//    - In sql I would need a third table
+//      - Idea: What if he decorator managed belongs to links in each entitties patition
+
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
 //      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
 
@@ -251,6 +257,7 @@ class Keg extends DrewsBrewsTable {
 // TODO where possible change code to use Map instead oj objects because it is more efficient (check on this..)
 
 // TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
+//      Idea... I can add the name of the key that a ForeignKey applies to on the other model
 
 // TODO find all instances where I throw a plain "Error" and make a custom error
 

@@ -4,9 +4,11 @@ import type {
   HasManyRelationship,
   BelongsToRelationship,
   HasOneRelationship,
-  EntityClass
+  EntityClass,
+  ForeignKeyAttribute
 } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
+import type { RelationshipMetadataWithForeignKey } from "./types";
 
 /**
  * Type guard to check if the relationship is a HasMany
@@ -33,6 +35,18 @@ export const isHasOneRelationship = (
   rel: RelationshipMetadata
 ): rel is HasOneRelationship => {
   return rel.type === "HasOne" && rel.foreignKey !== undefined;
+};
+
+// TODO is this used?
+/**
+ * Type guard to check if the relationship metadata includes a foreignKey
+ * @param rel
+ * @returns
+ */
+export const isRelationshipMetadataWithForeignKey = (
+  rel: RelationshipMetadata
+): rel is RelationshipMetadataWithForeignKey => {
+  return "foreignKey" in rel;
 };
 
 /**

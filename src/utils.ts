@@ -1,8 +1,9 @@
-import type SingleTableDesign from "./SingleTableDesign";
+import SingleTableDesign from "./SingleTableDesign";
 import {
   type DynamoTableItem,
   type BelongsToLinkDynamoItem,
-  type StringObj
+  type StringObj,
+  ForeignKey
 } from "./types";
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
@@ -68,6 +69,7 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   return entity;
 };
 
+// TODO is this still used?
 /**
  * Type guard to check if the key is defined on the entity
  */
@@ -75,6 +77,14 @@ export const isKeyOfEntity = (
   entity: SingleTableDesign,
   key: string
 ): key is keyof SingleTableDesign => {
+  return key in entity;
+};
+
+// TODO tsdoc
+export const isKeyOfObject = <T>(
+  entity: Partial<SingleTableDesign>,
+  key: any
+): key is keyof T => {
   return key in entity;
 };
 

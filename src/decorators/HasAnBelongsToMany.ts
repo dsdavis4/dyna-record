@@ -1,16 +1,18 @@
-import Metadata, { ForeignKeyAttribute, type EntityClass } from "../metadata";
+import Metadata, { type EntityClass } from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
-import { ForeignKey } from "../types";
 import { type ForeignEntityAttribute } from "./types";
 
-interface HasManyProps<T extends SingleTableDesign> {
-  foreignKey: ForeignEntityAttribute<T>;
+interface HasAndBelongsToManyProps<T extends SingleTableDesign> {
+  TODO: ForeignEntityAttribute<T>;
 }
 
-function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
+function HasAndBelongsToMany<
+  T extends SingleTableDesign,
+  K extends SingleTableDesign
+>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
-  props: HasManyProps<T>
+  props: HasAndBelongsToManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
@@ -18,14 +20,14 @@ function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
         const entity = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
-          type: "HasMany",
+          type: "HasAndBelongsToMany",
           propertyName: context.name as keyof SingleTableDesign,
-          target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyAttribute
+          target: getTarget()
+          // foreignKey: props.foreignKey as keyof SingleTableDesign
         });
       });
     }
   };
 }
 
-export default HasMany;
+export default HasAndBelongsToMany;

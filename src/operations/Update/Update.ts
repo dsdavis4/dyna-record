@@ -7,8 +7,11 @@ import type {
   HasManyRelationship
 } from "../../metadata";
 import { entityToTableItem } from "../../utils";
-import type { ForeignKey } from "../../types";
-import { RelationshipTransactions, expressionBuilder } from "../utils";
+import {
+  RelationshipTransactions,
+  expressionBuilder,
+  extractForeignKeyFromEntity
+} from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdateOptions } from "./types";
 
@@ -118,8 +121,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
   ): void {
     const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
-    const currentId =
-      entity !== undefined ? (entity[rel.foreignKey] as ForeignKey) : undefined;
+    const currentId = extractForeignKeyFromEntity(rel, entity);
 
     if (entity !== undefined && currentId !== undefined) {
       const oldLinkKeys = {

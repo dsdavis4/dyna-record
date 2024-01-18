@@ -1,5 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { type BelongsToLink } from "../relationships";
+import type { ForeignKey } from "../types";
 
 export interface AttributeMetadata {
   name: string;
@@ -12,10 +13,16 @@ interface AttributeMetadataOptions {
   nullable: boolean;
 }
 
-type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
+type RelationshipType =
+  | "HasMany"
+  | "BelongsTo"
+  | "HasOne"
+  | "HasAndBelongsToMany";
 
 export type EntityClass<T> = (new () => T) & typeof SingleTableDesign;
 type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
+
+export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
 
 interface RelationshipMetadataBase {
   type: RelationshipType;
@@ -25,23 +32,29 @@ interface RelationshipMetadataBase {
 
 export interface BelongsToRelationship extends RelationshipMetadataBase {
   type: "BelongsTo";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
 }
 
 export interface HasOneRelationship extends RelationshipMetadataBase {
   type: "HasOne";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
 }
 
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
+}
+
+export interface HasAndBelongsToManyRelationship
+  extends RelationshipMetadataBase {
+  type: "HasAndBelongsToMany";
 }
 
 export type RelationshipMetadata =
   | BelongsToRelationship
   | HasManyRelationship
-  | HasOneRelationship;
+  | HasOneRelationship
+  | HasAndBelongsToManyRelationship;
 
 export interface EntityMetadata {
   tableClassName: string; //

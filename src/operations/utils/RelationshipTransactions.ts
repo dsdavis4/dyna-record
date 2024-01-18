@@ -18,6 +18,7 @@ import {
 import { BelongsToLink } from "../../relationships";
 import type { Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
+import { extractForeignKeyFromEntity } from "./utils";
 
 type EntityData<T extends SingleTableDesign> = Pick<T, "id"> & Partial<T>;
 
@@ -77,7 +78,12 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       const isBelongsTo = isBelongsToRelationship(rel);
 
       if (isBelongsTo) {
-        const relationshipId = entityData[rel.foreignKey];
+        const relationshipId = extractForeignKeyFromEntity(
+          rel,
+          entityData as T
+        );
+
+        // const relationshipId = entityData[rel.foreignKey];
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
         if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {

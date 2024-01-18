@@ -1,4 +1,5 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import { isKeyObject } from "util/types";
+import SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
 import Metadata, {
@@ -7,11 +8,12 @@ import Metadata, {
 } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne
+  doesEntityBelongToRelAsHasOne,
+  isRelationshipMetadataWithForeignKey
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
 import type { RelationshipLookup } from "../../types";
-import { entityToTableItem } from "../../utils";
+import { entityToTableItem, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
@@ -118,39 +120,44 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    */
   private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
-    const entityMeta = Metadata.getEntity(relMeta.target.name);
 
-    const attrMeta = Object.values(entityMeta.attributes).find(
-      attr => attr.name === relMeta.foreignKey
-    );
+    if (isRelationshipMetadataWithForeignKey(relMeta)) {
+      const entityMeta = Metadata.getEntity(relMeta.target.name);
 
-    if (attrMeta?.nullable === false) {
-      this.trackValidationError(
-        new NullConstraintViolationError(
-          `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
-        )
+      const attrMeta = Object.values(entityMeta.attributes).find(
+        attr => attr.name === relMeta.foreignKey
+      );
+
+      if (attrMeta?.nullable === false) {
+        this.trackValidationError(
+          new NullConstraintViolationError(
+            `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
+          )
+        );
+      }
+
+      const tableKeys = entityToTableItem(this.EntityClass.name, {
+        [this.#primaryKeyField]: relMeta.target.primaryKeyValue(
+          item.foreignKey
+        ),
+        [this.#sortKeyField]: relMeta.target.name
+      });
+      const tableAttrs = entityToTableItem(relMeta.target.name, {
+        [relMeta.foreignKey]: null
+      });
+
+      const expression = expressionBuilder(tableAttrs);
+
+      this.#transactionBuilder.addUpdate(
+        {
+          TableName: this.#tableName,
+          Key: tableKeys,
+          UpdateExpression: expression.UpdateExpression,
+          ExpressionAttributeNames: expression.ExpressionAttributeNames
+        },
+        `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
       );
     }
-
-    const tableKeys = entityToTableItem(this.EntityClass.name, {
-      [this.#primaryKeyField]: relMeta.target.primaryKeyValue(item.foreignKey),
-      [this.#sortKeyField]: relMeta.target.name
-    });
-    const tableAttrs = entityToTableItem(relMeta.target.name, {
-      [relMeta.foreignKey]: null
-    });
-
-    const expression = expressionBuilder(tableAttrs);
-
-    this.#transactionBuilder.addUpdate(
-      {
-        TableName: this.#tableName,
-        Key: tableKeys,
-        UpdateExpression: expression.UpdateExpression,
-        ExpressionAttributeNames: expression.ExpressionAttributeNames
-      },
-      `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
-    );
   }
 
   /**
@@ -160,21 +167,23 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    */
   private buildDeleteAssociatedBelongsToLinkTransaction(
     entityId: string,
-    item: EntityClass<T>
+    item: T
   ): void {
     this.#belongsToRelationships.forEach(relMeta => {
-      const foreignKeyValue = item[relMeta.foreignKey as keyof EntityClass<T>];
+      if (isKeyOfObject(item, relMeta.foreignKey)) {
+        const foreignKeyValue = item[relMeta.foreignKey];
 
-      if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
-        this.buildDeleteBelongsToHasManyTransaction(
-          relMeta,
-          entityId,
-          foreignKeyValue
-        );
-      }
+        if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
+          this.buildDeleteBelongsToHasManyTransaction(
+            relMeta,
+            entityId,
+            foreignKeyValue
+          );
+        }
 
-      if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
-        this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
+        if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
+          this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
+        }
       }
     });
   }
@@ -228,8 +237,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @param item
    * @returns
    */
-  private isEntityClass(item: any): item is typeof this.EntityClass {
-    return item instanceof this.EntityClass;
+  private isEntityClass(item: any): item is T {
+    return item instanceof SingleTableDesign;
   }
 
   /**

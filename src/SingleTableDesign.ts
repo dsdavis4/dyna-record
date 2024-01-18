@@ -15,6 +15,8 @@ import {
   type UpdateOptions,
   Delete
 } from "./operations";
+import { ForeignKey, NullableForeignKey } from "./types";
+import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
 //      This might help me replace the EntityClass<T> that I have been passing around...
@@ -34,6 +36,15 @@ const createdAtField: DefaultFields = "createdAt";
 const updatedAtField: DefaultFields = "updatedAt";
 
 abstract class SingleTableDesign {
+  // [x: string]:
+  //   | ForeignKey
+  //   | NullableForeignKey
+  //   | NativeScalarAttributeValue
+  //   | Date
+  //   | SingleTableDesign
+  //   | null
+  //   | undefined;
+
   @Attribute({ alias: "Id" })
   public [idField]: string;
 
