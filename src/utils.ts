@@ -69,7 +69,6 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   return entity;
 };
 
-// TODO is this still used?
 /**
  * Type guard to check if the key is defined on the entity
  */

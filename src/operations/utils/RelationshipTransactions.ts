@@ -83,7 +83,6 @@ class RelationshipTransactions<T extends SingleTableDesign> {
           entityData as T
         );
 
-        // const relationshipId = entityData[rel.foreignKey];
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
         if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {
