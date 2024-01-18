@@ -15,8 +15,6 @@ import {
   type UpdateOptions,
   Delete
 } from "./operations";
-import { ForeignKey, NullableForeignKey } from "./types";
-import { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
 //      This might help me replace the EntityClass<T> that I have been passing around...

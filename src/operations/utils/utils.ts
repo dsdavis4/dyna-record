@@ -1,4 +1,4 @@
-import SingleTableDesign from "../../SingleTableDesign";
+import type SingleTableDesign from "../../SingleTableDesign";
 import type { RelationshipMetadata } from "../../metadata";
 import {
   isBelongsToRelationship,

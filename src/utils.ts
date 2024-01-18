@@ -1,9 +1,8 @@
-import SingleTableDesign from "./SingleTableDesign";
-import {
-  type DynamoTableItem,
-  type BelongsToLinkDynamoItem,
-  type StringObj,
-  ForeignKey
+import type SingleTableDesign from "./SingleTableDesign";
+import type {
+  DynamoTableItem,
+  BelongsToLinkDynamoItem,
+  StringObj
 } from "./types";
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";

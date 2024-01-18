@@ -4,8 +4,7 @@ import type {
   HasManyRelationship,
   BelongsToRelationship,
   HasOneRelationship,
-  EntityClass,
-  ForeignKeyAttribute
+  EntityClass
 } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { RelationshipMetadataWithForeignKey } from "./types";

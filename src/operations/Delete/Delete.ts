@@ -1,4 +1,3 @@
-import { isKeyObject } from "util/types";
 import SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";

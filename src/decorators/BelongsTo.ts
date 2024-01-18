@@ -1,4 +1,7 @@
-import Metadata, { ForeignKeyAttribute, type EntityClass } from "../metadata";
+import Metadata, {
+  type ForeignKeyAttribute,
+  type EntityClass
+} from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { NullableForeignKey, Optional } from "../types";
 import { type ForeignEntityAttribute } from "./types";
