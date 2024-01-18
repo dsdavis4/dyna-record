@@ -3,6 +3,9 @@ import type SingleTableDesign from "../SingleTableDesign";
 
 interface HasAndBelongsToManyProps<T extends SingleTableDesign> {
   // TODO I should do something like this to the other relationship types so that relationships are always set up correctly
+  /**
+   * The key of the model to add an association to.
+   */
   targetKey: keyof T;
 }
 
