@@ -11,7 +11,7 @@ import {
   HasOne,
   NullableForeignKeyAttribute,
   NullableAttribute,
-  HasAnBelongsToMany
+  HasAndBelongsToMany
 } from "../src/decorators";
 
 import {
@@ -134,7 +134,7 @@ class Brewery extends DrewsBrewsTable {
   @HasMany(() => Keg, { foreignKey: "breweryId" })
   public kegs: Keg[];
 
-  @HasAnBelongsToMany(() => User, { targetKey: "breweries" })
+  @HasAndBelongsToMany(() => User, { targetKey: "breweries" })
   public users: User[];
 
   public testing() {
@@ -231,7 +231,7 @@ class Keg extends DrewsBrewsTable {
 }
 
 @Entity
-class User extends SingleTableDesign {
+class User extends DrewsBrewsTable {
   @Attribute({ alias: "FirstName" })
   public firstName: string;
 
@@ -244,7 +244,7 @@ class User extends SingleTableDesign {
   @Attribute({ alias: "CognitoId" })
   public cognitoId: string;
 
-  @HasAnBelongsToMany(() => Brewery, { targetKey: "users" })
+  @HasAndBelongsToMany(() => Brewery, { targetKey: "users" })
   public breweries: Brewery[];
 }
 
@@ -289,6 +289,29 @@ class User extends SingleTableDesign {
 (async () => {
   try {
     const metadata = Metadata;
+
+    const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
+      include: [{ association: "breweries" }]
+    });
+
+    debugger;
+
+    const brewery2 = await Brewery.findById(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
+      {
+        include: [
+          { association: "users" },
+          { association: "beers" },
+          { association: "scales" },
+          { association: "rooms" },
+          { association: "kegs" }
+        ]
+      }
+    );
+
+    // TODO here... is find by id already done? If so do unit tests
+
+    debugger;
 
     // debugger;
 

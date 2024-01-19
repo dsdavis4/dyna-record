@@ -3,7 +3,9 @@ import {
   Customer,
   PaymentMethod,
   Order,
-  PaymentMethodProvider
+  PaymentMethodProvider,
+  Book,
+  Author
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -946,6 +948,177 @@ describe("FindById", () => {
     ]);
   });
 
+  it("will find an entity included HasAndBelongsToMany associations", async () => {
+    expect.assertions(6);
+
+    const bookRes = {
+      PK: "Book#789",
+      SK: "Book",
+      Id: "789",
+      Type: "Book",
+      Name: "BookAbc",
+      NumPages: 589,
+      CreatedAt: "2023-01-15T12:12:18.123Z",
+      UpdatedAt: "2023-02-15T08:31:15.148Z"
+    };
+
+    const authorLinks = [
+      {
+        PK: "Book#789",
+        SK: "Author#001",
+        Id: "001",
+        ForeignEntityType: "Author",
+        ForeignKey: "111",
+        Type: "BelongsToLink",
+        UpdatedAt: "2022-10-15T09:31:15.148Z",
+        SomeAttr: "attribute that is not modeled"
+      },
+      {
+        PK: "Book#789",
+        SK: "Author#003",
+        Id: "003",
+        ForeignEntityType: "Author",
+        ForeignKey: "112",
+        Type: "BelongsToLink",
+        UpdatedAt: "2022-11-01T23:31:21.148Z",
+        SomeAttr: "attribute that is not modeled"
+      },
+      {
+        PK: "Book#789",
+        SK: "Author#004",
+        Id: "004",
+        ForeignEntityType: "Author",
+        ForeignKey: "113",
+        Type: "BelongsToLink",
+        UpdatedAt: "2022-09-01T23:31:21.148Z",
+        SomeAttr: "attribute that is not modeled"
+      }
+    ];
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [bookRes, ...authorLinks]
+    });
+
+    const authorItems = authorLinks.map((link, idx) => ({
+      Item: {
+        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
+        SK: link.ForeignEntityType,
+        Id: link.ForeignKey,
+        Type: link.ForeignEntityType,
+        Name: `SomeName-${idx}`,
+        CreatedAt: "2023-02-15T08:31:15.148Z",
+        UpdatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    }));
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: authorItems
+    });
+
+    const result = await Book.findById("789", {
+      include: [{ association: "authors" }]
+    });
+
+    expect(result).toEqual({
+      pk: "Book#789",
+      sk: "Book",
+      id: "789",
+      type: "Book",
+      name: "BookAbc",
+      numPages: 589,
+      createdAt: "2023-01-15T12:12:18.123Z",
+      updatedAt: "2023-02-15T08:31:15.148Z",
+      authors: [
+        {
+          pk: "Author#111",
+          sk: "Author",
+          id: "111",
+          type: "Author",
+          name: "SomeName-0",
+          books: undefined,
+          createdAt: "2023-02-15T08:31:15.148Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        },
+        {
+          pk: "Author#112",
+          sk: "Author",
+          id: "112",
+          type: "Author",
+          name: "SomeName-1",
+          books: undefined,
+          createdAt: "2023-02-15T08:31:15.148Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        },
+        {
+          pk: "Author#113",
+          sk: "Author",
+          id: "113",
+          type: "Author",
+          name: "SomeName-2",
+          books: undefined,
+          createdAt: "2023-02-15T08:31:15.148Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        }
+      ]
+    });
+    expect(result).toBeInstanceOf(Book);
+    expect(result?.authors.every(order => order instanceof Author)).toEqual(
+      true
+    );
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK4",
+          FilterExpression:
+            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))",
+          ConsistentRead: true,
+          ExpressionAttributeNames: {
+            "#ForeignEntityType": "ForeignEntityType",
+            "#PK": "PK",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":ForeignEntityType3": "Author",
+            ":PK4": "Book#789",
+            ":Type1": "Book",
+            ":Type2": "BelongsToLink"
+          }
+        }
+      ]
+    ]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Author#111", SK: "Author" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Author#112", SK: "Author" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Author#113", SK: "Author" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactGetCommand" }]
+    ]);
+  });
+
   // TODO here......
 
   describe("types", () => {
@@ -1116,6 +1289,42 @@ describe("FindById", () => {
       }
     });
 
+    it("(HasAndBelongsToMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
+
+      const book = await Book.findById("789", {
+        include: [{ association: "authors" }]
+      });
+
+      if (book !== null) {
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.pk);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.sk);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.id);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.type);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.name);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.numPages);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.ownerId);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.createdAt);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        console.log(book.updatedAt);
+        // @ts-expect-error: Not included associations are not allowed
+        console.log(book.customer);
+        // @ts-expect-no-error: Included associations are allowed
+        console.log(book.authors);
+        // @ts-expect-error: Not included associations are not allowed
+        console.log(book.owner);
+      }
+    });
+
     it("(BelongsTo) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
       mockTransactGetItems.mockResolvedValueOnce({});
@@ -1145,6 +1354,22 @@ describe("FindById", () => {
         console.log(paymentMethod.orders[0].customer);
         // @ts-expect-no-error: Entity attributes should include entity attributes
         console.log(paymentMethod.orders[0].id);
+      }
+    });
+
+    it("(HasAndBelongsToMany) - included relationships should not include any of their associations", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
+
+      const book = await Book.findById("789", {
+        include: [{ association: "authors" }]
+      });
+
+      if (book !== null && book.authors?.length > 0) {
+        // @ts-expect-error: Included relationships should not include associations
+        console.log(book.authors[0].books);
+        // @ts-expect-no-error: Entity attributes should include entity attributes
+        console.log(book.authors[0].id);
       }
     });
   });

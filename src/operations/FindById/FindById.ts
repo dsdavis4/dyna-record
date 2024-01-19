@@ -293,7 +293,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         const rel = relationsLookup[tableItem.Type];
 
         if (isKeyOfEntity(parentEntity, rel.propertyName)) {
-          if (rel.type === "HasMany") {
+          if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {
             const entity = tableItemToEntity(rel.target, tableItem);
             const entities = parentEntity[rel.propertyName] ?? [];
 

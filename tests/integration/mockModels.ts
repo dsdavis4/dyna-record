@@ -12,6 +12,7 @@ import {
   NullableForeignKeyAttribute,
   NullableAttribute
 } from "../../src/decorators";
+import HasAndBelongsToMany from "../../src/decorators/HasAndBelongsToMany";
 import type {
   PrimaryKey,
   SortKey,
@@ -125,6 +126,9 @@ class Person extends MockTable {
 
   @HasOne(() => Home, { foreignKey: "personId" })
   public home: Home;
+
+  @HasMany(() => Book, { foreignKey: "ownerId" })
+  public books: Book[];
 }
 
 @Entity
@@ -181,6 +185,33 @@ class PhoneBook extends MockTable {
   public address: Address[];
 }
 
+@Entity
+class Book extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "NumPages" })
+  public numPages: number;
+
+  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  public ownerId?: NullableForeignKey;
+
+  @HasAndBelongsToMany(() => Author, { targetKey: "books" })
+  public authors: Author[];
+
+  @BelongsTo(() => Person, { foreignKey: "ownerId" })
+  public owner: Person;
+}
+
+@Entity
+class Author extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @HasAndBelongsToMany(() => Book, { targetKey: "authors" })
+  public books: Book[];
+}
+
 export {
   MockTable,
   Order,
@@ -192,5 +223,7 @@ export {
   Pet,
   Home,
   Address,
-  PhoneBook
+  PhoneBook,
+  Author,
+  Book
 };
