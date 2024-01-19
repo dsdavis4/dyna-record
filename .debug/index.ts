@@ -296,6 +296,15 @@ class User extends DrewsBrewsTable {
 
     debugger;
 
+    await User.create({
+      firstName: "test",
+      lastName: "test",
+      email: "test@test.com",
+      cognitoId: "1234"
+    });
+
+    debugger;
+
     const brewery2 = await Brewery.findById(
       "157cc981-1be2-4ecc-a257-07d9a6037559",
       {

@@ -1,5 +1,4 @@
 import { Entity, Attribute, HasAndBelongsToMany } from "../../src/decorators";
-import type { ForeignKey } from "../../src/types";
 import { MockTable } from "../integration/mockModels";
 
 describe("HasAndBelongsToMany", () => {

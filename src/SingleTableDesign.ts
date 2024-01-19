@@ -16,6 +16,7 @@ import {
   Delete
 } from "./operations";
 
+// TODO should this be renamed? Its weird to extend something called Single table design..
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
 //      This might help me replace the EntityClass<T> that I have been passing around...
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
