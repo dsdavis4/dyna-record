@@ -1,28 +1,43 @@
 import Metadata, { type EntityClass } from "../metadata";
+import { type JoinTable } from "../relationships";
 import type SingleTableDesign from "../SingleTableDesign";
 
+// TODO typedoc
 type TargetKey<T, U> = {
   [K in keyof T]: T[K] extends U[] ? K : never;
 }[keyof T];
 
+// TODO can I not use any/
+// TODO typedoc
+type ThroughFunction<J extends JoinTable<any, any>> = () => {
+  // TODO update to reflect actual args
+  joinTable: new (...args: any[]) => J;
+  foreignKey: keyof J;
+};
+
 interface HasAndBelongsToManyProps<
   T extends SingleTableDesign,
-  U extends SingleTableDesign
+  K extends SingleTableDesign,
+  J extends JoinTable<T, K>,
+  L extends JoinTable<K, T>
 > {
-  // TODO I should do something like this to the other relationship types so that relationships are always set up correctly
   /**
    * The key of the model to add an association to.
    */
-  targetKey: TargetKey<T, U>;
+  targetKey: TargetKey<T, K>;
+  // TODO tsdoc
+  through: ThroughFunction<J> | ThroughFunction<L>;
 }
 
 function HasAndBelongsToMany<
   T extends SingleTableDesign,
-  K extends SingleTableDesign
+  K extends SingleTableDesign,
+  J extends JoinTable<T, K>,
+  L extends JoinTable<K, T>
 >(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
-  _props: HasAndBelongsToManyProps<T, K>
+  props: HasAndBelongsToManyProps<T, K, J, L>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {

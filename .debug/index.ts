@@ -22,13 +22,7 @@ import {
 } from "../src/types";
 
 import Metadata from "../src/metadata";
-import { BelongsToLink } from "../src/relationships";
-
-// TODO START HERE... Work on HasAndBelongsToMany
-//      Does this need to be its own decorator? Can it use BelongsTo and HasMany as they are today? If I do that make sure to add tests for each operation
-//      Would it be cleaner to make its own?
-//    - In sql I would need a third table
-//      - Idea: What if he decorator managed belongs to links in each entitties patition
+import { BelongsToLink, JoinTable } from "../src/relationships";
 
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
 //      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
@@ -134,7 +128,11 @@ class Brewery extends DrewsBrewsTable {
   @HasMany(() => Keg, { foreignKey: "breweryId" })
   public kegs: Keg[];
 
-  @HasAndBelongsToMany(() => User, { targetKey: "breweries" })
+  @HasAndBelongsToMany(() => User, {
+    targetKey: "breweries",
+    // TODO should these be flat instead of in a function?
+    through: () => ({ joinTable: BreweryUser, foreignKey: "breweryId" })
+  })
   public users: User[];
 
   public testing() {
@@ -244,10 +242,17 @@ class User extends DrewsBrewsTable {
   @Attribute({ alias: "CognitoId" })
   public cognitoId: string;
 
-  @HasAndBelongsToMany(() => Brewery, { targetKey: "users" })
+  @HasAndBelongsToMany(() => Brewery, {
+    targetKey: "users",
+    through: () => ({ joinTable: BreweryUser, foreignKey: "userId" })
+  })
   public breweries: Brewery[];
 }
 
+class BreweryUser extends JoinTable<Brewery, User> {
+  public breweryId: ForeignKey;
+  public userId: ForeignKey;
+}
 // TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
 
@@ -290,9 +295,21 @@ class User extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
-      include: [{ association: "breweries" }]
-    });
+    // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
+    //   include: [{ association: "breweries" }]
+    // });
+
+    // await BreweryUser.add({ breweryId: "1", userId: "3" });
+
+    await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
+
+    // I need this to only accept "Brewery" or "User" without changing how
+
+    // const breweryUser = new BreweryUser();
+
+    // await breweryUser.add(User, { breweryId: "1" });
+
+    // await BreweryUser.add(new Scale());
 
     debugger;
 

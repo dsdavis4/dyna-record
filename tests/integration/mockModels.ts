@@ -13,6 +13,7 @@ import {
   NullableAttribute
 } from "../../src/decorators";
 import HasAndBelongsToMany from "../../src/decorators/HasAndBelongsToMany";
+import { JoinTable } from "../../src/relationships";
 import type {
   PrimaryKey,
   SortKey,
@@ -196,7 +197,10 @@ class Book extends MockTable {
   @NullableForeignKeyAttribute({ alias: "PersonId" })
   public ownerId?: NullableForeignKey;
 
-  @HasAndBelongsToMany(() => Author, { targetKey: "books" })
+  @HasAndBelongsToMany(() => Author, {
+    targetKey: "books",
+    through: () => ({ joinTable: AuthorBook, foreignKey: "bookId" })
+  })
   public authors: Author[];
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
@@ -208,8 +212,16 @@ class Author extends MockTable {
   @Attribute({ alias: "Name" })
   public name: string;
 
-  @HasAndBelongsToMany(() => Book, { targetKey: "authors" })
+  @HasAndBelongsToMany(() => Book, {
+    targetKey: "authors",
+    through: () => ({ joinTable: AuthorBook, foreignKey: "authorId" })
+  })
   public books: Book[];
+}
+
+export class AuthorBook extends JoinTable<Author, Book> {
+  public bookId: ForeignKey;
+  public authorId: ForeignKey;
 }
 
 export {
