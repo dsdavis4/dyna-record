@@ -1,6 +1,3 @@
-import { Entity, HasAndBelongsToMany } from "../../src/decorators";
-import { JoinTable } from "../../src/relationships";
-import type { ForeignKey } from "../../src/types";
 import { Author, Book, AuthorBook, Customer } from "../integration/mockModels";
 
 describe("JoinTable", () => {
