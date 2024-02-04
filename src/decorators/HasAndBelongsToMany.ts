@@ -9,7 +9,9 @@ type TargetKey<T, U> = {
 
 // TODO can I not use any/
 // TODO typedoc
-type ThroughFunction<J extends JoinTable<any, any>> = () => {
+type ThroughFunction<
+  J extends JoinTable<SingleTableDesign, SingleTableDesign>
+> = () => {
   // TODO update to reflect actual args
   joinTable: new (...args: any[]) => J;
   foreignKey: keyof J;
@@ -44,10 +46,20 @@ function HasAndBelongsToMany<
       context.addInitializer(function () {
         const entity = Object.getPrototypeOf(this);
 
+        const target = getTarget();
+
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasAndBelongsToMany",
           propertyName: context.name as keyof SingleTableDesign,
-          target: getTarget()
+          target
+        });
+
+        Metadata.addJoinTable(props.through().joinTable.name, {
+          entity: target,
+          foreignKey: props.through().foreignKey as keyof JoinTable<
+            SingleTableDesign,
+            SingleTableDesign
+          >
         });
       });
     }

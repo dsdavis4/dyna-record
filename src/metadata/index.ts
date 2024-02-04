@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import { type BelongsToLink } from "../relationships";
+import { type JoinTable, type BelongsToLink } from "../relationships";
 import type { ForeignKey } from "../types";
 
 export interface AttributeMetadata {
@@ -69,12 +69,18 @@ export interface TableMetadata {
   delimiter: string;
 }
 
+export interface JoinTableMetadata {
+  entity: EntityClass<SingleTableDesign>;
+  foreignKey: keyof JoinTable<SingleTableDesign, SingleTableDesign>;
+}
+
 export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 
 class Metadata {
   private readonly tables: Record<string, TableMetadata> = {};
   private readonly entities: Record<string, EntityMetadata> = {};
   private readonly entityClasses: Entity[] = [];
+  private readonly joinTables: Record<string, JoinTableMetadata[]> = {};
 
   private initialized: boolean = false;
 
@@ -107,6 +113,12 @@ class Metadata {
     this.init();
     const entityMetadata = this.getEntity(entityName);
     return this.getTable(entityMetadata.tableClassName);
+  }
+
+  // TODO typedoc
+  public getJoinTable(joinTableName: string): JoinTableMetadata[] {
+    this.init();
+    return this.joinTables[joinTableName];
   }
 
   /**
@@ -145,6 +157,25 @@ class Metadata {
     if (entityMetadata.relationships[options.propertyName] === undefined) {
       entityMetadata.relationships[options.propertyName] = options;
     }
+  }
+
+  // TODO typedoc
+  public addJoinTable(joinTableName: string, options: JoinTableMetadata): void {
+    const metadata = this.joinTables[joinTableName];
+
+    if (metadata === undefined) {
+      this.joinTables[joinTableName] = [options];
+    } else {
+      this.joinTables[joinTableName].push(options);
+    }
+
+    // TODO is this a real case?
+    // TODO add unit test for this
+    // If this event possible?
+    // throw a custom error if I keep it
+    // if (this.joinTables[joinTableName].length > 2) {
+    //   throw new Error("Cannot join multiple tables");
+    // }
   }
 
   /**

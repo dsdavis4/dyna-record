@@ -43,3 +43,6 @@ export interface RelationshipMetaObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
 }
+
+// TODO add typedoc of delete if not used
+export type Constructor<T> = new () => T;

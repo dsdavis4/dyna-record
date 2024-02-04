@@ -253,6 +253,7 @@ class BreweryUser extends JoinTable<Brewery, User> {
   public breweryId: ForeignKey;
   public userId: ForeignKey;
 }
+
 // TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
 
@@ -301,7 +302,34 @@ class BreweryUser extends JoinTable<Brewery, User> {
 
     // await BreweryUser.add({ breweryId: "1", userId: "3" });
 
-    await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
+    // await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
+
+    // const testBrewery = await Brewery.create({
+    //   name: "test has and belongs to many"
+    // });
+
+    // const user = await User.create({
+    //   firstName: "testing",
+    //   lastName: "bla",
+    //   email: "test@test.com",
+    //   cognitoId: "abc123"
+    // });
+
+    const testBrewery = await Brewery.findById(
+      "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+      { include: [{ association: "users" }] }
+    );
+    const user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
+      include: [{ association: "breweries" }]
+    });
+
+    debugger;
+
+    if (testBrewery && user) {
+      await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+    }
+
+    debugger;
 
     // I need this to only accept "Brewery" or "User" without changing how
 
