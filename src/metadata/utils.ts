@@ -36,7 +36,6 @@ export const isHasOneRelationship = (
   return rel.type === "HasOne" && rel.foreignKey !== undefined;
 };
 
-// TODO is this used?
 /**
  * Type guard to check if the relationship metadata includes a foreignKey
  * @param rel
