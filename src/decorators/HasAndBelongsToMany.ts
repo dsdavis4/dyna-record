@@ -12,7 +12,6 @@ type TargetKey<T, U> = {
 type ThroughFunction<
   J extends JoinTable<SingleTableDesign, SingleTableDesign>
 > = () => {
-  // TODO update to reflect actual args
   joinTable: new (...args: any[]) => J;
   foreignKey: keyof J;
 };
@@ -27,7 +26,9 @@ interface HasAndBelongsToManyProps<
    * The key of the model to add an association to.
    */
   targetKey: TargetKey<T, K>;
-  // TODO tsdoc
+  /**
+   * The JoinTable properties this relationship is associated through
+   */
   through: ThroughFunction<J> | ThroughFunction<L>;
 }
 
