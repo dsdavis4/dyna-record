@@ -323,10 +323,25 @@ class BreweryUser extends JoinTable<Brewery, User> {
       include: [{ association: "breweries" }]
     });
 
-    debugger;
-
     if (testBrewery && user) {
-      await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+      // await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+
+      await BreweryUser.delete({ breweryId: testBrewery.id, userId: user.id });
+
+      debugger;
+
+      const testBrewery2 = await Brewery.findById(
+        "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+        { include: [{ association: "users" }] }
+      );
+      const user2 = await User.findById(
+        "4aca132d-5c14-4d53-a182-09da6a457a4d",
+        {
+          include: [{ association: "breweries" }]
+        }
+      );
+
+      debugger;
     }
 
     debugger;
