@@ -115,7 +115,11 @@ class Metadata {
     return this.getTable(entityMetadata.tableClassName);
   }
 
-  // TODO typedoc
+  /**
+   * Returns JoinTable metadata by name
+   * @param {string} joinTableName - Name of the JoinTable class
+   * @returns joinTableName metadata
+   */
   public getJoinTable(joinTableName: string): JoinTableMetadata[] {
     this.init();
     return this.joinTables[joinTableName];
@@ -159,7 +163,11 @@ class Metadata {
     }
   }
 
-  // TODO typedoc
+  /**
+   * Adds JoinTable metadata to storage
+   * @param joinTableName
+   * @param options
+   */
   public addJoinTable(joinTableName: string, options: JoinTableMetadata): void {
     const metadata = this.joinTables[joinTableName];
 
