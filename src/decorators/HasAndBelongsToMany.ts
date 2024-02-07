@@ -2,17 +2,29 @@ import Metadata, { type EntityClass } from "../metadata";
 import { type JoinTable } from "../relationships";
 import type SingleTableDesign from "../SingleTableDesign";
 
-// TODO typedoc
+/**
+ * The key on the related Entity which is associated with this Entity
+ */
 type TargetKey<T, U> = {
   [K in keyof T]: T[K] extends U[] ? K : never;
 }[keyof T];
 
-// TODO can I not use any/
-// TODO typedoc
+/**
+ * Represents a function returning metadata for a join table.
+ * @template J The type of the join table.
+ */
 type ThroughFunction<
   J extends JoinTable<SingleTableDesign, SingleTableDesign>
 > = () => {
+  /**
+   * The constructor function for the join table.
+   * @param {...any[]} args Constructor arguments for the join table.
+   * @returns {J} An instance of the join table.
+   */
   joinTable: new (...args: any[]) => J;
+  /**
+   * The key representing the foreign key property of the join table.
+   */
   foreignKey: keyof J;
 };
 
