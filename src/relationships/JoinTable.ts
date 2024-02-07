@@ -53,10 +53,6 @@ abstract class JoinTable<
   T extends SingleTableDesign,
   K extends SingleTableDesign
 > {
-  // TODO make this so that it only allows ForeignKey types
-  // TODO If I keep this add a test that only ForeignKey types are allowed
-  // [key: string]: ForeignKey;
-
   constructor(
     private readonly type1: EntityClass<T>,
     private readonly type2: EntityClass<K>
