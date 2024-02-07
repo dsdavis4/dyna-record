@@ -181,9 +181,9 @@ class Metadata {
     // TODO add unit test for this
     // If this event possible?
     // throw a custom error if I keep it
-    // if (this.joinTables[joinTableName].length > 2) {
-    //   throw new Error("Cannot join multiple tables");
-    // }
+    if (this.joinTables[joinTableName].length > 2) {
+      throw new Error("Cannot join multiple tables");
+    }
   }
 
   /**
