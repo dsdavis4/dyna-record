@@ -130,7 +130,6 @@ class Brewery extends DrewsBrewsTable {
 
   @HasAndBelongsToMany(() => User, {
     targetKey: "breweries",
-    // TODO should these be flat instead of in a function?
     through: () => ({ joinTable: BreweryUser, foreignKey: "breweryId" })
   })
   public users: User[];
@@ -377,8 +376,6 @@ class BreweryUser extends JoinTable<Brewery, User> {
         ]
       }
     );
-
-    // TODO here... is find by id already done? If so do unit tests
 
     debugger;
 
