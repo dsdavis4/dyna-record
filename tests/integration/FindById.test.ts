@@ -1119,8 +1119,6 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO here......
-
   describe("types", () => {
     describe("operation results", () => {
       it("HasOne - when including an optional property, the returned type is optional", async () => {
