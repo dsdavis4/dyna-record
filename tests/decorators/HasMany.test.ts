@@ -68,25 +68,6 @@ describe("HasMany", () => {
       }
     });
 
-    // TODO this should pass
-    // it("will allow the foreign key to be an attribute on the associated entities model", () => {
-    //   @Entity
-    //   class ModelOne extends MockTable {
-    //     @Attribute({ alias: "Key1" })
-    //     public key1: string;
-
-    //     @BelongsTo(() => ModelTwo, { foreignKey: "key1" })
-    //     public modelTwoRel: ModelTwo;
-    //   }
-
-    //   @Entity
-    //   class ModelTwo extends MockTable {
-    //     // @ts-expect-no-error: HasMany rel can be optional
-    //     @HasMany(() => ModelOne, { foreignKey: "key1" })
-    //     public modelOneRel?: ModelOne[];
-    //   }
-    // });
-
     it("will not allow relationship attributes as the foreign key", () => {
       @Entity
       class ModelOne extends MockTable {

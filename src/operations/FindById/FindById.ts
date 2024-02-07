@@ -120,6 +120,11 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
 
     const transactionRes = await this.#transactionBuilder.executeTransaction();
 
+    if (transactionRes.some(res => res.Item === undefined)) {
+      // TODO I am getting this on some queries... why?
+      console.error("ERROR - Orphaned Belongs To Links");
+    }
+
     return this.resolveFindByIdIncludesResults(
       sortedQueryResults.item,
       transactionRes,
@@ -293,7 +298,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         const rel = relationsLookup[tableItem.Type];
 
         if (isKeyOfEntity(parentEntity, rel.propertyName)) {
-          if (rel.type === "HasMany") {
+          if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {
             const entity = tableItemToEntity(rel.target, tableItem);
             const entities = parentEntity[rel.propertyName] ?? [];
 

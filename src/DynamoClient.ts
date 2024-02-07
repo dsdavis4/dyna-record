@@ -44,6 +44,8 @@ const dynamo = DynamoDBDocumentClient.from(
 
 // TODO should these all be static?
 
+// TODO move to dynamo-utils folder
+
 class DynamoClient {
   public async getItem(
     params: GetCommandInput

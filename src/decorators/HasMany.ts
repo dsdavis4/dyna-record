@@ -1,4 +1,7 @@
-import Metadata, { type EntityClass } from "../metadata";
+import Metadata, {
+  type ForeignKeyAttribute,
+  type EntityClass
+} from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 import { type ForeignEntityAttribute } from "./types";
 
@@ -20,7 +23,7 @@ function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
           type: "HasMany",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
-          foreignKey: props.foreignKey as keyof SingleTableDesign
+          foreignKey: props.foreignKey as ForeignKeyAttribute
         });
       });
     }

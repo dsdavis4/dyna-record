@@ -1,10 +1,13 @@
-import Metadata, { type EntityClass } from "../metadata";
+import Metadata, {
+  type ForeignKeyAttribute,
+  type EntityClass
+} from "../metadata";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { Optional } from "../types";
 import { type ForeignEntityAttribute } from "./types";
 
 interface HasOneProps<T extends SingleTableDesign> {
-  foreignKey: ForeignEntityAttribute<T>;
+  foreignKey: ForeignEntityAttribute<T> & keyof T;
 }
 
 function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
@@ -24,7 +27,7 @@ function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
           type: "HasOne",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
-          foreignKey: props.foreignKey as keyof SingleTableDesign
+          foreignKey: props.foreignKey as ForeignKeyAttribute
         });
       });
     }

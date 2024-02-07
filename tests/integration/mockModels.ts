@@ -12,6 +12,8 @@ import {
   NullableForeignKeyAttribute,
   NullableAttribute
 } from "../../src/decorators";
+import HasAndBelongsToMany from "../../src/decorators/HasAndBelongsToMany";
+import { JoinTable } from "../../src/relationships";
 import type {
   PrimaryKey,
   SortKey,
@@ -125,6 +127,9 @@ class Person extends MockTable {
 
   @HasOne(() => Home, { foreignKey: "personId" })
   public home: Home;
+
+  @HasMany(() => Book, { foreignKey: "ownerId" })
+  public books: Book[];
 }
 
 @Entity
@@ -181,6 +186,44 @@ class PhoneBook extends MockTable {
   public address: Address[];
 }
 
+@Entity
+class Book extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @Attribute({ alias: "NumPages" })
+  public numPages: number;
+
+  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  public ownerId?: NullableForeignKey;
+
+  @HasAndBelongsToMany(() => Author, {
+    targetKey: "books",
+    through: () => ({ joinTable: AuthorBook, foreignKey: "bookId" })
+  })
+  public authors: Author[];
+
+  @BelongsTo(() => Person, { foreignKey: "ownerId" })
+  public owner: Person;
+}
+
+@Entity
+class Author extends MockTable {
+  @Attribute({ alias: "Name" })
+  public name: string;
+
+  @HasAndBelongsToMany(() => Book, {
+    targetKey: "authors",
+    through: () => ({ joinTable: AuthorBook, foreignKey: "authorId" })
+  })
+  public books: Book[];
+}
+
+export class AuthorBook extends JoinTable<Author, Book> {
+  public bookId: ForeignKey;
+  public authorId: ForeignKey;
+}
+
 export {
   MockTable,
   Order,
@@ -192,5 +235,7 @@ export {
   Pet,
   Home,
   Address,
-  PhoneBook
+  PhoneBook,
+  Author,
+  Book
 };

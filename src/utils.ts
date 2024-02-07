@@ -1,8 +1,8 @@
 import type SingleTableDesign from "./SingleTableDesign";
-import {
-  type DynamoTableItem,
-  type BelongsToLinkDynamoItem,
-  type StringObj
+import type {
+  DynamoTableItem,
+  BelongsToLinkDynamoItem,
+  StringObj
 } from "./types";
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
@@ -75,6 +75,19 @@ export const isKeyOfEntity = (
   entity: SingleTableDesign,
   key: string
 ): key is keyof SingleTableDesign => {
+  return key in entity;
+};
+
+/**
+ * Type guard to check if the key is a defined property on the entity
+ * @param entity
+ * @param key
+ * @returns
+ */
+export const isKeyOfObject = <T>(
+  entity: Partial<SingleTableDesign>,
+  key: any
+): key is keyof T => {
   return key in entity;
 };
 

@@ -1,6 +1,11 @@
+import type SingleTableDesign from "../../SingleTableDesign";
 import type { RelationshipMetadata } from "../../metadata";
-import { isBelongsToRelationship } from "../../metadata/utils";
-import type { RelationshipMetaObj } from "../../types";
+import {
+  isBelongsToRelationship,
+  isRelationshipMetadataWithForeignKey
+} from "../../metadata/utils";
+import type { ForeignKey, Optional, RelationshipMetaObj } from "../../types";
+import { isKeyOfObject } from "../../utils";
 
 /**
  * Creates an object including
@@ -24,4 +29,21 @@ export const buildEntityRelationshipMetaObj = (
     },
     { relationsLookup: {}, belongsToRelationships: [] }
   );
+};
+
+/**
+ * Extracts a ForeignKey value from an entity instance
+ * @param relMeta - RelationshipMetadata for associated foreignKey
+ * @param entity - instance of SingleTableDesign
+ * @returns
+ */
+export const extractForeignKeyFromEntity = <T extends SingleTableDesign>(
+  relMeta: RelationshipMetadata,
+  entity?: T
+): Optional<ForeignKey> => {
+  return entity !== undefined &&
+    isRelationshipMetadataWithForeignKey(relMeta) &&
+    isKeyOfObject(entity, relMeta.foreignKey)
+    ? entity[relMeta.foreignKey]
+    : undefined;
 };

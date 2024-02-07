@@ -1,5 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import { type BelongsToLink } from "../relationships";
+import { type JoinTable, type BelongsToLink } from "../relationships";
+import type { ForeignKey } from "../types";
 
 export interface AttributeMetadata {
   name: string;
@@ -12,10 +13,16 @@ interface AttributeMetadataOptions {
   nullable: boolean;
 }
 
-type RelationshipType = "HasMany" | "BelongsTo" | "HasOne";
+type RelationshipType =
+  | "HasMany"
+  | "BelongsTo"
+  | "HasOne"
+  | "HasAndBelongsToMany";
 
 export type EntityClass<T> = (new () => T) & typeof SingleTableDesign;
 type Entity = new (...args: any) => SingleTableDesign | BelongsToLink;
+
+export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
 
 interface RelationshipMetadataBase {
   type: RelationshipType;
@@ -25,23 +32,29 @@ interface RelationshipMetadataBase {
 
 export interface BelongsToRelationship extends RelationshipMetadataBase {
   type: "BelongsTo";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
 }
 
 export interface HasOneRelationship extends RelationshipMetadataBase {
   type: "HasOne";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
 }
 
 export interface HasManyRelationship extends RelationshipMetadataBase {
   type: "HasMany";
-  foreignKey: keyof SingleTableDesign;
+  foreignKey: ForeignKeyAttribute;
+}
+
+export interface HasAndBelongsToManyRelationship
+  extends RelationshipMetadataBase {
+  type: "HasAndBelongsToMany";
 }
 
 export type RelationshipMetadata =
   | BelongsToRelationship
   | HasManyRelationship
-  | HasOneRelationship;
+  | HasOneRelationship
+  | HasAndBelongsToManyRelationship;
 
 export interface EntityMetadata {
   tableClassName: string; //
@@ -56,12 +69,18 @@ export interface TableMetadata {
   delimiter: string;
 }
 
+export interface JoinTableMetadata {
+  entity: EntityClass<SingleTableDesign>;
+  foreignKey: keyof JoinTable<SingleTableDesign, SingleTableDesign>;
+}
+
 export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
 
 class Metadata {
   private readonly tables: Record<string, TableMetadata> = {};
   private readonly entities: Record<string, EntityMetadata> = {};
   private readonly entityClasses: Entity[] = [];
+  private readonly joinTables: Record<string, JoinTableMetadata[]> = {};
 
   private initialized: boolean = false;
 
@@ -94,6 +113,16 @@ class Metadata {
     this.init();
     const entityMetadata = this.getEntity(entityName);
     return this.getTable(entityMetadata.tableClassName);
+  }
+
+  /**
+   * Returns JoinTable metadata by name
+   * @param {string} joinTableName - Name of the JoinTable class
+   * @returns joinTableName metadata
+   */
+  public getJoinTable(joinTableName: string): JoinTableMetadata[] {
+    this.init();
+    return this.joinTables[joinTableName];
   }
 
   /**
@@ -131,6 +160,22 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
     if (entityMetadata.relationships[options.propertyName] === undefined) {
       entityMetadata.relationships[options.propertyName] = options;
+    }
+  }
+
+  /**
+   * Adds JoinTable metadata to storage
+   * @param joinTableName
+   * @param options
+   */
+  public addJoinTable(joinTableName: string, options: JoinTableMetadata): void {
+    const metadata = this.joinTables[joinTableName];
+
+    if (metadata === undefined) {
+      this.joinTables[joinTableName] = [options];
+    } else if (this.joinTables[joinTableName].length === 1) {
+      // There can only be two tables in a join table
+      this.joinTables[joinTableName].push(options);
     }
   }
 

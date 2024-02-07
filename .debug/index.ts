@@ -10,7 +10,8 @@ import {
   BelongsTo,
   HasOne,
   NullableForeignKeyAttribute,
-  NullableAttribute
+  NullableAttribute,
+  HasAndBelongsToMany
 } from "../src/decorators";
 
 import {
@@ -21,7 +22,7 @@ import {
 } from "../src/types";
 
 import Metadata from "../src/metadata";
-import { BelongsToLink } from "../src/relationships";
+import { BelongsToLink, JoinTable } from "../src/relationships";
 
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
 //      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
@@ -34,6 +35,9 @@ import { BelongsToLink } from "../src/relationships";
 //  the accepted comment has conversations about getting class name on class field decorators
 //   this would make it so I dont have to have addInitializer methods
 //
+
+// TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
+//       I think I had a medium article about a library that does this
 
 // TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
 //    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
@@ -123,6 +127,12 @@ class Brewery extends DrewsBrewsTable {
 
   @HasMany(() => Keg, { foreignKey: "breweryId" })
   public kegs: Keg[];
+
+  @HasAndBelongsToMany(() => User, {
+    targetKey: "breweries",
+    through: () => ({ joinTable: BreweryUser, foreignKey: "breweryId" })
+  })
+  public users: User[];
 
   public testing() {
     return "hi";
@@ -217,6 +227,32 @@ class Keg extends DrewsBrewsTable {
   public beer: Beer;
 }
 
+@Entity
+class User extends DrewsBrewsTable {
+  @Attribute({ alias: "FirstName" })
+  public firstName: string;
+
+  @Attribute({ alias: "LastName" })
+  public lastName: string;
+
+  @Attribute({ alias: "Email" })
+  public email: string;
+
+  @Attribute({ alias: "CognitoId" })
+  public cognitoId: string;
+
+  @HasAndBelongsToMany(() => Brewery, {
+    targetKey: "users",
+    through: () => ({ joinTable: BreweryUser, foreignKey: "userId" })
+  })
+  public breweries: Brewery[];
+}
+
+class BreweryUser extends JoinTable<Brewery, User> {
+  public breweryId: ForeignKey;
+  public userId: ForeignKey;
+}
+
 // TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
 
@@ -251,12 +287,97 @@ class Keg extends DrewsBrewsTable {
 // TODO where possible change code to use Map instead oj objects because it is more efficient (check on this..)
 
 // TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
+//      Idea... I can add the name of the key that a ForeignKey applies to on the other model
 
 // TODO find all instances where I throw a plain "Error" and make a custom error
 
 (async () => {
   try {
     const metadata = Metadata;
+
+    // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
+    //   include: [{ association: "breweries" }]
+    // });
+
+    // await BreweryUser.add({ breweryId: "1", userId: "3" });
+
+    // await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
+
+    // const testBrewery = await Brewery.create({
+    //   name: "test has and belongs to many"
+    // });
+
+    // const user = await User.create({
+    //   firstName: "testing",
+    //   lastName: "bla",
+    //   email: "test@test.com",
+    //   cognitoId: "abc123"
+    // });
+
+    const testBrewery = await Brewery.findById(
+      "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+      { include: [{ association: "users" }] }
+    );
+    const user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
+      include: [{ association: "breweries" }]
+    });
+
+    if (testBrewery && user) {
+      // await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+
+      await BreweryUser.delete({ breweryId: testBrewery.id, userId: user.id });
+
+      debugger;
+
+      const testBrewery2 = await Brewery.findById(
+        "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+        { include: [{ association: "users" }] }
+      );
+      const user2 = await User.findById(
+        "4aca132d-5c14-4d53-a182-09da6a457a4d",
+        {
+          include: [{ association: "breweries" }]
+        }
+      );
+
+      debugger;
+    }
+
+    debugger;
+
+    // I need this to only accept "Brewery" or "User" without changing how
+
+    // const breweryUser = new BreweryUser();
+
+    // await breweryUser.add(User, { breweryId: "1" });
+
+    // await BreweryUser.add(new Scale());
+
+    debugger;
+
+    await User.create({
+      firstName: "test",
+      lastName: "test",
+      email: "test@test.com",
+      cognitoId: "1234"
+    });
+
+    debugger;
+
+    const brewery2 = await Brewery.findById(
+      "157cc981-1be2-4ecc-a257-07d9a6037559",
+      {
+        include: [
+          { association: "users" },
+          { association: "beers" },
+          { association: "scales" },
+          { association: "rooms" },
+          { association: "kegs" }
+        ]
+      }
+    );
+
+    debugger;
 
     // debugger;
 
