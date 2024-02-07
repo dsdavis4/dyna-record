@@ -173,16 +173,9 @@ class Metadata {
 
     if (metadata === undefined) {
       this.joinTables[joinTableName] = [options];
-    } else {
+    } else if (this.joinTables[joinTableName].length === 1) {
+      // There can only be two tables in a join table
       this.joinTables[joinTableName].push(options);
-    }
-
-    // TODO is this a real case?
-    // TODO add unit test for this
-    // If this event possible?
-    // throw a custom error if I keep it
-    if (this.joinTables[joinTableName].length > 2) {
-      throw new Error("Cannot join multiple tables");
     }
   }
 

@@ -74,8 +74,6 @@ abstract class JoinTable<
   ): Promise<void> {
     const transactionBuilder = new TransactionBuilder();
 
-    // Table can never have more than two items
-    // validated in decorator.. TODO check this
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
 
     JoinTable.createBelongsToLink(transactionBuilder, keys, rel1, rel2);
@@ -95,8 +93,6 @@ abstract class JoinTable<
   ): Promise<void> {
     const transactionBuilder = new TransactionBuilder();
 
-    // Table can never have more than two items
-    // validated in decorator.. TODO check this
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
 
     JoinTable.deleteBelongsToLink(transactionBuilder, keys, rel1, rel2);
