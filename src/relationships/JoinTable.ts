@@ -9,17 +9,24 @@ import type { ForeignKey } from "../types";
 import { entityToTableItem } from "../utils";
 import BelongsToLink from "./BelongsToLink";
 
-// TODO move types to a type file
-
+/**
+ * Exclude the type1 type2 instance keys
+ */
 type ExcludeKeys = "type1" | "type2";
 
+/**
+ * ForeignKey properties of the join table
+ */
 type ForeignKeyProperties<T> = {
   [P in Exclude<keyof T, ExcludeKeys>]: T[P] extends ForeignKey
     ? string
     : never;
 };
 
-interface TranactionProps {
+/**
+ * Common props for building transactions
+ */
+interface TransactionProps {
   tableProps: TableMetadata;
   entities: {
     parentEntity: EntityClass<SingleTableDesign>;
@@ -28,13 +35,6 @@ interface TranactionProps {
   ids: { parentId: string; linkedEntityId: string };
 }
 
-// TODO typedoc for everything in here
-
-// type ForeignKeyAttribute<T extends SingleTableDesign> = keyof T & ForeignKey;
-
-// type ForeignKeyParam<T extends SingleTableDesign> =
-
-// TODO is example still valid? Check at end of this..
 /**
  * Abstract class representing a join table for HasAndBelongsToMany relationships.
  * This class should be extended for specific join table implementations.
@@ -62,8 +62,12 @@ abstract class JoinTable<
     private readonly type2: EntityClass<K>
   ) {}
 
-  // TODO typedoc
-  // TODO type tests similiar to add
+  /**
+   * Create a JoinTable entry
+   * Adds BelongsToLink to each associated Entity's partition
+   * @param this
+   * @param keys
+   */
   public static async create<
     ThisClass extends JoinTable<T, K>,
     T extends SingleTableDesign,
@@ -82,7 +86,12 @@ abstract class JoinTable<
     await transactionBuilder.executeTransaction();
   }
 
-  // TODO typedoc
+  /**
+   * Delete a JoinTable entry
+   * Deletes BelongsToLink from each associated Entity's partition
+   * @param this
+   * @param keys
+   */
   public static async delete<
     ThisClass extends JoinTable<T, K>,
     T extends SingleTableDesign,
@@ -101,7 +110,15 @@ abstract class JoinTable<
     await transactionBuilder.executeTransaction();
   }
 
-  // TODO typedoc
+  /**
+   * Creates transactions:
+   *   1. Create a BelongsToLink in parents partition if its not already linked
+   *   2. Ensures that the parent EntityExists
+   * @param transactionBuilder
+   * @param keys
+   * @param parentEntityMeta
+   * @param linkedEntityMeta
+   */
   private static createBelongsToLink(
     transactionBuilder: TransactionBuilder,
     keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
@@ -132,7 +149,6 @@ abstract class JoinTable<
       `${parentEntity.name} with ID ${linkedEntityId} is already linked to ${linkedEntity.name} with ID ${parentId}`
     );
 
-    // // TODO check this condition works
     transactionBuilder.addConditionCheck(
       {
         TableName: tableName,
@@ -146,7 +162,14 @@ abstract class JoinTable<
     );
   }
 
-  // TODO typedoc
+  /**
+   * Deletes transactions:
+   *   1. Delete a BelongsToLink in parents partition if its linked
+   * @param transactionBuilder
+   * @param keys
+   * @param parentEntityMeta
+   * @param linkedEntityMeta
+   */
   private static deleteBelongsToLink(
     transactionBuilder: TransactionBuilder,
     keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
@@ -163,7 +186,6 @@ abstract class JoinTable<
       parentEntity.name
     );
 
-    // TODO add test for error case
     transactionBuilder.addDelete(
       {
         TableName: tableName,
@@ -196,7 +218,7 @@ abstract class JoinTable<
     keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
-  ): TranactionProps {
+  ): TransactionProps {
     const { entity: parentEntity, foreignKey: parentFK } = parentEntityMeta;
     const { entity: linkedEntity, foreignKey: linkedFK } = linkedEntityMeta;
 
