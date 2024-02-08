@@ -19,9 +19,10 @@ export interface SortedQueryResults {
 type IncludedKeys<
   T extends SingleTableDesign,
   Opts extends FindByIdOptions<T>
-> = Opts extends Required<FindByIdOptions<T>>
-  ? [...NonNullable<Opts>["include"]][number]["association"]
-  : never;
+> =
+  Opts extends Required<FindByIdOptions<T>>
+    ? [...NonNullable<Opts>["include"]][number]["association"]
+    : never;
 
 type EntityKeysWithIncludedAssociations<
   T extends SingleTableDesign,
@@ -30,8 +31,8 @@ type EntityKeysWithIncludedAssociations<
   [K in P]: T[K] extends SingleTableDesign
     ? EntityAttributes<T>
     : T[K] extends SingleTableDesign[]
-    ? Array<EntityAttributes<T>>
-    : T[K];
+      ? Array<EntityAttributes<T>>
+      : T[K];
 };
 
 export type FindByIdIncludesRes<

@@ -13,6 +13,12 @@ module.exports = {
       parserOptions: {
         sourceType: "script"
       }
+    },
+    {
+      files: ["*.test.ts"],
+      rules: {
+        "@typescript-eslint/no-unsafe-argument": "off"
+      }
     }
   ],
   parserOptions: {

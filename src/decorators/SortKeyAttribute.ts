@@ -1,3 +1,4 @@
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata from "../metadata";
 import { type SortKey } from "../types";
 
@@ -12,7 +13,7 @@ function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity = Object.getPrototypeOf(this);
+        const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),

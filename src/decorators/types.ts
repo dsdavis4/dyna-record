@@ -9,8 +9,8 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
   [K in keyof T]: T[K] extends ForeignKey
     ? K
     : T[K] extends NullableForeignKey
-    ? Optional<K>
-    : never;
+      ? Optional<K>
+      : never;
 }[keyof EntityAttributes<T>];
 
 export interface AttributeProps {

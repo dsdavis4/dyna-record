@@ -17,7 +17,7 @@ function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity = Object.getPrototypeOf(this);
+        const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasMany",
