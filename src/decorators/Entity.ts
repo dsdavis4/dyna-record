@@ -6,7 +6,7 @@ function Entity<T extends SingleTableDesign>(
   context: ClassDecoratorContext
 ): void {
   if (context.kind === "class") {
-    const tableClassName = Object.getPrototypeOf(target).name;
+    const tableClassName: string = Object.getPrototypeOf(target).name;
     Metadata.addEntity(target, tableClassName);
   }
 }

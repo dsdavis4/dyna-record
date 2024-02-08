@@ -259,7 +259,7 @@ class Metadata {
   private getEntityTableMetadata(
     classPrototype: SingleTableDesign
   ): TableMetadata | undefined {
-    const protoType = Object.getPrototypeOf(classPrototype);
+    const protoType: SingleTableDesign = Object.getPrototypeOf(classPrototype);
 
     if (protoType === null) return;
 

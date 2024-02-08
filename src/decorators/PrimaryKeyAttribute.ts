@@ -1,3 +1,4 @@
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata from "../metadata";
 import { type PrimaryKey } from "../types";
 
@@ -14,7 +15,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity = Object.getPrototypeOf(this);
+        const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),

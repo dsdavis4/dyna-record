@@ -1,3 +1,4 @@
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata from "../metadata";
 import type { ForeignKey } from "../types";
 
@@ -16,7 +17,7 @@ function ForeignKeyAttribute<T>(props: ForeignKeyAttributeProps) {
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity = Object.getPrototypeOf(this);
+        const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),

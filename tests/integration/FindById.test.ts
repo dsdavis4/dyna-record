@@ -70,15 +70,14 @@ describe("FindById", () => {
   });
 
   it("will initialize a Dynamo client", async () => {
-    expect.assertions(2);
+    expect.assertions(3);
 
     mockGet.mockResolvedValueOnce({});
 
     await Customer.findById("123");
 
-    expect(mockedDynamoDBClient.mock.calls).toEqual([
-      [{ region: "us-west-2" }]
-    ]);
+    expect(mockedDynamoDBClient).toHaveBeenCalledWith({ region: "us-west-2" });
+    expect(mockedDynamoDBClient).toHaveBeenCalledTimes(1);
     expect(mockedDynamoDBDocumentClient.from.mock.calls).toEqual([
       [{ key: "MockDynamoDBClient" }]
     ]);

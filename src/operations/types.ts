@@ -32,8 +32,8 @@ type ForeignKeyToValue<T> = {
   [K in keyof T]: T[K] extends NullableForeignKey
     ? Optional<string>
     : T[K] extends ForeignKey
-    ? string
-    : T[K];
+      ? string
+      : T[K];
 };
 
 /**

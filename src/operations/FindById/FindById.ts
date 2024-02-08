@@ -202,8 +202,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
-      const foreignKey = link[FOREIGN_KEY_ALIAS];
-      const foreignEntityType = link[FOREIGN_ENTITY_TYPE_ALIAS];
+      const foreignKey: string = link[FOREIGN_KEY_ALIAS];
+      const foreignEntityType: string = link[FOREIGN_ENTITY_TYPE_ALIAS];
       const includedRel = relationsLookup[foreignEntityType];
 
       this.#transactionBuilder.addGet({
@@ -231,8 +231,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
       const tableKeyLookup = this.buildTableKeyLookup();
 
       belongsToRelationships.forEach(rel => {
-        const tableForeignKeyAttrName = tableKeyLookup[rel.foreignKey];
-        const foreignKeyVal = item[tableForeignKeyAttrName];
+        const tableForeignKeyAttrName: string = tableKeyLookup[rel.foreignKey];
+        const foreignKeyVal: string = item[tableForeignKeyAttrName];
 
         this.#transactionBuilder.addGet({
           TableName: tableName,

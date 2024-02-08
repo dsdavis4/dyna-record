@@ -1,3 +1,4 @@
+import type SingleTableDesign from "../SingleTableDesign";
 import Metadata from "../metadata";
 import type { NullableForeignKey } from "../types";
 
@@ -24,7 +25,7 @@ function NullableForeignKeyAttribute<T>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity = Object.getPrototypeOf(this);
+        const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
