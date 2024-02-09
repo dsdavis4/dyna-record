@@ -46,6 +46,8 @@ const dynamo = DynamoDBDocumentClient.from(
 
 // TODO move to dynamo-utils folder
 
+// TODO typedoc for everything
+
 class DynamoClient {
   public async getItem(
     params: GetCommandInput
@@ -73,7 +75,7 @@ class DynamoClient {
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
     console.log("transactWriteItems", { params });
-    return await dynamo.send(new TransactWriteCommand(params));
+    return dynamo.send(new TransactWriteCommand(params));
   }
 }
 

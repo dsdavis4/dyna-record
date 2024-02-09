@@ -1,30 +1,26 @@
 import Metadata, {
   type ForeignKeyAttribute,
   type EntityClass
-} from "../metadata";
-import type SingleTableDesign from "../SingleTableDesign";
-import type { Optional } from "../types";
-import { type ForeignEntityAttribute } from "./types";
+} from "../../metadata";
+import type SingleTableDesign from "../../SingleTableDesign";
+import { type ForeignEntityAttribute } from "../types";
 
-interface HasOneProps<T extends SingleTableDesign> {
-  foreignKey: ForeignEntityAttribute<T> & keyof T;
+interface HasManyProps<T extends SingleTableDesign> {
+  foreignKey: ForeignEntityAttribute<T>;
 }
 
-function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
+function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
-  props: HasOneProps<T>
+  props: HasManyProps<T>
 ) {
-  return function (
-    _value: undefined,
-    context: ClassFieldDecoratorContext<K, Optional<T>>
-  ) {
+  return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
         const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
-          type: "HasOne",
+          type: "HasMany",
           propertyName: context.name as keyof SingleTableDesign,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
@@ -34,4 +30,4 @@ function HasOne<T extends SingleTableDesign, K extends SingleTableDesign>(
   };
 }
 
-export default HasOne;
+export default HasMany;

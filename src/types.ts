@@ -1,4 +1,4 @@
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 
@@ -18,14 +18,13 @@ export type NullableForeignKey =
   | Brand<string, "NullableForeignKey">
   | undefined;
 
-// TODO should this be the native scalar version type?
-export type DynamoTableItem = Record<string, NativeAttributeValue>;
+export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
 
 export type StringObj = Record<string, string>;
 
 export interface BelongsToLinkDynamoItem {
   Type: typeof BelongsToLink.name;
-  [key: string]: NativeAttributeValue;
+  [key: string]: NativeScalarAttributeValue;
 }
 
 export type Optional<T> = T | undefined;

@@ -1,14 +1,12 @@
-import type SingleTableDesign from "../SingleTableDesign";
-import Metadata from "../metadata";
-import { type PrimaryKey } from "../types";
+import type SingleTableDesign from "../../SingleTableDesign";
+import Metadata from "../../metadata";
+import { type SortKey } from "../../types";
 
-interface PrimaryKeyAttributeProps {
+interface SortKeyAttributeProps {
   alias: string;
 }
 
-function PrimaryKeyAttribute<T, K extends PrimaryKey>(
-  props: PrimaryKeyAttributeProps
-) {
+function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
@@ -17,7 +15,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
       context.addInitializer(function () {
         const entity: SingleTableDesign = Object.getPrototypeOf(this);
 
-        Metadata.addPrimaryKeyAttribute(entity, {
+        Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),
           alias: props.alias
         });
@@ -26,4 +24,4 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   };
 }
 
-export default PrimaryKeyAttribute;
+export default SortKeyAttribute;

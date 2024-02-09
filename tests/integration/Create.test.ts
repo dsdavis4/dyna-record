@@ -100,15 +100,15 @@ describe("Create", () => {
     });
 
     expect(order).toEqual({
-      createdAt: "2023-10-16T03:31:35.918Z",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
       customerId: "123",
       id: "uuid1",
-      orderDate: "2024-01-01T00:00:00.000Z",
+      orderDate: new Date("2024-01-01T00:00:00.000Z"),
       paymentMethodId: "456",
       pk: "Order#uuid1",
       sk: "Order",
       type: "Order",
-      updatedAt: "2023-10-16T03:31:35.918Z"
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(order).toBeInstanceOf(Order);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
@@ -210,11 +210,11 @@ describe("Create", () => {
         sk: "PaymentMethodProvider",
         id: "uuid1",
         name: "provider-1",
-        createdAt: "2023-10-16T03:31:35.918Z",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
         paymentMethod: undefined,
         paymentMethodId: "123",
         type: "PaymentMethodProvider",
-        updatedAt: "2023-10-16T03:31:35.918Z"
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(paymentMethodProvider).toBeInstanceOf(PaymentMethodProvider);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);

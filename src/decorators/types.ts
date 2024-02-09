@@ -15,4 +15,5 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
 
 export interface AttributeProps {
   alias: string;
+  nullable?: boolean;
 }

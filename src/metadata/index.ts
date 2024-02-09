@@ -1,16 +1,21 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { type JoinTable, type BelongsToLink } from "../relationships";
 import type { ForeignKey } from "../types";
+import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+
+type Serializer = (param: NativeScalarAttributeValue) => any;
 
 export interface AttributeMetadata {
   name: string;
   nullable: boolean;
+  serializer?: Serializer;
 }
 
 interface AttributeMetadataOptions {
   attributeName: string;
   alias: string;
   nullable: boolean;
+  serializer?: Serializer;
 }
 
 type RelationshipType =
@@ -193,7 +198,8 @@ class Metadata {
     if (entityMetadata.attributes[options.alias] === undefined) {
       entityMetadata.attributes[options.alias] = {
         name: options.attributeName,
-        nullable: options.nullable
+        nullable: options.nullable,
+        serializer: options.serializer
       };
     }
   }

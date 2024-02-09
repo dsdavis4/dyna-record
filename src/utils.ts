@@ -55,13 +55,20 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const { attributes: attrs } = Metadata.getEntity(EntityClass.name);
+  const { attributes: attrsMeta } = Metadata.getEntity(EntityClass.name);
   const entity = new EntityClass();
 
-  Object.keys(tableItem).forEach(attr => {
-    const entityKey = attrs[attr]?.name;
-    if (isKeyOfEntity(entity, entityKey)) {
-      entity[entityKey] = tableItem[attr];
+  Object.keys(tableItem).forEach(attrName => {
+    const attrMeta = attrsMeta[attrName];
+
+    if (attrMeta !== undefined) {
+      const { name: entityKey, serializer } = attrMeta;
+      if (isKeyOfEntity(entity, entityKey)) {
+        const rawVal = tableItem[attrName];
+        const val = serializer === undefined ? rawVal : serializer(rawVal);
+
+        entity[entityKey] = val;
+      }
     }
   });
 
@@ -112,4 +119,34 @@ export const chunkArray = <T>(array: T[], size: number): T[][] => {
   return Array.from({ length: Math.ceil(array.length / size) }, (_, index) =>
     array.slice(index * size, (index + 1) * size)
   );
+};
+
+/**
+ * Checks if a value is a valid property key (string, number, or symbol).
+ *
+ * @param value The value to be checked. This can be of any type.
+ * @returns `true` if the value is a `string`, `number`, or `symbol` (i.e., a valid property key); otherwise, `false`.
+ *
+ * @example
+ * console.log(isPropertyKey('test')); // true
+ * console.log(isPropertyKey(123)); // true
+ * console.log(isPropertyKey(Symbol('sym'))); // true
+ * console.log(isPropertyKey({})); // false
+ */
+export const isPropertyKey = (value: any): value is PropertyKey => {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "symbol"
+  );
+};
+
+/**
+ * Checks if the given value is a string.
+ *
+ * @param value - The value to check. This can be any type as the function is meant to validate if it's a string.
+ * @returns `true` if `value` is a string; otherwise, `false`.
+ */
+export const isString = (value: any): value is string => {
+  return typeof value === "string";
 };

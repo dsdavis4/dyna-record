@@ -11,7 +11,9 @@ import {
   HasOne,
   NullableForeignKeyAttribute,
   NullableAttribute,
-  HasAndBelongsToMany
+  HasAndBelongsToMany,
+  DateAttribute,
+  DateNullableAttribute
 } from "../src/decorators";
 
 import {
@@ -253,6 +255,27 @@ class BreweryUser extends JoinTable<Brewery, User> {
   public userId: ForeignKey;
 }
 
+@Entity
+class AttributeTester extends DrewsBrewsTable {
+  @Attribute({ alias: "StringAttr" })
+  public stringAttr: string;
+
+  @Attribute({ alias: "IntAttr" })
+  public intAttr: number;
+
+  @Attribute({ alias: "FloatAttr", nullable: true })
+  public floatAttr: number;
+
+  @Attribute({ alias: "BooleanAttr" })
+  public booleanAttr: boolean;
+
+  @DateAttribute({ alias: "DateAttr" })
+  public dateAttr: Date;
+
+  @DateNullableAttribute({ alias: "DateAttr2" })
+  public dateAttr2?: Date;
+}
+
 // TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
 
@@ -314,18 +337,38 @@ class BreweryUser extends JoinTable<Brewery, User> {
     //   cognitoId: "abc123"
     // });
 
-    const testBrewery = await Brewery.findById(
+    // const bla = await AttributeTester.create({
+    //   stringAttr: "someval",
+    //   intAttr: 1,
+    //   floatAttr: 1.001,
+    //   booleanAttr: true,
+    //   dateAttr: new Date()
+    // });
+
+    // debugger;
+
+    // const bla2 = await AttributeTester.findById(bla.id);
+
+    // debugger;
+
+    // await AttributeTester.delete(bla.id);
+
+    debugger;
+
+    let testBrewery = await Brewery.findById(
       "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
       { include: [{ association: "users" }] }
     );
-    const user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
+
+    debugger;
+    let user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
       include: [{ association: "breweries" }]
     });
 
     if (testBrewery && user) {
-      // await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+      await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
 
-      await BreweryUser.delete({ breweryId: testBrewery.id, userId: user.id });
+      // await BreweryUser.delete({ breweryId: testBrewery.id, userId: user.id });
 
       debugger;
 

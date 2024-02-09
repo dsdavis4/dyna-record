@@ -1,6 +1,6 @@
-import { Entity, NullableForeignKeyAttribute } from "../../src/decorators";
-import type { NullableForeignKey, ForeignKey } from "../../src/types";
-import { MockTable } from "../integration/mockModels";
+import { Entity, NullableForeignKeyAttribute } from "../../../src/decorators";
+import type { NullableForeignKey, ForeignKey } from "../../../src/types";
+import { MockTable } from "../../integration/mockModels";
 
 describe("NullableForeignKeyAttribute", () => {
   describe("types", () => {

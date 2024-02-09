@@ -109,7 +109,7 @@ describe("FindById", () => {
       id: "123",
       name: "Some Customer",
       address: "11 Some St",
-      updatedAt: "2023-09-15T04:26:31.148Z"
+      updatedAt: new Date("2023-09-15T04:26:31.148Z")
     });
     expect(result?.mockCustomInstanceMethod()).toEqual("Some Customer-123");
     expect(mockedGetCommand.mock.calls).toEqual([
@@ -260,7 +260,7 @@ describe("FindById", () => {
       id: "123",
       name: "Some Customer",
       address: "11 Some St",
-      updatedAt: "2022-09-15T04:26:31.148Z",
+      updatedAt: new Date("2022-09-15T04:26:31.148Z"),
       orders: [
         {
           pk: "Order#111",
@@ -269,8 +269,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "116",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Order#112",
@@ -279,8 +279,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "116",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Order#113",
@@ -289,8 +289,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "116",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         }
       ],
       paymentMethods: [
@@ -301,7 +301,7 @@ describe("FindById", () => {
           type: "PaymentMethod",
           lastFour: "0000",
           customerId: "123",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "PaymentMethod#117",
@@ -310,7 +310,7 @@ describe("FindById", () => {
           type: "PaymentMethod",
           lastFour: "0001",
           customerId: "123",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         }
       ]
     });
@@ -420,7 +420,7 @@ describe("FindById", () => {
       id: "123",
       name: "Some Customer",
       address: "11 Some St",
-      updatedAt: "2022-09-15T04:26:31.148Z",
+      updatedAt: new Date("2022-09-15T04:26:31.148Z"),
       orders: [],
       paymentMethods: []
     });
@@ -494,7 +494,7 @@ describe("FindById", () => {
       type: "Order",
       customerId: "456",
       paymentMethodId: "789",
-      orderDate: "2023-09-15T04:26:31.148Z",
+      orderDate: new Date("2023-09-15T04:26:31.148Z"),
       customer: {
         pk: "Customer#456",
         sk: "Customer",
@@ -502,7 +502,7 @@ describe("FindById", () => {
         type: "Customer",
         name: "Some Customer",
         address: "11 Some St",
-        updatedAt: "2022-09-15T04:26:31.148Z"
+        updatedAt: new Date("2022-09-15T04:26:31.148Z")
       },
       paymentMethod: {
         pk: "PaymentMethod#789",
@@ -511,7 +511,7 @@ describe("FindById", () => {
         type: "PaymentMethod",
         lastFour: "0000",
         customerId: "123",
-        updatedAt: "2023-02-15T08:31:15.148Z"
+        updatedAt: new Date("2023-02-15T08:31:15.148Z")
       }
     });
     expect(result).toBeInstanceOf(Order);
@@ -603,7 +603,7 @@ describe("FindById", () => {
         type: "PaymentMethod",
         lastFour: "0000",
         customerId: "123",
-        updatedAt: "2023-02-15T08:31:15.148Z"
+        updatedAt: new Date("2023-02-15T08:31:15.148Z")
       }
     });
     expect(result).toBeInstanceOf(PaymentMethodProvider);
@@ -661,7 +661,7 @@ describe("FindById", () => {
       SK: "PaymentMethodProvider",
       Id: "001",
       Type: "BelongsToLink",
-      ForeignKey: 123,
+      ForeignKey: "123",
       ForeignEntityType: "PaymentMethodProvider",
       CreatedAt: "2022-10-15T09:31:15.148Z",
       UpdatedAt: "2022-10-15T09:31:15.148Z"
@@ -694,7 +694,7 @@ describe("FindById", () => {
       type: "PaymentMethod",
       lastFour: "0000",
       customerId: "123",
-      updatedAt: "2023-02-15T08:31:15.148Z",
+      updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       paymentMethodProvider: {
         pk: "PaymentMethodProvider#123",
         sk: "PaymentMethodProvider",
@@ -840,7 +840,7 @@ describe("FindById", () => {
       type: "PaymentMethod",
       lastFour: "0000",
       customerId: "123",
-      updatedAt: "2023-02-15T08:31:15.148Z",
+      updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       customer: {
         pk: "Customer#123",
         sk: "Customer",
@@ -848,7 +848,7 @@ describe("FindById", () => {
         type: "Customer",
         name: "Some Customer",
         address: "11 Some St",
-        updatedAt: "2023-09-15T04:26:31.148Z"
+        updatedAt: new Date("2023-09-15T04:26:31.148Z")
       },
       orders: [
         {
@@ -858,8 +858,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "789",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Order#112",
@@ -868,8 +868,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "789",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Order#113",
@@ -878,8 +878,8 @@ describe("FindById", () => {
           type: "Order",
           customerId: "123",
           paymentMethodId: "789",
-          orderDate: "2022-12-15T09:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          orderDate: new Date("2022-12-15T09:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         }
       ]
     });
@@ -1025,8 +1025,8 @@ describe("FindById", () => {
       type: "Book",
       name: "BookAbc",
       numPages: 589,
-      createdAt: "2023-01-15T12:12:18.123Z",
-      updatedAt: "2023-02-15T08:31:15.148Z",
+      createdAt: new Date("2023-01-15T12:12:18.123Z"),
+      updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       authors: [
         {
           pk: "Author#111",
@@ -1035,8 +1035,8 @@ describe("FindById", () => {
           type: "Author",
           name: "SomeName-0",
           books: undefined,
-          createdAt: "2023-02-15T08:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Author#112",
@@ -1045,8 +1045,8 @@ describe("FindById", () => {
           type: "Author",
           name: "SomeName-1",
           books: undefined,
-          createdAt: "2023-02-15T08:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
           pk: "Author#113",
@@ -1055,8 +1055,8 @@ describe("FindById", () => {
           type: "Author",
           name: "SomeName-2",
           books: undefined,
-          createdAt: "2023-02-15T08:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         }
       ]
     });

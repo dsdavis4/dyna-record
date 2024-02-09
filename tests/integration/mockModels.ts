@@ -10,9 +10,10 @@ import {
   BelongsTo,
   HasOne,
   NullableForeignKeyAttribute,
-  NullableAttribute
+  NullableAttribute,
+  DateAttribute,
+  HasAndBelongsToMany
 } from "../../src/decorators";
-import HasAndBelongsToMany from "../../src/decorators/HasAndBelongsToMany";
 import { JoinTable } from "../../src/relationships";
 import type {
   PrimaryKey,
@@ -38,7 +39,7 @@ class Order extends MockTable {
   @ForeignKeyAttribute({ alias: "PaymentMethodId" })
   public paymentMethodId: ForeignKey;
 
-  @Attribute({ alias: "OrderDate" })
+  @DateAttribute({ alias: "OrderDate" })
   public orderDate: Date;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
