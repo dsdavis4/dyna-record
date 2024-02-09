@@ -75,8 +75,7 @@ class DynamoClient {
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
     console.log("transactWriteItems", { params });
-    const res = await dynamo.send(new TransactWriteCommand(params));
-    return res;
+    return dynamo.send(new TransactWriteCommand(params));
   }
 }
 
