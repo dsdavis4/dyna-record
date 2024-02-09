@@ -3,8 +3,6 @@ import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { AttributeProps } from "../types";
 
-// TODO add test that only like date is not allowed
-// TODO add test it cant be optional
 // TODO typedoc about why this is here
 function DateAttribute<T, K extends Date>(props: AttributeProps) {
   return function (
