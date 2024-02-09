@@ -13,6 +13,7 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
 
 /**
  * A decorator to annotate class fields as attributes of a single-table design entity, adding metadata for ORM (Object-Relational Mapping) purposes.
+ * This decorator is restricted to attributes with types native to DynamoDB. For attributes of other types, please use the 'PropNameAttribute' decorators, such as @DateAttribute.
  *
  * This decorator function takes an object of `AttributeProps` which defines the configuration for the attribute, such as its alias. It is intended to be used on class fields representing attributes of entities in a single-table design pattern. When applied, it registers the attribute with metadata, including its name and alias, and whether it is nullable.
  *
