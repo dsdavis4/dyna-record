@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, DateAttribute } from "../../../src/decorators";
+import { Entity, DateNullableAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 
 describe("BelongsTo", () => {
@@ -8,16 +8,16 @@ describe("BelongsTo", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-no-error: Date is a valid type
-        @DateAttribute({ alias: "Key1" })
+        @DateNullableAttribute({ alias: "Key1" })
         public key1: Date;
       }
     });
 
-    it("does not allow the property its applied to to be optional", () => {
+    it("does allow the property its applied to to be optional", () => {
       @Entity
       class ModelOne extends MockTable {
-        // @ts-expect-error: DateAttributes are not nullable
-        @DateAttribute({ alias: "Key1" })
+        // @ts-expect-no-error: DateNullableAttributes can be nullable
+        @DateNullableAttribute({ alias: "Key1" })
         public key1?: Date;
       }
     });
@@ -25,8 +25,8 @@ describe("BelongsTo", () => {
     it("does not support non-Date fields", () => {
       @Entity
       class ModelOne extends MockTable {
-        // @ts-expect-error: string is not a valid type. Only Date is allowed
-        @DateAttribute({ alias: "Key1" })
+        // @ts-expect-error: Can only be applied to a Date property
+        @DateNullableAttribute({ alias: "Key1" })
         public key1: string;
       }
     });

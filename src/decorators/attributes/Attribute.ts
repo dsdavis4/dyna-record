@@ -17,18 +17,19 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
  *
  * This decorator function takes an object of `AttributeProps` which defines the configuration for the attribute, such as its alias. It is intended to be used on class fields representing attributes of entities in a single-table design pattern. When applied, it registers the attribute with metadata, including its name and alias, and whether it is nullable.
  *
+ * Does not allow property to be optional.
+ *
  * @template T The class type that the decorator is applied to.
  * @template K The type of the attribute, extending [See NativeScalarAttributeValue Docs](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-aws-sdk-util-dynamodb/TypeAlias/NativeScalarAttributeValue/), ensuring it is compatible with scalar values supported natively by Dynamo.
  * @param props An object of `AttributeProps`, which includes configuration options like `alias`, specifying an alternative name for the attribute in the database.
  * @returns A class field decorator function that takes the target class instance and the field's context to apply metadata enhancements. It specifically targets fields by adding initializers to the class's prototype, registering each field with the ORM's metadata management.
  *
- * The decorator internally checks if it's applied to a class field (`context.kind === "field"`) and then proceeds to add an initializer function. This initializer function captures the class prototype and uses it to register attribute metadata through `Metadata.addEntityAttribute`.
  *
  * Usage example:
  * ```typescript
  * class MyEntity extends MyTable {
- *   @Attribute({ alias: 'MyField', nullable: true })
- *   myField: string;
+ *   @Attribute({ alias: 'MyField' })
+ *   public myField: string;
  * }
  * ```
  *
