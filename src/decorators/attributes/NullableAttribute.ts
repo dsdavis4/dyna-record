@@ -11,7 +11,6 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
   ? never
   : Optional<T>;
 
-// TODO add test that stuff like date is not allowed
 // TODO typedoc about supported properties
 function NullableAttribute<T, K extends NativeScalarAttributeValue>(
   props: AttributeProps

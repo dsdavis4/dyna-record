@@ -266,7 +266,6 @@ class AttributeTester extends DrewsBrewsTable {
   @Attribute({ alias: "FloatAttr", nullable: true })
   public floatAttr: number;
 
-  // @Nullable
   @Attribute({ alias: "BooleanAttr" })
   public booleanAttr: boolean;
 
