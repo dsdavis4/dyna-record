@@ -44,10 +44,10 @@ abstract class SingleTableDesign {
   public [typeField]: string;
 
   @DateAttribute({ alias: "CreatedAt" })
-  public [createdAtField]: Date; // TODO this should serialize to date
+  public [createdAtField]: Date;
 
   @DateAttribute({ alias: "UpdatedAt" })
-  public [updatedAtField]: Date; // TODO this should serialize to date
+  public [updatedAtField]: Date;
 
   /**
    * Find an entity by Id and optionally include associations
