@@ -1,4 +1,4 @@
-import { Entity, Attribute } from "../decorators";
+import { Entity, Attribute, DateAttribute } from "../decorators";
 import { v4 as uuidv4 } from "uuid";
 
 export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
@@ -46,11 +46,11 @@ class BelongsToLink implements BelongsToLinkProps {
   public foreignKey: string; // TODO should this be of type ForeignKey?
 
   // TODO how to get this dynamically? This is a default field
-  @Attribute({ alias: "CreatedAt" })
+  @DateAttribute({ alias: "CreatedAt" })
   public createdAt: Date;
 
   // TODO how to get this dynamically? This is a default field
-  @Attribute({ alias: "UpdatedAt" })
+  @DateAttribute({ alias: "UpdatedAt" })
   public updatedAt: Date;
 
   public static build(

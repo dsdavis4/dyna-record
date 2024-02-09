@@ -1,6 +1,6 @@
 import Metadata, { type EntityClass } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
-import { Attribute } from "./decorators";
+import { Attribute, DateAttribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
@@ -43,10 +43,10 @@ abstract class SingleTableDesign {
   @Attribute({ alias: "Type" })
   public [typeField]: string;
 
-  @Attribute({ alias: "CreatedAt" })
+  @DateAttribute({ alias: "CreatedAt" })
   public [createdAtField]: Date; // TODO this should serialize to date
 
-  @Attribute({ alias: "UpdatedAt" })
+  @DateAttribute({ alias: "UpdatedAt" })
   public [updatedAtField]: Date; // TODO this should serialize to date
 
   /**

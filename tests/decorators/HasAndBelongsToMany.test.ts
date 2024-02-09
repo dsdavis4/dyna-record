@@ -71,7 +71,7 @@ describe("HasAndBelongsToMany", () => {
       @Entity
       class ModelTwo extends MockTable {
         @Attribute({ alias: "SomeVal" })
-        public someVal: string[];
+        public someVal: string;
 
         @HasAndBelongsToMany(() => ModelOne, {
           // @ts-expect-no-error: targetKey 'modelTwos' exists on ModelOne as type of ModelTwo[]
@@ -108,7 +108,7 @@ describe("HasAndBelongsToMany", () => {
       @Entity
       class ModelTwo extends MockTable {
         @Attribute({ alias: "SomeVal" })
-        public someVal: string[];
+        public someVal: string;
 
         // @ts-expect-error: attribute is not an array of ModelOne
         @HasAndBelongsToMany(() => ModelOne, {

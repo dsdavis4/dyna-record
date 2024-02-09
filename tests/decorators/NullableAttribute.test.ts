@@ -2,7 +2,7 @@ import { Entity, NullableAttribute } from "../../src/decorators";
 import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { MockTable } from "../integration/mockModels";
 
-describe("BelongsTo", () => {
+describe("NullableAttribute", () => {
   describe("types", () => {
     it("ForeignKey is not a valid type to apply the NullableAttribute decorator", () => {
       @Entity
