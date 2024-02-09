@@ -11,9 +11,9 @@ import {
   HasOne,
   NullableForeignKeyAttribute,
   NullableAttribute,
-  DateAttribute
+  DateAttribute,
+  HasAndBelongsToMany
 } from "../../src/decorators";
-import HasAndBelongsToMany from "../../src/decorators/HasAndBelongsToMany";
 import { JoinTable } from "../../src/relationships";
 import type {
   PrimaryKey,
