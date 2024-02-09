@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import Metadata from "./metadata";
 import { BelongsToLink } from "./relationships";
+import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO should I pass the entity class instead of the name?
 /**
@@ -36,9 +37,13 @@ export const entityToTableItem = (
   return Object.entries(entityData).reduce<DynamoTableItem>(
     (acc, [key, val]) => {
       const tableKey = tableKeyLookup[key];
-      // Dynamo doesn't support date, convert to string
-      const value = val instanceof Date ? val.toISOString() : val;
-      acc[tableKey] = value;
+      const serializers = entityMetadata.attributes[tableKey]?.serializers;
+
+      // If the attribute has a custom serializer, serialize it
+      const value =
+        serializers === undefined ? val : serializers.toTableAttribute(val);
+
+      acc[tableKey] = value as NativeScalarAttributeValue;
       return acc;
     },
     {}
@@ -62,10 +67,13 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
     const attrMeta = attrsMeta[attrName];
 
     if (attrMeta !== undefined) {
-      const { name: entityKey, serializer } = attrMeta;
+      const { name: entityKey, serializers } = attrMeta;
       if (isKeyOfEntity(entity, entityKey)) {
         const rawVal = tableItem[attrName];
-        const val = serializer === undefined ? rawVal : serializer(rawVal);
+        const val =
+          serializers?.toEntityAttribute === undefined
+            ? rawVal
+            : serializers?.toEntityAttribute(rawVal);
 
         entity[entityKey] = val;
       }

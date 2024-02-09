@@ -36,11 +36,14 @@ function DateAttribute<T, K extends Date>(props: AttributeProps) {
           attributeName: context.name.toString(),
           alias: props.alias,
           nullable: false,
-          serializer: (val: NativeScalarAttributeValue) => {
-            if (typeof val === "string") {
-              return new Date(val);
-            }
-            return val;
+          serializers: {
+            toEntityAttribute: (val: NativeScalarAttributeValue) => {
+              if (typeof val === "string") {
+                return new Date(val);
+              }
+              return val;
+            },
+            toTableAttribute: (val: Date) => val.toISOString()
           }
         });
       });

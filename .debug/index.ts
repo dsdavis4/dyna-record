@@ -26,6 +26,10 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 
+// TODO start here. Start working on TODO list
+
+// TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
+
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
 //      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
 
@@ -337,19 +341,19 @@ class AttributeTester extends DrewsBrewsTable {
     //   cognitoId: "abc123"
     // });
 
-    // const bla = await AttributeTester.create({
-    //   stringAttr: "someval",
-    //   intAttr: 1,
-    //   floatAttr: 1.001,
-    //   booleanAttr: true,
-    //   dateAttr: new Date()
-    // });
+    const bla = await AttributeTester.create({
+      stringAttr: "someval",
+      intAttr: 1,
+      floatAttr: 1.001,
+      booleanAttr: true,
+      dateAttr: new Date("1/12/2023")
+    });
 
-    // debugger;
+    debugger;
 
-    // const bla2 = await AttributeTester.findById(bla.id);
+    const bla2 = await AttributeTester.findById(bla.id);
 
-    // debugger;
+    debugger;
 
     // await AttributeTester.delete(bla.id);
 
