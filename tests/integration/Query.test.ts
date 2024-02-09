@@ -114,48 +114,48 @@ describe("Query", () => {
           id: "123",
           name: "Some Customer",
           type: "Customer",
-          createdAt: "2021-09-15T04:26:31.148Z",
-          updatedAt: "2022-09-15T04:26:31.148Z"
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
-          createdAt: "2021-11-01T23:31:21.148Z",
-          updatedAt: "2022-11-01T23:31:21.148Z"
+          createdAt: new Date("2021-11-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
-          createdAt: "2021-09-01T23:31:21.148Z",
-          updatedAt: "2022-09-01T23:31:21.148Z"
+          createdAt: new Date("2021-09-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "PaymentMethod#116",
           id: "007",
           type: "BelongsToLink",
-          createdAt: "2021-10-01T12:31:21.148Z",
-          updatedAt: "2022-10-01T12:31:21.148Z"
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-01T12:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
-          createdAt: "2021-11-21T12:31:21.148Z",
-          updatedAt: "2022-11-21T12:31:21.148Z"
+          createdAt: new Date("2021-11-21T12:31:21.148Z"),
+          updatedAt: new Date("2022-11-21T12:31:21.148Z")
         }
       ]);
       result.forEach((res, index) => {
@@ -204,8 +204,8 @@ describe("Query", () => {
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         }
       ]);
       expect(result[0]).toBeInstanceOf(BelongsToLink);
@@ -272,24 +272,24 @@ describe("Query", () => {
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
-          createdAt: "2021-11-01T23:31:21.148Z",
-          updatedAt: "2022-11-01T23:31:21.148Z"
+          createdAt: new Date("2021-11-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
-          createdAt: "2021-09-01T23:31:21.148Z",
-          updatedAt: "2022-09-01T23:31:21.148Z"
+          createdAt: new Date("2021-09-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-01T23:31:21.148Z")
         }
       ]);
       result.forEach(res => {
@@ -345,8 +345,8 @@ describe("Query", () => {
           sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
-          createdAt: "2021-11-21T12:31:21.148Z",
-          updatedAt: "2022-11-21T12:31:21.148Z"
+          createdAt: new Date("2021-11-21T12:31:21.148Z"),
+          updatedAt: new Date("2022-11-21T12:31:21.148Z")
         }
       ]);
 
@@ -423,8 +423,8 @@ describe("Query", () => {
           id: "123",
           name: "Some Customer",
           type: "Customer",
-          createdAt: "2021-09-15T04:26:31.148Z",
-          updatedAt: "2022-09-15T04:26:31.148Z"
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
         }
       ]);
       result.forEach((res, index) => {
@@ -511,24 +511,24 @@ describe("Query", () => {
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
-          createdAt: "2021-11-01T23:31:21.148Z",
-          updatedAt: "2022-11-01T23:31:21.148Z"
+          createdAt: new Date("2021-11-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
-          createdAt: "2021-09-01T23:31:21.148Z",
-          updatedAt: "2022-09-01T23:31:21.148Z"
+          createdAt: new Date("2021-09-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-01T23:31:21.148Z")
         }
       ]);
       result.forEach(res => {
@@ -653,48 +653,48 @@ describe("Query", () => {
           id: "123",
           name: "Some Customer",
           type: "Customer",
-          createdAt: "2021-09-15T04:26:31.148Z",
-          updatedAt: "2022-09-15T04:26:31.148Z"
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
-          createdAt: "2021-11-01T23:31:21.148Z",
-          updatedAt: "2022-11-01T23:31:21.148Z"
+          createdAt: new Date("2021-11-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
-          createdAt: "2021-09-01T23:31:21.148Z",
-          updatedAt: "2022-09-01T23:31:21.148Z"
+          createdAt: new Date("2021-09-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "PaymentMethod#116",
           id: "007",
           type: "BelongsToLink",
-          createdAt: "2021-10-01T12:31:21.148Z",
-          updatedAt: "2022-10-01T12:31:21.148Z"
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-01T12:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
-          createdAt: "2021-11-21T12:31:21.148Z",
-          updatedAt: "2022-11-21T12:31:21.148Z"
+          createdAt: new Date("2021-11-21T12:31:21.148Z"),
+          updatedAt: new Date("2022-11-21T12:31:21.148Z")
         }
       ]);
       result.forEach((res, index) => {
@@ -742,8 +742,8 @@ describe("Query", () => {
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         }
       ]);
       expect(result[0]).toBeInstanceOf(BelongsToLink);
@@ -809,24 +809,24 @@ describe("Query", () => {
           sk: "Order#111",
           id: "001",
           type: "BelongsToLink",
-          createdAt: "2021-10-15T09:31:15.148Z",
-          updatedAt: "2022-10-15T09:31:15.148Z"
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#112",
           id: "003",
           type: "BelongsToLink",
-          createdAt: "2021-11-01T23:31:21.148Z",
-          updatedAt: "2022-11-01T23:31:21.148Z"
+          createdAt: new Date("2021-11-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-01T23:31:21.148Z")
         },
         {
           pk: "Customer#123",
           sk: "Order#113",
           id: "004",
           type: "BelongsToLink",
-          createdAt: "2021-09-01T23:31:21.148Z",
-          updatedAt: "2022-09-01T23:31:21.148Z"
+          createdAt: new Date("2021-09-01T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-01T23:31:21.148Z")
         }
       ]);
       result.forEach(res => {
@@ -879,8 +879,8 @@ describe("Query", () => {
           sk: "PaymentMethod#117",
           id: "008",
           type: "BelongsToLink",
-          createdAt: "2021-11-21T12:31:21.148Z",
-          updatedAt: "2022-11-21T12:31:21.148Z"
+          createdAt: new Date("2021-11-21T12:31:21.148Z"),
+          updatedAt: new Date("2022-11-21T12:31:21.148Z")
         }
       ]);
 
@@ -952,8 +952,8 @@ describe("Query", () => {
           id: "123",
           name: "Some Customer",
           type: "Customer",
-          createdAt: "2021-09-15T04:26:31.148Z",
-          updatedAt: "2022-09-15T04:26:31.148Z"
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
         }
       ]);
       result.forEach((res, index) => {

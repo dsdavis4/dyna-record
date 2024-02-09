@@ -1,7 +1,7 @@
+import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { AttributeProps } from "../types";
-// TODO I might want to use this everywhere insteaof of NativeAttributeValue
 
 // TODO add test that only like date is not allowed
 // TODO add test it cant be optional
@@ -18,7 +18,13 @@ function DateAttribute<T, K extends Date>(props: AttributeProps) {
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
           alias: props.alias,
-          nullable: false
+          nullable: false,
+          serializer: (val: NativeScalarAttributeValue) => {
+            if (typeof val === "string") {
+              return new Date(val);
+            }
+            return val;
+          }
         });
       });
     }

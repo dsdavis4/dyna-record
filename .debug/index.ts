@@ -338,21 +338,21 @@ class AttributeTester extends DrewsBrewsTable {
     //   cognitoId: "abc123"
     // });
 
-    const bla = await AttributeTester.create({
-      stringAttr: "someval",
-      intAttr: 1,
-      floatAttr: 1.001,
-      booleanAttr: true,
-      dateAttr: new Date()
-    });
+    // const bla = await AttributeTester.create({
+    //   stringAttr: "someval",
+    //   intAttr: 1,
+    //   floatAttr: 1.001,
+    //   booleanAttr: true,
+    //   dateAttr: new Date()
+    // });
 
-    debugger;
+    // debugger;
 
-    const bla2 = await AttributeTester.findById(bla.id);
+    // const bla2 = await AttributeTester.findById(bla.id);
 
-    debugger;
+    // debugger;
 
-    await AttributeTester.delete(bla.id);
+    // await AttributeTester.delete(bla.id);
 
     debugger;
 

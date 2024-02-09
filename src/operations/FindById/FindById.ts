@@ -17,6 +17,8 @@ import type {
 import {
   isBelongsToLinkDynamoItem,
   isKeyOfEntity,
+  isPropertyKey,
+  isString,
   tableItemToEntity
 } from "../../utils";
 import {
@@ -202,17 +204,25 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
-      const foreignKey: string = link[FOREIGN_KEY_ALIAS];
-      const foreignEntityType: string = link[FOREIGN_ENTITY_TYPE_ALIAS];
-      const includedRel = relationsLookup[foreignEntityType];
+      const foreignKey = link[FOREIGN_KEY_ALIAS];
+      const foreignEntityType = link[FOREIGN_ENTITY_TYPE_ALIAS];
 
-      this.#transactionBuilder.addGet({
-        TableName: tableName,
-        Key: {
-          [primaryKey]: includedRel.target.primaryKeyValue(foreignKey),
-          [sortKey]: includedRel.target.name
-        }
-      });
+      if (isPropertyKey(foreignEntityType) && isString(foreignKey)) {
+        const includedRel = relationsLookup[foreignEntityType];
+
+        this.#transactionBuilder.addGet({
+          TableName: tableName,
+          Key: {
+            [primaryKey]: includedRel.target.primaryKeyValue(foreignKey),
+            [sortKey]: includedRel.target.name
+          }
+        });
+      } else {
+        console.error(
+          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+          `Corrupted foreign key value. Invalid type. ${foreignEntityType} - ${foreignKey}`
+        );
+      }
     });
   }
 

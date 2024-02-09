@@ -2,7 +2,6 @@ import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { ForeignKey, NullableForeignKey } from "../../types";
 import type { AttributeProps } from "../types";
-// TODO I might want to use this everywhere insteaof of NativeAttributeValue
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 /**
@@ -18,8 +17,6 @@ function Attribute<T, K extends NativeScalarAttributeValue>(
 ) {
   return function (
     _value: undefined,
-    // TODO START HERE... make sure this is only allowing NativeAttributeValue
-    // Then make DateAttribute and NullableDateAttribute with comments that they need special care since dynamo doesnt support them
     context: ClassFieldDecoratorContext<T, NotForeignKey<K>>
   ) {
     if (context.kind === "field") {
