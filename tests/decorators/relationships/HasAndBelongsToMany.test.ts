@@ -1,7 +1,11 @@
-import { Entity, Attribute, HasAndBelongsToMany } from "../../src/decorators";
-import { JoinTable } from "../../src/relationships";
-import type { ForeignKey } from "../../src/types";
-import { MockTable } from "../integration/mockModels";
+import {
+  Entity,
+  Attribute,
+  HasAndBelongsToMany
+} from "../../../src/decorators";
+import { JoinTable } from "../../../src/relationships";
+import type { ForeignKey } from "../../../src/types";
+import { MockTable } from "../../integration/mockModels";
 
 describe("HasAndBelongsToMany", () => {
   afterEach(() => {

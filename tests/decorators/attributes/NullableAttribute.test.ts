@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, NullableAttribute } from "../../src/decorators";
-import type { ForeignKey, NullableForeignKey } from "../../src/types";
-import { MockTable } from "../integration/mockModels";
+import { Entity, NullableAttribute } from "../../../src/decorators";
+import type { ForeignKey, NullableForeignKey } from "../../../src/types";
+import { MockTable } from "../../integration/mockModels";
 
 describe("NullableAttribute", () => {
   describe("types", () => {

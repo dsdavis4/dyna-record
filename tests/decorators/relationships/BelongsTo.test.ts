@@ -6,9 +6,9 @@ import {
   HasOne,
   NullableForeignKeyAttribute,
   HasMany
-} from "../../src/decorators";
-import type { NullableForeignKey, ForeignKey } from "../../src/types";
-import { MockTable } from "../integration/mockModels";
+} from "../../../src/decorators";
+import type { NullableForeignKey, ForeignKey } from "../../../src/types";
+import { MockTable } from "../../integration/mockModels";
 
 describe("BelongsTo", () => {
   describe("types", () => {

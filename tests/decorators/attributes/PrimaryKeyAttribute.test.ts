@@ -1,5 +1,5 @@
-import { PrimaryKeyAttribute } from "../../src/decorators";
-import { type PrimaryKey } from "../../src/types";
+import { PrimaryKeyAttribute } from "../../../src/decorators";
+import { type PrimaryKey } from "../../../src/types";
 
 describe("PrimaryKeyAttribute", () => {
   it("requires the attribute to be of type PrimaryKey", () => {

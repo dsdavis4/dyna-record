@@ -1,5 +1,5 @@
-import { SortKeyAttribute } from "../../src/decorators";
-import { type SortKey } from "../../src/types";
+import { SortKeyAttribute } from "../../../src/decorators";
+import { type SortKey } from "../../../src/types";
 
 describe("SortKeyAttribute", () => {
   it("requires the attribute to be of type SortKey", () => {
