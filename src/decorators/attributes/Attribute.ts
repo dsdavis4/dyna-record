@@ -27,12 +27,12 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
  * Usage example:
  * ```typescript
  * class MyEntity extends MyTable {
- *   @Attribute({ alias: 'customName', nullable: true })
+ *   @Attribute({ alias: 'MyField', nullable: true })
  *   myField: string;
  * }
  * ```
  *
- * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'customName' for ORM purposes.
+ * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
 function Attribute<T, K extends NativeScalarAttributeValue>(
   props: AttributeProps
