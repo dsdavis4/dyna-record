@@ -18,7 +18,6 @@ export type NullableForeignKey =
   | Brand<string, "NullableForeignKey">
   | undefined;
 
-// TODO should this be the native scalar version type?
 export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
 
 export type StringObj = Record<string, string>;
