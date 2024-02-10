@@ -112,6 +112,10 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
       ConsistentRead: true
     });
 
+    if (queryResults.length === 0) {
+      return null;
+    }
+
     const sortedQueryResults = this.filterQueryResults(queryResults);
     const relationsObj = buildEntityRelationshipMetaObj(includedRels);
 

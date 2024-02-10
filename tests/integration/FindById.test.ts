@@ -124,8 +124,8 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
-  it("will return null if it doesn't find the record", async () => {
-    expect.assertions(3);
+  it("findByIdOnly - will return null if it doesn't find the record", async () => {
+    expect.assertions(4);
 
     mockGet.mockResolvedValueOnce({});
 
@@ -141,7 +141,44 @@ describe("FindById", () => {
         }
       ]
     ]);
+    expect(mockGet.mock.calls).toEqual([[]]);
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
+  });
+
+  it("findByIdWithIncludes - will return null if it doesn't find the record", async () => {
+    expect.assertions(4);
+
+    mockQuery.mockResolvedValueOnce({ Items: [] });
+
+    const result = await Customer.findById("123", {
+      include: [{ association: "orders" }]
+    });
+
+    expect(result).toEqual(null);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK4",
+          ConsistentRead: true,
+          ExpressionAttributeNames: {
+            "#ForeignEntityType": "ForeignEntityType",
+            "#PK": "PK",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":ForeignEntityType3": "Order",
+            ":PK4": "Customer#123",
+            ":Type1": "Customer",
+            ":Type2": "BelongsToLink"
+          },
+          FilterExpression:
+            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))"
+        }
+      ]
+    ]);
+    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
   it("will find an entity with included HasMany associations", async () => {
@@ -1130,14 +1167,12 @@ describe("FindById", () => {
           include: [{ association: "contactInformation" }]
         });
 
-        if (result !== null) {
-          try {
-            // @ts-expect-error ContactInformation could be undefined
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            result.contactInformation.id;
-          } catch (_e) {
-            expect(true).toEqual(true);
-          }
+        try {
+          // @ts-expect-error ContactInformation could be undefined
+          // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+          result.contactInformation.id;
+        } catch (_e) {
+          expect(true).toEqual(true);
         }
       });
     });

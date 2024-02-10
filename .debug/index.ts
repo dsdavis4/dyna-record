@@ -26,7 +26,7 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 
-// TODO start here. Start working on TODO list
+// TODO start here. Start working on TODO list...
 
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
@@ -309,8 +309,6 @@ class AttributeTester extends DrewsBrewsTable {
 
 // TODO make a logger class to optionally log. Structured logs..
 
-// TODO check that find byId with includes returns null if the parent is not found... I think I saw this happen...
-
 // TODO where possible change code to use Map instead oj objects because it is more efficient (check on this..)
 
 // TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
@@ -321,6 +319,12 @@ class AttributeTester extends DrewsBrewsTable {
 (async () => {
   try {
     const metadata = Metadata;
+
+    const bla3 = await Brewery.findById("1", {
+      include: [{ association: "beers" }]
+    });
+
+    debugger;
 
     // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
     //   include: [{ association: "breweries" }]
