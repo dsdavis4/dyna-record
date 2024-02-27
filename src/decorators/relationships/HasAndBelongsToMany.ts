@@ -65,7 +65,6 @@ function HasAndBelongsToMany<
           type: "HasAndBelongsToMany",
           propertyName: context.name as keyof SingleTableDesign,
           target,
-          // TODO if I didnt use this field... I should remove it... and update metadata shape
           joinTableName: joinTable.name
         });
 
