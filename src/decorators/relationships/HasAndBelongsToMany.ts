@@ -2,6 +2,8 @@ import Metadata, { type EntityClass } from "../../metadata";
 import { type JoinTable } from "../../relationships";
 import type SingleTableDesign from "../../SingleTableDesign";
 
+// TODO start here for real... I need the Entity.delete() method to clean up HasAndBelongsToMany...
+
 /**
  * The key on the related Entity which is associated with this Entity
  */
@@ -59,16 +61,19 @@ function HasAndBelongsToMany<
       context.addInitializer(function () {
         const entity: SingleTableDesign = Object.getPrototypeOf(this);
         const target = getTarget();
+        const { joinTable, foreignKey } = props.through();
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasAndBelongsToMany",
           propertyName: context.name as keyof SingleTableDesign,
-          target
+          target,
+          // TODO if I didnt use this field... I should remove it... and update metadata shape
+          joinTableName: joinTable.name
         });
 
-        Metadata.addJoinTable(props.through().joinTable.name, {
+        Metadata.addJoinTable(joinTable.name, {
           entity: target,
-          foreignKey: props.through().foreignKey as keyof JoinTable<
+          foreignKey: foreignKey as keyof JoinTable<
             SingleTableDesign,
             SingleTableDesign
           >

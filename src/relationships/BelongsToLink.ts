@@ -1,8 +1,12 @@
 import { Entity, Attribute, DateAttribute } from "../decorators";
 import { v4 as uuidv4 } from "uuid";
+import Metadata from "../metadata";
 
 export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
 export const FOREIGN_KEY_ALIAS = "ForeignKey";
+
+// TODO add tests that all operations work when table keys are not PK or SK
+//      It might be best to solve the dynamic PK and SK problem in BelongsToLinkFirst
 
 interface BelongsToLinkProps {
   id: string;
@@ -21,8 +25,12 @@ class BelongsToLink implements BelongsToLinkProps {
     }
   }
 
+  // TODO wait.... Why is this even in the Entity metadata section? Can I refactor so that its at top of the metadata structure the same way JoinTables are
+  //             I think this is the right move...
   // TODO how to obtain the pk and sk... maybe throught the new type?
   //    IE - > need the alias dynamically
+  //   @Attribute({ alias: Metadata.getEntityTable("BelongsToLink").primaryKey })
+  //  Something like that ^^ might work... Right now metadata for BelongsToLink tableclassName is undefined...
   @Attribute({ alias: "PK" })
   public pk: string;
 

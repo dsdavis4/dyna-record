@@ -26,7 +26,7 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 
-// TODO start here. Start working on TODO list...
+// TODO start here. Start working on TODO list.....
 
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
@@ -320,11 +320,11 @@ class AttributeTester extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    debugger;
+
     const bla3 = await Brewery.findById("1", {
       include: [{ association: "beers" }]
     });
-
-    debugger;
 
     // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
     //   include: [{ association: "breweries" }]
@@ -345,51 +345,63 @@ class AttributeTester extends DrewsBrewsTable {
     //   cognitoId: "abc123"
     // });
 
-    const bla = await AttributeTester.create({
-      stringAttr: "someval",
-      intAttr: 1,
-      floatAttr: 1.001,
-      booleanAttr: true,
-      dateAttr: new Date("1/12/2023")
-    });
+    // const bla = await AttributeTester.create({
+    //   stringAttr: "someval",
+    //   intAttr: 1,
+    //   floatAttr: 1.001,
+    //   booleanAttr: true,
+    //   dateAttr: new Date("1/12/2023")
+    // });
 
-    debugger;
+    // debugger;
 
-    const bla2 = await AttributeTester.findById(bla.id);
+    // const bla2 = await AttributeTester.findById(bla.id);
 
-    debugger;
+    // debugger;
 
     // await AttributeTester.delete(bla.id);
 
-    debugger;
+    const testBrewery = await Brewery.create({ name: "testing 123" });
 
-    let testBrewery = await Brewery.findById(
-      "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
-      { include: [{ association: "users" }] }
-    );
-
-    debugger;
-    let user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
-      include: [{ association: "breweries" }]
+    const user = await User.create({
+      firstName: "first",
+      lastName: "last",
+      email: "email",
+      cognitoId: "cognitoId"
     });
 
-    if (testBrewery && user) {
-      await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
+    await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
 
-      // await BreweryUser.delete({ breweryId: testBrewery.id, userId: user.id });
+    debugger;
+
+    // let testBrewery = await Brewery.findById(
+    //   "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+    //   { include: [{ association: "users" }] }
+    // );
+
+    // let user = await User.findById("4aca132d-5c14-4d53-a182-09da6a457a4d", {
+    //   include: [{ association: "breweries" }]
+    // });
+
+    if (testBrewery && user) {
+      // await BreweryUser.create({ breweryId: testBrewery.id, userId: user.id });
 
       debugger;
 
-      const testBrewery2 = await Brewery.findById(
-        "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
-        { include: [{ association: "users" }] }
-      );
-      const user2 = await User.findById(
-        "4aca132d-5c14-4d53-a182-09da6a457a4d",
-        {
-          include: [{ association: "breweries" }]
-        }
-      );
+      await Brewery.delete(testBrewery.id);
+
+      debugger;
+
+      // const testBrewery2 = await Brewery.findById(
+      //   "b0234ff2-0aaf-4663-b1ae-7a55cc5bf8ce",
+      //   { include: [{ association: "users" }] }
+      // );
+      // const user2 = await User.findById(
+      //   "4aca132d-5c14-4d53-a182-09da6a457a4d",
+      //   {
+      //     include: [{ association: "breweries" }]
+      //   }
+      // );
 
       debugger;
     }
