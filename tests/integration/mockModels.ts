@@ -239,7 +239,7 @@ class Teacher extends OtherTable {
   @Attribute({ alias: "name" })
   public name: string;
 
-  @HasMany(() => Course, { foreignKey: "courseId" })
+  @HasMany(() => Course, { foreignKey: "teacherId" })
   public courses: Course[];
 
   @HasOne(() => Profile, { foreignKey: "userId" })
@@ -266,8 +266,11 @@ class Course extends OtherTable {
   @Attribute({ alias: "name" })
   public name: string;
 
-  @NullableForeignKeyAttribute({ alias: "courseId" })
-  public courseId?: NullableForeignKey;
+  @NullableForeignKeyAttribute({ alias: "teacherId" })
+  public teacherId?: NullableForeignKey;
+
+  @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
+  public teacher?: Teacher;
 
   @HasMany(() => Assignment, { foreignKey: "courseId" })
   public assignments: Assignment[];
