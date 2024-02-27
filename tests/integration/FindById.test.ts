@@ -1159,6 +1159,7 @@ describe("FindById", () => {
     ]);
   });
 
+  // TODO do a test like this (alternate table) for all operation types
   it.only("will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
     expect.assertions(6);
 
