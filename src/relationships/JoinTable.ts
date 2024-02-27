@@ -9,9 +9,6 @@ import type { ForeignKey } from "../types";
 import { entityToTableItem } from "../utils";
 import BelongsToLink from "./BelongsToLink";
 
-// TODO Should enforce nullable and non nullable foreign keys so that items cant be unlinked if they are not allowed to...
-//      What happens if I apply the decorators in the code as is...
-
 /**
  * Exclude the type1 type2 instance keys
  */
