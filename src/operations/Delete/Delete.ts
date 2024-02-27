@@ -114,8 +114,10 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     );
   }
 
-  // TODO typedoc
-  // TODO add test for this...
+  /**
+   * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
+   * @param item - BelongsToLink from HasAndBelongsToMany relationship
+   */
   private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
 
