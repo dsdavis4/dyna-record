@@ -76,6 +76,7 @@ export interface HasManyRelationship extends RelationshipMetadataBase {
 export interface HasAndBelongsToManyRelationship
   extends RelationshipMetadataBase {
   type: "HasAndBelongsToMany";
+  joinTableName: string;
 }
 
 export type RelationshipMetadata =

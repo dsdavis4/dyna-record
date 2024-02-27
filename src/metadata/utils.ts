@@ -4,7 +4,8 @@ import type {
   HasManyRelationship,
   BelongsToRelationship,
   HasOneRelationship,
-  EntityClass
+  EntityClass,
+  HasAndBelongsToManyRelationship
 } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { RelationshipMetadataWithForeignKey } from "./types";
@@ -34,6 +35,15 @@ export const isHasOneRelationship = (
   rel: RelationshipMetadata
 ): rel is HasOneRelationship => {
   return rel.type === "HasOne" && rel.foreignKey !== undefined;
+};
+
+/**
+ * Type guard to check if the relationship is a HasOne
+ */
+export const isHasAndBelongsToManyRelationship = (
+  rel: RelationshipMetadata
+): rel is HasAndBelongsToManyRelationship => {
+  return rel.type === "HasAndBelongsToMany" && rel.joinTableName !== undefined;
 };
 
 /**

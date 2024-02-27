@@ -59,16 +59,18 @@ function HasAndBelongsToMany<
       context.addInitializer(function () {
         const entity: SingleTableDesign = Object.getPrototypeOf(this);
         const target = getTarget();
+        const { joinTable, foreignKey } = props.through();
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasAndBelongsToMany",
           propertyName: context.name as keyof SingleTableDesign,
-          target
+          target,
+          joinTableName: joinTable.name
         });
 
-        Metadata.addJoinTable(props.through().joinTable.name, {
+        Metadata.addJoinTable(joinTable.name, {
           entity: target,
-          foreignKey: props.through().foreignKey as keyof JoinTable<
+          foreignKey: foreignKey as keyof JoinTable<
             SingleTableDesign,
             SingleTableDesign
           >

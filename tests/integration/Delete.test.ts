@@ -1,5 +1,5 @@
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { MockTable, Person, Pet, Home, PhoneBook } from "./mockModels";
+import { MockTable, Person, Pet, Home, PhoneBook, Book } from "./mockModels";
 import { Attribute, Entity } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -344,6 +344,170 @@ describe("Delete", () => {
                 Key: { PK: "Home#222", SK: "Home" },
                 ExpressionAttributeNames: { "#PersonId": "PersonId" },
                 UpdateExpression: "REMOVE #PersonId"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will delete an entity from a HasAndBelongsToMany relationship", async () => {
+    expect.assertions(6);
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [
+        {
+          PK: "Book#123",
+          SK: "Book",
+          Id: "123",
+          Type: "Book",
+          Name: "Some Name",
+          NumPages: 100,
+          CreatedAt: "2021-10-15T08:31:15.148Z",
+          UpdatedAt: "2022-10-15T08:31:15.148Z"
+        },
+        {
+          PK: "Book#123",
+          SK: "Author#456",
+          Id: "001",
+          Type: "BelongsToLink",
+          ForeignEntityType: "Author",
+          ForeignKey: "456",
+          CreatedAt: "2024-02-27T03:19:52.667Z",
+          UpdatedAt: "2024-02-27T03:19:52.667Z"
+        }
+      ]
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+    const res = await Book.delete("123");
+
+    expect(res).toEqual(undefined);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK1",
+          ExpressionAttributeNames: { "#PK": "PK" },
+          ExpressionAttributeValues: { ":PK1": "Book#123" }
+        }
+      ]
+    ]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Delete: {
+                Key: { PK: "Book#123", SK: "Book" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Delete: {
+                Key: { PK: "Book#123", SK: "Author#456" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Delete: {
+                Key: { PK: "Author#456", SK: "Book#123" },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will delete an entity from a HasAndBelongsToMany relationship and a BelongsTo -> HasMany relationship", async () => {
+    expect.assertions(6);
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [
+        {
+          PK: "Book#123",
+          SK: "Book",
+          Id: "123",
+          // Optional key is undefined
+          PersonId: "789",
+          Type: "Book",
+          Name: "Some Name",
+          NumPages: 100,
+          CreatedAt: "2021-10-15T08:31:15.148Z",
+          UpdatedAt: "2022-10-15T08:31:15.148Z"
+        },
+        {
+          PK: "Book#123",
+          SK: "Author#456",
+          Id: "001",
+          Type: "BelongsToLink",
+          ForeignEntityType: "Author",
+          ForeignKey: "456",
+          CreatedAt: "2024-02-27T03:19:52.667Z",
+          UpdatedAt: "2024-02-27T03:19:52.667Z"
+        }
+      ]
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+    const res = await Book.delete("123");
+
+    expect(res).toEqual(undefined);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK1",
+          ExpressionAttributeNames: { "#PK": "PK" },
+          ExpressionAttributeValues: { ":PK1": "Book#123" }
+        }
+      ]
+    ]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Delete the book
+              Delete: {
+                Key: { PK: "Book#123", SK: "Book" },
+                TableName: "mock-table"
+              }
+            },
+            // Delete the BelongsTo -> HasMany relationship
+            {
+              Delete: {
+                Key: { PK: "Person#789", SK: "Book#123" },
+                TableName: "mock-table"
+              }
+            },
+            // Delete first AuthorBook JoinTable entry
+            {
+              Delete: {
+                Key: { PK: "Book#123", SK: "Author#456" },
+                TableName: "mock-table"
+              }
+            },
+            // Delete second AuthorBook JoinTable entry
+            {
+              Delete: {
+                Key: { PK: "Author#456", SK: "Book#123" },
+                TableName: "mock-table"
               }
             }
           ]

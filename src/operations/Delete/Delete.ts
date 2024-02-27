@@ -8,7 +8,8 @@ import Metadata, {
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
-  isRelationshipMetadataWithForeignKey
+  isRelationshipMetadataWithForeignKey,
+  isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
 import type { RelationshipLookup } from "../../types";
@@ -67,7 +68,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
         });
-        this.buildDeleteAssociatedBelongsToLinkTransaction(id, item);
+        this.buildDeleteAssociatedBelongsTransaction(id, item);
       }
 
       if (item instanceof BelongsToLink) {
@@ -77,6 +78,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
           )}`
         });
         this.buildNullifyForeignKeyTransaction(item);
+        this.buildDeleteJoinTableLinkTransaction(item);
       }
     }
 
@@ -113,7 +115,29 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   /**
-   * Nullify the associated relationship's ForeignKey attribute
+   * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
+   * @param item - BelongsToLink from HasAndBelongsToMany relationship
+   */
+  private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
+    const relMeta = this.#relationsLookup[item.foreignEntityType];
+
+    if (isHasAndBelongsToManyRelationship(relMeta)) {
+      // Inverse the keys to delete the other JoinTable entry
+      const belongsToLinksKeys: ItemKeys<T> = {
+        [this.#primaryKeyField]: item.sk,
+        [this.#sortKeyField]: item.pk
+      };
+
+      this.buildDeleteItemTransaction(belongsToLinksKeys, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          belongsToLinksKeys
+        )}`
+      });
+    }
+  }
+
+  /**
+   * If the item being deleted has a foreign key reference, nullify the associated relationship's ForeignKey attribute
    * If the ForeignKey is non nullable than it throws a NullConstraintViolationError
    * @param item
    */
@@ -160,16 +184,19 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   /**
-   * Deletes associated BelongsToLinks for each ForeignKey of the item being deleted
+   * Deletes associated BelongsTo relationships for each ForeignKey of the item being deleted
    * @param entityId
    * @param item
    */
-  private buildDeleteAssociatedBelongsToLinkTransaction(
+  private buildDeleteAssociatedBelongsTransaction(
     entityId: string,
     item: T
   ): void {
     this.#belongsToRelationships.forEach(relMeta => {
-      if (isKeyOfObject(item, relMeta.foreignKey)) {
+      if (
+        isKeyOfObject(item, relMeta.foreignKey) &&
+        item[relMeta.foreignKey] !== undefined
+      ) {
         const foreignKeyValue = item[relMeta.foreignKey];
 
         if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
