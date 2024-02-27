@@ -220,7 +220,7 @@ class Author extends MockTable {
   public books: Book[];
 }
 
-export class AuthorBook extends JoinTable<Author, Book> {
+class AuthorBook extends JoinTable<Author, Book> {
   public bookId: ForeignKey;
   public authorId: ForeignKey;
 }
@@ -238,5 +238,6 @@ export {
   Address,
   PhoneBook,
   Author,
-  Book
+  Book,
+  AuthorBook
 };
