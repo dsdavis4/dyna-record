@@ -1,6 +1,5 @@
 import { Entity, Attribute, DateAttribute } from "../decorators";
 import { v4 as uuidv4 } from "uuid";
-import Metadata from "../metadata";
 
 export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
 export const FOREIGN_KEY_ALIAS = "ForeignKey";
