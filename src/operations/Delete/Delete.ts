@@ -114,9 +114,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     );
   }
 
-  // TODO start here.... this is working for delete
-  //       write unit tests for this, then clean up
-
   // TODO typedoc
   // TODO add test for this...
   private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
