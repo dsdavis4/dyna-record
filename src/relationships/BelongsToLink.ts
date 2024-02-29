@@ -21,8 +21,8 @@ interface BelongsToLinkProps {
 class BelongsToLink implements BelongsToLinkProps {
   // TODO delete this and getter/setter if not used
   // TODO do I really need these?
-  public pk: string;
-  public sk: string;
+  // public pk: string;
+  // public sk: string;
   public id: string;
   public type: string;
   public foreignEntityType: string;
@@ -30,11 +30,7 @@ class BelongsToLink implements BelongsToLinkProps {
   public createdAt: Date;
   public updatedAt: Date;
 
-  // TODO is this used? Can it be removed from constructor?
-  readonly #tableClass: TableMetadata;
   constructor(tableClassName: string, item?: BelongsToLink) {
-    this.#tableClass = Metadata.getTable(tableClassName);
-
     if (item !== undefined) {
       Object.assign(this, item);
     }
@@ -113,6 +109,8 @@ class BelongsToLink implements BelongsToLinkProps {
   // public set updatedAt(value: Date) {
   //   this.#updatedAt = value;
   // }
+
+  public bla(): any {}
 
   public static build(
     foreignEntityType: string,

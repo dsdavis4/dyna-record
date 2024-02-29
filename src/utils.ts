@@ -106,15 +106,13 @@ export const tableItemToBelongsToLink = (
 
     if (attrMeta !== undefined) {
       const { name: entityKey, serializers } = attrMeta;
-      if (isKeyOfEntity(link, entityKey)) {
-        const rawVal = tableItem[attrName];
-        const val =
-          serializers?.toEntityAttribute === undefined
-            ? rawVal
-            : serializers?.toEntityAttribute(rawVal);
+      const rawVal = tableItem[attrName];
+      const val =
+        serializers?.toEntityAttribute === undefined
+          ? rawVal
+          : serializers?.toEntityAttribute(rawVal);
 
-        link[entityKey] = val;
-      }
+      link[entityKey as keyof BelongsToLink] = val;
     }
   });
 
