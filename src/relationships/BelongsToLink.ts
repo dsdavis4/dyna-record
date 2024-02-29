@@ -19,10 +19,6 @@ interface BelongsToLinkProps {
 
 // @Entity
 class BelongsToLink implements BelongsToLinkProps {
-  // TODO delete this and getter/setter if not used
-  // TODO do I really need these?
-  // public pk: string;
-  // public sk: string;
   public id: string;
   public type: string;
   public foreignEntityType: string;
@@ -30,87 +26,11 @@ class BelongsToLink implements BelongsToLinkProps {
   public createdAt: Date;
   public updatedAt: Date;
 
-  constructor(tableClassName: string, item?: BelongsToLink) {
+  constructor(item?: BelongsToLink) {
     if (item !== undefined) {
       Object.assign(this, item);
     }
   }
-
-  // TODO are the changes in here needed?
-
-  // TODO wait.... Why is this even in the Entity metadata section? Can I refactor so that its at top of the metadata structure the same way JoinTables are
-  //             I think this is the right move...
-  // TODO how to obtain the pk and sk... maybe throught the new type?
-  //    IE - > need the alias dynamically
-  //   @Attribute({ alias: Metadata.getEntityTable("BelongsToLink").primaryKey })
-  //  Something like that ^^ might work... Right now metadata for BelongsToLink tableclassName is undefined...
-  // @Attribute({ alias: "PK" })
-
-  // public get pk(): string {
-  //   return this.#pk;
-  // }
-
-  // public set pk(value: string) {
-  //   this.#pk = value;
-  // }
-
-  // public get sk(): string {
-  //   return this.#sk;
-  // }
-
-  // public set sk(value: string) {
-  //   this.#sk = value;
-  // }
-
-  // public get id(): string {
-  //   return this.#id;
-  // }
-
-  // public set id(value: string) {
-  //   this.#id = value;
-  // }
-
-  // public get type(): string {
-  //   return this.#type;
-  // }
-
-  // public set type(value: string) {
-  //   this.#type = value;
-  // }
-
-  // public get foreignEntityType(): string {
-  //   return this.#foreignEntityType;
-  // }
-
-  // public set foreignEntityType(value: string) {
-  //   this.#foreignEntityType = value;
-  // }
-
-  // public get foreignKey(): string {
-  //   return this.#foreignKey;
-  // }
-
-  // public set foreignKey(value: string) {
-  //   this.#foreignKey = value;
-  // }
-
-  // public get createdAt(): Date {
-  //   return this.#createdAt;
-  // }
-
-  // public set createdAt(value: Date) {
-  //   this.#createdAt = value;
-  // }
-
-  // public get updatedAt(): Date {
-  //   return this.#updatedAt;
-  // }
-
-  // public set updatedAt(value: Date) {
-  //   this.#updatedAt = value;
-  // }
-
-  public bla(): any {}
 
   public static build(
     foreignEntityType: string,

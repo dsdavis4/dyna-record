@@ -93,7 +93,7 @@ export const tableItemToBelongsToLink = (
   tableMeta: TableMetadata,
   tableItem: DynamoTableItem
 ): BelongsToLink => {
-  const link = new BelongsToLink(tableMeta.name);
+  const link = new BelongsToLink();
 
   const belongsToLinkAttrs = {
     ...{ [tableMeta.primaryKey]: tableMeta.primaryKeyAttribute },
