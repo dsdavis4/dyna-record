@@ -4,7 +4,7 @@ import type {
   BelongsToLinkDynamoItem,
   StringObj
 } from "./types";
-import Metadata from "./metadata";
+import Metadata, { AttributeMetadata, TableMetadata } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
@@ -20,11 +20,14 @@ export const entityToTableItem = (
   entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
   const entityMetadata = Metadata.getEntity(entityClassName);
+  // const defaultFields = Metadata.getTable(entityMetadata.tableClassName);
 
-  const possibleAttrs = {
-    ...entityMetadata.attributes,
-    ...Metadata.getEntity(BelongsToLink.name).attributes
-  };
+  // TODO start here... the branch I am on has a new test that should pass
+  // I am working on having dynamic keys
+  // I am trying to determine how to store BelongsToLink in metadata
+  // then update places where its needed
+  // Run unit tests and see its failing here because BelongsToLink is not an entity now
+  const possibleAttrs = Metadata.getEntityAttributes(entityClassName);
 
   const tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
     (acc, [tableKey, attrMetadata]) => {
@@ -60,11 +63,13 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const { attributes: attrsMeta } = Metadata.getEntity(EntityClass.name);
+  // TODO is this change needed?
+  // TODO see if I need the changes to this function or not...
+  const entityAttrsMeta = Metadata.getEntityAttributes(EntityClass.name);
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = attrsMeta[attrName];
+    const attrMeta = entityAttrsMeta[attrName];
 
     if (attrMeta !== undefined) {
       const { name: entityKey, serializers } = attrMeta;
@@ -81,6 +86,39 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   });
 
   return entity;
+};
+
+// TODO typedoc
+export const tableItemToBelongsToLink = (
+  tableMeta: TableMetadata,
+  tableItem: DynamoTableItem
+): BelongsToLink => {
+  const link = new BelongsToLink(tableMeta.name);
+
+  const belongsToLinkAttrs = {
+    ...{ [tableMeta.primaryKey]: tableMeta.primaryKeyAttribute },
+    ...{ [tableMeta.sortKey]: tableMeta.sortKeyAttribute },
+    ...tableMeta.defaultAttributes
+  };
+
+  Object.keys(tableItem).forEach(attrName => {
+    const attrMeta = belongsToLinkAttrs[attrName];
+
+    if (attrMeta !== undefined) {
+      const { name: entityKey, serializers } = attrMeta;
+      if (isKeyOfEntity(link, entityKey)) {
+        const rawVal = tableItem[attrName];
+        const val =
+          serializers?.toEntityAttribute === undefined
+            ? rawVal
+            : serializers?.toEntityAttribute(rawVal);
+
+        link[entityKey] = val;
+      }
+    }
+  });
+
+  return link;
 };
 
 /**
@@ -112,9 +150,10 @@ export const isKeyOfObject = <T>(
  * @returns boolean
  */
 export const isBelongsToLinkDynamoItem = (
-  res: DynamoTableItem
+  res: DynamoTableItem,
+  tableMeta: TableMetadata
 ): res is BelongsToLinkDynamoItem => {
-  return res.Type === BelongsToLink.name;
+  return res[tableMeta.typeField] === BelongsToLink.name;
 };
 
 /**

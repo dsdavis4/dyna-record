@@ -17,6 +17,7 @@ import {
   QueryCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
+import { profile } from "console";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
@@ -99,6 +100,7 @@ describe("FindById", () => {
         Address: "11 Some St",
         Type: "Customer",
         UpdatedAt: "2023-09-15T04:26:31.148Z",
+        //TODO remove all instances of this
         SomeAttr: "attribute that is not modeled"
       }
     });
@@ -988,6 +990,7 @@ describe("FindById", () => {
     ]);
   });
 
+  // TODO remove only
   it("will find an entity included HasAndBelongsToMany associations", async () => {
     expect.assertions(6);
 
@@ -1160,8 +1163,8 @@ describe("FindById", () => {
   });
 
   // TODO do a test like this (alternate table) for all operation types
-  it.only("will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
-    expect.assertions(6);
+  it("will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
+    expect.assertions(8);
 
     const courseRes = {
       myPk: "Course|123",
@@ -1181,6 +1184,7 @@ describe("FindById", () => {
         id: "001",
         foreignEntityType: "Student",
         foreignKey: "456",
+        type: "BelongsToLink",
         createdAt: "2023-01-15T12:12:18.123Z",
         updatedAt: "2023-02-15T08:31:15.148Z"
       },
@@ -1190,6 +1194,7 @@ describe("FindById", () => {
         foreignEntityType: "Student",
         foreignKey: "789",
         id: "002",
+        type: "BelongsToLink",
         createdAt: "2023-01-15T12:12:18.123Z",
         updatedAt: "2023-02-15T08:31:15.148Z"
       }
@@ -1202,6 +1207,7 @@ describe("FindById", () => {
         id: "003",
         foreignEntityType: "Assignment",
         foreignKey: "111",
+        type: "BelongsToLink",
         createdAt: "2023-01-15T12:12:18.123Z",
         updatedAt: "2023-02-15T08:31:15.148Z"
       }
@@ -1247,6 +1253,7 @@ describe("FindById", () => {
         myPk: "Teacher|555",
         mySk: "Teacher",
         id: "555",
+        name: "TeacherName",
         createdAt: "2023-02-15T08:31:15.148Z",
         updatedAt: "2023-02-15T08:31:15.148Z",
         type: "Teacher"
@@ -1273,8 +1280,9 @@ describe("FindById", () => {
       myPk: "Course|123",
       mySk: "Course",
       id: "123",
-      name: "Cooking",
-      courseId: "456",
+      type: "Course",
+      name: "Math",
+      teacherId: "555",
       createdAt: new Date("2023-01-15T12:12:18.123Z"),
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       teacher: {
@@ -1282,8 +1290,11 @@ describe("FindById", () => {
         mySk: "Teacher",
         id: "555",
         type: "Teacher",
+        name: "TeacherName",
         createdAt: new Date("2023-02-15T08:31:15.148Z"),
-        updatedAt: new Date("2023-02-15T08:31:15.148Z")
+        updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+        courses: undefined,
+        profile: undefined
       },
       assignments: [
         {
@@ -1294,7 +1305,8 @@ describe("FindById", () => {
           title: "SomeTitle-0",
           courseId: "123",
           createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          course: undefined
         }
       ],
       students: [
@@ -1302,18 +1314,23 @@ describe("FindById", () => {
           myPk: "Student|456",
           mySk: "Student",
           id: "456",
+          type: "Student",
           name: "SomeName-0",
-          createdAt: new Date("2023-01-15T12:12:18.123Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          courses: undefined,
+          profile: undefined
         },
         {
-          myPk: "Course|123",
-          mySk: "Student|002",
-          foreignEntityType: "Student",
-          foreignKey: "789",
-          id: "002",
-          createdAt: new Date("2023-01-15T12:12:18.123Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          myPk: "Student|789",
+          mySk: "Student",
+          id: "789",
+          type: "Student",
+          name: "SomeName-1",
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          courses: undefined,
+          profile: undefined
         }
       ]
     });
@@ -1325,8 +1342,44 @@ describe("FindById", () => {
     expect(
       result?.students.every(student => student instanceof Student)
     ).toEqual(true);
-    expect(mockedQueryCommand.mock.calls).toEqual("TODO");
-    expect(mockTransactGetCommand.mock.calls).toEqual("TODO");
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          ConsistentRead: true,
+          ExpressionAttributeNames: {
+            "#foreignEntityType": "foreignEntityType",
+            "#myPk": "myPk",
+            "#type": "type"
+          },
+          ExpressionAttributeValues: {
+            ":foreignEntityType3": "Teacher",
+            ":foreignEntityType4": "Assignment",
+            ":foreignEntityType5": "Student",
+            ":myPk6": "Course|123",
+            ":type1": "Course",
+            ":type2": "BelongsToLink"
+          },
+          FilterExpression:
+            "#type = :type1 OR (#type = :type2 AND #foreignEntityType IN (:foreignEntityType3,:foreignEntityType4,:foreignEntityType5))",
+          KeyConditionExpression: "#myPk = :myPk6",
+          TableName: "other-table"
+        }
+      ]
+    ]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                Key: { myPk: "Teacher|555", mySk: "Teacher" },
+                TableName: "other-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
     expect(mockSend.mock.calls).toEqual([
       [{ name: "QueryCommand" }],
       [{ name: "TransactGetCommand" }]

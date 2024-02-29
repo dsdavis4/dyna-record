@@ -6,7 +6,11 @@ import {
 import DynamoClient from "../../DynamoClient";
 import { BelongsToLink } from "../../relationships";
 import type { DynamoTableItem } from "../../types";
-import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../../utils";
+import {
+  isBelongsToLinkDynamoItem,
+  tableItemToBelongsToLink,
+  tableItemToEntity
+} from "../../utils";
 import OperationBase from "../OperationBase";
 import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 
@@ -97,8 +101,8 @@ class Query<T extends SingleTableDesign> extends OperationBase<T> {
     queryResults: DynamoTableItem[]
   ): QueryResults<T> {
     return queryResults.map(res =>
-      isBelongsToLinkDynamoItem(res)
-        ? tableItemToEntity(BelongsToLink, res)
+      isBelongsToLinkDynamoItem(res, this.tableMetadata)
+        ? tableItemToBelongsToLink(this.tableMetadata, res)
         : tableItemToEntity<T>(this.EntityClass, res)
     );
   }

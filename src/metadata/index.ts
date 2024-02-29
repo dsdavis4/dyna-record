@@ -1,5 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import { type JoinTable, type BelongsToLink } from "../relationships";
+import { dateSerializer } from "../decorators";
+import { type JoinTable, BelongsToLink } from "../relationships";
 import type { ForeignKey } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
@@ -85,17 +86,51 @@ export type RelationshipMetadata =
   | HasOneRelationship
   | HasAndBelongsToManyRelationship;
 
+// TODO should I move things to classes? Table, Attribte, Entity etc
+// TODO check these default things and delete if not used
+export type DefaultTableKeys =
+  | "Id"
+  | "Type"
+  | "CreatedAt"
+  | "UpdatedAt"
+  | "ForeignKey"
+  | "ForeignEntityType";
+
+// TODO what is this for/
+const tableDefaultFields: Record<string, string> = {
+  id: "Id",
+  type: "Type",
+  createdAt: "CreatedAt",
+  updatedAt: "UpdatedAt",
+  foreignKey: "ForeignKey",
+  foreignEntityType: "ForeignEntityType"
+};
+
+type AttributeMetadataStorage = Record<string, AttributeMetadata>;
+type RelationshipMetadataStorage = Record<string, RelationshipMetadata>;
+type TableMetadataStorage = Record<string, DeepRequired<TableMetadata>>;
+type EntityMetadataStorage = Record<string, EntityMetadata>;
+type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
+
 export interface EntityMetadata {
   tableClassName: string; //
-  attributes: Record<string, AttributeMetadata>;
-  relationships: Record<string, RelationshipMetadata>;
+  attributes: AttributeMetadataStorage;
+  relationships: RelationshipMetadataStorage;
 }
 
 export interface TableMetadata {
   name: string;
+  // TODO should I refactor places to get this from  primaryKeyAttribute ?
   primaryKey: string;
   sortKey: string;
+  // TODO should I refactor so that these are not redefined on entitiy metadata
+  primaryKeyAttribute: AttributeMetadata;
+  sortKeyAttribute: AttributeMetadata;
   delimiter: string;
+  // TODO typedoc with defaults
+  // TODO type tests
+  defaultAttributes: Record<string, AttributeMetadata>;
+  typeField: string;
 }
 
 export interface JoinTableMetadata {
@@ -103,13 +138,28 @@ export interface JoinTableMetadata {
   foreignKey: keyof JoinTable<SingleTableDesign, SingleTableDesign>;
 }
 
-export type TableMetadataNoKeys = Omit<TableMetadata, "primaryKey" | "sortKey">;
+export type TableMetadataOptions = Omit<
+  TableMetadata,
+  | "primaryKey"
+  | "sortKey"
+  | "defaultAttributes"
+  | "typeField"
+  | "primaryKeyAttribute"
+  | "sortKeyAttribute"
+> & {
+  defaultFields?: Partial<typeof tableDefaultFields>;
+};
+
+// TODO if used move to generic utils class
+type DeepRequired<T> = Required<{
+  [K in keyof T]: T[K] extends Required<T[K]> ? T[K] : DeepRequired<T[K]>;
+}>;
 
 class Metadata {
-  private readonly tables: Record<string, TableMetadata> = {};
-  private readonly entities: Record<string, EntityMetadata> = {};
+  private readonly tables: TableMetadataStorage = {};
+  private readonly entities: EntityMetadataStorage = {};
   private readonly entityClasses: Entity[] = [];
-  private readonly joinTables: Record<string, JoinTableMetadata[]> = {};
+  private readonly joinTables: JoinTableMetadataStorage = {};
 
   private initialized: boolean = false;
 
@@ -128,7 +178,7 @@ class Metadata {
    * @param {string} tableName - Name of the table
    * @returns Table metadata
    */
-  public getTable(tableName: string): TableMetadata {
+  public getTable(tableName: string): DeepRequired<TableMetadata> {
     this.init();
     return this.tables[tableName];
   }
@@ -138,7 +188,7 @@ class Metadata {
    * @param {string} entityName - Name of the entity
    * @returns Table metadata
    */
-  public getEntityTable(entityName: string): TableMetadata {
+  public getEntityTable(entityName: string): DeepRequired<TableMetadata> {
     this.init();
     const entityMetadata = this.getEntity(entityName);
     return this.getTable(entityMetadata.tableClassName);
@@ -154,13 +204,63 @@ class Metadata {
     return this.joinTables[joinTableName];
   }
 
+  // TODO check usages of this, should it be renamed?
+  // TODO typedoc
+  // TODO remove foreign key attributes if the type is not BelongsToLink
+  public getEntityAttributes(entityName: string): AttributeMetadataStorage {
+    const entityMetadata = this.getEntity(entityName);
+    const { defaultAttributes } = this.getTable(entityMetadata.tableClassName);
+    return { ...entityMetadata.attributes, ...defaultAttributes };
+  }
+
   /**
    * Add a table to metadata storage
    * @param tableClassName
    * @param options
    */
-  public addTable(tableClassName: string, options: TableMetadataNoKeys): void {
-    this.tables[tableClassName] = { ...options, primaryKey: "", sortKey: "" };
+  public addTable(tableClassName: string, options: TableMetadataOptions): void {
+    this.tables[tableClassName] = {
+      primaryKey: "",
+      sortKey: "",
+      name: options.name,
+      delimiter: options.delimiter,
+      defaultAttributes: this.buildDefaultAttributes(options),
+      typeField: options.defaultFields?.type ?? tableDefaultFields.type,
+      // Placeholders, these are set later
+      primaryKeyAttribute: {
+        name: "",
+        nullable: false,
+        serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" }
+      },
+      sortKeyAttribute: {
+        name: "",
+        nullable: false,
+        serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" }
+      }
+    };
+  }
+
+  // TODO typedoc
+  private buildDefaultAttributes(
+    options: TableMetadataOptions
+  ): Record<DefaultTableKeys, AttributeMetadata> {
+    const defaultAttrsMeta = Object.entries(tableDefaultFields);
+    const customDefaults = options.defaultFields ?? {};
+
+    return defaultAttrsMeta.reduce<Record<string, AttributeMetadata>>(
+      (acc, [entityKey, tableKeyAlias]) => {
+        const field = customDefaults[entityKey] ?? tableKeyAlias;
+        // TODO make consts for these
+        const isDateField = ["createdAt", "updatedAt"].includes(entityKey);
+        acc[field] = {
+          name: entityKey,
+          nullable: false,
+          serializers: isDateField ? dateSerializer : undefined
+        };
+        return acc;
+      },
+      {}
+    );
   }
 
   /**
@@ -220,11 +320,8 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
 
     if (entityMetadata.attributes[options.alias] === undefined) {
-      entityMetadata.attributes[options.alias] = {
-        name: options.attributeName,
-        nullable: options.nullable,
-        serializers: options.serializers
-      };
+      entityMetadata.attributes[options.alias] =
+        this.buildAttributeMetadata(options);
     }
   }
 
@@ -239,14 +336,15 @@ class Metadata {
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
+    const attrMeta = { ...options, nullable: false };
+
     if (tableMetadata !== undefined) {
       tableMetadata.primaryKey = options.alias;
+      tableMetadata.primaryKeyAttribute = this.buildAttributeMetadata(attrMeta);
     }
 
-    this.addEntityAttribute(entityClass.constructor.name, {
-      ...options,
-      nullable: false
-    });
+    // TODO can this be removed?
+    this.addEntityAttribute(entityClass.constructor.name, attrMeta);
   }
 
   /**
@@ -260,14 +358,14 @@ class Metadata {
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
+    const attrMeta = { ...options, nullable: false };
+
     if (tableMetadata !== undefined) {
       tableMetadata.sortKey = options.alias;
+      tableMetadata.sortKeyAttribute = this.buildAttributeMetadata(attrMeta);
     }
 
-    this.addEntityAttribute(entityClass.constructor.name, {
-      ...options,
-      nullable: false
-    });
+    this.addEntityAttribute(entityClass.constructor.name, attrMeta);
   }
 
   /**
@@ -298,6 +396,17 @@ class Metadata {
     } else {
       return this.getEntityTableMetadata(protoType);
     }
+  }
+
+  // TODO typedoc
+  private buildAttributeMetadata(
+    options: AttributeMetadataOptions
+  ): AttributeMetadata {
+    return {
+      name: options.attributeName,
+      nullable: options.nullable,
+      serializers: options.serializers
+    };
   }
 }
 

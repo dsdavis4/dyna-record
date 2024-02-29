@@ -48,6 +48,7 @@ interface QueryCommandProps {
 
 // TODO add jsdoc
 // TODO should I add explicit returns for all these functions?
+// TODO update to use #private modifer
 class QueryBuilder {
   private attrCounter: number;
   private readonly tableMetadata: TableMetadata;
@@ -61,11 +62,7 @@ class QueryBuilder {
 
     const entityMetadata = Metadata.getEntity(props.entityClassName);
     this.tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
-
-    const possibleAttrs = {
-      ...entityMetadata.attributes,
-      ...Metadata.getEntity(BelongsToLink.name).attributes
-    };
+    const possibleAttrs = Metadata.getEntityAttributes(props.entityClassName);
 
     this.tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
       (acc, [tableKey, attrMetadata]) => {

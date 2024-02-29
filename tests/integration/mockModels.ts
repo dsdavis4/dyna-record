@@ -225,7 +225,18 @@ class AuthorBook extends JoinTable<Author, Book> {
   public authorId: ForeignKey;
 }
 
-@Table({ name: "other-table", delimiter: "|" })
+@Table({
+  name: "other-table",
+  delimiter: "|",
+  defaultFields: {
+    id: "id",
+    type: "type",
+    createdAt: "createdAt",
+    updatedAt: "updatedAt",
+    foreignKey: "foreignKey",
+    foreignEntityType: "foreignEntityType"
+  }
+})
 abstract class OtherTable extends SingleTableDesign {
   @PrimaryKeyAttribute({ alias: "myPk" })
   public myPk: PrimaryKey;

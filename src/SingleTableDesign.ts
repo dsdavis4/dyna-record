@@ -29,6 +29,7 @@ import {
  * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
  */
 export type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
+// TODO Delete these, these are now handled from TableProps
 const idField: DefaultFields = "id";
 const typeField: DefaultFields = "type";
 const createdAtField: DefaultFields = "createdAt";
