@@ -5,7 +5,11 @@ import {
   Order,
   PaymentMethodProvider,
   Book,
-  Author
+  Author,
+  Course,
+  Teacher,
+  Assignment,
+  Student
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -95,6 +99,7 @@ describe("FindById", () => {
         Address: "11 Some St",
         Type: "Customer",
         UpdatedAt: "2023-09-15T04:26:31.148Z",
+        // TODO remove all instances of this
         SomeAttr: "attribute that is not modeled"
       }
     });
@@ -1143,6 +1148,229 @@ describe("FindById", () => {
               Get: {
                 TableName: "mock-table",
                 Key: { PK: "Author#113", SK: "Author" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactGetCommand" }]
+    ]);
+  });
+
+  it("will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
+    expect.assertions(8);
+
+    const courseRes = {
+      myPk: "Course|123",
+      mySk: "Course",
+      id: "123",
+      type: "Course",
+      name: "Math",
+      teacherId: "555",
+      createdAt: "2023-01-15T12:12:18.123Z",
+      updatedAt: "2023-02-15T08:31:15.148Z"
+    };
+
+    const studentCourseJoinTableItems = [
+      {
+        myPk: "Course|123",
+        mySk: "Student|001",
+        id: "001",
+        foreignEntityType: "Student",
+        foreignKey: "456",
+        type: "BelongsToLink",
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      },
+      {
+        myPk: "Course|123",
+        mySk: "Student|002",
+        foreignEntityType: "Student",
+        foreignKey: "789",
+        id: "002",
+        type: "BelongsToLink",
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    ];
+
+    const assignmentBelongsToLinkTableItems = [
+      {
+        myPk: "Course|123",
+        mySk: "Assignment|003",
+        id: "003",
+        foreignEntityType: "Assignment",
+        foreignKey: "111",
+        type: "BelongsToLink",
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    ];
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [
+        courseRes,
+        ...studentCourseJoinTableItems,
+        ...assignmentBelongsToLinkTableItems
+      ]
+    });
+
+    const studentTableItems = studentCourseJoinTableItems.map((link, idx) => ({
+      Item: {
+        myPk: `${link.foreignEntityType}|${link.foreignKey}`,
+        mySk: link.foreignEntityType,
+        id: link.foreignKey,
+        type: link.foreignEntityType,
+        name: `SomeName-${idx}`,
+        createdAt: "2023-02-15T08:31:15.148Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      }
+    }));
+
+    const assignmentTableItems = assignmentBelongsToLinkTableItems.map(
+      (link, idx) => ({
+        Item: {
+          myPk: `${link.foreignEntityType}|${link.foreignKey}`,
+          mySk: link.foreignEntityType,
+          id: link.foreignKey,
+          type: link.foreignEntityType,
+          title: `SomeTitle-${idx}`,
+          courseId: "123",
+          createdAt: "2023-02-15T08:31:15.148Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        }
+      })
+    );
+
+    const teacherTableItem = {
+      Item: {
+        myPk: "Teacher|555",
+        mySk: "Teacher",
+        id: "555",
+        name: "TeacherName",
+        createdAt: "2023-02-15T08:31:15.148Z",
+        updatedAt: "2023-02-15T08:31:15.148Z",
+        type: "Teacher"
+      }
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [
+        ...studentTableItems,
+        ...assignmentTableItems,
+        teacherTableItem
+      ]
+    });
+
+    const result = await Course.findById("123", {
+      include: [
+        { association: "teacher" },
+        { association: "assignments" },
+        { association: "students" }
+      ]
+    });
+
+    expect(result).toEqual({
+      myPk: "Course|123",
+      mySk: "Course",
+      id: "123",
+      type: "Course",
+      name: "Math",
+      teacherId: "555",
+      createdAt: new Date("2023-01-15T12:12:18.123Z"),
+      updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+      teacher: {
+        myPk: "Teacher|555",
+        mySk: "Teacher",
+        id: "555",
+        type: "Teacher",
+        name: "TeacherName",
+        createdAt: new Date("2023-02-15T08:31:15.148Z"),
+        updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+        courses: undefined,
+        profile: undefined
+      },
+      assignments: [
+        {
+          myPk: "Assignment|111",
+          mySk: "Assignment",
+          id: "111",
+          type: "Assignment",
+          title: "SomeTitle-0",
+          courseId: "123",
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          course: undefined
+        }
+      ],
+      students: [
+        {
+          myPk: "Student|456",
+          mySk: "Student",
+          id: "456",
+          type: "Student",
+          name: "SomeName-0",
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          courses: undefined,
+          profile: undefined
+        },
+        {
+          myPk: "Student|789",
+          mySk: "Student",
+          id: "789",
+          type: "Student",
+          name: "SomeName-1",
+          createdAt: new Date("2023-02-15T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+          courses: undefined,
+          profile: undefined
+        }
+      ]
+    });
+    expect(result).toBeInstanceOf(Course);
+    expect(result?.teacher).toBeInstanceOf(Teacher);
+    expect(
+      result?.assignments.every(assignment => assignment instanceof Assignment)
+    ).toEqual(true);
+    expect(
+      result?.students.every(student => student instanceof Student)
+    ).toEqual(true);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          ConsistentRead: true,
+          ExpressionAttributeNames: {
+            "#foreignEntityType": "foreignEntityType",
+            "#myPk": "myPk",
+            "#type": "type"
+          },
+          ExpressionAttributeValues: {
+            ":foreignEntityType3": "Teacher",
+            ":foreignEntityType4": "Assignment",
+            ":foreignEntityType5": "Student",
+            ":myPk6": "Course|123",
+            ":type1": "Course",
+            ":type2": "BelongsToLink"
+          },
+          FilterExpression:
+            "#type = :type1 OR (#type = :type2 AND #foreignEntityType IN (:foreignEntityType3,:foreignEntityType4,:foreignEntityType5))",
+          KeyConditionExpression: "#myPk = :myPk6",
+          TableName: "other-table"
+        }
+      ]
+    ]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                Key: { myPk: "Teacher|555", mySk: "Teacher" },
+                TableName: "other-table"
               }
             }
           ]

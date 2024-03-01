@@ -74,7 +74,12 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       if (item instanceof BelongsToLink) {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-            { [this.#primaryKeyField]: item.pk, [this.#sortKeyField]: item.sk }
+            {
+              [this.#primaryKeyField]:
+                item[this.#primaryKeyField as keyof BelongsToLink],
+              [this.#sortKeyField]:
+                item[this.#sortKeyField as keyof BelongsToLink]
+            }
           )}`
         });
         this.buildNullifyForeignKeyTransaction(item);
@@ -124,8 +129,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     if (isHasAndBelongsToManyRelationship(relMeta)) {
       // Inverse the keys to delete the other JoinTable entry
       const belongsToLinksKeys: ItemKeys<T> = {
-        [this.#primaryKeyField]: item.sk,
-        [this.#sortKeyField]: item.pk
+        [this.#primaryKeyField]:
+          item[this.#sortKeyField as keyof BelongsToLink],
+        [this.#sortKeyField]: item[this.#primaryKeyField as keyof BelongsToLink]
       };
 
       this.buildDeleteItemTransaction(belongsToLinksKeys, {

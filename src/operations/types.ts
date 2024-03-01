@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import type { DefaultFields } from "../SingleTableDesign";
+import type { DefaultEntityFields } from "../metadata";
 import type {
   ForeignKey,
   NullableForeignKey,
@@ -65,7 +65,7 @@ export type EntityAttributes<T extends SingleTableDesign> = Omit<
  */
 export type EntityDefinedAttributes<T extends SingleTableDesign> = Omit<
   ForeignKeyToValue<T>,
-  | DefaultFields
+  | DefaultEntityFields
   | RelationshipAttributeNames<T>
   | FunctionFields<T>
   | PrimaryKeyAttribute<T>

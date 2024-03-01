@@ -6,3 +6,4 @@ export { default as ForeignKeyAttribute } from "./ForeignKeyAttribute";
 export { default as NullableForeignKeyAttribute } from "./NullableForeignKeyAttribute";
 export { default as DateAttribute } from "./DateAttribute";
 export { default as DateNullableAttribute } from "./DateNullableAttribute";
+export * from "./serializers";

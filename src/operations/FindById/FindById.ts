@@ -128,6 +128,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
 
     if (transactionRes.some(res => res.Item === undefined)) {
       // TODO I am getting this on some queries... why?
+      // TODO delete this code block
       console.error("ERROR - Orphaned Belongs To Links");
     }
 
@@ -173,8 +174,10 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
-        if (res.Type === this.EntityClass.name) acc.item = res;
-        if (isBelongsToLinkDynamoItem(res)) acc.belongsToLinks.push(res);
+        const { typeField } = this.tableMetadata;
+        if (res[typeField] === this.EntityClass.name) acc.item = res;
+        if (isBelongsToLinkDynamoItem(res, this.tableMetadata))
+          acc.belongsToLinks.push(res);
         return acc;
       },
       { item: {}, belongsToLinks: [] as BelongsToLinkDynamoItem[] }
@@ -304,12 +307,13 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     relationsLookup: RelationshipLookup
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
     const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
+    const { typeField } = this.tableMetadata;
 
     transactionResults.forEach(res => {
       const tableItem = res.Item;
 
       if (tableItem !== undefined) {
-        const rel = relationsLookup[tableItem.Type];
+        const rel = relationsLookup[tableItem[typeField]];
 
         if (isKeyOfEntity(parentEntity, rel.propertyName)) {
           if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {

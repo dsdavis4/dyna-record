@@ -2,6 +2,7 @@ import { TransactWriteCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import {
   ContactInformation,
   Customer,
+  Grade,
   MockTable,
   Order,
   PaymentMethod,
@@ -2024,7 +2025,7 @@ describe("Update", () => {
         .mockReturnValueOnce("belongsToLinkId2");
     });
 
-    it("can update foreign keys for an enitity that includes both HasMany and Belongs to relationships", async () => {
+    it("can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
       expect.assertions(6);
 
       mockGet.mockResolvedValue({
@@ -2130,6 +2131,135 @@ describe("Update", () => {
                     ForeignKey: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
+      expect.assertions(6);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          myPk: "Grade|123",
+          mySk: "Grade",
+          id: "123",
+          type: "Grade",
+          gradeValue: "A+",
+          assignmentId: "456",
+          studentId: "789",
+          createdAt: "2023-10-16T03:31:35.918Z",
+          updatedAt: "2023-10-16T03:31:35.918Z"
+        }
+      });
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Grade.update("123", {
+          gradeValue: "B",
+          assignmentId: "111",
+          studentId: "222"
+        })
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "GetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockGet.mock.calls).toEqual([[]]);
+      expect(mockedGetCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "other-table",
+            Key: { myPk: "Grade|123", mySk: "Grade" },
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "other-table",
+                  Key: { myPk: "Grade|123", mySk: "Grade" },
+                  UpdateExpression:
+                    "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  ExpressionAttributeNames: {
+                    "#LetterValue": "LetterValue",
+                    "#assignmentId": "assignmentId",
+                    "#studentId": "studentId",
+                    "#updatedAt": "updatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":LetterValue": "B",
+                    ":assignmentId": "111",
+                    ":studentId": "222",
+                    ":updatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  Key: { myPk: "Assignment|111", mySk: "Assignment" },
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              },
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: { myPk: "Assignment|456", mySk: "Grade" }
+                }
+              },
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Assignment|111",
+                    mySk: "Grade",
+                    id: "belongsToLinkId1",
+                    type: "BelongsToLink",
+                    foreignKey: "123",
+                    foreignEntityType: "Grade",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|222", mySk: "Student" },
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              },
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|789", mySk: "Grade|123" }
+                }
+              },
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Student|222",
+                    mySk: "Grade|123",
+                    id: "belongsToLinkId2",
+                    type: "BelongsToLink",
+                    foreignKey: "123",
+                    foreignEntityType: "Grade",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
               }

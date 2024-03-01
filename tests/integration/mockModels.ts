@@ -220,12 +220,131 @@ class Author extends MockTable {
   public books: Book[];
 }
 
-export class AuthorBook extends JoinTable<Author, Book> {
+class AuthorBook extends JoinTable<Author, Book> {
   public bookId: ForeignKey;
   public authorId: ForeignKey;
 }
 
+@Table({
+  name: "other-table",
+  delimiter: "|",
+  defaultFields: {
+    id: "id",
+    type: "type",
+    createdAt: "createdAt",
+    updatedAt: "updatedAt",
+    foreignKey: "foreignKey",
+    foreignEntityType: "foreignEntityType"
+  }
+})
+abstract class OtherTable extends SingleTableDesign {
+  @PrimaryKeyAttribute({ alias: "myPk" })
+  public myPk: PrimaryKey;
+
+  @SortKeyAttribute({ alias: "mySk" })
+  public mySk: SortKey;
+}
+
+@Entity
+class Teacher extends OtherTable {
+  @Attribute({ alias: "name" })
+  public name: string;
+
+  @HasMany(() => Course, { foreignKey: "teacherId" })
+  public courses: Course[];
+
+  @HasOne(() => Profile, { foreignKey: "userId" })
+  public profile: Profile;
+}
+
+@Entity
+class Student extends OtherTable {
+  @Attribute({ alias: "name" })
+  public name: string;
+
+  @HasAndBelongsToMany(() => Course, {
+    targetKey: "students",
+    through: () => ({ joinTable: StudentCourse, foreignKey: "studentId" })
+  })
+  public courses: Course[];
+
+  @HasOne(() => Profile, { foreignKey: "userId" })
+  public profile: Profile;
+
+  @HasMany(() => Grade, { foreignKey: "studentId" })
+  public grades: Grade[];
+}
+
+@Entity
+class Course extends OtherTable {
+  @Attribute({ alias: "name" })
+  public name: string;
+
+  @NullableForeignKeyAttribute({ alias: "teacherId" })
+  public teacherId?: NullableForeignKey;
+
+  @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
+  public teacher?: Teacher;
+
+  @HasMany(() => Assignment, { foreignKey: "courseId" })
+  public assignments: Assignment[];
+
+  @HasAndBelongsToMany(() => Student, {
+    targetKey: "courses",
+    through: () => ({ joinTable: StudentCourse, foreignKey: "courseId" })
+  })
+  public students: Student[];
+}
+
+@Entity
+class Assignment extends OtherTable {
+  @Attribute({ alias: "title" })
+  public title: string;
+
+  @ForeignKeyAttribute({ alias: "courseId" })
+  public courseId: ForeignKey;
+
+  @BelongsTo(() => Course, { foreignKey: "courseId" })
+  public course: Course;
+
+  @HasOne(() => Grade, { foreignKey: "assignmentId" })
+  public grade: Grade;
+}
+
+@Entity
+class Grade extends OtherTable {
+  @Attribute({ alias: "LetterValue" })
+  public gradeValue: string;
+
+  @ForeignKeyAttribute({ alias: "assignmentId" })
+  public assignmentId: ForeignKey;
+
+  @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
+  public assignment: Assignment;
+
+  @ForeignKeyAttribute({ alias: "studentId" })
+  public studentId: ForeignKey;
+
+  @BelongsTo(() => Student, { foreignKey: "studentId" })
+  public student: Student;
+}
+
+@Entity
+class Profile extends OtherTable {
+  @DateAttribute({ alias: "lastLogin" })
+  public lastLogin: Date;
+
+  @ForeignKeyAttribute({ alias: "userId" })
+  public userId: ForeignKey;
+}
+
+class StudentCourse extends JoinTable<Student, Course> {
+  public studentId: ForeignKey;
+  public courseId: ForeignKey;
+}
+
 export {
+  // MockTable exports
   MockTable,
   Order,
   PaymentMethodProvider,
@@ -238,5 +357,15 @@ export {
   Address,
   PhoneBook,
   Author,
-  Book
+  Book,
+  AuthorBook,
+  // OtherTable exports
+  OtherTable,
+  Teacher,
+  Student,
+  Course,
+  Assignment,
+  Profile,
+  StudentCourse,
+  Grade
 };

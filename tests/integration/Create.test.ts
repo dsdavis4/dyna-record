@@ -2,6 +2,7 @@ import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import {
   ContactInformation,
   Customer,
+  Grade,
   MockTable,
   Order,
   PaymentMethodProvider
@@ -298,6 +299,151 @@ describe("Create", () => {
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: PaymentMethod with id: 123 already has an associated PaymentMethodProvider"
+          )
+        ]);
+      }
+    });
+  });
+
+  describe("entity BelongsTo an entity which HasOne of it and another entity HasMany of it", () => {
+    it("will create the entity and de-normalize the BelongsToLinks", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      const grade = await Grade.create({
+        gradeValue: "A+",
+        assignmentId: "123",
+        studentId: "456"
+      });
+
+      expect(grade).toEqual({
+        myPk: "Grade|uuid1",
+        mySk: "Grade",
+        id: "uuid1",
+        type: "Grade",
+        gradeValue: "A+",
+        assignmentId: "123",
+        studentId: "456",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(grade).toBeInstanceOf(Grade);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|uuid1",
+                    mySk: "Grade",
+                    id: "uuid1",
+                    type: "Grade",
+                    LetterValue: "A+",
+                    assignmentId: "123",
+                    studentId: "456",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  Key: { myPk: "Assignment|123", mySk: "Assignment" },
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              },
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Assignment|123",
+                    mySk: "Grade",
+                    id: "uuid2",
+                    type: "BelongsToLink",
+                    foreignKey: "uuid1",
+                    foreignEntityType: "Grade",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: { myPk: "Student|456", mySk: "Student" }
+                }
+              },
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Student|456",
+                    mySk: "Grade|uuid1",
+                    id: "uuid3",
+                    type: "BelongsToLink",
+                    foreignKey: "uuid1",
+                    foreignEntityType: "Grade",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("will throw an error if the request fails because the conditions fail (Assignment already has grade associated with it or parent entities don't exist)", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2")
+        .mockReturnValueOnce("uuid3");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Grade.create({
+          gradeValue: "A+",
+          assignmentId: "123",
+          studentId: "456"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Assignment with id: 123 already has an associated Grade"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Student with ID '456' does not exist"
           )
         ]);
       }

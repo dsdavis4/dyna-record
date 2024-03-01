@@ -4,7 +4,7 @@ import type {
   BelongsToLinkDynamoItem,
   StringObj
 } from "./types";
-import Metadata from "./metadata";
+import Metadata, { type TableMetadata } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
@@ -20,11 +20,7 @@ export const entityToTableItem = (
   entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
   const entityMetadata = Metadata.getEntity(entityClassName);
-
-  const possibleAttrs = {
-    ...entityMetadata.attributes,
-    ...Metadata.getEntity(BelongsToLink.name).attributes
-  };
+  const possibleAttrs = Metadata.getEntityAttributes(entityClassName);
 
   const tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
     (acc, [tableKey, attrMetadata]) => {
@@ -60,11 +56,11 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const { attributes: attrsMeta } = Metadata.getEntity(EntityClass.name);
+  const { attributes: entityAttrsMeta } = Metadata.getEntity(EntityClass.name);
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = attrsMeta[attrName];
+    const attrMeta = entityAttrsMeta[attrName];
 
     if (attrMeta !== undefined) {
       const { name: entityKey, serializers } = attrMeta;
@@ -81,6 +77,42 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   });
 
   return entity;
+};
+
+/**
+ * Serialize a dynamo table item response to a BelongsToLink
+ * @param tableMeta - Table metadata
+ * @param tableItem - Table item from dynamo response
+ * @returns - { @link BelongsToLink }
+ */
+export const tableItemToBelongsToLink = (
+  tableMeta: TableMetadata,
+  tableItem: BelongsToLinkDynamoItem
+): BelongsToLink => {
+  const link = new BelongsToLink();
+
+  const belongsToLinkAttrs = {
+    ...{ [tableMeta.primaryKey]: tableMeta.primaryKeyAttribute },
+    ...{ [tableMeta.sortKey]: tableMeta.sortKeyAttribute },
+    ...tableMeta.defaultAttributes
+  };
+
+  Object.keys(tableItem).forEach(attrName => {
+    const attrMeta = belongsToLinkAttrs[attrName];
+
+    if (attrMeta !== undefined) {
+      const { name: entityKey, serializers } = attrMeta;
+      const rawVal = tableItem[attrName];
+      const val =
+        serializers?.toEntityAttribute === undefined
+          ? rawVal
+          : serializers?.toEntityAttribute(rawVal);
+
+      link[entityKey as keyof BelongsToLink] = val;
+    }
+  });
+
+  return link;
 };
 
 /**
@@ -112,9 +144,10 @@ export const isKeyOfObject = <T>(
  * @returns boolean
  */
 export const isBelongsToLinkDynamoItem = (
-  res: DynamoTableItem
+  res: DynamoTableItem,
+  tableMeta: TableMetadata
 ): res is BelongsToLinkDynamoItem => {
-  return res.Type === BelongsToLink.name;
+  return res[tableMeta.typeField] === BelongsToLink.name;
 };
 
 /**

@@ -13,6 +13,9 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
       : never;
 }[keyof EntityAttributes<T>];
 
+// TODO make alias nullable now that defaults are applied in metadata.
+//    - Update tests where passible to not pass the option
+//    - make type tests
 export interface AttributeProps {
   alias: string;
   nullable?: boolean;

@@ -1,4 +1,4 @@
-import { AuthorBook } from "../integration/mockModels";
+import { AuthorBook, StudentCourse } from "../integration/mockModels";
 import { v4 as uuidv4 } from "uuid";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -126,6 +126,73 @@ describe("JoinTable", () => {
       ]);
     });
 
+    it("alternate table style - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+      expect.assertions(3);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+      const res = await StudentCourse.create({ studentId: "1", courseId: "2" });
+
+      expect(res).toEqual(undefined);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Course|2",
+                    mySk: "Student|1",
+                    id: "uuid1",
+                    type: "BelongsToLink",
+                    foreignKey: "1",
+                    foreignEntityType: "Student",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  Key: { myPk: "Course|2", mySk: "Course" },
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              },
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Student|1",
+                    mySk: "Course|2",
+                    id: "uuid2",
+                    type: "BelongsToLink",
+                    foreignKey: "2",
+                    foreignEntityType: "Course",
+                    createdAt: "2023-10-16T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|1", mySk: "Student" },
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("throws an error if the request fails because the entities are already linked", async () => {
       expect.assertions(2);
 
@@ -228,6 +295,38 @@ describe("JoinTable", () => {
                     PK: "Book#2",
                     SK: "Author#1"
                   }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("alternate table style - will delete a BelongsToLink for each item in a HasAndBelongsToMany relationship", async () => {
+      expect.assertions(3);
+
+      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+      const res = await StudentCourse.delete({ studentId: "1", courseId: "2" });
+
+      expect(res).toEqual(undefined);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: { myPk: "Course|2", mySk: "Student|1" },
+                  ConditionExpression: "attribute_exists(myPk)"
+                }
+              },
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|1", mySk: "Course|2" },
+                  ConditionExpression: "attribute_exists(myPk)"
                 }
               }
             ]

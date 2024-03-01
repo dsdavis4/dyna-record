@@ -4,13 +4,31 @@ import {
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils";
 import DynamoClient from "../../DynamoClient";
-import { BelongsToLink } from "../../relationships";
 import type { DynamoTableItem } from "../../types";
-import { isBelongsToLinkDynamoItem, tableItemToEntity } from "../../utils";
+import {
+  isBelongsToLinkDynamoItem,
+  tableItemToBelongsToLink,
+  tableItemToEntity
+} from "../../utils";
 import OperationBase from "../OperationBase";
 import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 
 // TODO make sure this paginates on dynamo limits
+
+// TODO currently pk is not required in the query. It should be, sk should be optional
+
+// TODO this should not be a valid query, only allowed operands should be allowed
+//     - invalid: mySk: { $bla: "1" }
+//     - valid: mySk: { $beginsWith: "1" }
+
+// TODO filters should only allow valid types, or default table fields
+// EX:
+// {
+//   filter: {
+//     type: ["BelongsToLink", "Brewery"],
+//     shouldBeBad: 1
+//   }
+// }
 
 /**
  * Query operations
@@ -97,8 +115,8 @@ class Query<T extends SingleTableDesign> extends OperationBase<T> {
     queryResults: DynamoTableItem[]
   ): QueryResults<T> {
     return queryResults.map(res =>
-      isBelongsToLinkDynamoItem(res)
-        ? tableItemToEntity(BelongsToLink, res)
+      isBelongsToLinkDynamoItem(res, this.tableMetadata)
+        ? tableItemToBelongsToLink(this.tableMetadata, res)
         : tableItemToEntity<T>(this.EntityClass, res)
     );
   }

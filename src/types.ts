@@ -42,3 +42,10 @@ export interface RelationshipMetaObj {
   relationsLookup: RelationshipLookup;
   belongsToRelationships: BelongsToRelationship[];
 }
+
+/**
+ * Make every key in an object required, including nested keys
+ */
+export type DeepRequired<T> = Required<{
+  [K in keyof T]: T[K] extends Required<T[K]> ? T[K] : DeepRequired<T[K]>;
+}>;

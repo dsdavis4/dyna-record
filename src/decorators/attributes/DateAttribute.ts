@@ -1,7 +1,7 @@
-import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { AttributeProps } from "../types";
+import { dateSerializer } from "./serializers";
 
 /**
  * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
@@ -36,15 +36,7 @@ function DateAttribute<T, K extends Date>(props: AttributeProps) {
           attributeName: context.name.toString(),
           alias: props.alias,
           nullable: false,
-          serializers: {
-            toEntityAttribute: (val: NativeScalarAttributeValue) => {
-              if (typeof val === "string") {
-                return new Date(val);
-              }
-              return val;
-            },
-            toTableAttribute: (val: Date) => val.toISOString()
-          }
+          serializers: dateSerializer
         });
       });
     }

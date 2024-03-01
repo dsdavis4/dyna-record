@@ -1,4 +1,8 @@
-import Metadata, { type EntityClass } from "./metadata";
+import Metadata, {
+  tableDefaultFields,
+  type EntityClass,
+  type DefaultEntityFields
+} from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute, DateAttribute } from "./decorators";
 import {
@@ -22,31 +26,27 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
-// TODO "type" key might be too generic
-// TODO Make sure that these values are not repeated in other files, without using this type
-
 /**
  * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
  */
-export type DefaultFields = "id" | "type" | "createdAt" | "updatedAt";
-const idField: DefaultFields = "id";
-const typeField: DefaultFields = "type";
-const createdAtField: DefaultFields = "createdAt";
-const updatedAtField: DefaultFields = "updatedAt";
+const idField: DefaultEntityFields = "id";
+const typeField: DefaultEntityFields = "type";
+const createdAtField: DefaultEntityFields = "createdAt";
+const updatedAtField: DefaultEntityFields = "updatedAt";
 
+// TODO should these fields be readonly?
+// TODO add typing for these aliases...
 abstract class SingleTableDesign {
-  @Attribute({ alias: "Id" })
+  @Attribute({ alias: tableDefaultFields.id })
   public [idField]: string;
 
-  // TODO this is too generic. Consuming models would want to use this
-  // Maybe EntityType? Would require data migration....
-  @Attribute({ alias: "Type" })
+  @Attribute({ alias: tableDefaultFields.type })
   public [typeField]: string;
 
-  @DateAttribute({ alias: "CreatedAt" })
+  @DateAttribute({ alias: tableDefaultFields.createdAt })
   public [createdAtField]: Date;
 
-  @DateAttribute({ alias: "UpdatedAt" })
+  @DateAttribute({ alias: tableDefaultFields.updatedAt })
   public [updatedAtField]: Date;
 
   /**
