@@ -361,7 +361,7 @@ class Metadata {
       tableMetadata.primaryKeyAttribute = this.buildAttributeMetadata(attrMeta);
     }
 
-    // TODO can this be removed?
+    // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
     this.addEntityAttribute(entityClass.constructor.name, attrMeta);
   }
 
@@ -383,6 +383,7 @@ class Metadata {
       tableMetadata.sortKeyAttribute = this.buildAttributeMetadata(attrMeta);
     }
 
+    // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
     this.addEntityAttribute(entityClass.constructor.name, attrMeta);
   }
 
