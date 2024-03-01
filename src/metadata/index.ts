@@ -1,7 +1,7 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { dateSerializer } from "../decorators";
 import type { JoinTable, BelongsToLink } from "../relationships";
-import type { ForeignKey } from "../types";
+import type { ForeignKey, DeepRequired } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO refactor this file... its a mess
@@ -154,11 +154,6 @@ export type TableMetadataOptions = Omit<
 > & {
   defaultFields?: Record<string, string>;
 };
-
-// TODO if used move to generic utils class
-type DeepRequired<T> = Required<{
-  [K in keyof T]: T[K] extends Required<T[K]> ? T[K] : DeepRequired<T[K]>;
-}>;
 
 class Metadata {
   private readonly tables: TableMetadataStorage = {};
