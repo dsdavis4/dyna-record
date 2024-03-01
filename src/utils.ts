@@ -79,10 +79,15 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   return entity;
 };
 
-// TODO typedoc
+/**
+ * Serialize a dynamo table item response to a BelongsToLink
+ * @param tableMeta - Table metadata
+ * @param tableItem - Table item from dynamo response
+ * @returns - { @link BelongsToLink }
+ */
 export const tableItemToBelongsToLink = (
   tableMeta: TableMetadata,
-  tableItem: DynamoTableItem
+  tableItem: BelongsToLinkDynamoItem
 ): BelongsToLink => {
   const link = new BelongsToLink();
 
