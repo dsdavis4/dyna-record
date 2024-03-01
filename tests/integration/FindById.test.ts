@@ -989,7 +989,6 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO remove only
   it("will find an entity included HasAndBelongsToMany associations", async () => {
     expect.assertions(6);
 
@@ -1161,7 +1160,6 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO do a test like this (alternate table) for all operation types
   it("will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
     expect.assertions(8);
 

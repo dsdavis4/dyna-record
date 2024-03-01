@@ -417,7 +417,11 @@ class Metadata {
     }
   }
 
-  // TODO typedoc
+  /**
+   * Build an attribute metadata object from options
+   * @param options - {@link AttributeMetadataOptions}
+   * @returns
+   */
   private buildAttributeMetadata(
     options: AttributeMetadataOptions
   ): AttributeMetadata {
