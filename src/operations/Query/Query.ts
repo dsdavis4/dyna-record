@@ -16,6 +16,21 @@ import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 
 // TODO make sure this paginates on dynamo limits
 
+// TODO currently pk is not required in the query. It should be, sk should be optional
+
+// TODO this should not be a valid query, only allowed operands should be allowed
+//     - invalid: mySk: { $bla: "1" }
+//     - valid: mySk: { $beginsWith: "1" }
+
+// TODO filters should only allow valid types, or default table fields
+// EX:
+// {
+//   filter: {
+//     type: ["BelongsToLink", "Brewery"],
+//     shouldBeBad: 1
+//   }
+// }
+
 /**
  * Query operations
  */

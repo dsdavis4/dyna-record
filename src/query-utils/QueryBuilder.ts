@@ -1,7 +1,6 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, { type TableMetadata } from "../metadata";
-import { BelongsToLink } from "../relationships";
 import type { StringObj } from "../types";
 
 // TODO I think this is nto working as expected and should instead be:
