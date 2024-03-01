@@ -56,9 +56,7 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  // TODO is this change needed?
-  // TODO see if I need the changes to this function or not...
-  const entityAttrsMeta = Metadata.getEntityAttributes(EntityClass.name);
+  const { attributes: entityAttrsMeta } = Metadata.getEntity(EntityClass.name);
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {

@@ -204,9 +204,11 @@ class Metadata {
     return this.joinTables[joinTableName];
   }
 
-  // TODO check usages of this, should it be renamed?
-  // TODO typedoc
-  // TODO remove foreign key attributes if the type is not BelongsToLink
+  /**
+   * Returns attribute metadata for attributes defined directly on the entity, as well as table default attributes
+   * @param entityName - Name of the Entity class
+   * @returns - {@link AttributeMetadataStorage}
+   */
   public getEntityAttributes(entityName: string): AttributeMetadataStorage {
     const entityMetadata = this.getEntity(entityName);
     const { defaultAttributes } = this.getTable(entityMetadata.tableClassName);
