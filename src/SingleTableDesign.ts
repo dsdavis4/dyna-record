@@ -26,13 +26,9 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
-// TODO "type" key might be too generic
-// TODO Make sure that these values are not repeated in other files, without using this type
-
 /**
  * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
  */
-// TODO Delete these, these are now handled from TableProps
 const idField: DefaultEntityFields = "id";
 const typeField: DefaultEntityFields = "type";
 const createdAtField: DefaultEntityFields = "createdAt";
