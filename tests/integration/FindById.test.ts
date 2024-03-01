@@ -17,7 +17,6 @@ import {
   QueryCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
-import { profile } from "console";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();

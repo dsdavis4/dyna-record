@@ -20,13 +20,6 @@ export const entityToTableItem = (
   entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
   const entityMetadata = Metadata.getEntity(entityClassName);
-  // const defaultFields = Metadata.getTable(entityMetadata.tableClassName);
-
-  // TODO start here... the branch I am on has a new test that should pass
-  // I am working on having dynamic keys
-  // I am trying to determine how to store BelongsToLink in metadata
-  // then update places where its needed
-  // Run unit tests and see its failing here because BelongsToLink is not an entity now
   const possibleAttrs = Metadata.getEntityAttributes(entityClassName);
 
   const tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(

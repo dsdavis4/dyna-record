@@ -270,6 +270,9 @@ class Student extends OtherTable {
 
   @HasOne(() => Profile, { foreignKey: "userId" })
   public profile: Profile;
+
+  @HasMany(() => Grade, { foreignKey: "studentId" })
+  public grades: Grade[];
 }
 
 @Entity
@@ -303,6 +306,27 @@ class Assignment extends OtherTable {
 
   @BelongsTo(() => Course, { foreignKey: "courseId" })
   public course: Course;
+
+  @HasOne(() => Grade, { foreignKey: "assignmentId" })
+  public grade: Grade;
+}
+
+@Entity
+class Grade extends OtherTable {
+  @Attribute({ alias: "LetterValue" })
+  public gradeValue: string;
+
+  @ForeignKeyAttribute({ alias: "assignmentId" })
+  public assignmentId: ForeignKey;
+
+  @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
+  public assignment: Assignment;
+
+  @ForeignKeyAttribute({ alias: "studentId" })
+  public studentId: ForeignKey;
+
+  @BelongsTo(() => Student, { foreignKey: "studentId" })
+  public student: Student;
 }
 
 @Entity
@@ -342,5 +366,6 @@ export {
   Course,
   Assignment,
   Profile,
-  StudentCourse
+  StudentCourse,
+  Grade
 };

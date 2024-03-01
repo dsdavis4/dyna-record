@@ -1,8 +1,10 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { dateSerializer } from "../decorators";
-import { type JoinTable, BelongsToLink } from "../relationships";
+import type { JoinTable, BelongsToLink } from "../relationships";
 import type { ForeignKey } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+
+// TODO refactor this file... its a mess
 
 /**
  * Function that takes a attribute from a Dynamo table item, and serialize it to a non-Dynamo native type (EX: Date)
@@ -86,8 +88,6 @@ export type RelationshipMetadata =
   | HasOneRelationship
   | HasAndBelongsToManyRelationship;
 
-// TODO should I move things to classes? Table, Attribte, Entity etc
-// TODO check these default things and delete if not used
 export type DefaultTableKeys =
   | "Id"
   | "Type"
@@ -96,15 +96,22 @@ export type DefaultTableKeys =
   | "ForeignKey"
   | "ForeignEntityType";
 
+export type DefaultEntityFields = "id" | "type" | "createdAt" | "updatedAt";
+type DefaultBelongsToLinkFields =
+  | DefaultEntityFields
+  | "foreignKey"
+  | "foreignEntityType";
+type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
+
 // TODO what is this for/
-const tableDefaultFields: Record<string, string> = {
+export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
   id: "Id",
   type: "Type",
   createdAt: "CreatedAt",
   updatedAt: "UpdatedAt",
   foreignKey: "ForeignKey",
   foreignEntityType: "ForeignEntityType"
-};
+} as const;
 
 type AttributeMetadataStorage = Record<string, AttributeMetadata>;
 type RelationshipMetadataStorage = Record<string, RelationshipMetadata>;
@@ -147,7 +154,7 @@ export type TableMetadataOptions = Omit<
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
-  defaultFields?: Partial<typeof tableDefaultFields>;
+  defaultFields?: Record<string, string>;
 };
 
 // TODO if used move to generic utils class
@@ -249,7 +256,8 @@ class Metadata {
 
     return defaultAttrsMeta.reduce<Record<string, AttributeMetadata>>(
       (acc, [entityKey, tableKeyAlias]) => {
-        const field = customDefaults[entityKey] ?? tableKeyAlias;
+        const field =
+          customDefaults[entityKey as DefaultFields] ?? tableKeyAlias;
         // TODO make consts for these
         const isDateField = ["createdAt", "updatedAt"].includes(entityKey);
         acc[field] = {
@@ -318,10 +326,20 @@ class Metadata {
     options: AttributeMetadataOptions
   ): void {
     const entityMetadata = this.entities[entityName];
+    const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
 
-    if (entityMetadata.attributes[options.alias] === undefined) {
+    const defaultAttrMeta = Object.entries(defaultAttributes).find(
+      ([_, attr]) => attr.name === options.attributeName
+    );
+
+    if (defaultAttrMeta === undefined) {
+      // If this is not one of the default attributes, build it from options
       entityMetadata.attributes[options.alias] =
         this.buildAttributeMetadata(options);
+    } else {
+      // If this is a default attribute, use default attribute settings
+      const [tableAlias, attrMeta] = defaultAttrMeta;
+      entityMetadata.attributes[tableAlias] = attrMeta;
     }
   }
 
