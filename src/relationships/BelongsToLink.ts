@@ -1,12 +1,11 @@
-import { Entity, Attribute, DateAttribute } from "../decorators";
 import { v4 as uuidv4 } from "uuid";
-import Metadata, { TableMetadata } from "../metadata";
 
 export const FOREIGN_ENTITY_TYPE_ALIAS = "ForeignEntityType";
 export const FOREIGN_KEY_ALIAS = "ForeignKey";
 
 // TODO add tests that all operations work when table keys are not PK or SK
 //      It might be best to solve the dynamic PK and SK problem in BelongsToLinkFirst
+// TODO enforce that these match the default types in metadata types
 
 interface BelongsToLinkProps {
   id: string;
@@ -17,7 +16,6 @@ interface BelongsToLinkProps {
   updatedAt: Date;
 }
 
-// @Entity
 class BelongsToLink implements BelongsToLinkProps {
   public id: string;
   public type: string;

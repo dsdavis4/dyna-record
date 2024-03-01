@@ -1,5 +1,13 @@
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { MockTable, Person, Pet, Home, PhoneBook, Book } from "./mockModels";
+import {
+  MockTable,
+  Person,
+  Pet,
+  Home,
+  PhoneBook,
+  Book,
+  Course
+} from "./mockModels";
 import { Attribute, Entity } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -508,6 +516,89 @@ describe("Delete", () => {
               Delete: {
                 Key: { PK: "Author#456", SK: "Book#123" },
                 TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will delete an an entity that BelongsTo an entity via HasMany and is part of a HasAndBelongsToMany relationship", async () => {
+    expect.assertions(6);
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [
+        {
+          myPk: "Course|123",
+          mySk: "Course",
+          id: "123",
+          type: "Course",
+          name: "History",
+          teacherId: "111", // Belongs to Teacher as HasMany
+          CreatedAt: "2021-10-15T09:31:15.148Z",
+          UpdatedAt: "2022-10-15T09:31:15.148Z"
+        },
+        // HasAndBelongsToMany Student
+        {
+          myPk: "Course|123",
+          mySk: "Student|333",
+          id: "002",
+          type: "BelongsToLink",
+          foreignEntityType: "Student",
+          foreignKey: "333",
+          createdAt: "2024-02-27T03:19:52.667Z",
+          updatedAt: "2024-02-27T03:19:52.667Z"
+        }
+      ]
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+    const res = await Course.delete("123");
+
+    expect(res).toEqual(undefined);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "other-table",
+          KeyConditionExpression: "#myPk = :myPk1",
+          ExpressionAttributeNames: { "#myPk": "myPk" },
+          ExpressionAttributeValues: { ":myPk1": "Course|123" }
+        }
+      ]
+    ]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Delete: {
+                TableName: "other-table",
+                Key: { myPk: "Course|123", mySk: "Course" }
+              }
+            },
+            {
+              Delete: {
+                TableName: "other-table",
+                Key: { myPk: "Teacher|111", mySk: "Course|123" }
+              }
+            },
+            {
+              Delete: {
+                TableName: "other-table",
+                Key: { myPk: "Course|123", mySk: "Student|333" }
+              }
+            },
+            {
+              Delete: {
+                TableName: "other-table",
+                Key: { myPk: "Student|333", mySk: "Course|123" }
               }
             }
           ]
