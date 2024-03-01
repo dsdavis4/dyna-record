@@ -103,7 +103,6 @@ type DefaultBelongsToLinkFields =
   | "foreignEntityType";
 type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
-// TODO what is this for/
 export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
   id: "Id",
   type: "Type",
