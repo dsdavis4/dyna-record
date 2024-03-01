@@ -134,8 +134,6 @@ export interface TableMetadata {
   primaryKeyAttribute: AttributeMetadata;
   sortKeyAttribute: AttributeMetadata;
   delimiter: string;
-  // TODO typedoc with defaults
-  // TODO type tests
   defaultAttributes: Record<string, AttributeMetadata>;
   typeField: string;
 }
