@@ -96,7 +96,9 @@ export type DefaultTableKeys =
   | "ForeignKey"
   | "ForeignEntityType";
 
-export type DefaultEntityFields = "id" | "type" | "createdAt" | "updatedAt";
+type DefaultDateFields = "createdAt" | "updatedAt";
+
+export type DefaultEntityFields = "id" | "type" | DefaultDateFields;
 type DefaultBelongsToLinkFields =
   | DefaultEntityFields
   | "foreignKey"
@@ -241,7 +243,11 @@ class Metadata {
     };
   }
 
-  // TODO typedoc
+  /**
+   * Creates default attribute metadata. Use {@link tableDefaultFields} unless consuming table decorator specifies overrides
+   * @param options - {@link TableMetadataOptions}
+   * @returns
+   */
   private buildDefaultAttributes(
     options: TableMetadataOptions
   ): Record<DefaultTableKeys, AttributeMetadata> {
@@ -252,8 +258,8 @@ class Metadata {
       (acc, [entityKey, tableKeyAlias]) => {
         const field =
           customDefaults[entityKey as DefaultFields] ?? tableKeyAlias;
-        // TODO make consts for these
-        const isDateField = ["createdAt", "updatedAt"].includes(entityKey);
+        const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
+        const isDateField = dateFields.includes(entityKey as DefaultDateFields);
         acc[field] = {
           name: entityKey,
           nullable: false,
