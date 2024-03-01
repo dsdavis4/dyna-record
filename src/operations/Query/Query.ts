@@ -4,7 +4,6 @@ import {
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils";
 import DynamoClient from "../../DynamoClient";
-import { BelongsToLink } from "../../relationships";
 import type { DynamoTableItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,

@@ -99,7 +99,7 @@ describe("FindById", () => {
         Address: "11 Some St",
         Type: "Customer",
         UpdatedAt: "2023-09-15T04:26:31.148Z",
-        //TODO remove all instances of this
+        // TODO remove all instances of this
         SomeAttr: "attribute that is not modeled"
       }
     });

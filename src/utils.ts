@@ -4,7 +4,7 @@ import type {
   BelongsToLinkDynamoItem,
   StringObj
 } from "./types";
-import Metadata, { AttributeMetadata, TableMetadata } from "./metadata";
+import Metadata, { type TableMetadata } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
