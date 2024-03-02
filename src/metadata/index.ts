@@ -128,6 +128,9 @@ export interface EntityMetadata {
 
 export interface TableMetadata {
   name: string;
+  // TODO start here last time I finished the effort to support dynamic key names
+  //      this would be good to do next while I have more context
+  //      determine if I want to keep this up here, or refactor so everything goes through primaryKeyAttribute props
   // TODO should I refactor places to get this from  primaryKeyAttribute ?
   primaryKey: string;
   sortKey: string;
@@ -136,6 +139,7 @@ export interface TableMetadata {
   sortKeyAttribute: AttributeMetadata;
   delimiter: string;
   defaultAttributes: Record<string, AttributeMetadata>;
+  // TODO should this be typeAttribte, similiar to primary key and sort key attribute
   typeField: string;
 }
 
@@ -328,9 +332,7 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
     const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
 
-    const defaultAttrMeta = Object.entries(defaultAttributes).find(
-      ([_, attr]) => attr.name === options.attributeName
-    );
+    const defaultAttrMeta = defaultAttributes[options.attributeName];
 
     if (defaultAttrMeta === undefined) {
       // If this is not one of the default attributes, build it from options
@@ -338,8 +340,7 @@ class Metadata {
         this.buildAttributeMetadata(options);
     } else {
       // If this is a default attribute, use default attribute settings
-      const [tableAlias, attrMeta] = defaultAttrMeta;
-      entityMetadata.attributes[tableAlias] = attrMeta;
+      entityMetadata.attributes[options.attributeName] = defaultAttrMeta;
     }
   }
 
