@@ -1,13 +1,11 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type SortKey } from "../../types";
+import type { AttributeAliasOnlyProp } from "../types";
 
-// TODO extend attribute props and Pick alias
-interface SortKeyAttributeProps {
-  alias?: string;
-}
-
-function SortKeyAttribute<T, K extends SortKey>(props?: SortKeyAttributeProps) {
+function SortKeyAttribute<T, K extends SortKey>(
+  props?: AttributeAliasOnlyProp
+) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>

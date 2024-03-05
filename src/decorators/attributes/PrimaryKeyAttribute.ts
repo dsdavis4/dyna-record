@@ -1,14 +1,10 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
-
-// TODO extend attribute props and Pick alias
-interface PrimaryKeyAttributeProps {
-  alias?: string;
-}
+import type { AttributeAliasOnlyProp } from "../types";
 
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
-  props?: PrimaryKeyAttributeProps
+  props?: AttributeAliasOnlyProp
 ) {
   return function (
     _value: undefined,

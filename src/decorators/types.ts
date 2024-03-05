@@ -39,3 +39,8 @@ export interface AttributeProps {
    */
   nullable?: boolean;
 }
+
+/**
+ * Attribute props used when 'alias' is the only configurable option
+ */
+export interface AttributeAliasOnlyProp extends Pick<AttributeProps, "alias"> {}

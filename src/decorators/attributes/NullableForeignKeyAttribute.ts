@@ -1,6 +1,7 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { NullableForeignKey } from "../../types";
+import type { AttributeAliasOnlyProp } from "../types";
 
 // TODO do I need to do something to handle anything in here so that if a NullableForeignKey is "included" on that tht type system knows that the return value might not be defined...
 // EX:
@@ -8,18 +9,8 @@ import type { NullableForeignKey } from "../../types";
 //  //  And also should  do empty array for nulable on HasMany
 // const res = Scale.findById("123", {include: [{association: "process"}]})
 
-// TODO extend attribute props and Pick alias
-interface NullableForeignKeyAttributeProps {
-  alias?: string;
-}
-
-// TODO... Since I started, typescript released metadata property of deraotrs. Can I use it?
-//        https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html#decorator-metadata
-
 // TODO dry up with ForeignKeyAttribute
-function NullableForeignKeyAttribute<T>(
-  props?: NullableForeignKeyAttributeProps
-) {
+function NullableForeignKeyAttribute<T>(props?: AttributeAliasOnlyProp) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, NullableForeignKey>
