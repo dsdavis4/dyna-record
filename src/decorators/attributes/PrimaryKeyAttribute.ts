@@ -3,6 +3,8 @@ import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
 import type { AttributeAliasOnlyProp } from "../types";
 
+// TODO typedoc... make sure to link AttributeProps like I did for ForeignKeyAttribute Attribute
+
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   props?: AttributeAliasOnlyProp
 ) {

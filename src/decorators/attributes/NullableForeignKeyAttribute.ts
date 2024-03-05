@@ -3,6 +3,8 @@ import Metadata from "../../metadata";
 import type { NullableForeignKey } from "../../types";
 import type { AttributeAliasOnlyProp } from "../types";
 
+// TODO typedoc... make sure to link AttributeProps like I did for ForeignKeyAttribute Attribute
+
 // TODO do I need to do something to handle anything in here so that if a NullableForeignKey is "included" on that tht type system knows that the return value might not be defined...
 // EX:
 // // In below, res.process should be known that it might return undefined because process is nullbable forieng key
