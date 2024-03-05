@@ -173,6 +173,15 @@ export type TableMetadataOptions = Omit<
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
+  // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeMetadata
+  // EX:
+  // @Table({
+  //   name: "temp-table",
+  //   delimiter: "#",
+  //   defaultFields: {
+  //     id: {alias: "Id"},
+  //   }
+  // })
   defaultFields?: Record<DefaultFields, string>;
 };
 
