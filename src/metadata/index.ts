@@ -21,7 +21,7 @@ type EntitySerializer = (param: NativeScalarAttributeValue) => any;
  */
 type TableSerializer = (param: any) => NativeScalarAttributeValue;
 
-type KeysAAttributeMetadataOptions = MakeOptional<
+type KeysAttributeMetadataOptions = MakeOptional<
   Omit<AttributeMetadataOptions, "nullable">,
   "alias"
 >;
@@ -377,7 +377,7 @@ class Metadata {
    */
   public addPrimaryKeyAttribute(
     entityClass: SingleTableDesign,
-    options: KeysAAttributeMetadataOptions
+    options: KeysAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
@@ -400,7 +400,7 @@ class Metadata {
    */
   public addSortKeyAttribute(
     entityClass: SingleTableDesign,
-    options: KeysAAttributeMetadataOptions
+    options: KeysAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
