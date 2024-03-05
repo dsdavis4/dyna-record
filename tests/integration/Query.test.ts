@@ -1020,7 +1020,6 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
-    // TODO see if this is actually working...
     it("can perform complex queries (arbitrary example)", async () => {
       expect.assertions(4);
 

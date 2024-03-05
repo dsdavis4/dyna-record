@@ -22,7 +22,19 @@ import type {
   NullableForeignKey
 } from "../../src/types";
 
-@Table({ name: "mock-table", delimiter: "#" })
+@Table({
+  name: "mock-table",
+  delimiter: "#",
+  // TODO add type test that the keys of this have to be what is below and value can be any string
+  defaultFields: {
+    id: "Id",
+    type: "Type",
+    createdAt: "CreatedAt",
+    updatedAt: "UpdatedAt",
+    foreignKey: "ForeignKey",
+    foreignEntityType: "ForeignEntityType"
+  }
+})
 abstract class MockTable extends SingleTableDesign {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
@@ -225,18 +237,7 @@ class AuthorBook extends JoinTable<Author, Book> {
   public authorId: ForeignKey;
 }
 
-@Table({
-  name: "other-table",
-  delimiter: "|",
-  defaultFields: {
-    id: "id",
-    type: "type",
-    createdAt: "createdAt",
-    updatedAt: "updatedAt",
-    foreignKey: "foreignKey",
-    foreignEntityType: "foreignEntityType"
-  }
-})
+@Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends SingleTableDesign {
   @PrimaryKeyAttribute()
   public myPk: PrimaryKey;

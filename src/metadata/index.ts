@@ -1,7 +1,12 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { dateSerializer } from "../decorators";
 import type { JoinTable, BelongsToLink } from "../relationships";
-import type { ForeignKey, DeepRequired, MakeOptional } from "../types";
+import type {
+  ForeignKey,
+  DeepRequired,
+  MakeOptional,
+  StringObj
+} from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO refactor this file... its a mess
@@ -95,12 +100,12 @@ export type RelationshipMetadata =
   | HasAndBelongsToManyRelationship;
 
 export type DefaultTableKeys =
-  | "Id"
-  | "Type"
-  | "CreatedAt"
-  | "UpdatedAt"
-  | "ForeignKey"
-  | "ForeignEntityType";
+  | "id"
+  | "type"
+  | "createdAt"
+  | "updatedAt"
+  | "foreignKey"
+  | "foreignEntityType";
 
 type DefaultDateFields = "createdAt" | "updatedAt";
 
@@ -113,14 +118,16 @@ type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
-// TODO reverse the defaults... This will match what happens with attributes
+// TODO here.... I am on working on defaulting the alias field. This is working on the PR
+//       I am trying to get the table fields to reverse, so as to better match attribute defaults.
+//       Why did this break....
 export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
-  id: "Id",
-  type: "Type",
-  createdAt: "CreatedAt",
-  updatedAt: "UpdatedAt",
-  foreignKey: "ForeignKey",
-  foreignEntityType: "ForeignEntityType"
+  id: "id",
+  type: "type",
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+  foreignKey: "foreignKey",
+  foreignEntityType: "foreignEntityType"
 } as const;
 
 type AttributeMetadataStorage = Record<string, AttributeMetadata>;
@@ -166,9 +173,11 @@ export type TableMetadataOptions = Omit<
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
-  defaultFields?: Record<string, string>;
+  defaultFields?: Record<DefaultFields, string>;
 };
 
+// TODO update private in here to be '#'
+// TODO update any instance of private throughout the app to use '#'
 class Metadata {
   private readonly tables: TableMetadataStorage = {};
   private readonly entities: EntityMetadataStorage = {};
@@ -267,12 +276,11 @@ class Metadata {
     options: TableMetadataOptions
   ): Record<DefaultTableKeys, AttributeMetadata> {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
-    const customDefaults = options.defaultFields ?? {};
+    const customDefaults: StringObj = options.defaultFields ?? {};
 
     return defaultAttrsMeta.reduce<Record<string, AttributeMetadata>>(
       (acc, [entityKey, tableKeyAlias]) => {
-        const alias =
-          customDefaults[entityKey as DefaultFields] ?? tableKeyAlias;
+        const alias = customDefaults[entityKey] ?? tableKeyAlias;
         const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
         acc[alias] = {
@@ -344,7 +352,10 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
     const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
 
-    const defaultAttrMeta = defaultAttributes[options.attributeName];
+    // TODO how to not loop as much...
+    const defaultAttrMeta = Object.values(defaultAttributes).find(
+      attr => attr.name === options.attributeName
+    );
 
     if (defaultAttrMeta === undefined) {
       const alias = options.alias ?? options.attributeName;
@@ -354,7 +365,7 @@ class Metadata {
       entityMetadata.attributes[alias] = this.buildAttributeMetadata(attrMeta);
     } else {
       // If this is a default attribute, use default attribute settings
-      entityMetadata.attributes[options.attributeName] = defaultAttrMeta;
+      entityMetadata.attributes[defaultAttrMeta.alias] = defaultAttrMeta;
     }
   }
 
@@ -410,7 +421,7 @@ class Metadata {
   private init(): void {
     if (!this.initialized) {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      this.entityClasses.forEach(EntityClass => new EntityClass());
+      this.entityClasses.forEach(EntityClass => new EntityClass()); // TODO can I free up memory by clearing this out after init? Its only used here..
       this.initialized = true;
     }
   }
