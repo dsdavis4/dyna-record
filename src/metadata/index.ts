@@ -173,7 +173,7 @@ export type TableMetadataOptions = Omit<
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
-  // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeMetadata
+  // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeAliasOnlyProp
   // EX:
   // @Table({
   //   name: "temp-table",
