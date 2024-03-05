@@ -238,16 +238,16 @@ class AuthorBook extends JoinTable<Author, Book> {
   }
 })
 abstract class OtherTable extends SingleTableDesign {
-  @PrimaryKeyAttribute({ alias: "myPk" })
+  @PrimaryKeyAttribute()
   public myPk: PrimaryKey;
 
-  @SortKeyAttribute({ alias: "mySk" })
+  @SortKeyAttribute()
   public mySk: SortKey;
 }
 
 @Entity
 class Teacher extends OtherTable {
-  @Attribute({ alias: "name" })
+  @Attribute()
   public name: string;
 
   @HasMany(() => Course, { foreignKey: "teacherId" })
@@ -259,7 +259,7 @@ class Teacher extends OtherTable {
 
 @Entity
 class Student extends OtherTable {
-  @Attribute({ alias: "name" })
+  @Attribute()
   public name: string;
 
   @HasAndBelongsToMany(() => Course, {
@@ -277,10 +277,10 @@ class Student extends OtherTable {
 
 @Entity
 class Course extends OtherTable {
-  @Attribute({ alias: "name" })
+  @Attribute()
   public name: string;
 
-  @NullableForeignKeyAttribute({ alias: "teacherId" })
+  @NullableForeignKeyAttribute()
   public teacherId?: NullableForeignKey;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
@@ -298,10 +298,10 @@ class Course extends OtherTable {
 
 @Entity
 class Assignment extends OtherTable {
-  @Attribute({ alias: "title" })
+  @Attribute()
   public title: string;
 
-  @ForeignKeyAttribute({ alias: "courseId" })
+  @ForeignKeyAttribute()
   public courseId: ForeignKey;
 
   @BelongsTo(() => Course, { foreignKey: "courseId" })
@@ -316,13 +316,13 @@ class Grade extends OtherTable {
   @Attribute({ alias: "LetterValue" })
   public gradeValue: string;
 
-  @ForeignKeyAttribute({ alias: "assignmentId" })
+  @ForeignKeyAttribute()
   public assignmentId: ForeignKey;
 
   @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
   public assignment: Assignment;
 
-  @ForeignKeyAttribute({ alias: "studentId" })
+  @ForeignKeyAttribute()
   public studentId: ForeignKey;
 
   @BelongsTo(() => Student, { foreignKey: "studentId" })
@@ -331,10 +331,10 @@ class Grade extends OtherTable {
 
 @Entity
 class Profile extends OtherTable {
-  @DateAttribute({ alias: "lastLogin" })
+  @DateAttribute()
   public lastLogin: Date;
 
-  @ForeignKeyAttribute({ alias: "userId" })
+  @ForeignKeyAttribute()
   public userId: ForeignKey;
 }
 

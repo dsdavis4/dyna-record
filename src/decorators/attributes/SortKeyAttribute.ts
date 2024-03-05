@@ -2,11 +2,12 @@ import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type SortKey } from "../../types";
 
+// TODO extend attribute props and Pick alias
 interface SortKeyAttributeProps {
-  alias: string;
+  alias?: string;
 }
 
-function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
+function SortKeyAttribute<T, K extends SortKey>(props?: SortKeyAttributeProps) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
@@ -17,7 +18,7 @@ function SortKeyAttribute<T, K extends SortKey>(props: SortKeyAttributeProps) {
 
         Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          ...props
         });
       });
     }

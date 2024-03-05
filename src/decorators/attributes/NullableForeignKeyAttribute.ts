@@ -8,8 +8,9 @@ import type { NullableForeignKey } from "../../types";
 //  //  And also should  do empty array for nulable on HasMany
 // const res = Scale.findById("123", {include: [{association: "process"}]})
 
+// TODO extend attribute props and Pick alias
 interface NullableForeignKeyAttributeProps {
-  alias: string;
+  alias?: string;
 }
 
 // TODO... Since I started, typescript released metadata property of deraotrs. Can I use it?
@@ -17,7 +18,7 @@ interface NullableForeignKeyAttributeProps {
 
 // TODO dry up with ForeignKeyAttribute
 function NullableForeignKeyAttribute<T>(
-  props: NullableForeignKeyAttributeProps
+  props?: NullableForeignKeyAttributeProps
 ) {
   return function (
     _value: undefined,
@@ -29,8 +30,8 @@ function NullableForeignKeyAttribute<T>(
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias,
-          nullable: true
+          nullable: true,
+          ...props
         });
       });
     }

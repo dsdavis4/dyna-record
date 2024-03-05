@@ -49,3 +49,9 @@ export interface RelationshipMetaObj {
 export type DeepRequired<T> = Required<{
   [K in keyof T]: T[K] extends Required<T[K]> ? T[K] : DeepRequired<T[K]>;
 }>;
+
+/**
+ * Make some keys of an object nullable
+ */
+export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
+  Partial<Pick<T, K>>;

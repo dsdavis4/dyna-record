@@ -17,6 +17,6 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
 //    - Update tests where passible to not pass the option
 //    - make type tests
 export interface AttributeProps {
-  alias: string;
+  alias?: string;
   nullable?: boolean;
 }

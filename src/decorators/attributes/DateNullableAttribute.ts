@@ -23,7 +23,7 @@ import type { AttributeProps } from "../types";
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function DateNullableAttribute<T, K extends Date>(props: AttributeProps) {
+function DateNullableAttribute<T, K extends Date>(props?: AttributeProps) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, Optional<K>>
@@ -34,8 +34,8 @@ function DateNullableAttribute<T, K extends Date>(props: AttributeProps) {
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias,
-          nullable: true
+          nullable: true,
+          ...props
         });
       });
     }

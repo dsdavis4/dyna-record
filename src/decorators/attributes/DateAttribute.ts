@@ -23,7 +23,7 @@ import { dateSerializer } from "./serializers";
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function DateAttribute<T, K extends Date>(props: AttributeProps) {
+function DateAttribute<T, K extends Date>(props?: AttributeProps) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
@@ -34,9 +34,9 @@ function DateAttribute<T, K extends Date>(props: AttributeProps) {
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias,
           nullable: false,
-          serializers: dateSerializer
+          serializers: dateSerializer,
+          ...props
         });
       });
     }

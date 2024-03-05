@@ -2,12 +2,13 @@ import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
 
+// TODO extend attribute props and Pick alias
 interface PrimaryKeyAttributeProps {
-  alias: string;
+  alias?: string;
 }
 
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
-  props: PrimaryKeyAttributeProps
+  props?: PrimaryKeyAttributeProps
 ) {
   return function (
     _value: undefined,
@@ -19,7 +20,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
 
         Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          ...props
         });
       });
     }
