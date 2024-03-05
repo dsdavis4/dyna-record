@@ -118,9 +118,6 @@ type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
-// TODO here.... I am on working on defaulting the alias field. This is working on the PR
-//       I am trying to get the table fields to reverse, so as to better match attribute defaults.
-//       Why did this break....
 export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
   id: "id",
   type: "type",
@@ -144,9 +141,6 @@ export interface EntityMetadata {
 
 export interface TableMetadata {
   name: string;
-  // TODO start here last time I finished the effort to support dynamic key names
-  //      this would be good to do next while I have more context
-  //      determine if I want to keep this up here, or refactor so everything goes through primaryKeyAttribute props
   // TODO should I refactor places to get this from  primaryKeyAttribute ?
   primaryKey: string;
   sortKey: string;
