@@ -182,6 +182,7 @@ export type TableMetadataOptions = Omit<
   //     id: {alias: "Id"},
   //   }
   // })
+  // TODO this should be a partial and not require all fields to be set
   defaultFields?: Record<DefaultFields, string>;
 };
 
