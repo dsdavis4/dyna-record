@@ -1,9 +1,36 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Entity, NullableAttribute } from "../../../src/decorators";
 import type { ForeignKey, NullableForeignKey } from "../../../src/types";
-import { MockTable } from "../../integration/mockModels";
+import {
+  MockTable,
+  ContactInformation,
+  Profile
+} from "../../integration/mockModels";
+import Metadata from "../../../src/metadata";
 
 describe("NullableAttribute", () => {
+  it("uses the provided table alias as attribute metadata if one is provided", () => {
+    expect.assertions(1);
+
+    expect(Metadata.getEntityAttributes(ContactInformation.name).Phone).toEqual(
+      {
+        name: "phone",
+        alias: "Phone",
+        nullable: true
+      }
+    );
+  });
+
+  it("defaults attribute metadata alias to the table key if alias is not provided", () => {
+    expect.assertions(1);
+
+    expect(Metadata.getEntityAttributes(Profile.name).alternateEmail).toEqual({
+      name: "alternateEmail",
+      alias: "alternateEmail",
+      nullable: true
+    });
+  });
+
   describe("types", () => {
     it("ForeignKey is not a valid type to apply the NullableAttribute decorator", () => {
       @Entity
@@ -38,6 +65,15 @@ describe("NullableAttribute", () => {
         // @ts-expect-error: Date is not a valid type for NullableAttribute decorator
         @NullableAttribute({ alias: "Key1" })
         public key1: Date;
+      }
+    });
+
+    it("'alias' is optional", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-no-error: Alias prop is optional
+        @NullableAttribute()
+        public key1?: string;
       }
     });
   });

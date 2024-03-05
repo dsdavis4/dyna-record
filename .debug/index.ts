@@ -46,7 +46,18 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
 // TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
 //    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
 //    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
-@Table({ name: "temp-table", delimiter: "#" })
+@Table({
+  name: "temp-table",
+  delimiter: "#",
+  defaultFields: {
+    id: "Id",
+    type: "Type",
+    createdAt: "CreatedAt",
+    updatedAt: "UpdatedAt",
+    foreignKey: "ForeignKey",
+    foreignEntityType: "ForeignEntityType"
+  }
+})
 abstract class DrewsBrewsTable extends SingleTableDesign {
   // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })

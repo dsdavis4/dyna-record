@@ -1,13 +1,12 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
+import type { AttributeAliasOnlyProp } from "../types";
 
-interface PrimaryKeyAttributeProps {
-  alias: string;
-}
+// TODO typedoc... make sure to link AttributeProps like I did for ForeignKeyAttribute Attribute
 
 function PrimaryKeyAttribute<T, K extends PrimaryKey>(
-  props: PrimaryKeyAttributeProps
+  props?: AttributeAliasOnlyProp
 ) {
   return function (
     _value: undefined,
@@ -19,7 +18,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
 
         Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),
-          alias: props.alias
+          ...props
         });
       });
     }

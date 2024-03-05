@@ -9,7 +9,18 @@ import {
 } from "../../src/decorators";
 import type { PrimaryKey, SortKey } from "../../src/types";
 
-@Table({ name: "mock-table", delimiter: "#" })
+@Table({
+  name: "mock-table",
+  delimiter: "#",
+  defaultFields: {
+    id: "Id",
+    type: "Type",
+    createdAt: "CreatedAt",
+    updatedAt: "UpdatedAt",
+    foreignKey: "ForeignKey",
+    foreignEntityType: "ForeignEntityType"
+  }
+})
 class MockTable extends SingleTableDesign {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;

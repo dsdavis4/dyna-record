@@ -1,7 +1,12 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import { dateSerializer } from "../decorators";
 import type { JoinTable, BelongsToLink } from "../relationships";
-import type { ForeignKey, DeepRequired } from "../types";
+import type {
+  ForeignKey,
+  DeepRequired,
+  MakeOptional,
+  StringObj
+} from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
 // TODO refactor this file... its a mess
@@ -15,6 +20,11 @@ type EntitySerializer = (param: NativeScalarAttributeValue) => any;
  * Function that takes a attribute from an Entity which is not a native Dynamo type and serializes it a type that is supported by Dynamo
  */
 type TableSerializer = (param: any) => NativeScalarAttributeValue;
+
+type KeysAttributeMetadataOptions = MakeOptional<
+  Omit<AttributeMetadataOptions, "nullable">,
+  "alias"
+>;
 
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item
@@ -33,6 +43,7 @@ export interface Serializers {
 
 export interface AttributeMetadata {
   name: string;
+  alias: string;
   nullable: boolean;
   serializers?: Serializers;
 }
@@ -89,12 +100,12 @@ export type RelationshipMetadata =
   | HasAndBelongsToManyRelationship;
 
 export type DefaultTableKeys =
-  | "Id"
-  | "Type"
-  | "CreatedAt"
-  | "UpdatedAt"
-  | "ForeignKey"
-  | "ForeignEntityType";
+  | "id"
+  | "type"
+  | "createdAt"
+  | "updatedAt"
+  | "foreignKey"
+  | "foreignEntityType";
 
 type DefaultDateFields = "createdAt" | "updatedAt";
 
@@ -105,13 +116,15 @@ type DefaultBelongsToLinkFields =
   | "foreignEntityType";
 type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
+const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
+
 export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
-  id: "Id",
-  type: "Type",
-  createdAt: "CreatedAt",
-  updatedAt: "UpdatedAt",
-  foreignKey: "ForeignKey",
-  foreignEntityType: "ForeignEntityType"
+  id: "id",
+  type: "type",
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+  foreignKey: "foreignKey",
+  foreignEntityType: "foreignEntityType"
 } as const;
 
 type AttributeMetadataStorage = Record<string, AttributeMetadata>;
@@ -128,9 +141,6 @@ export interface EntityMetadata {
 
 export interface TableMetadata {
   name: string;
-  // TODO start here last time I finished the effort to support dynamic key names
-  //      this would be good to do next while I have more context
-  //      determine if I want to keep this up here, or refactor so everything goes through primaryKeyAttribute props
   // TODO should I refactor places to get this from  primaryKeyAttribute ?
   primaryKey: string;
   sortKey: string;
@@ -157,9 +167,21 @@ export type TableMetadataOptions = Omit<
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
-  defaultFields?: Record<string, string>;
+  // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeAliasOnlyProp
+  // EX:
+  // @Table({
+  //   name: "temp-table",
+  //   delimiter: "#",
+  //   defaultFields: {
+  //     id: {alias: "Id"},
+  //   }
+  // })
+  // TODO this should be a partial and not require all fields to be set
+  defaultFields?: Record<DefaultFields, string>;
 };
 
+// TODO update private in here to be '#'
+// TODO update any instance of private throughout the app to use '#'
 class Metadata {
   private readonly tables: TableMetadataStorage = {};
   private readonly entities: EntityMetadataStorage = {};
@@ -236,11 +258,13 @@ class Metadata {
       // Placeholders, these are set later
       primaryKeyAttribute: {
         name: "",
+        alias: defaultTableKeys.primaryKey,
         nullable: false,
         serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" }
       },
       sortKeyAttribute: {
         name: "",
+        alias: defaultTableKeys.sortKey,
         nullable: false,
         serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" }
       }
@@ -256,16 +280,16 @@ class Metadata {
     options: TableMetadataOptions
   ): Record<DefaultTableKeys, AttributeMetadata> {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
-    const customDefaults = options.defaultFields ?? {};
+    const customDefaults: StringObj = options.defaultFields ?? {};
 
     return defaultAttrsMeta.reduce<Record<string, AttributeMetadata>>(
       (acc, [entityKey, tableKeyAlias]) => {
-        const field =
-          customDefaults[entityKey as DefaultFields] ?? tableKeyAlias;
+        const alias = customDefaults[entityKey] ?? tableKeyAlias;
         const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
-        acc[field] = {
+        acc[alias] = {
           name: entityKey,
+          alias,
           nullable: false,
           serializers: isDateField ? dateSerializer : undefined
         };
@@ -327,20 +351,26 @@ class Metadata {
    */
   public addEntityAttribute(
     entityName: string,
-    options: AttributeMetadataOptions
+    options: MakeOptional<AttributeMetadataOptions, "alias">
   ): void {
     const entityMetadata = this.entities[entityName];
     const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
 
-    const defaultAttrMeta = defaultAttributes[options.attributeName];
+    // TODO how to not loop as much...
+    //      Instead of doing that ^ I should refactor so default fields are on the table, instead of the entity
+    const defaultAttrMeta = Object.values(defaultAttributes).find(
+      attr => attr.name === options.attributeName
+    );
 
     if (defaultAttrMeta === undefined) {
+      const alias = options.alias ?? options.attributeName;
+      const attrMeta = { ...options, alias };
+
       // If this is not one of the default attributes, build it from options
-      entityMetadata.attributes[options.alias] =
-        this.buildAttributeMetadata(options);
+      entityMetadata.attributes[alias] = this.buildAttributeMetadata(attrMeta);
     } else {
       // If this is a default attribute, use default attribute settings
-      entityMetadata.attributes[options.attributeName] = defaultAttrMeta;
+      entityMetadata.attributes[defaultAttrMeta.alias] = defaultAttrMeta;
     }
   }
 
@@ -351,19 +381,20 @@ class Metadata {
    */
   public addPrimaryKeyAttribute(
     entityClass: SingleTableDesign,
-    options: Omit<AttributeMetadataOptions, "nullable">
+    options: KeysAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
-    const attrMeta = { ...options, nullable: false };
-
     if (tableMetadata !== undefined) {
-      tableMetadata.primaryKey = options.alias;
-      tableMetadata.primaryKeyAttribute = this.buildAttributeMetadata(attrMeta);
-    }
+      const alias = options.alias ?? options.attributeName;
+      const attrMeta = { ...options, nullable: false, alias };
 
-    // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
-    this.addEntityAttribute(entityClass.constructor.name, attrMeta);
+      tableMetadata.primaryKey = alias;
+      tableMetadata.primaryKeyAttribute = this.buildAttributeMetadata(attrMeta);
+
+      // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
+      this.addEntityAttribute(entityClass.constructor.name, attrMeta);
+    }
   }
 
   /**
@@ -373,19 +404,20 @@ class Metadata {
    */
   public addSortKeyAttribute(
     entityClass: SingleTableDesign,
-    options: Omit<AttributeMetadataOptions, "nullable">
+    options: KeysAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
-    const attrMeta = { ...options, nullable: false };
-
     if (tableMetadata !== undefined) {
-      tableMetadata.sortKey = options.alias;
-      tableMetadata.sortKeyAttribute = this.buildAttributeMetadata(attrMeta);
-    }
+      const alias = options.alias ?? options.attributeName;
+      const attrMeta = { ...options, nullable: false, alias };
 
-    // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
-    this.addEntityAttribute(entityClass.constructor.name, attrMeta);
+      tableMetadata.sortKey = alias;
+      tableMetadata.sortKeyAttribute = this.buildAttributeMetadata(attrMeta);
+
+      // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
+      this.addEntityAttribute(entityClass.constructor.name, attrMeta);
+    }
   }
 
   /**
@@ -394,7 +426,7 @@ class Metadata {
   private init(): void {
     if (!this.initialized) {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      this.entityClasses.forEach(EntityClass => new EntityClass());
+      this.entityClasses.forEach(EntityClass => new EntityClass()); // TODO can I free up memory by clearing this out after init? Its only used here..
       this.initialized = true;
     }
   }
@@ -428,6 +460,7 @@ class Metadata {
   ): AttributeMetadata {
     return {
       name: options.attributeName,
+      alias: options.alias,
       nullable: options.nullable,
       serializers: options.serializers
     };

@@ -10,7 +10,7 @@ import { dateSerializer } from "./serializers";
  *
  * @template T The class type that the decorator is applied to, ensuring type safety and integration within specific class instances.
  * @template K A type constraint extending `Date`, ensuring that the decorator is only applied to class fields specifically intended to represent dates.
- * @param props An `AttributeProps` object providing configuration options for the attribute, such as its `alias` which allows the attribute to be referred to by an alternative name in the database context. The `nullable` property is also set to `false` by default; the attribute must not be empty.
+ * @param props An {@link AttributeProps} object providing configuration options for the attribute, such as its `alias` which allows the attribute to be referred to by an alternative name in the database context. The `nullable` property is also set to `false` by default; the attribute must not be empty.
  * @returns A class field decorator function that operates within the class field's context. It configures the field as a date attribute and defines how it should be serialized and deserialized to/from DynamoDB.
  *
  * Usage example:
@@ -23,7 +23,7 @@ import { dateSerializer } from "./serializers";
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function DateAttribute<T, K extends Date>(props: AttributeProps) {
+function DateAttribute<T, K extends Date>(props?: AttributeProps) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
@@ -34,9 +34,9 @@ function DateAttribute<T, K extends Date>(props: AttributeProps) {
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
-          alias: props.alias,
           nullable: false,
-          serializers: dateSerializer
+          serializers: dateSerializer,
+          ...props
         });
       });
     }
