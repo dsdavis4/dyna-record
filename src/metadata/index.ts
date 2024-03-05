@@ -108,6 +108,7 @@ type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
+// TODO reverse the defaults... This will match what happens with attributes
 export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
   id: "Id",
   type: "Type",

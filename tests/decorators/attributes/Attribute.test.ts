@@ -1,9 +1,30 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Entity, Attribute } from "../../../src/decorators";
+import Metadata from "../../../src/metadata";
 import type { ForeignKey, NullableForeignKey } from "../../../src/types";
-import { MockTable } from "../../integration/mockModels";
+import { MockTable, Customer, Student } from "../../integration/mockModels";
 
-describe("BelongsTo", () => {
+describe("Attribute", () => {
+  it("uses the provided table alias as attribute metadata if one is provided", () => {
+    expect.assertions(1);
+
+    expect(Metadata.getEntityAttributes(Customer.name).Name).toEqual({
+      name: "name",
+      alias: "Name",
+      nullable: false
+    });
+  });
+
+  it("defaults attribute metadata alias to the table key if alias is not provided", () => {
+    expect.assertions(1);
+
+    expect(Metadata.getEntityAttributes(Student.name).name).toEqual({
+      name: "name",
+      alias: "name",
+      nullable: false
+    });
+  });
+
   describe("types", () => {
     it("ForeignKey is not a valid type to apply the Attribute decorator", () => {
       @Entity
@@ -38,6 +59,15 @@ describe("BelongsTo", () => {
         // @ts-expect-error: Date is not a valid type for Attribute decorator
         @Attribute({ alias: "Key1" })
         public key1: Date;
+      }
+    });
+
+    it("'alias' is optional", () => {
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Alias prop is optional
+        @Attribute()
+        public key1: string;
       }
     });
   });

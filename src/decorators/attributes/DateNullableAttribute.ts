@@ -2,6 +2,9 @@ import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { Optional } from "../../types";
 import type { AttributeProps } from "../types";
+import { dateSerializer } from "./serializers";
+
+// TODO I am missing a unit test where a DateNullable attribute is serialized
 
 /**
  * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
@@ -35,6 +38,7 @@ function DateNullableAttribute<T, K extends Date>(props?: AttributeProps) {
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
           nullable: true,
+          serializers: dateSerializer,
           ...props
         });
       });

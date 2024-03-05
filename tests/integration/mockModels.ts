@@ -112,7 +112,7 @@ class ContactInformation extends MockTable {
   public phone?: string;
 
   @NullableForeignKeyAttribute({ alias: "CustomerId" })
-  public customerId: NullableForeignKey;
+  public customerId?: NullableForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public customer: Customer;
@@ -336,6 +336,9 @@ class Profile extends OtherTable {
 
   @ForeignKeyAttribute()
   public userId: ForeignKey;
+
+  @NullableAttribute()
+  public alternateEmail?: string;
 }
 
 class StudentCourse extends JoinTable<Student, Course> {
