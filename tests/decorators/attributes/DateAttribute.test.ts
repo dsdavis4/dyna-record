@@ -3,7 +3,7 @@ import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators";
 import { MockTable, Order, Profile } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 
-describe("BelongsTo", () => {
+describe("DateAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 

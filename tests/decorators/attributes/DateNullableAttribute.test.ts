@@ -21,7 +21,7 @@ class ModelB extends MockTable {
   public key1?: Date;
 }
 
-describe("BelongsTo", () => {
+describe("DateNullableAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
