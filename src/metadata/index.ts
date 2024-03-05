@@ -16,6 +16,11 @@ type EntitySerializer = (param: NativeScalarAttributeValue) => any;
  */
 type TableSerializer = (param: any) => NativeScalarAttributeValue;
 
+type KeysAAttributeMetadataOptions = MakeOptional<
+  Omit<AttributeMetadataOptions, "nullable">,
+  "alias"
+>;
+
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item
  * EX: See '@DateAttribute'
@@ -360,8 +365,7 @@ class Metadata {
    */
   public addPrimaryKeyAttribute(
     entityClass: SingleTableDesign,
-    // TODO dry up by making shared type
-    options: MakeOptional<Omit<AttributeMetadataOptions, "nullable">, "alias">
+    options: KeysAAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
@@ -384,7 +388,7 @@ class Metadata {
    */
   public addSortKeyAttribute(
     entityClass: SingleTableDesign,
-    options: MakeOptional<Omit<AttributeMetadataOptions, "nullable">, "alias">
+    options: KeysAAttributeMetadataOptions
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
