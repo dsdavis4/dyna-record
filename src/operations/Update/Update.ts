@@ -49,10 +49,10 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     attributes: UpdateOptions<T>
   ): void {
     const { attributes: entityAttrs } = this.entityMetadata;
-    const { name: tableName, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const pk = entityAttrs[this.primaryKeyAlias].name;
-    const sk = entityAttrs[sortKey].name;
+    const sk = entityAttrs[this.sortKeyAlias].name;
 
     const keys = {
       [pk]: this.EntityClass.primaryKeyValue(id),
@@ -119,14 +119,14 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     relType: HasOneRelationship["type"] | HasManyRelationship["type"],
     entity?: T
   ): void {
-    const { name: tableName, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const currentId = extractForeignKeyFromEntity(rel, entity);
 
     if (entity !== undefined && currentId !== undefined) {
       const oldLinkKeys = {
         [this.primaryKeyAlias]: rel.target.primaryKeyValue(currentId),
-        [sortKey]:
+        [this.sortKeyAlias]:
           relType === "HasMany"
             ? this.EntityClass.primaryKeyValue(entity.id)
             : this.EntityClass.name

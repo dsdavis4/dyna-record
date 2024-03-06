@@ -126,8 +126,9 @@ abstract class JoinTable<
       parentEntityMeta,
       linkedEntityMeta
     );
-    const { name: tableName, sortKey } = tableProps;
+    const { name: tableName } = tableProps;
     const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
+    const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
     const { parentEntity, linkedEntity } = entities;
     const { parentId, linkedEntityId } = ids;
 
@@ -151,7 +152,7 @@ abstract class JoinTable<
         TableName: tableName,
         Key: {
           [primaryKeyAlias]: parentEntity.primaryKeyValue(linkedEntityId),
-          [sortKey]: parentEntity.name
+          [sortKeyAlias]: parentEntity.name
         },
         ConditionExpression: `attribute_exists(${primaryKeyAlias})`
       },
@@ -206,9 +207,10 @@ abstract class JoinTable<
     const { parentEntity, linkedEntity } = entities;
 
     const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
+    const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
     return {
       [primaryKeyAlias]: parentEntity.primaryKeyValue(ids.linkedEntityId),
-      [tableProps.sortKey]: linkedEntity.primaryKeyValue(ids.parentId)
+      [sortKeyAlias]: linkedEntity.primaryKeyValue(ids.parentId)
     };
   }
 

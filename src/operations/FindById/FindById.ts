@@ -73,14 +73,14 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
    * @returns An entity object or null
    */
   private async findByIdOnly(id: string): Promise<T | null> {
-    const { name: tableName, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
     const res = await dynamo.getItem({
       TableName: tableName,
       Key: {
         [this.primaryKeyAlias]: this.EntityClass.primaryKeyValue(id),
-        [sortKey]: this.EntityClass.name
+        [this.sortKeyAlias]: this.EntityClass.name
       },
       ConsistentRead: true
     });
@@ -208,7 +208,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipMetaObj["relationsLookup"]
   ): void {
-    const { name: tableName, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
       const foreignKey = link[FOREIGN_KEY_ALIAS];
@@ -221,7 +221,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
           TableName: tableName,
           Key: {
             [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKey),
-            [sortKey]: rel.target.name
+            [this.sortKeyAlias]: rel.target.name
           }
         });
       } else {
@@ -243,7 +243,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToRelationships: RelationshipMetaObj["belongsToRelationships"]
   ): void {
     if (belongsToRelationships.length > 0) {
-      const { name: tableName, sortKey } = this.tableMetadata;
+      const { name: tableName } = this.tableMetadata;
 
       const tableKeyLookup = this.buildTableKeyLookup();
 
@@ -255,7 +255,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
           TableName: tableName,
           Key: {
             [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKeyVal),
-            [sortKey]: rel.target.name
+            [this.sortKeyAlias]: rel.target.name
           }
         });
       });

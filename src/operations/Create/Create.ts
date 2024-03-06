@@ -38,13 +38,12 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
     const { attributes: entityAttrs } = this.entityMetadata;
-    const { sortKey } = this.tableMetadata;
 
     const id = uuidv4();
     const createdAt = new Date();
 
     const pk = entityAttrs[this.primaryKeyAlias].name;
-    const sk = entityAttrs[sortKey].name;
+    const sk = entityAttrs[this.sortKeyAlias].name;
 
     const keys = {
       [pk]: this.EntityClass.primaryKeyValue(id),

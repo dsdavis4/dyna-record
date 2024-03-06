@@ -62,6 +62,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #primaryKeyAlias: string;
+  readonly #sortKeyAlias: string;
 
   constructor(private readonly props: RelationshipTransactionsProps<T>) {
     this.#entityMetadata = Metadata.getEntity(props.Entity.name);
@@ -69,6 +70,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       this.#entityMetadata.tableClassName
     );
     this.#primaryKeyAlias = this.#tableMetadata.primaryKeyAttribute.alias;
+    this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
   public async build<T extends SingleTableDesign>(
@@ -119,7 +121,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     rel: BelongsToRelationship,
     relationshipId: string
   ): void {
-    const { name: tableName, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
@@ -127,7 +129,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       TableName: tableName,
       Key: {
         [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: rel.target.name
+        [this.#sortKeyAlias]: rel.target.name
       },
       ConditionExpression: `attribute_exists(${this.#primaryKeyAlias})`
     };
@@ -147,7 +149,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: Nullable<string>
   ): Promise<void> {
-    const { name: tableName, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     if (this.props.belongsToHasOneCb !== undefined) {
       await this.props.belongsToHasOneCb(rel, entityId);
@@ -158,7 +160,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
 
       const keys = {
         [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: this.props.Entity.name
+        [this.#sortKeyAlias]: this.props.Entity.name
       };
 
       const putExpression: Put = {
@@ -185,7 +187,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: Nullable<string>
   ): Promise<void> {
-    const { name: tableName, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     if (this.props.belongsToHasManyCb !== undefined) {
       await this.props.belongsToHasManyCb(rel, entityId);
@@ -196,7 +198,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
 
       const keys = {
         [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: this.props.Entity.primaryKeyValue(link.foreignKey)
+        [this.#sortKeyAlias]: this.props.Entity.primaryKeyValue(link.foreignKey)
       };
 
       const putExpression: Put = {
