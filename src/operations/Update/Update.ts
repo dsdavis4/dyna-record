@@ -49,9 +49,9 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     attributes: UpdateOptions<T>
   ): void {
     const { attributes: entityAttrs } = this.entityMetadata;
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, sortKey } = this.tableMetadata;
 
-    const pk = entityAttrs[primaryKey].name;
+    const pk = entityAttrs[this.primaryKeyAlias].name;
     const sk = entityAttrs[sortKey].name;
 
     const keys = {
@@ -72,7 +72,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
       {
         TableName: tableName,
         Key: tableKeys,
-        ConditionExpression: `attribute_exists(${primaryKey})`, // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${this.primaryKeyAlias})`, // Only update the item if it exists
         ...expression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
@@ -119,13 +119,13 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     relType: HasOneRelationship["type"] | HasManyRelationship["type"],
     entity?: T
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, sortKey } = this.tableMetadata;
 
     const currentId = extractForeignKeyFromEntity(rel, entity);
 
     if (entity !== undefined && currentId !== undefined) {
       const oldLinkKeys = {
-        [primaryKey]: rel.target.primaryKeyValue(currentId),
+        [this.primaryKeyAlias]: rel.target.primaryKeyValue(currentId),
         [sortKey]:
           relType === "HasMany"
             ? this.EntityClass.primaryKeyValue(entity.id)

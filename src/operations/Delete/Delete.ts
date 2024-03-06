@@ -35,10 +35,11 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
 
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, sortKey } = this.tableMetadata;
 
     this.#tableName = tableName;
-    this.#primaryKeyField = this.entityMetadata.attributes[primaryKey].name;
+    this.#primaryKeyField =
+      this.entityMetadata.attributes[this.primaryKeyAlias].name;
     this.#sortKeyField = this.entityMetadata.attributes[sortKey].name;
 
     const relationsObj = buildEntityRelationshipMetaObj(
@@ -102,7 +103,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     item: BelongsToLink | ItemKeys<T>,
     options: DeleteOptions
   ): void {
-    const { primaryKey, sortKey } = this.tableMetadata;
+    const { sortKey } = this.tableMetadata;
 
     const pkField = this.#primaryKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
@@ -111,7 +112,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       {
         TableName: this.#tableName,
         Key: {
-          [primaryKey]: item[pkField],
+          [this.primaryKeyAlias]: item[pkField],
           [sortKey]: item[skField]
         }
       },

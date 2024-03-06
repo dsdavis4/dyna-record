@@ -142,7 +142,6 @@ export interface EntityMetadata {
 export interface TableMetadata {
   name: string;
   // TODO should I refactor places to get this from  primaryKeyAttribute ?
-  primaryKey: string;
   sortKey: string;
   // TODO should I refactor so that these are not redefined on entitiy metadata
   primaryKeyAttribute: AttributeMetadata;
@@ -249,7 +248,6 @@ class Metadata {
    */
   public addTable(tableClassName: string, options: TableMetadataOptions): void {
     this.tables[tableClassName] = {
-      primaryKey: "",
       sortKey: "",
       name: options.name,
       delimiter: options.delimiter,
@@ -389,7 +387,6 @@ class Metadata {
       const alias = options.alias ?? options.attributeName;
       const attrMeta = { ...options, nullable: false, alias };
 
-      tableMetadata.primaryKey = alias;
       tableMetadata.primaryKeyAttribute = this.buildAttributeMetadata(attrMeta);
 
       // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis

@@ -38,12 +38,12 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
     const { attributes: entityAttrs } = this.entityMetadata;
-    const { primaryKey, sortKey } = this.tableMetadata;
+    const { sortKey } = this.tableMetadata;
 
     const id = uuidv4();
     const createdAt = new Date();
 
-    const pk = entityAttrs[primaryKey].name;
+    const pk = entityAttrs[this.primaryKeyAlias].name;
     const sk = entityAttrs[sortKey].name;
 
     const keys = {
@@ -66,12 +66,12 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
    * @param tableItem
    */
   private buildPutItemTransaction(tableItem: DynamoTableItem): void {
-    const { name: tableName, primaryKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const putExpression = {
       TableName: tableName,
       Item: tableItem,
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+      ConditionExpression: `attribute_not_exists(${this.primaryKeyAlias})` // Ensure item doesn't already exist
     };
     this.#transactionBuilder.addPut(putExpression);
   }

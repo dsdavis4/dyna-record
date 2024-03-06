@@ -73,13 +73,13 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
    * @returns An entity object or null
    */
   private async findByIdOnly(id: string): Promise<T | null> {
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, sortKey } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
     const res = await dynamo.getItem({
       TableName: tableName,
       Key: {
-        [primaryKey]: this.EntityClass.primaryKeyValue(id),
+        [this.primaryKeyAlias]: this.EntityClass.primaryKeyValue(id),
         [sortKey]: this.EntityClass.name
       },
       ConsistentRead: true
@@ -149,8 +149,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     id: string,
     includedRelationships: RelationshipMetadata[]
   ): QueryCommandInput {
-    const { primaryKey } = this.tableMetadata;
-    const modelPrimaryKey = this.entityMetadata.attributes[primaryKey].name;
+    const modelPrimaryKey =
+      this.entityMetadata.attributes[this.primaryKeyAlias].name;
 
     const partitionFilter = includedRelationshipsFilter(
       this.EntityClass.name,
@@ -208,20 +208,20 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipMetaObj["relationsLookup"]
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, sortKey } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
       const foreignKey = link[FOREIGN_KEY_ALIAS];
       const foreignEntityType = link[FOREIGN_ENTITY_TYPE_ALIAS];
 
       if (isPropertyKey(foreignEntityType) && isString(foreignKey)) {
-        const includedRel = relationsLookup[foreignEntityType];
+        const rel = relationsLookup[foreignEntityType];
 
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [primaryKey]: includedRel.target.primaryKeyValue(foreignKey),
-            [sortKey]: includedRel.target.name
+            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKey),
+            [sortKey]: rel.target.name
           }
         });
       } else {
@@ -243,7 +243,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToRelationships: RelationshipMetaObj["belongsToRelationships"]
   ): void {
     if (belongsToRelationships.length > 0) {
-      const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+      const { name: tableName, sortKey } = this.tableMetadata;
 
       const tableKeyLookup = this.buildTableKeyLookup();
 
@@ -254,7 +254,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [primaryKey]: rel.target.primaryKeyValue(foreignKeyVal),
+            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKeyVal),
             [sortKey]: rel.target.name
           }
         });

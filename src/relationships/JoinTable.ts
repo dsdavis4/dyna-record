@@ -126,7 +126,8 @@ abstract class JoinTable<
       parentEntityMeta,
       linkedEntityMeta
     );
-    const { name: tableName, primaryKey, sortKey } = tableProps;
+    const { name: tableName, sortKey } = tableProps;
+    const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
     const { parentEntity, linkedEntity } = entities;
     const { parentId, linkedEntityId } = ids;
 
@@ -140,7 +141,7 @@ abstract class JoinTable<
             BelongsToLink.build(linkedEntity.name, parentId)
           )
         },
-        ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${primaryKeyAlias})` // Ensure item doesn't already exist
       },
       `${parentEntity.name} with ID ${linkedEntityId} is already linked to ${linkedEntity.name} with ID ${parentId}`
     );
@@ -149,10 +150,10 @@ abstract class JoinTable<
       {
         TableName: tableName,
         Key: {
-          [primaryKey]: parentEntity.primaryKeyValue(linkedEntityId),
+          [primaryKeyAlias]: parentEntity.primaryKeyValue(linkedEntityId),
           [sortKey]: parentEntity.name
         },
-        ConditionExpression: `attribute_exists(${primaryKey})`
+        ConditionExpression: `attribute_exists(${primaryKeyAlias})`
       },
       `${parentEntity.name} with ID ${linkedEntityId} does not exist`
     );
@@ -178,7 +179,7 @@ abstract class JoinTable<
     const parentId: string = keys[parentKey];
     const linkedEntityId: string = keys[linkedKey];
 
-    const { name: tableName, primaryKey } = Metadata.getEntityTable(
+    const { name: tableName, primaryKeyAttribute } = Metadata.getEntityTable(
       parentEntity.name
     );
 
@@ -186,7 +187,7 @@ abstract class JoinTable<
       {
         TableName: tableName,
         Key: this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta),
-        ConditionExpression: `attribute_exists(${primaryKey})`
+        ConditionExpression: `attribute_exists(${primaryKeyAttribute.alias})`
       },
       `${parentEntity.name} with ID ${linkedEntityId} is not linked to ${linkedEntity.name} with ID ${parentId}`
     );
@@ -204,8 +205,9 @@ abstract class JoinTable<
     );
     const { parentEntity, linkedEntity } = entities;
 
+    const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
     return {
-      [tableProps.primaryKey]: parentEntity.primaryKeyValue(ids.linkedEntityId),
+      [primaryKeyAlias]: parentEntity.primaryKeyValue(ids.linkedEntityId),
       [tableProps.sortKey]: linkedEntity.primaryKeyValue(ids.parentId)
     };
   }

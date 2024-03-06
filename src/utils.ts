@@ -92,7 +92,7 @@ export const tableItemToBelongsToLink = (
   const link = new BelongsToLink();
 
   const belongsToLinkAttrs = {
-    ...{ [tableMeta.primaryKey]: tableMeta.primaryKeyAttribute },
+    ...{ [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute },
     ...{ [tableMeta.sortKey]: tableMeta.sortKeyAttribute },
     ...tableMeta.defaultAttributes
   };
