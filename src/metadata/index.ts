@@ -369,11 +369,8 @@ class Metadata {
     const entityMetadata = this.entities[entityName];
     const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
 
-    // TODO how to not loop as much...
-    //      Instead of doing that ^ I should refactor so default fields are on the table, instead of the entity
-    const defaultAttrMeta = Object.values(defaultAttributes).find(
-      attr => attr.name === options.attributeName
-    );
+    const defaultAttrMeta =
+      defaultAttributes[options.attributeName as DefaultFields];
 
     if (defaultAttrMeta === undefined) {
       const alias = options.alias ?? options.attributeName;
