@@ -1369,8 +1369,26 @@ describe("FindById", () => {
           TransactItems: [
             {
               Get: {
-                Key: { myPk: "Teacher|555", mySk: "Teacher" },
-                TableName: "other-table"
+                TableName: "other-table",
+                Key: { myPk: "Student|456", mySk: "Student" }
+              }
+            },
+            {
+              Get: {
+                TableName: "other-table",
+                Key: { myPk: "Student|789", mySk: "Student" }
+              }
+            },
+            {
+              Get: {
+                TableName: "other-table",
+                Key: { myPk: "Assignment|111", mySk: "Assignment" }
+              }
+            },
+            {
+              Get: {
+                TableName: "other-table",
+                Key: { myPk: "Teacher|555", mySk: "Teacher" }
               }
             }
           ]

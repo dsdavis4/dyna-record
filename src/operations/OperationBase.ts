@@ -9,6 +9,8 @@ abstract class OperationBase<T extends SingleTableDesign> {
   protected readonly EntityClass: EntityClass<T>;
   protected readonly entityMetadata: EntityMetadata;
   protected readonly tableMetadata: TableMetadata;
+
+  // TODO see if these are still used or needed...
   protected readonly primaryKeyAlias: string;
   protected readonly sortKeyAlias: string;
 

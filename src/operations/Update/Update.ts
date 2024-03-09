@@ -48,11 +48,10 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
     id: string,
     attributes: UpdateOptions<T>
   ): void {
-    const { attributes: entityAttrs } = this.entityMetadata;
     const { name: tableName } = this.tableMetadata;
 
-    const pk = entityAttrs[this.primaryKeyAlias].name;
-    const sk = entityAttrs[this.sortKeyAlias].name;
+    const pk = this.tableMetadata.primaryKeyAttribute.name;
+    const sk = this.tableMetadata.sortKeyAttribute.name;
 
     const keys = {
       [pk]: this.EntityClass.primaryKeyValue(id),

@@ -127,7 +127,7 @@ export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
   foreignEntityType: "foreignEntityType"
 } as const;
 
-type AttributeMetadataStorage = Record<string, AttributeMetadata>;
+export type AttributeMetadataStorage = Record<string, AttributeMetadata>;
 type RelationshipMetadataStorage = Record<string, RelationshipMetadata>;
 type TableMetadataStorage = Record<string, DeepRequired<TableMetadata>>;
 type EntityMetadataStorage = Record<string, EntityMetadata>;
@@ -139,16 +139,15 @@ export interface EntityMetadata {
   relationships: RelationshipMetadataStorage;
 }
 
+// TODO typedoc for each of these
 export interface TableMetadata {
   name: string;
-  // TODO should I refactor so that these are not redefined on entitiy metadata
+  // TODO start here I am working on cleaning up metadata storage - should I refactor so that these are not redefined on entitiy metadata
   // If I do I can get rid of the this.addEntityAttribute calls in the add primary key and sort key functions
   primaryKeyAttribute: AttributeMetadata;
   sortKeyAttribute: AttributeMetadata;
   delimiter: string;
-  defaultAttributes: Record<string, AttributeMetadata>;
-  // TODO should this be typeAttribte, similiar to primary key and sort key attribute
-  typeField: string;
+  defaultAttributes: Record<DefaultFields, AttributeMetadata>;
 }
 
 export interface JoinTableMetadata {
@@ -161,7 +160,6 @@ export type TableMetadataOptions = Omit<
   | "primaryKey"
   | "sortKey"
   | "defaultAttributes"
-  | "typeField"
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
@@ -229,6 +227,7 @@ class Metadata {
     return this.joinTables[joinTableName];
   }
 
+  // TODO is this used..
   /**
    * Returns attribute metadata for attributes defined directly on the entity, as well as table default attributes
    * @param entityName - Name of the Entity class
@@ -237,7 +236,26 @@ class Metadata {
   public getEntityAttributes(entityName: string): AttributeMetadataStorage {
     const entityMetadata = this.getEntity(entityName);
     const { defaultAttributes } = this.getTable(entityMetadata.tableClassName);
-    return { ...entityMetadata.attributes, ...defaultAttributes };
+
+    return {
+      ...entityMetadata.attributes,
+      ...defaultAttributes
+    };
+  }
+
+  // TODO does this need to be public?
+  // TODO how to reduce looping? Perhaps store something internal? this is called alot
+  // TODO typedoc
+  // TODO rename, check this is needed or used...
+  public getEntityTableAttributes(
+    defaultAttributes: Record<DefaultDateFields, AttributeMetadata>
+  ): Record<string, AttributeMetadata> {
+    return Object.values(defaultAttributes).reduce<
+      Record<string, AttributeMetadata>
+    >((acc, attr) => {
+      acc[attr.alias] = attr;
+      return acc;
+    }, {});
   }
 
   /**
@@ -250,7 +268,6 @@ class Metadata {
       name: options.name,
       delimiter: options.delimiter,
       defaultAttributes: this.buildDefaultAttributes(options),
-      typeField: options.defaultFields?.type ?? tableDefaultFields.type,
       // Placeholders, these are set later
       primaryKeyAttribute: {
         name: "",
@@ -283,7 +300,7 @@ class Metadata {
         const alias = customDefaults[entityKey] ?? tableKeyAlias;
         const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
-        acc[alias] = {
+        acc[entityKey] = {
           name: entityKey,
           alias,
           nullable: false,
@@ -363,10 +380,11 @@ class Metadata {
       const attrMeta = { ...options, alias };
 
       // If this is not one of the default attributes, build it from options
-      entityMetadata.attributes[alias] = this.buildAttributeMetadata(attrMeta);
+      entityMetadata.attributes[options.attributeName] =
+        this.buildAttributeMetadata(attrMeta);
     } else {
       // If this is a default attribute, use default attribute settings
-      entityMetadata.attributes[defaultAttrMeta.alias] = defaultAttrMeta;
+      entityMetadata.attributes[defaultAttrMeta.name] = defaultAttrMeta;
     }
   }
 

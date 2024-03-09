@@ -36,11 +36,10 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     this.#transactionBuilder = new TransactWriteBuilder();
 
     const { name: tableName } = this.tableMetadata;
-    const { attributes } = this.entityMetadata;
 
     this.#tableName = tableName;
-    this.#primaryKeyField = attributes[this.primaryKeyAlias].name;
-    this.#sortKeyField = attributes[this.sortKeyAlias].name;
+    this.#primaryKeyField = this.tableMetadata.primaryKeyAttribute.name;
+    this.#sortKeyField = this.tableMetadata.sortKeyAttribute.name;
 
     const relationsObj = buildEntityRelationshipMetaObj(
       Object.values(this.entityMetadata.relationships)

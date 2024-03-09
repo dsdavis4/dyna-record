@@ -12,7 +12,7 @@ describe("NullableAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(ContactInformation.name).Phone).toEqual(
+    expect(Metadata.getEntityAttributes(ContactInformation.name).phone).toEqual(
       {
         name: "phone",
         alias: "Phone",

@@ -2282,8 +2282,6 @@ describe("Update", () => {
     });
 
     it("will not accept function attributes on update", async () => {
-      expect.assertions(1);
-
       @Entity
       class MyModel extends MockTable {
         @Attribute({ alias: "MyAttribute" })
@@ -2294,15 +2292,11 @@ describe("Update", () => {
         }
       }
 
-      try {
-        await MyModel.update("123", {
-          myAttribute: "someVal",
-          // @ts-expect-error function attributes are not allowed
-          someMethod: () => "123"
-        });
-      } catch (e) {
-        expect(true).toEqual(true);
-      }
+      await MyModel.update("123", {
+        myAttribute: "someVal",
+        // @ts-expect-error function attributes are not allowed
+        someMethod: () => "123"
+      });
     });
 
     it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {

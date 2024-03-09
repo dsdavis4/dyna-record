@@ -86,10 +86,8 @@ class Query<T extends SingleTableDesign> extends OperationBase<T> {
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
-    const entityMetadata = this.entityMetadata;
-
-    const modelPk = entityMetadata.attributes[this.primaryKeyAlias].name;
-    const modelSk = entityMetadata.attributes[this.sortKeyAlias].name;
+    const modelPk = this.tableMetadata.primaryKeyAttribute.name;
+    const modelSk = this.tableMetadata.sortKeyAttribute.name;
 
     const keyCondition = {
       [modelPk]: this.EntityClass.primaryKeyValue(id),

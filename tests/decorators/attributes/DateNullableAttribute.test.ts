@@ -36,7 +36,7 @@ describe("DateNullableAttribute", () => {
   it("defaults attribute metadata alias to the table key if alias is not provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(ModelB.name).Key1).toEqual({
+    expect(Metadata.getEntityAttributes(ModelB.name).key1).toEqual({
       name: "key1",
       alias: "Key1",
       nullable: true,
