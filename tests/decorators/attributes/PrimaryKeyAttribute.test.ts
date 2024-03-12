@@ -7,7 +7,7 @@ describe("PrimaryKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Customer.name).PK).toEqual({
+    expect(Metadata.getEntityAttributes(Customer.name).pk).toEqual({
       name: "pk",
       alias: "PK",
       nullable: false

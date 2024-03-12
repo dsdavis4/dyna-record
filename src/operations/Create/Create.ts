@@ -1,7 +1,6 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import { type EntityClass } from "../../metadata";
 import { v4 as uuidv4 } from "uuid";
-import type { DynamoTableItem } from "../../types";
+import type { DynamoTableItem, EntityClass } from "../../types";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
@@ -37,14 +36,11 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
   }
 
   private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
-    const { attributes: entityAttrs } = this.entityMetadata;
-    const { primaryKey, sortKey } = this.tableMetadata;
-
     const id = uuidv4();
     const createdAt = new Date();
 
-    const pk = entityAttrs[primaryKey].name;
-    const sk = entityAttrs[sortKey].name;
+    const pk = this.tableMetadata.primaryKeyAttribute.name;
+    const sk = this.tableMetadata.sortKeyAttribute.name;
 
     const keys = {
       [pk]: this.EntityClass.primaryKeyValue(id),
@@ -66,12 +62,12 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
    * @param tableItem
    */
   private buildPutItemTransaction(tableItem: DynamoTableItem): void {
-    const { name: tableName, primaryKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const putExpression = {
       TableName: tableName,
       Item: tableItem,
-      ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+      ConditionExpression: `attribute_not_exists(${this.primaryKeyAlias})` // Ensure item doesn't already exist
     };
     this.#transactionBuilder.addPut(putExpression);
   }

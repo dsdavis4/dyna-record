@@ -1,9 +1,6 @@
-import Metadata, {
-  type ForeignKeyAttribute,
-  type EntityClass
-} from "../../metadata";
+import Metadata from "../../metadata";
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { Optional } from "../../types";
+import type { EntityClass, ForeignKeyAttribute, Optional } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
 interface HasOneProps<T extends SingleTableDesign> {

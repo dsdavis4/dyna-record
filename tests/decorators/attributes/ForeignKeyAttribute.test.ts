@@ -7,7 +7,7 @@ describe("ForeignKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Order.name).CustomerId).toEqual({
+    expect(Metadata.getEntityAttributes(Order.name).customerId).toEqual({
       name: "customerId",
       alias: "CustomerId",
       nullable: false

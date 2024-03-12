@@ -1,6 +1,9 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata, { type TableMetadata } from "../metadata";
+import Metadata, {
+  type AttributeMetadataStorage,
+  type TableMetadata
+} from "../metadata";
 import type { StringObj } from "../types";
 
 // TODO I think this is nto working as expected and should instead be:
@@ -50,10 +53,9 @@ interface QueryCommandProps {
 // TODO update to use #private modifer
 class QueryBuilder {
   private attrCounter: number;
+  // TODO check that all are needed
   private readonly tableMetadata: TableMetadata;
-
-  // Lookup tableKey by modelKey: ex: { modelProp1: :"ModelProp1", modelProp2: :"ModelProp2" }
-  private readonly tableKeyLookup: StringObj;
+  readonly #attributeMetadata: AttributeMetadataStorage;
 
   constructor(private readonly props: QueryCommandProps) {
     this.props = props;
@@ -61,14 +63,8 @@ class QueryBuilder {
 
     const entityMetadata = Metadata.getEntity(props.entityClassName);
     this.tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
-    const possibleAttrs = Metadata.getEntityAttributes(props.entityClassName);
-
-    this.tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
-      (acc, [tableKey, attrMetadata]) => {
-        acc[attrMetadata.name] = tableKey;
-        return acc;
-      },
-      {}
+    this.#attributeMetadata = Metadata.getEntityAttributes(
+      props.entityClassName
     );
   }
 
@@ -114,7 +110,7 @@ class QueryBuilder {
     const { filter } = this.props.options ?? {};
 
     const accumulator = (obj: StringObj, key: string): StringObj => {
-      const tableKey = this.tableKeyLookup[key];
+      const tableKey = this.#attributeMetadata[key].alias;
       obj[`#${tableKey}`] = tableKey;
       return obj;
     };
@@ -182,7 +178,7 @@ class QueryBuilder {
   }
 
   private andCondition(attr: string, value: FilterTypes): FilterExpression {
-    const tableKey = this.tableKeyLookup[attr];
+    const tableKey = this.#attributeMetadata[attr].alias;
 
     let condition;
     let values: Record<string, NativeScalarAttributeValue> = {};

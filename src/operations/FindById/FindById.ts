@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { RelationshipMetadata, EntityClass } from "../../metadata";
+import Metadata, { type RelationshipMetadata } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
@@ -9,10 +9,10 @@ import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { TransactGetBuilder } from "../../dynamo-utils";
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import type {
-  StringObj,
   BelongsToLinkDynamoItem,
   RelationshipMetaObj,
-  RelationshipLookup
+  RelationshipLookup,
+  EntityClass
 } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
@@ -21,10 +21,6 @@ import {
   isString,
   tableItemToEntity
 } from "../../utils";
-import {
-  FOREIGN_ENTITY_TYPE_ALIAS,
-  FOREIGN_KEY_ALIAS
-} from "../../relationships/BelongsToLink";
 import OperationBase from "../OperationBase";
 import type {
   FindByIdOptions,
@@ -73,14 +69,14 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
    * @returns An entity object or null
    */
   private async findByIdOnly(id: string): Promise<T | null> {
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
     const res = await dynamo.getItem({
       TableName: tableName,
       Key: {
-        [primaryKey]: this.EntityClass.primaryKeyValue(id),
-        [sortKey]: this.EntityClass.name
+        [this.primaryKeyAlias]: this.EntityClass.primaryKeyValue(id),
+        [this.sortKeyAlias]: this.EntityClass.name
       },
       ConsistentRead: true
     });
@@ -149,8 +145,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     id: string,
     includedRelationships: RelationshipMetadata[]
   ): QueryCommandInput {
-    const { primaryKey } = this.tableMetadata;
-    const modelPrimaryKey = this.entityMetadata.attributes[primaryKey].name;
+    const modelPrimaryKey = this.tableMetadata.primaryKeyAttribute.name;
 
     const partitionFilter = includedRelationshipsFilter(
       this.EntityClass.name,
@@ -174,8 +169,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
-        const { typeField } = this.tableMetadata;
-        if (res[typeField] === this.EntityClass.name) acc.item = res;
+        const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+        if (res[typeAlias] === this.EntityClass.name) acc.item = res;
         if (isBelongsToLinkDynamoItem(res, this.tableMetadata))
           acc.belongsToLinks.push(res);
         return acc;
@@ -208,20 +203,20 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToLinks: BelongsToLinkDynamoItem[],
     relationsLookup: RelationshipMetaObj["relationsLookup"]
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName, defaultAttributes } = this.tableMetadata;
 
     belongsToLinks.forEach(link => {
-      const foreignKey = link[FOREIGN_KEY_ALIAS];
-      const foreignEntityType = link[FOREIGN_ENTITY_TYPE_ALIAS];
+      const foreignKey = link[defaultAttributes.foreignKey.alias];
+      const foreignEntityType = link[defaultAttributes.foreignEntityType.alias];
 
       if (isPropertyKey(foreignEntityType) && isString(foreignKey)) {
-        const includedRel = relationsLookup[foreignEntityType];
+        const rel = relationsLookup[foreignEntityType];
 
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [primaryKey]: includedRel.target.primaryKeyValue(foreignKey),
-            [sortKey]: includedRel.target.name
+            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKey),
+            [this.sortKeyAlias]: rel.target.name
           }
         });
       } else {
@@ -243,36 +238,22 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     belongsToRelationships: RelationshipMetaObj["belongsToRelationships"]
   ): void {
     if (belongsToRelationships.length > 0) {
-      const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
-
-      const tableKeyLookup = this.buildTableKeyLookup();
+      const { name: tableName } = this.tableMetadata;
+      const attributes = Metadata.getEntityAttributes(this.EntityClass.name);
 
       belongsToRelationships.forEach(rel => {
-        const tableForeignKeyAttrName: string = tableKeyLookup[rel.foreignKey];
-        const foreignKeyVal: string = item[tableForeignKeyAttrName];
+        const foreignKeyTableAlias: string = attributes[rel.foreignKey].alias;
+        const foreignKeyVal: string = item[foreignKeyTableAlias];
 
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [primaryKey]: rel.target.primaryKeyValue(foreignKeyVal),
-            [sortKey]: rel.target.name
+            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKeyVal),
+            [this.sortKeyAlias]: rel.target.name
           }
         });
       });
     }
-  }
-
-  /**
-   * Create a lookup object to lookup a table key attribute name by the entities attribute key
-   */
-  private buildTableKeyLookup(): StringObj {
-    return Object.entries(this.entityMetadata.attributes).reduce<StringObj>(
-      (acc, [tableKey, meta]) => {
-        acc[meta.name] = tableKey;
-        return acc;
-      },
-      {}
-    );
   }
 
   /**
@@ -307,13 +288,13 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     relationsLookup: RelationshipLookup
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
     const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
-    const { typeField } = this.tableMetadata;
+    const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
 
     transactionResults.forEach(res => {
       const tableItem = res.Item;
 
       if (tableItem !== undefined) {
-        const rel = relationsLookup[tableItem[typeField]];
+        const rel = relationsLookup[tableItem[typeAlias]];
 
         if (isKeyOfEntity(parentEntity, rel.propertyName)) {
           if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {

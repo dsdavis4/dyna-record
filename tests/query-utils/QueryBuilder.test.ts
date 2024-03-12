@@ -13,12 +13,12 @@ import type { PrimaryKey, SortKey } from "../../src/types";
   name: "mock-table",
   delimiter: "#",
   defaultFields: {
-    id: "Id",
-    type: "Type",
-    createdAt: "CreatedAt",
-    updatedAt: "UpdatedAt",
-    foreignKey: "ForeignKey",
-    foreignEntityType: "ForeignEntityType"
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" },
+    foreignKey: { alias: "ForeignKey" },
+    foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
 class MockTable extends SingleTableDesign {

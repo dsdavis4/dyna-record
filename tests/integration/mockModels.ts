@@ -25,14 +25,13 @@ import type {
 @Table({
   name: "mock-table",
   delimiter: "#",
-  // TODO add type test that the keys of this have to be what is below and value can be any string
   defaultFields: {
-    id: "Id",
-    type: "Type",
-    createdAt: "CreatedAt",
-    updatedAt: "UpdatedAt",
-    foreignKey: "ForeignKey",
-    foreignEntityType: "ForeignEntityType"
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" },
+    foreignKey: { alias: "ForeignKey" },
+    foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
 abstract class MockTable extends SingleTableDesign {

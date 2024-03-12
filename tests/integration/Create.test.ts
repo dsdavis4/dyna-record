@@ -654,8 +654,6 @@ describe("Create", () => {
     });
 
     it("will not accept function attributes on create", async () => {
-      expect.assertions(1);
-
       @Entity
       class MyModel extends MockTable {
         @Attribute({ alias: "MyAttribute" })
@@ -666,20 +664,14 @@ describe("Create", () => {
         }
       }
 
-      try {
-        await MyModel.create({
-          myAttribute: "someVal",
-          // @ts-expect-error function attributes are not allowed
-          someMethod: () => "123"
-        });
-      } catch (e) {
-        expect(true).toEqual(true);
-      }
+      await MyModel.create({
+        myAttribute: "someVal",
+        // @ts-expect-error function attributes are not allowed
+        someMethod: () => "123"
+      });
     });
 
     it("optional attributes are not required", async () => {
-      expect.assertions(1);
-
       @Entity
       class SomeModel extends MockTable {
         @Attribute({ alias: "MyAttribute1" })
@@ -689,14 +681,10 @@ describe("Create", () => {
         public myAttribute2?: string;
       }
 
-      try {
-        await SomeModel.create({
-          // @ts-expect-no-error Optional attributes do not have to be included
-          myAttribute1: "someVal"
-        });
-      } catch (e) {
-        expect(true).toEqual(true);
-      }
+      await SomeModel.create({
+        // @ts-expect-no-error Optional attributes do not have to be included
+        myAttribute1: "someVal"
+      });
     });
 
     it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {

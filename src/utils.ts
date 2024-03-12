@@ -1,10 +1,9 @@
 import type SingleTableDesign from "./SingleTableDesign";
-import type {
-  DynamoTableItem,
-  BelongsToLinkDynamoItem,
-  StringObj
-} from "./types";
-import Metadata, { type TableMetadata } from "./metadata";
+import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
+import Metadata, {
+  type AttributeMetadata,
+  type TableMetadata
+} from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
@@ -19,27 +18,20 @@ export const entityToTableItem = (
   entityClassName: string,
   entityData: Partial<SingleTableDesign>
 ): DynamoTableItem => {
-  const entityMetadata = Metadata.getEntity(entityClassName);
-  const possibleAttrs = Metadata.getEntityAttributes(entityClassName);
-
-  const tableKeyLookup = Object.entries(possibleAttrs).reduce<StringObj>(
-    (acc, [tableKey, attrMetadata]) => {
-      acc[attrMetadata.name] = tableKey;
-      return acc;
-    },
-    {}
-  );
+  const attributesMeta = Metadata.getEntityAttributes(entityClassName);
 
   return Object.entries(entityData).reduce<DynamoTableItem>(
     (acc, [key, val]) => {
-      const tableKey = tableKeyLookup[key];
-      const serializers = entityMetadata.attributes[tableKey]?.serializers;
+      const attrMeta = attributesMeta[key];
+      if (attrMeta !== undefined) {
+        const { alias, serializers } = attrMeta;
 
-      // If the attribute has a custom serializer, serialize it
-      const value =
-        serializers === undefined ? val : serializers.toTableAttribute(val);
+        // If the attribute has a custom serializer, serialize it
+        const value =
+          serializers === undefined ? val : serializers.toTableAttribute(val);
 
-      acc[tableKey] = value as NativeScalarAttributeValue;
+        acc[alias] = value as NativeScalarAttributeValue;
+      }
       return acc;
     },
     {}
@@ -56,11 +48,12 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const { attributes: entityAttrsMeta } = Metadata.getEntity(EntityClass.name);
+  const tableAttributes = Metadata.getEntityTableAttributes(EntityClass.name);
+
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = entityAttrsMeta[attrName];
+    const attrMeta = tableAttributes[attrName];
 
     if (attrMeta !== undefined) {
       const { name: entityKey, serializers } = attrMeta;
@@ -91,10 +84,10 @@ export const tableItemToBelongsToLink = (
 ): BelongsToLink => {
   const link = new BelongsToLink();
 
-  const belongsToLinkAttrs = {
-    ...{ [tableMeta.primaryKey]: tableMeta.primaryKeyAttribute },
-    ...{ [tableMeta.sortKey]: tableMeta.sortKeyAttribute },
-    ...tableMeta.defaultAttributes
+  const belongsToLinkAttrs: Record<string, AttributeMetadata> = {
+    ...{ [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute },
+    ...{ [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute },
+    ...tableMeta.defaultTableAttributes
   };
 
   Object.keys(tableItem).forEach(attrName => {
@@ -147,7 +140,7 @@ export const isBelongsToLinkDynamoItem = (
   res: DynamoTableItem,
   tableMeta: TableMetadata
 ): res is BelongsToLinkDynamoItem => {
-  return res[tableMeta.typeField] === BelongsToLink.name;
+  return res[tableMeta.defaultAttributes.type.alias] === BelongsToLink.name;
 };
 
 /**

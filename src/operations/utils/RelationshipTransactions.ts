@@ -7,7 +7,6 @@ import type {
 import Metadata, {
   type TableMetadata,
   type BelongsToRelationship,
-  type EntityClass,
   type EntityMetadata
 } from "../../metadata";
 import {
@@ -16,7 +15,7 @@ import {
   isBelongsToRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import type { Nullable } from "../../types";
+import type { EntityClass, Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
 import { extractForeignKeyFromEntity } from "./utils";
 
@@ -61,12 +60,16 @@ interface RelationshipTransactionsProps<T extends SingleTableDesign> {
 class RelationshipTransactions<T extends SingleTableDesign> {
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
+  readonly #primaryKeyAlias: string;
+  readonly #sortKeyAlias: string;
 
   constructor(private readonly props: RelationshipTransactionsProps<T>) {
     this.#entityMetadata = Metadata.getEntity(props.Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
+    this.#primaryKeyAlias = this.#tableMetadata.primaryKeyAttribute.alias;
+    this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
   public async build<T extends SingleTableDesign>(
@@ -117,17 +120,17 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     rel: BelongsToRelationship,
     relationshipId: string
   ): void {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
     const conditionCheck: ConditionCheck = {
       TableName: tableName,
       Key: {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: rel.target.name
+        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
+        [this.#sortKeyAlias]: rel.target.name
       },
-      ConditionExpression: `attribute_exists(${primaryKey})`
+      ConditionExpression: `attribute_exists(${this.#primaryKeyAlias})`
     };
 
     this.props.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
@@ -145,7 +148,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: Nullable<string>
   ): Promise<void> {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     if (this.props.belongsToHasOneCb !== undefined) {
       await this.props.belongsToHasOneCb(rel, entityId);
@@ -155,14 +158,14 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
       const keys = {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: this.props.Entity.name
+        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
+        [this.#sortKeyAlias]: this.props.Entity.name
       };
 
       const putExpression: Put = {
         TableName: tableName,
         Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-        ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 
       this.props.transactionBuilder.addPut(
@@ -183,7 +186,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
     entityId: string,
     relationshipId: Nullable<string>
   ): Promise<void> {
-    const { name: tableName, primaryKey, sortKey } = this.#tableMetadata;
+    const { name: tableName } = this.#tableMetadata;
 
     if (this.props.belongsToHasManyCb !== undefined) {
       await this.props.belongsToHasManyCb(rel, entityId);
@@ -193,14 +196,14 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       const link = BelongsToLink.build(this.props.Entity.name, entityId);
 
       const keys = {
-        [primaryKey]: rel.target.primaryKeyValue(relationshipId),
-        [sortKey]: this.props.Entity.primaryKeyValue(link.foreignKey)
+        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
+        [this.#sortKeyAlias]: this.props.Entity.primaryKeyValue(link.foreignKey)
       };
 
       const putExpression: Put = {
         TableName: tableName,
         Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
-        ConditionExpression: `attribute_not_exists(${primaryKey})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 
       this.props.transactionBuilder.addPut(

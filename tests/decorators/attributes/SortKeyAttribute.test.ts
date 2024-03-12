@@ -7,7 +7,7 @@ describe("SortKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Customer.name).SK).toEqual({
+    expect(Metadata.getEntityAttributes(Customer.name).sk).toEqual({
       name: "sk",
       alias: "SK",
       nullable: false

@@ -26,6 +26,8 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 
+// TODO update any instance of private throughout the app to use '#'
+
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
@@ -50,12 +52,12 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
   name: "temp-table",
   delimiter: "#",
   defaultFields: {
-    id: "Id",
-    type: "Type",
-    createdAt: "CreatedAt",
-    updatedAt: "UpdatedAt",
-    foreignKey: "ForeignKey",
-    foreignEntityType: "ForeignEntityType"
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" },
+    foreignKey: { alias: "ForeignKey" },
+    foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
 abstract class DrewsBrewsTable extends SingleTableDesign {
@@ -329,8 +331,6 @@ class AttributeTester extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    debugger;
-
     const bla3 = await Brewery.findById("1", {
       include: [{ association: "beers" }]
     });
@@ -343,9 +343,9 @@ class AttributeTester extends DrewsBrewsTable {
 
     // await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
 
-    // const testBrewery = await Brewery.create({
-    //   name: "test has and belongs to many"
-    // });
+    const testBrssewery = await Brewery.create({
+      name: "test has and belongs to many"
+    });
 
     // const user = await User.create({
     //   firstName: "testing",
@@ -463,9 +463,9 @@ class AttributeTester extends DrewsBrewsTable {
 
     // // debugger;
 
-    // // await Keg.update(keg?.id!, {
-    // //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
-    // // });
+    // await Keg.update("123", {
+    //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
+    // });
 
     // debugger;
 

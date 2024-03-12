@@ -1,10 +1,7 @@
 import SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
-import Metadata, {
-  type BelongsToRelationship,
-  type EntityClass
-} from "../../metadata";
+import Metadata, { type BelongsToRelationship } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
@@ -12,7 +9,7 @@ import {
   isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import type { RelationshipLookup } from "../../types";
+import type { EntityClass, RelationshipLookup } from "../../types";
 import { entityToTableItem, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
@@ -35,11 +32,11 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
 
-    const { name: tableName, primaryKey, sortKey } = this.tableMetadata;
+    const { name: tableName } = this.tableMetadata;
 
     this.#tableName = tableName;
-    this.#primaryKeyField = this.entityMetadata.attributes[primaryKey].name;
-    this.#sortKeyField = this.entityMetadata.attributes[sortKey].name;
+    this.#primaryKeyField = this.tableMetadata.primaryKeyAttribute.name;
+    this.#sortKeyField = this.tableMetadata.sortKeyAttribute.name;
 
     const relationsObj = buildEntityRelationshipMetaObj(
       Object.values(this.entityMetadata.relationships)
@@ -102,8 +99,6 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     item: BelongsToLink | ItemKeys<T>,
     options: DeleteOptions
   ): void {
-    const { primaryKey, sortKey } = this.tableMetadata;
-
     const pkField = this.#primaryKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
 
@@ -111,8 +106,8 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
       {
         TableName: this.#tableName,
         Key: {
-          [primaryKey]: item[pkField],
-          [sortKey]: item[skField]
+          [this.primaryKeyAlias]: item[pkField],
+          [this.sortKeyAlias]: item[skField]
         }
       },
       options.errorMessage
@@ -151,9 +146,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
 
     if (isRelationshipMetadataWithForeignKey(relMeta)) {
-      const entityMeta = Metadata.getEntity(relMeta.target.name);
+      const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
 
-      const attrMeta = Object.values(entityMeta.attributes).find(
+      const attrMeta = Object.values(entityAttrs).find(
         attr => attr.name === relMeta.foreignKey
       );
 

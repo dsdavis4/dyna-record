@@ -7,7 +7,7 @@ describe("DateAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Order.name).OrderDate).toEqual({
+    expect(Metadata.getEntityAttributes(Order.name).orderDate).toEqual({
       name: "orderDate",
       alias: "OrderDate",
       nullable: false,

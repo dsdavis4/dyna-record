@@ -1,8 +1,4 @@
-import Metadata, {
-  tableDefaultFields,
-  type EntityClass,
-  type DefaultEntityFields
-} from "./metadata";
+import Metadata, { tableDefaultFields } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute, DateAttribute } from "./decorators";
 import {
@@ -19,6 +15,7 @@ import {
   type UpdateOptions,
   Delete
 } from "./operations";
+import type { EntityClass } from "./types";
 
 // TODO should this be renamed? Its weird to extend something called Single table design..
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -26,28 +23,27 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
-/**
- * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
- */
-const idField: DefaultEntityFields = "id";
-const typeField: DefaultEntityFields = "type";
-const createdAtField: DefaultEntityFields = "createdAt";
-const updatedAtField: DefaultEntityFields = "updatedAt";
+interface SingleTableDesignBase {
+  id: string;
+  type: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 // TODO should these fields be readonly?
 // TODO add typing for these aliases...
-abstract class SingleTableDesign {
-  @Attribute({ alias: tableDefaultFields.id })
-  public [idField]: string;
+abstract class SingleTableDesign implements SingleTableDesignBase {
+  @Attribute({ alias: tableDefaultFields.id.alias })
+  public id: string;
 
-  @Attribute({ alias: tableDefaultFields.type })
-  public [typeField]: string;
+  @Attribute({ alias: tableDefaultFields.type.alias })
+  public type: string;
 
-  @DateAttribute({ alias: tableDefaultFields.createdAt })
-  public [createdAtField]: Date;
+  @DateAttribute({ alias: tableDefaultFields.createdAt.alias })
+  public createdAt: Date;
 
-  @DateAttribute({ alias: tableDefaultFields.updatedAt })
-  public [updatedAtField]: Date;
+  @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
+  public updatedAt: Date;
 
   /**
    * Find an entity by Id and optionally include associations

@@ -12,7 +12,7 @@ describe("NullableForeignKeyAttribute", () => {
     expect.assertions(1);
 
     expect(
-      Metadata.getEntityAttributes(ContactInformation.name).CustomerId
+      Metadata.getEntityAttributes(ContactInformation.name).customerId
     ).toEqual({
       name: "customerId",
       alias: "CustomerId",
