@@ -1,16 +1,13 @@
 import { v4 as uuidv4 } from "uuid";
+import type SingleTableDesign from "../SingleTableDesign";
 
 // TODO add tests that all operations work when table keys are not PK or SK
 //      It might be best to solve the dynamic PK and SK problem in BelongsToLinkFirst
 // TODO enforce that these match the default types in metadata types
 
-interface BelongsToLinkProps {
-  id: string;
-  type: string;
+interface BelongsToLinkProps extends SingleTableDesign {
   foreignEntityType: string;
   foreignKey: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 class BelongsToLink implements BelongsToLinkProps {

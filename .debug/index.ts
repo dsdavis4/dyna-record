@@ -341,9 +341,9 @@ class AttributeTester extends DrewsBrewsTable {
 
     // await BreweryUser.add(Brewery, { breweryId: "1", userId: "2" });
 
-    // const testBrewery = await Brewery.create({
-    //   name: "test has and belongs to many"
-    // });
+    const testBrssewery = await Brewery.create({
+      name: "test has and belongs to many"
+    });
 
     // const user = await User.create({
     //   firstName: "testing",
@@ -461,9 +461,9 @@ class AttributeTester extends DrewsBrewsTable {
 
     // // debugger;
 
-    // // await Keg.update(keg?.id!, {
-    // //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
-    // // });
+    // await Keg.update("123", {
+    //   beerId: "1da63136-13fe-4435-b590-313ff1cbd587"
+    // });
 
     // debugger;
 

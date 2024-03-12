@@ -1,8 +1,4 @@
-import Metadata, {
-  tableDefaultFields,
-  type EntityClass,
-  type DefaultEntityFields
-} from "./metadata";
+import Metadata, { tableDefaultFields, type EntityClass } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute, DateAttribute } from "./decorators";
 import {
@@ -26,28 +22,27 @@ import {
 // TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
 // TODO  or InstanceType from InstanceType
 
-/**
- * Default attributes defined by no-orm, which cannot be customized by consumers and are required for no-orm to work
- */
-const idField: DefaultEntityFields = "id";
-const typeField: DefaultEntityFields = "type";
-const createdAtField: DefaultEntityFields = "createdAt";
-const updatedAtField: DefaultEntityFields = "updatedAt";
+interface SingleTableDesignBase {
+  id: string;
+  type: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 // TODO should these fields be readonly?
 // TODO add typing for these aliases...
-abstract class SingleTableDesign {
+abstract class SingleTableDesign implements SingleTableDesignBase {
   @Attribute({ alias: tableDefaultFields.id.alias })
-  public [idField]: string;
+  public id: string;
 
   @Attribute({ alias: tableDefaultFields.type.alias })
-  public [typeField]: string;
+  public type: string;
 
   @DateAttribute({ alias: tableDefaultFields.createdAt.alias })
-  public [createdAtField]: Date;
+  public createdAt: Date;
 
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
-  public [updatedAtField]: Date;
+  public updatedAt: Date;
 
   /**
    * Find an entity by Id and optionally include associations
