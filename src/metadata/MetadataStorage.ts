@@ -161,20 +161,8 @@ class MetadataStorage {
     const defaultAttrMeta =
       defaultAttributes[options.attributeName as DefaultFields];
 
-    if (defaultAttrMeta === undefined) {
-      const alias = options.alias ?? options.attributeName;
-      const attrMetaOptions = { ...options, alias };
-
-      const meta = new AttributeMetadata(options);
-
-      // If this is not one of the default attributes, build it from options
-      entityMetadata.attributes[options.attributeName] = meta;
-      entityMetadata.tableAttributes[attrMetaOptions.alias] = meta;
-    } else {
-      // If this is a default attribute, use default attribute settings
-      entityMetadata.attributes[defaultAttrMeta.name] = defaultAttrMeta;
-      entityMetadata.tableAttributes[defaultAttrMeta.alias] = defaultAttrMeta;
-    }
+    const meta = defaultAttrMeta ?? new AttributeMetadata(options);
+    entityMetadata.addAttribute(meta);
   }
 
   /**

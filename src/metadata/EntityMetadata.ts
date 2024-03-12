@@ -1,4 +1,8 @@
-import type { AttributeMetadataStorage, RelationshipMetadataStorage } from ".";
+import {
+  type AttributeMetadata,
+  type AttributeMetadataStorage,
+  type RelationshipMetadataStorage
+} from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 
 // TODO can I refactor to make instance vars private
@@ -32,6 +36,11 @@ class EntityMetadata {
     this.attributes = {};
     this.tableAttributes = {};
     this.relationships = {};
+  }
+
+  public addAttribute(meta: AttributeMetadata): void {
+    this.attributes[meta.name] = meta;
+    this.tableAttributes[meta.alias] = meta;
   }
 }
 
