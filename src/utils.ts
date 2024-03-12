@@ -48,7 +48,7 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const { tableAttributes } = Metadata.getEntity(EntityClass.name);
+  const tableAttributes = Metadata.getEntityTableAttributes(EntityClass.name);
 
   const entity = new EntityClass();
 

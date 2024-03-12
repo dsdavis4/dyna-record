@@ -146,9 +146,9 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
     const relMeta = this.#relationsLookup[item.foreignEntityType];
 
     if (isRelationshipMetadataWithForeignKey(relMeta)) {
-      const entityMeta = Metadata.getEntity(relMeta.target.name);
+      const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
 
-      const attrMeta = Object.values(entityMeta.attributes).find(
+      const attrMeta = Object.values(entityAttrs).find(
         attr => attr.name === relMeta.foreignKey
       );
 

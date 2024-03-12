@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { RelationshipMetadata } from "../../metadata";
+import Metadata, { type RelationshipMetadata } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
@@ -239,7 +239,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   ): void {
     if (belongsToRelationships.length > 0) {
       const { name: tableName } = this.tableMetadata;
-      const { attributes } = this.entityMetadata;
+      const attributes = Metadata.getEntityAttributes(this.EntityClass.name);
 
       belongsToRelationships.forEach(rel => {
         const foreignKeyTableAlias: string = attributes[rel.foreignKey].alias;

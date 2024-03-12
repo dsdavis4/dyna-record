@@ -75,17 +75,39 @@ class MetadataStorage {
     return this.joinTables[joinTableName];
   }
 
-  // TODO is this used..
   /**
-   * Returns attribute metadata for attributes defined directly on the entity, as well as table default attributes
-   * @param entityName - Name of the Entity class
+   * Returns attribute metadata for attributes defined keyed by entity key
    * @returns - {@link AttributeMetadataStorage}
    */
   public getEntityAttributes(entityName: string): AttributeMetadataStorage {
     const entityMetadata = this.getEntity(entityName);
-    const { defaultAttributes } = this.getTable(entityMetadata.tableClassName);
+    const tableMeta = this.getTable(entityMetadata.tableClassName);
 
-    return { ...entityMetadata.attributes, ...defaultAttributes };
+    return {
+      ...entityMetadata.attributes,
+      ...tableMeta.defaultAttributes,
+      [tableMeta.primaryKeyAttribute.name]: tableMeta.primaryKeyAttribute,
+      [tableMeta.sortKeyAttribute.name]: tableMeta.sortKeyAttribute
+    };
+  }
+
+  /**
+   * Returns attribute metadata for attributes defined keyed by table alias
+   * @param entityName - Name of the Entity class
+   * @returns - {@link AttributeMetadataStorage}
+   */
+  public getEntityTableAttributes(
+    entityName: string
+  ): AttributeMetadataStorage {
+    const entityMetadata = this.getEntity(entityName);
+    const tableMeta = this.getTable(entityMetadata.tableClassName);
+
+    return {
+      ...entityMetadata.tableAttributes,
+      ...tableMeta.defaultTableAttributes,
+      [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute,
+      [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute
+    };
   }
 
   /**
@@ -161,6 +183,7 @@ class MetadataStorage {
     const defaultAttrMeta =
       defaultAttributes[options.attributeName as DefaultFields];
 
+    // The property is a default field assign it, otherwise instantiate new AttributeMetadata
     const meta = defaultAttrMeta ?? new AttributeMetadata(options);
     entityMetadata.addAttribute(meta);
   }
@@ -180,9 +203,6 @@ class MetadataStorage {
       const opts = { ...options, nullable: false };
 
       tableMetadata.primaryKeyAttribute = new AttributeMetadata(opts);
-
-      // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
-      this.addEntityAttribute(entityClass.constructor.name, opts);
     }
   }
 
@@ -201,9 +221,6 @@ class MetadataStorage {
       const opts = { ...options, nullable: false };
 
       tableMetadata.sortKeyAttribute = new AttributeMetadata(opts);
-
-      // TODO if I refactor so that primary key attribute meta is only on the table metadata, and not replicated through all entity metadata, then I wont need htis
-      this.addEntityAttribute(entityClass.constructor.name, opts);
     }
   }
 
