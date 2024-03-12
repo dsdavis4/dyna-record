@@ -192,7 +192,7 @@ export type TableMetadataOptions = Omit<
 class Metadata {
   private readonly tables: TableMetadataStorage = {};
   private readonly entities: EntityMetadataStorage = {};
-  private readonly entityClasses: Entity[] = [];
+  private entityClasses: Entity[] = [];
   private readonly joinTables: JoinTableMetadataStorage = {};
 
   private initialized: boolean = false;
@@ -440,8 +440,9 @@ class Metadata {
   private init(): void {
     if (!this.initialized) {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      this.entityClasses.forEach(EntityClass => new EntityClass()); // TODO can I free up memory by clearing this out after init? Its only used here..
+      this.entityClasses.forEach(EntityClass => new EntityClass());
       this.initialized = true;
+      this.entityClasses = []; // Clear entityClasses as its no longer needed
     }
   }
 
