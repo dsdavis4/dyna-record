@@ -20,7 +20,10 @@ class EntityMetadata {
    * Attribute metadata, for looking up attribute metadata by table key
    */
   public readonly tableAttributes: AttributeMetadataStorage;
-  // TODO evaluate if there is a better way to store.. can I store in a wway where I dont need to make relationship lookup items
+
+  /**
+   * Relationship metadata. For looking up a relationship by entity key
+   */
   public readonly relationships: RelationshipMetadataStorage;
 
   public readonly EntityClass: EntityClass;
