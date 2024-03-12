@@ -189,7 +189,7 @@ class MetadataStorage {
   }
 
   /**
-   * Adds the primary key attribute to Table and Entity metadata storage
+   * Adds the primary key attribute to Table metadata storage
    * @param entityClass
    * @param options
    */
@@ -207,7 +207,7 @@ class MetadataStorage {
   }
 
   /**
-   * Adds the sort key attribute to Table and Entity metadata storage
+   * Adds the sort key attribute to Table metadata storage
    * @param entityClass
    * @param options
    */

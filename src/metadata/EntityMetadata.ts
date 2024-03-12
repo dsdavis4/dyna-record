@@ -38,9 +38,9 @@ class EntityMetadata {
     this.relationships = {};
   }
 
-  public addAttribute(meta: AttributeMetadata): void {
-    this.attributes[meta.name] = meta;
-    this.tableAttributes[meta.alias] = meta;
+  public addAttribute(attrMeta: AttributeMetadata): void {
+    this.attributes[attrMeta.name] = attrMeta;
+    this.tableAttributes[attrMeta.alias] = attrMeta;
   }
 }
 
