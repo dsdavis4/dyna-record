@@ -25,14 +25,13 @@ type TableMetadataStorage = Record<string, TableMetadata>;
 type EntityMetadataStorage = Record<string, EntityMetadata>;
 type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
 
-// TODO update private in here to be '#'
 // TODO update any instance of private throughout the app to use '#'
 class MetadataStorage {
-  private readonly tables: TableMetadataStorage = {};
-  private readonly entities: EntityMetadataStorage = {};
-  private readonly joinTables: JoinTableMetadataStorage = {};
+  readonly #tables: TableMetadataStorage = {};
+  readonly #entities: EntityMetadataStorage = {};
+  readonly #joinTables: JoinTableMetadataStorage = {};
 
-  private initialized: boolean = false;
+  #initialized: boolean = false;
 
   /**
    * Returns entity metadata given an entity name
@@ -41,7 +40,7 @@ class MetadataStorage {
    */
   public getEntity(entityName: string): EntityMetadata {
     this.init();
-    return this.entities[entityName];
+    return this.#entities[entityName];
   }
 
   /**
@@ -51,7 +50,7 @@ class MetadataStorage {
    */
   public getTable(tableName: string): TableMetadata {
     this.init();
-    return this.tables[tableName];
+    return this.#tables[tableName];
   }
 
   /**
@@ -72,7 +71,7 @@ class MetadataStorage {
    */
   public getJoinTable(joinTableName: string): JoinTableMetadata[] {
     this.init();
-    return this.joinTables[joinTableName];
+    return this.#joinTables[joinTableName];
   }
 
   /**
@@ -116,7 +115,7 @@ class MetadataStorage {
    * @param options
    */
   public addTable(tableClassName: string, options: TableMetadataOptions): void {
-    this.tables[tableClassName] = new TableMetadata(options);
+    this.#tables[tableClassName] = new TableMetadata(options);
   }
 
   /**
@@ -128,7 +127,7 @@ class MetadataStorage {
     entityClass: EntityMetadata["EntityClass"],
     tableClassName: string
   ): void {
-    this.entities[entityClass.name] = new EntityMetadata(
+    this.#entities[entityClass.name] = new EntityMetadata(
       entityClass,
       tableClassName
     );
@@ -143,7 +142,7 @@ class MetadataStorage {
     entityName: string,
     options: RelationshipMetadata
   ): void {
-    const entityMetadata = this.entities[entityName];
+    const entityMetadata = this.#entities[entityName];
     if (entityMetadata.relationships[options.propertyName] === undefined) {
       entityMetadata.relationships[options.propertyName] =
         createRelationshipInstance(options);
@@ -156,15 +155,15 @@ class MetadataStorage {
    * @param options
    */
   public addJoinTable(joinTableName: string, options: JoinTableMetadata): void {
-    const metadata = this.joinTables[joinTableName];
+    const metadata = this.#joinTables[joinTableName];
 
     if (metadata === undefined) {
       const meta = new JoinTableMetadata(options.entity, options.foreignKey);
-      this.joinTables[joinTableName] = [meta];
-    } else if (this.joinTables[joinTableName].length === 1) {
+      this.#joinTables[joinTableName] = [meta];
+    } else if (this.#joinTables[joinTableName].length === 1) {
       // There can only be two tables in a join table
       const meta = new JoinTableMetadata(options.entity, options.foreignKey);
-      this.joinTables[joinTableName].push(meta);
+      this.#joinTables[joinTableName].push(meta);
     }
   }
 
@@ -177,8 +176,8 @@ class MetadataStorage {
     entityName: string,
     options: MakeOptional<AttributeMetadataOptions, "alias">
   ): void {
-    const entityMetadata = this.entities[entityName];
-    const { defaultAttributes } = this.tables[entityMetadata.tableClassName];
+    const entityMetadata = this.#entities[entityName];
+    const { defaultAttributes } = this.#tables[entityMetadata.tableClassName];
 
     const defaultAttrMeta =
       defaultAttributes[options.attributeName as DefaultFields];
@@ -228,12 +227,12 @@ class MetadataStorage {
    * Initialize metadata object
    */
   private init(): void {
-    if (!this.initialized) {
+    if (!this.#initialized) {
       // Initialize all entities once to trigger Attribute decorators and fill metadata object
-      Object.values(this.entities).forEach(
+      Object.values(this.#entities).forEach(
         entityMeta => new entityMeta.EntityClass()
       );
-      this.initialized = true;
+      this.#initialized = true;
     }
   }
 
@@ -249,8 +248,8 @@ class MetadataStorage {
 
     if (protoType === null) return;
 
-    if (this.tables[protoType.constructor.name] !== undefined) {
-      return this.tables[protoType.constructor.name];
+    if (this.#tables[protoType.constructor.name] !== undefined) {
+      return this.#tables[protoType.constructor.name];
     } else {
       return this.getEntityTableMetadata(protoType);
     }
