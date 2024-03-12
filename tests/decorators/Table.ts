@@ -28,12 +28,12 @@ describe("Table metadata", () => {
         name: "other-table",
         delimiter: "|",
         defaultFields: {
-          id: "Id",
-          type: "Type",
-          createdAt: "CreatedAt",
-          updatedAt: "UpdatedAt",
-          foreignKey: "ForeignKey",
-          foreignEntityType: "ForeignEntityType"
+          id: { alias: "Id" },
+          type: { alias: "Type" },
+          createdAt: { alias: "CreatedAt" },
+          updatedAt: { alias: "UpdatedAt" },
+          foreignKey: { alias: "ForeignKey" },
+          foreignEntityType: { alias: "ForeignEntityType" }
         }
       })
       abstract class SomeTable extends SingleTableDesign {}
@@ -45,7 +45,7 @@ describe("Table metadata", () => {
         name: "other-table",
         delimiter: "|",
         defaultFields: {
-          id: "Id"
+          id: { alias: "Id" }
         }
       })
       abstract class SomeTable extends SingleTableDesign {}

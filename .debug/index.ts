@@ -50,12 +50,12 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
   name: "temp-table",
   delimiter: "#",
   defaultFields: {
-    id: "Id",
-    type: "Type",
-    createdAt: "CreatedAt",
-    updatedAt: "UpdatedAt",
-    foreignKey: "ForeignKey",
-    foreignEntityType: "ForeignEntityType"
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" },
+    foreignKey: { alias: "ForeignKey" },
+    foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
 abstract class DrewsBrewsTable extends SingleTableDesign {

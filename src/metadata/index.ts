@@ -118,13 +118,17 @@ type DefaultFields = DefaultEntityFields | DefaultBelongsToLinkFields;
 
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
-export const tableDefaultFields: Record<DefaultFields, DefaultTableKeys> = {
-  id: "id",
-  type: "type",
-  createdAt: "createdAt",
-  updatedAt: "updatedAt",
-  foreignKey: "foreignKey",
-  foreignEntityType: "foreignEntityType"
+// TODO typedoc
+export const tableDefaultFields: Record<
+  DefaultFields,
+  { alias: DefaultTableKeys }
+> = {
+  id: { alias: "id" },
+  type: { alias: "type" },
+  createdAt: { alias: "createdAt" },
+  updatedAt: { alias: "updatedAt" },
+  foreignKey: { alias: "foreignKey" },
+  foreignEntityType: { alias: "foreignEntityType" }
 } as const;
 
 export type AttributeMetadataStorage = Record<string, AttributeMetadata>;
@@ -165,18 +169,13 @@ export interface JoinTableMetadata {
   foreignKey: keyof JoinTable<SingleTableDesign, SingleTableDesign>;
 }
 
+type TableDefaultFields = Record<
+  DefaultFields,
+  Pick<AttributeMetadata, "alias">
+>;
+
 export type TableMetadataOptions = Pick<TableMetadata, "name" | "delimiter"> & {
-  // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeAliasOnlyProp
-  // EX:
-  // @Table({
-  //   name: "temp-table",
-  //   delimiter: "#",
-  //   defaultFields: {
-  //     id: {alias: "Id"},
-  //   }
-  // })
-  // TODO this should be a partial and not require all fields to be set
-  defaultFields?: Partial<Record<DefaultFields, string>>;
+  defaultFields?: Partial<TableDefaultFields>;
 };
 
 // TODO update private in here to be '#'
@@ -281,14 +280,16 @@ class Metadata {
     tableDefaults: TableMetadata["defaultTableAttributes"];
   } {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
-    const customDefaults: StringObj = options.defaultFields ?? {};
+    const customDefaults: Partial<TableDefaultFields> =
+      options.defaultFields ?? {};
 
     return defaultAttrsMeta.reduce<{
       entityDefaults: Record<string, AttributeMetadata>;
       tableDefaults: Record<string, AttributeMetadata>;
     }>(
       (acc, [entityKey, tableKeyAlias]) => {
-        const alias = customDefaults[entityKey] ?? tableKeyAlias;
+        const key = entityKey as DefaultFields;
+        const { alias } = customDefaults[key] ?? tableKeyAlias;
         const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
         const meta = {

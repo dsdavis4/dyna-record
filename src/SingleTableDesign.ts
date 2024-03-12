@@ -37,16 +37,16 @@ const updatedAtField: DefaultEntityFields = "updatedAt";
 // TODO should these fields be readonly?
 // TODO add typing for these aliases...
 abstract class SingleTableDesign {
-  @Attribute({ alias: tableDefaultFields.id })
+  @Attribute({ alias: tableDefaultFields.id.alias })
   public [idField]: string;
 
-  @Attribute({ alias: tableDefaultFields.type })
+  @Attribute({ alias: tableDefaultFields.type.alias })
   public [typeField]: string;
 
-  @DateAttribute({ alias: tableDefaultFields.createdAt })
+  @DateAttribute({ alias: tableDefaultFields.createdAt.alias })
   public [createdAtField]: Date;
 
-  @DateAttribute({ alias: tableDefaultFields.updatedAt })
+  @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public [updatedAtField]: Date;
 
   /**
