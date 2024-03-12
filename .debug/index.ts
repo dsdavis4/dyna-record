@@ -26,6 +26,8 @@ import {
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 
+// TODO update any instance of private throughout the app to use '#'
+
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
 // TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist

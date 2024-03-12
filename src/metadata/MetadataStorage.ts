@@ -20,7 +20,6 @@ type TableMetadataStorage = Record<string, TableMetadata>;
 type EntityMetadataStorage = Record<string, EntityMetadata>;
 type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
 
-// TODO update any instance of private throughout the app to use '#'
 class MetadataStorage {
   readonly #tables: TableMetadataStorage = {};
   readonly #entities: EntityMetadataStorage = {};

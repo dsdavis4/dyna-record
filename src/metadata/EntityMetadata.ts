@@ -5,11 +5,7 @@ import {
 } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 
-// TODO can I refactor to make instance vars private
-
 type EntityClass = new (...args: any) => SingleTableDesign;
-
-// TODO can anything in here be readonly?
 
 class EntityMetadata {
   /**
@@ -19,13 +15,13 @@ class EntityMetadata {
   /**
    * Attribute metadata, for looking up attribute metadata by entity key
    */
-  public attributes: AttributeMetadataStorage;
+  public readonly attributes: AttributeMetadataStorage;
   /**
    * Attribute metadata, for looking up attribute metadata by table key
    */
-  public tableAttributes: AttributeMetadataStorage;
+  public readonly tableAttributes: AttributeMetadataStorage;
   // TODO evaluate if there is a better way to store.. can I store in a wway where I dont need to make relationship lookup items
-  public relationships: RelationshipMetadataStorage;
+  public readonly relationships: RelationshipMetadataStorage;
 
   public readonly EntityClass: EntityClass;
 

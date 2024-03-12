@@ -1,8 +1,4 @@
-// TODO can anything in here be readonly?
-
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-
-// TODO can I refactor to make instance vars private
 
 // TODO add typedoc for each of the attributes
 
@@ -39,10 +35,10 @@ export interface AttributeMetadataOptions {
 }
 
 class AttributeMetadata {
-  public name: string;
-  public alias: string;
-  public nullable: boolean;
-  public serializers?: Serializers;
+  public readonly name: string;
+  public readonly alias: string;
+  public readonly nullable: boolean;
+  public readonly serializers?: Serializers;
 
   constructor(options: AttributeMetadataOptions) {
     this.name = options.attributeName;

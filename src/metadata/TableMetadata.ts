@@ -5,10 +5,6 @@ import type { BelongsToLink } from "../relationships";
 import type { MakeOptional } from "../types";
 import type { AttributeMetadataOptions } from "./AttributeMetadata";
 
-// TODO can anything in here be readonly?
-
-// TODO can I refactor to make instance vars private
-
 // TODO add typedoc for each of the attributes
 
 type DefaultDateFields = "createdAt" | "updatedAt";
@@ -45,22 +41,18 @@ type KeysAttributeMetadataOptions = MakeOptional<
 >;
 
 class TableMetadata {
-  public name: string;
-  // TODO start here I am working on cleaning up metadata storage - should I refactor so that these are not redefined on entitiy metadata
-  // If I do I can get rid of the this.addEntityAttribute calls in the add primary key and sort key functions
+  public readonly name: string;
+  public readonly delimiter: string;
+  public readonly defaultAttributes: Record<DefaultFields, AttributeMetadata>;
+  public readonly defaultTableAttributes: Record<string, AttributeMetadata>;
   public primaryKeyAttribute: AttributeMetadata;
   public sortKeyAttribute: AttributeMetadata;
-  public delimiter: string;
-  public defaultAttributes: Record<DefaultFields, AttributeMetadata>;
-  public defaultTableAttributes: Record<string, AttributeMetadata>;
 
   constructor(options: TableMetadataOptions) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
 
     this.name = options.name;
     this.delimiter = options.delimiter;
-    // TODO instead of storing these, does it make sense to calculate each time its needed?
-    //     What about for just one of the lookups?
     this.defaultAttributes = defaultAttrMeta.entityDefaults;
     this.defaultTableAttributes = defaultAttrMeta.tableDefaults;
     // Placeholders, these are set later
