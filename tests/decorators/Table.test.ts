@@ -39,6 +39,19 @@ describe("Table metadata", () => {
       abstract class SomeTable extends SingleTableDesign {}
     });
 
+    it("only accepts valid default fields", () => {
+      @Table({
+        name: "other-table",
+        delimiter: "|",
+        defaultFields: {
+          id: { alias: "Id" },
+          // @ts-expect-error: 'someField' is not a default field
+          someField: { alias: "SomeField" }
+        }
+      })
+      abstract class SomeTable extends SingleTableDesign {}
+    });
+
     it("does not require all defaultFields to be set", () => {
       // @ts-expect-no-error: defaultFields is optional
       @Table({

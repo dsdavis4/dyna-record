@@ -25,7 +25,6 @@ import type {
 @Table({
   name: "mock-table",
   delimiter: "#",
-  // TODO add type test that the keys of this have to be what is below and value can be any string
   defaultFields: {
     id: { alias: "Id" },
     type: { alias: "Type" },
