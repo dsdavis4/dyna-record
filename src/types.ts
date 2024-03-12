@@ -36,7 +36,6 @@ export interface BelongsToLinkDynamoItem {
 export type Optional<T> = T | undefined;
 export type Nullable<T> = T | null;
 
-// TODO see if I a mstoring things the right way to determine if this is needed
 /**
  * Object to lookup up Relationship metadata by related entity name (As defined by property key for the relationship)
  */
