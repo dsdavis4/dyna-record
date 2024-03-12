@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import type { ForeignKey, MakeOptional } from "../types";
+import type { MakeOptional } from "../types";
 import TableMetadata, {
   type DefaultFields,
   type TableMetadataOptions
@@ -11,8 +11,6 @@ import AttributeMetadata, {
 import JoinTableMetadata from "./JoinTableMetadata";
 import { createRelationshipInstance } from "./relationship-metadata/utils";
 import type { RelationshipMetadata } from "./relationship-metadata";
-
-export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
 
 export type AttributeMetadataStorage = Record<string, AttributeMetadata>;
 export type RelationshipMetadataStorage = Record<string, RelationshipMetadata>;

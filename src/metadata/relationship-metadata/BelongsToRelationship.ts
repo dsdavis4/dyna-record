@@ -1,4 +1,4 @@
-import type { ForeignKeyAttribute } from "../MetadataStorage";
+import type { ForeignKeyAttribute } from "../../types";
 import RelationshipMetadata from "./RelationshipMetadata";
 
 class BelongsToRelationship extends RelationshipMetadata {

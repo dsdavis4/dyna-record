@@ -7,7 +7,6 @@ import JoinTableMetadata from "./JoinTableMetadata";
 export default new MetadataStorage();
 export { TableMetadata, EntityMetadata, AttributeMetadata, JoinTableMetadata };
 
-// TODO remove if not needed
 export * from "./MetadataStorage";
 export * from "./TableMetadata";
 export * from "./relationship-metadata";
