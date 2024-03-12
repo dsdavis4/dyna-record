@@ -165,15 +165,7 @@ export interface JoinTableMetadata {
   foreignKey: keyof JoinTable<SingleTableDesign, SingleTableDesign>;
 }
 
-export type TableMetadataOptions = Omit<
-  TableMetadata,
-  | "primaryKey"
-  | "sortKey"
-  | "defaultAttributes"
-  | "defaultTableAttributes"
-  | "primaryKeyAttribute"
-  | "sortKeyAttribute"
-> & {
+export type TableMetadataOptions = Pick<TableMetadata, "name" | "delimiter"> & {
   // TODO would this read more clearly and be more flexible as Record<DefaultFields, {alias: string}> but use AttributeAliasOnlyProp
   // EX:
   // @Table({
@@ -184,7 +176,7 @@ export type TableMetadataOptions = Omit<
   //   }
   // })
   // TODO this should be a partial and not require all fields to be set
-  defaultFields?: Record<DefaultFields, string>;
+  defaultFields?: Partial<Record<DefaultFields, string>>;
 };
 
 // TODO update private in here to be '#'
