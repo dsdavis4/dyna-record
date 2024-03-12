@@ -1,9 +1,6 @@
-import Metadata, {
-  type ForeignKeyAttribute,
-  type EntityClass
-} from "../../metadata";
+import Metadata, { type ForeignKeyAttribute } from "../../metadata";
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { NullableForeignKey, Optional } from "../../types";
+import type { EntityClass, NullableForeignKey, Optional } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
 interface BelongsToProps<T extends SingleTableDesign> {

@@ -1,7 +1,6 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import { type EntityClass } from "../../metadata";
 import { v4 as uuidv4 } from "uuid";
-import type { DynamoTableItem } from "../../types";
+import type { DynamoTableItem, EntityClass } from "../../types";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";

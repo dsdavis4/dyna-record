@@ -2,10 +2,9 @@ import type SingleTableDesign from "../SingleTableDesign";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
 import Metadata, {
   type TableMetadata,
-  type EntityClass,
   type JoinTableMetadata
 } from "../metadata";
-import type { ForeignKey } from "../types";
+import type { ForeignKey, EntityClass } from "../types";
 import { entityToTableItem } from "../utils";
 import BelongsToLink from "./BelongsToLink";
 

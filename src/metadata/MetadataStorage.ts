@@ -17,9 +17,6 @@ type KeysAttributeMetadataOptions = MakeOptional<
   "alias"
 >;
 
-// TODO move to geneirc types
-export type EntityClass<T> = (new () => T) & typeof SingleTableDesign;
-
 export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
 
 export type AttributeMetadataStorage = Record<string, AttributeMetadata>;

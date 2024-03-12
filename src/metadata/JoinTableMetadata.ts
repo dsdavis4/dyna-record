@@ -1,6 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
 import type { JoinTable } from "../relationships";
-import type { EntityClass } from "./MetadataStorage";
+import type { EntityClass } from "../types";
 
 // TODO can anything in here be readonly?
 

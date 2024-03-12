@@ -1,10 +1,7 @@
 import SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
-import Metadata, {
-  type BelongsToRelationship,
-  type EntityClass
-} from "../../metadata";
+import Metadata, { type BelongsToRelationship } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
@@ -12,7 +9,7 @@ import {
   isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import type { RelationshipLookup } from "../../types";
+import type { EntityClass, RelationshipLookup } from "../../types";
 import { entityToTableItem, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";

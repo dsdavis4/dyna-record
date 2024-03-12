@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { EntityClass } from "../MetadataStorage";
+import type { EntityClass } from "../../types";
 
 type RelationshipType =
   | "HasMany"

@@ -1,7 +1,6 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import type {
-  EntityClass,
   RelationshipMetadata,
   HasOneRelationship,
   HasManyRelationship
@@ -14,6 +13,7 @@ import {
 } from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdateOptions } from "./types";
+import type { EntityClass } from "../../types";
 
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks

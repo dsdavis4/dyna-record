@@ -1,9 +1,6 @@
 import type SingleTableDesign from "../SingleTableDesign";
-import Metadata, {
-  type EntityClass,
-  type EntityMetadata,
-  type TableMetadata
-} from "../metadata";
+import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata";
+import type { EntityClass } from "../types";
 
 abstract class OperationBase<T extends SingleTableDesign> {
   protected readonly EntityClass: EntityClass<T>;

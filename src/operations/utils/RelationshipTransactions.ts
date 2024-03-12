@@ -7,7 +7,6 @@ import type {
 import Metadata, {
   type TableMetadata,
   type BelongsToRelationship,
-  type EntityClass,
   type EntityMetadata
 } from "../../metadata";
 import {
@@ -16,7 +15,7 @@ import {
   isBelongsToRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import type { Nullable } from "../../types";
+import type { EntityClass, Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
 import { extractForeignKeyFromEntity } from "./utils";
 

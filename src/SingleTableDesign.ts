@@ -1,4 +1,4 @@
-import Metadata, { tableDefaultFields, type EntityClass } from "./metadata";
+import Metadata, { tableDefaultFields } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { Attribute, DateAttribute } from "./decorators";
 import {
@@ -15,6 +15,7 @@ import {
   type UpdateOptions,
   Delete
 } from "./operations";
+import type { EntityClass } from "./types";
 
 // TODO should this be renamed? Its weird to extend something called Single table design..
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42

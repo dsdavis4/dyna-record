@@ -1,5 +1,5 @@
 import type SingleTableDesign from "../../SingleTableDesign";
-import type { RelationshipMetadata, EntityClass } from "../../metadata";
+import type { RelationshipMetadata } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
@@ -11,7 +11,8 @@ import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import type {
   BelongsToLinkDynamoItem,
   RelationshipMetaObj,
-  RelationshipLookup
+  RelationshipLookup,
+  EntityClass
 } from "../../types";
 import {
   isBelongsToLinkDynamoItem,

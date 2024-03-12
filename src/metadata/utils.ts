@@ -4,11 +4,11 @@ import type {
   HasManyRelationship,
   BelongsToRelationship,
   HasOneRelationship,
-  EntityClass,
   HasAndBelongsToManyRelationship
 } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 import type { RelationshipMetadataWithForeignKey } from "./types";
+import type { EntityClass } from "../types";
 
 /**
  * Type guard to check if the relationship is a HasMany

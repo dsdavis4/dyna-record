@@ -1,6 +1,7 @@
-import Metadata, { type EntityClass } from "../../metadata";
+import Metadata from "../../metadata";
 import { type JoinTable } from "../../relationships";
 import type SingleTableDesign from "../../SingleTableDesign";
+import type { EntityClass } from "../../types";
 
 /**
  * The key on the related Entity which is associated with this Entity
