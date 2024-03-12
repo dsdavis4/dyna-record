@@ -1,7 +1,9 @@
-import { type AttributeMetadata } from ".";
+import { AttributeMetadata } from ".";
 import type SingleTableDesign from "../SingleTableDesign";
 import { dateSerializer } from "../decorators";
 import type { BelongsToLink } from "../relationships";
+import type { MakeOptional } from "../types";
+import type { AttributeMetadataOptions } from "./AttributeMetadata";
 
 // TODO can anything in here be readonly?
 
@@ -36,6 +38,11 @@ type TableDefaultFields = Record<
 export type TableMetadataOptions = Pick<TableMetadata, "name" | "delimiter"> & {
   defaultFields?: Partial<TableDefaultFields>;
 };
+
+type KeysAttributeMetadataOptions = MakeOptional<
+  Omit<AttributeMetadataOptions, "nullable">,
+  "alias"
+>;
 
 class TableMetadata {
   public name: string;
@@ -105,6 +112,24 @@ class TableMetadata {
       },
       { entityDefaults: {}, tableDefaults: {} }
     );
+  }
+
+  /**
+   * Adds the primary key attribute to Table metadata storage
+   * @param options
+   */
+  public addPrimaryKeyAttribute(options: KeysAttributeMetadataOptions): void {
+    const opts = { ...options, nullable: false };
+    this.primaryKeyAttribute = new AttributeMetadata(opts);
+  }
+
+  /**
+   * Adds the sort key attribute to Table metadata storage
+   * @param options
+   */
+  public addSortKeyAttribute(options: KeysAttributeMetadataOptions): void {
+    const opts = { ...options, nullable: false };
+    this.sortKeyAttribute = new AttributeMetadata(opts);
   }
 }
 

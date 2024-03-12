@@ -15,7 +15,7 @@ class EntityMetadata {
   /**
    * The name of the table class instance to which this entity belongs
    */
-  public tableClassName: string; //
+  public readonly tableClassName: string; //
   /**
    * Attribute metadata, for looking up attribute metadata by entity key
    */

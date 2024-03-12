@@ -12,11 +12,6 @@ import JoinTableMetadata from "./JoinTableMetadata";
 import { createRelationshipInstance } from "./relationship-metadata/utils";
 import type { RelationshipMetadata } from "./relationship-metadata";
 
-type KeysAttributeMetadataOptions = MakeOptional<
-  Omit<AttributeMetadataOptions, "nullable">,
-  "alias"
->;
-
 export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
 
 export type AttributeMetadataStorage = Record<string, AttributeMetadata>;
@@ -194,14 +189,12 @@ class MetadataStorage {
    */
   public addPrimaryKeyAttribute(
     entityClass: SingleTableDesign,
-    options: KeysAttributeMetadataOptions
+    options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
     if (tableMetadata !== undefined) {
-      const opts = { ...options, nullable: false };
-
-      tableMetadata.primaryKeyAttribute = new AttributeMetadata(opts);
+      tableMetadata.addPrimaryKeyAttribute(options);
     }
   }
 
@@ -212,14 +205,12 @@ class MetadataStorage {
    */
   public addSortKeyAttribute(
     entityClass: SingleTableDesign,
-    options: KeysAttributeMetadataOptions
+    options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
     if (tableMetadata !== undefined) {
-      const opts = { ...options, nullable: false };
-
-      tableMetadata.sortKeyAttribute = new AttributeMetadata(opts);
+      tableMetadata.addSortKeyAttribute(options);
     }
   }
 
