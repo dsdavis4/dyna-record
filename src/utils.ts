@@ -1,9 +1,5 @@
 import type SingleTableDesign from "./SingleTableDesign";
-import type {
-  DynamoTableItem,
-  BelongsToLinkDynamoItem,
-  StringObj
-} from "./types";
+import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
 import Metadata, {
   type AttributeMetadata,
   type TableMetadata
@@ -52,20 +48,12 @@ export const tableItemToEntity = <T extends SingleTableDesign>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
-  const entityAttrsMeta = Metadata.getEntityAttributes(EntityClass.name);
-
-  // TODO this is a lot of looping, find out a better way
-  const attrLookup = Object.values(entityAttrsMeta).reduce<
-    Record<string, AttributeMetadata>
-  >((acc, attrMetadata) => {
-    acc[attrMetadata.alias] = attrMetadata;
-    return acc;
-  }, {});
+  const { tableAttributes } = Metadata.getEntity(EntityClass.name);
 
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = attrLookup[attrName];
+    const attrMeta = tableAttributes[attrName];
 
     if (attrMeta !== undefined) {
       const { name: entityKey, serializers } = attrMeta;
@@ -99,7 +87,7 @@ export const tableItemToBelongsToLink = (
   const belongsToLinkAttrs: Record<string, AttributeMetadata> = {
     ...{ [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute },
     ...{ [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute },
-    ...Metadata.getEntityTableAttributes(tableMeta.defaultAttributes)
+    ...tableMeta.defaultTableAttributes
   };
 
   Object.keys(tableItem).forEach(attrName => {

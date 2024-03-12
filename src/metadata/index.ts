@@ -135,7 +135,15 @@ type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
 
 export interface EntityMetadata {
   tableClassName: string; //
+  /**
+   * Attribute metadata, for looking up attribute metadata by entity key
+   */
   attributes: AttributeMetadataStorage;
+  /**
+   * Attribute metadata, for looking up attribute metadata by table key
+   */
+  tableAttributes: AttributeMetadataStorage;
+  // TODO evaluate if there is a better way to store.. can I store in a wway where I dont need to make relationship lookup items
   relationships: RelationshipMetadataStorage;
 }
 
@@ -148,6 +156,8 @@ export interface TableMetadata {
   sortKeyAttribute: AttributeMetadata;
   delimiter: string;
   defaultAttributes: Record<DefaultFields, AttributeMetadata>;
+  // TODO what if instead of duplicating the data I made a referene to make it easy to look up in the original object..
+  defaultTableAttributes: Record<string, AttributeMetadata>;
 }
 
 export interface JoinTableMetadata {
@@ -160,6 +170,7 @@ export type TableMetadataOptions = Omit<
   | "primaryKey"
   | "sortKey"
   | "defaultAttributes"
+  | "defaultTableAttributes"
   | "primaryKeyAttribute"
   | "sortKeyAttribute"
 > & {
@@ -237,25 +248,7 @@ class Metadata {
     const entityMetadata = this.getEntity(entityName);
     const { defaultAttributes } = this.getTable(entityMetadata.tableClassName);
 
-    return {
-      ...entityMetadata.attributes,
-      ...defaultAttributes
-    };
-  }
-
-  // TODO does this need to be public?
-  // TODO how to reduce looping? Perhaps store something internal? this is called alot
-  // TODO typedoc
-  // TODO rename, check this is needed or used...
-  public getEntityTableAttributes(
-    defaultAttributes: Record<DefaultDateFields, AttributeMetadata>
-  ): Record<string, AttributeMetadata> {
-    return Object.values(defaultAttributes).reduce<
-      Record<string, AttributeMetadata>
-    >((acc, attr) => {
-      acc[attr.alias] = attr;
-      return acc;
-    }, {});
+    return { ...entityMetadata.attributes, ...defaultAttributes };
   }
 
   /**
@@ -264,10 +257,12 @@ class Metadata {
    * @param options
    */
   public addTable(tableClassName: string, options: TableMetadataOptions): void {
+    const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
     this.tables[tableClassName] = {
       name: options.name,
       delimiter: options.delimiter,
-      defaultAttributes: this.buildDefaultAttributes(options),
+      defaultAttributes: defaultAttrMeta.entityDefaults,
+      defaultTableAttributes: defaultAttrMeta.tableDefaults,
       // Placeholders, these are set later
       primaryKeyAttribute: {
         name: "",
@@ -289,26 +284,32 @@ class Metadata {
    * @param options - {@link TableMetadataOptions}
    * @returns
    */
-  private buildDefaultAttributes(
-    options: TableMetadataOptions
-  ): Record<DefaultTableKeys, AttributeMetadata> {
+  private buildDefaultAttributesMetadata(options: TableMetadataOptions): {
+    entityDefaults: TableMetadata["defaultAttributes"];
+    tableDefaults: TableMetadata["defaultTableAttributes"];
+  } {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
     const customDefaults: StringObj = options.defaultFields ?? {};
 
-    return defaultAttrsMeta.reduce<Record<string, AttributeMetadata>>(
+    return defaultAttrsMeta.reduce<{
+      entityDefaults: Record<string, AttributeMetadata>;
+      tableDefaults: Record<string, AttributeMetadata>;
+    }>(
       (acc, [entityKey, tableKeyAlias]) => {
         const alias = customDefaults[entityKey] ?? tableKeyAlias;
         const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
-        acc[entityKey] = {
+        const meta = {
           name: entityKey,
           alias,
           nullable: false,
           serializers: isDateField ? dateSerializer : undefined
         };
+        acc.entityDefaults[entityKey] = meta;
+        acc.tableDefaults[alias] = meta;
         return acc;
       },
-      {}
+      { entityDefaults: {}, tableDefaults: {} }
     );
   }
 
@@ -322,6 +323,7 @@ class Metadata {
     this.entities[entityClass.name] = {
       tableClassName,
       attributes: {},
+      tableAttributes: {},
       relationships: {}
     };
   }
@@ -374,14 +376,17 @@ class Metadata {
 
     if (defaultAttrMeta === undefined) {
       const alias = options.alias ?? options.attributeName;
-      const attrMeta = { ...options, alias };
+      const attrMetaOptions = { ...options, alias };
+
+      const meta = this.buildAttributeMetadata(attrMetaOptions);
 
       // If this is not one of the default attributes, build it from options
-      entityMetadata.attributes[options.attributeName] =
-        this.buildAttributeMetadata(attrMeta);
+      entityMetadata.attributes[options.attributeName] = meta;
+      entityMetadata.tableAttributes[attrMetaOptions.alias] = meta;
     } else {
       // If this is a default attribute, use default attribute settings
       entityMetadata.attributes[defaultAttrMeta.name] = defaultAttrMeta;
+      entityMetadata.tableAttributes[defaultAttrMeta.alias] = defaultAttrMeta;
     }
   }
 

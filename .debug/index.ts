@@ -329,8 +329,6 @@ class AttributeTester extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
-    debugger;
-
     const bla3 = await Brewery.findById("1", {
       include: [{ association: "beers" }]
     });
