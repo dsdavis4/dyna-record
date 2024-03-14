@@ -10,7 +10,7 @@ export type Get = NonNullable<TransactItems[number]["Get"]>;
 const MAX_TRANSACTION_ITEMS = 100;
 
 class TransactGetBuilder {
-  private readonly transactionItems: TransactItems = [];
+  readonly #transactionItems: TransactItems = [];
 
   /**
    * Execute the transaction
@@ -19,7 +19,7 @@ class TransactGetBuilder {
     const dynamo = new DynamoClient();
 
     const transactionChunks = chunkArray(
-      this.transactionItems,
+      this.#transactionItems,
       MAX_TRANSACTION_ITEMS
     );
 
@@ -38,7 +38,7 @@ class TransactGetBuilder {
    * @param item
    */
   public addGet(item: Get): void {
-    this.transactionItems.push({ Get: item });
+    this.#transactionItems.push({ Get: item });
   }
 }
 

@@ -49,37 +49,35 @@ interface QueryCommandProps {
 }
 
 // TODO add jsdoc
-// TODO should I add explicit returns for all these functions?
-// TODO update to use #private modifer
 class QueryBuilder {
-  private attrCounter: number;
-  // TODO check that all are needed
-  private readonly tableMetadata: TableMetadata;
+  readonly #props: QueryCommandProps;
+  readonly #tableMetadata: TableMetadata;
   readonly #attributeMetadata: AttributeMetadataStorage;
+  #attrCounter: number;
 
-  constructor(private readonly props: QueryCommandProps) {
-    this.props = props;
-    this.attrCounter = 0;
+  constructor(props: QueryCommandProps) {
+    this.#props = props;
+    this.#attrCounter = 0;
 
     const entityMetadata = Metadata.getEntity(props.entityClassName);
-    this.tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
+    this.#tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
     this.#attributeMetadata = Metadata.getEntityAttributes(
       props.entityClassName
     );
   }
 
   public build(): QueryCommandInput {
-    const { indexName, filter } = this.props.options ?? {};
+    const { indexName, filter } = this.#props.options ?? {};
     const filterParams =
       filter !== undefined ? this.filterParams(filter) : undefined;
 
-    const keyFilter = this.andFilter(this.props.key);
+    const keyFilter = this.andFilter(this.#props.key);
 
     const hasIndex = indexName !== undefined;
     const hasFilter = filterParams !== undefined;
 
     return {
-      TableName: this.tableMetadata.name,
+      TableName: this.#tableMetadata.name,
       ...(hasIndex && { IndexName: indexName }),
       ...(hasFilter && { FilterExpression: filterParams.expression }),
       KeyConditionExpression: keyFilter.expression,
@@ -95,7 +93,7 @@ class QueryBuilder {
     keyParams: FilterExpression,
     filterParams?: FilterExpression
   ): QueryCommandInput["ExpressionAttributeValues"] {
-    const hasFilter = this.props.options?.filter !== undefined;
+    const hasFilter = this.#props.options?.filter !== undefined;
     const valueParams = hasFilter
       ? { ...keyParams.values, ...filterParams?.values }
       : keyParams.values;
@@ -107,7 +105,7 @@ class QueryBuilder {
   }
 
   private expressionAttributeNames(): QueryCommandInput["ExpressionAttributeNames"] {
-    const { filter } = this.props.options ?? {};
+    const { filter } = this.#props.options ?? {};
 
     const accumulator = (obj: StringObj, key: string): StringObj => {
       const tableKey = this.#attributeMetadata[key].alias;
@@ -116,7 +114,7 @@ class QueryBuilder {
     };
 
     let expressionAttributeNames = Object.keys(
-      this.props.key
+      this.#props.key
     ).reduce<StringObj>((acc, key) => accumulator(acc, key), {});
 
     if (filter !== undefined) {
@@ -184,17 +182,17 @@ class QueryBuilder {
     let values: Record<string, NativeScalarAttributeValue> = {};
     if (Array.isArray(value)) {
       const mappings = value.reduce<string[]>((acc, val) => {
-        const attr = `${tableKey}${++this.attrCounter}`;
+        const attr = `${tableKey}${++this.#attrCounter}`;
         values[attr] = val;
         return acc.concat(`:${attr}`);
       }, []);
       condition = `#${tableKey} IN (${mappings.join()})`;
     } else if (this.isBeginsWithFilter(value)) {
-      const attr = `${tableKey}${++this.attrCounter}`;
+      const attr = `${tableKey}${++this.#attrCounter}`;
       condition = `begins_with(#${tableKey}, :${attr})`;
       values = { [`${attr}`]: value.$beginsWith };
     } else {
-      const attr = `${tableKey}${++this.attrCounter}`;
+      const attr = `${tableKey}${++this.#attrCounter}`;
       condition = `#${tableKey} = :${attr}`;
       values = { [`${attr}`]: value };
     }

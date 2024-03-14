@@ -58,12 +58,14 @@ interface RelationshipTransactionsProps<T extends SingleTableDesign> {
  *   - Adds/removes BelongsToLinks
  */
 class RelationshipTransactions<T extends SingleTableDesign> {
+  readonly #props: RelationshipTransactionsProps<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #primaryKeyAlias: string;
   readonly #sortKeyAlias: string;
 
-  constructor(private readonly props: RelationshipTransactionsProps<T>) {
+  constructor(props: RelationshipTransactionsProps<T>) {
+    this.#props = props;
     this.#entityMetadata = Metadata.getEntity(props.Entity.name);
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
@@ -98,11 +100,11 @@ class RelationshipTransactions<T extends SingleTableDesign> {
 
           const callbackParams = [rel, entityData.id, relationshipId] as const;
 
-          if (doesEntityBelongToRelAsHasMany(this.props.Entity, rel)) {
+          if (doesEntityBelongToRelAsHasMany(this.#props.Entity, rel)) {
             await this.buildBelongsToHasMany(...callbackParams);
           }
 
-          if (doesEntityBelongToRelAsHasOne(this.props.Entity, rel)) {
+          if (doesEntityBelongToRelAsHasOne(this.#props.Entity, rel)) {
             await this.buildBelongsToHasOne(...callbackParams);
           }
         }
@@ -133,7 +135,7 @@ class RelationshipTransactions<T extends SingleTableDesign> {
       ConditionExpression: `attribute_exists(${this.#primaryKeyAlias})`
     };
 
-    this.props.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
+    this.#props.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
   /**
@@ -150,16 +152,16 @@ class RelationshipTransactions<T extends SingleTableDesign> {
   ): Promise<void> {
     const { name: tableName } = this.#tableMetadata;
 
-    if (this.props.belongsToHasOneCb !== undefined) {
-      await this.props.belongsToHasOneCb(rel, entityId);
+    if (this.#props.belongsToHasOneCb !== undefined) {
+      await this.#props.belongsToHasOneCb(rel, entityId);
     }
 
     if (relationshipId !== null) {
-      const link = BelongsToLink.build(this.props.Entity.name, entityId);
+      const link = BelongsToLink.build(this.#props.Entity.name, entityId);
 
       const keys = {
         [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [this.#sortKeyAlias]: this.props.Entity.name
+        [this.#sortKeyAlias]: this.#props.Entity.name
       };
 
       const putExpression: Put = {
@@ -168,9 +170,9 @@ class RelationshipTransactions<T extends SingleTableDesign> {
         ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 
-      this.props.transactionBuilder.addPut(
+      this.#props.transactionBuilder.addPut(
         putExpression,
-        `${rel.target.name} with id: ${relationshipId} already has an associated ${this.props.Entity.name}`
+        `${rel.target.name} with id: ${relationshipId} already has an associated ${this.#props.Entity.name}`
       );
     }
   }
@@ -188,16 +190,18 @@ class RelationshipTransactions<T extends SingleTableDesign> {
   ): Promise<void> {
     const { name: tableName } = this.#tableMetadata;
 
-    if (this.props.belongsToHasManyCb !== undefined) {
-      await this.props.belongsToHasManyCb(rel, entityId);
+    if (this.#props.belongsToHasManyCb !== undefined) {
+      await this.#props.belongsToHasManyCb(rel, entityId);
     }
 
     if (relationshipId !== null) {
-      const link = BelongsToLink.build(this.props.Entity.name, entityId);
+      const link = BelongsToLink.build(this.#props.Entity.name, entityId);
 
       const keys = {
         [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [this.#sortKeyAlias]: this.props.Entity.primaryKeyValue(link.foreignKey)
+        [this.#sortKeyAlias]: this.#props.Entity.primaryKeyValue(
+          link.foreignKey
+        )
       };
 
       const putExpression: Put = {
@@ -206,9 +210,9 @@ class RelationshipTransactions<T extends SingleTableDesign> {
         ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 
-      this.props.transactionBuilder.addPut(
+      this.#props.transactionBuilder.addPut(
         putExpression,
-        `${this.props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
+        `${this.#props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
       );
     }
   }

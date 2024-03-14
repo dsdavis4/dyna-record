@@ -14,8 +14,8 @@ export type Update = NonNullable<TransactItems[number]["Update"]>;
 export type Delete = NonNullable<TransactItems[number]["Delete"]>;
 
 class TransactionBuilder {
-  private readonly transactionItems: TransactItems = [];
-  private readonly errorMessages: Record<number, string> = {};
+  readonly #transactionItems: TransactItems = [];
+  readonly #errorMessages: Record<number, string> = {};
 
   /**
    * Execute the transaction
@@ -25,7 +25,7 @@ class TransactionBuilder {
 
     try {
       const response = await dynamo.transactWriteItems({
-        TransactItems: this.transactionItems
+        TransactItems: this.#transactionItems
       });
       console.log("Transaction successful:", response);
     } catch (error) {
@@ -46,7 +46,7 @@ class TransactionBuilder {
     conditionFailedMsg: string
   ): void {
     this.trackErrorMessage(conditionFailedMsg);
-    this.transactionItems.push({ ConditionCheck: item });
+    this.#transactionItems.push({ ConditionCheck: item });
   }
 
   /**
@@ -55,7 +55,7 @@ class TransactionBuilder {
    */
   public addPut(item: Put, conditionFailedMsg?: string): void {
     this.trackErrorMessage(conditionFailedMsg);
-    this.transactionItems.push({ Put: item });
+    this.#transactionItems.push({ Put: item });
   }
 
   /**
@@ -64,7 +64,7 @@ class TransactionBuilder {
    */
   public addUpdate(item: Update, conditionFailedMsg?: string): void {
     this.trackErrorMessage(conditionFailedMsg);
-    this.transactionItems.push({ Update: item });
+    this.#transactionItems.push({ Update: item });
   }
 
   /**
@@ -73,18 +73,18 @@ class TransactionBuilder {
    */
   public addDelete(item: Delete, conditionFailedMsg?: string): void {
     this.trackErrorMessage(conditionFailedMsg);
-    this.transactionItems.push({ Delete: item });
+    this.#transactionItems.push({ Delete: item });
   }
 
   /**
    * Track error messages to return if there is a ConditionalCheckFailed exception
    *
-   * IMPORTANT - Call this before adding the transaction to this.transactionItems
+   * IMPORTANT - Call this before adding the transaction to this.#transactionItems
    * @param errMsg The custom error message to return if there is a ConditionalCheckFailed exception
    */
   private trackErrorMessage(errMsg?: string): void {
     if (errMsg !== undefined) {
-      this.errorMessages[this.transactionItems.length] = errMsg;
+      this.#errorMessages[this.#transactionItems.length] = errMsg;
     }
   }
 
@@ -101,7 +101,7 @@ class TransactionBuilder {
       const conditionFailedErrs = reasons.reduce<ConditionalCheckFailedError[]>(
         (errors, reason, idx) => {
           if (reason.Code === "ConditionalCheckFailed") {
-            const failure = this.errorMessages[idx] ?? reason.Message;
+            const failure = this.#errorMessages[idx] ?? reason.Message;
             const msg = `${reason.Code}: ${failure}`;
             errors.push(new ConditionalCheckFailedError(msg));
           }
