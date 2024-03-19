@@ -250,6 +250,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         const foreignKeyTableAlias: string = attributes[rel.foreignKey].alias;
         const foreignKeyVal: string = item[foreignKeyTableAlias];
 
+        if (foreignKeyVal === undefined) return;
+
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
