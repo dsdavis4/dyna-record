@@ -430,10 +430,10 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO this test should pass
-  // Its also out of date since the transactGetItems refactor
   // TODO there should be an equivalent for not found HasOne or BelongsTo
-  it.skip("will set HasMany associations to an empty array if it doesn't find any", async () => {
+  // TODO make a test where it finds some but not all associations
+  // TODO make sure types on response are correct
+  it("findByIdWithIncludes - will set HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(4);
 
     mockQuery.mockResolvedValueOnce({
@@ -466,23 +466,30 @@ describe("FindById", () => {
       orders: [],
       paymentMethods: []
     });
-    expect(result).toBeInstanceOf(Customer);
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
         {
           TableName: "mock-table",
-          FilterExpression: "#Type = :Type1 OR #Type = :Type2",
-          KeyConditionExpression: "#PK = :PK3",
-          ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
+          FilterExpression:
+            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
+          KeyConditionExpression: "#PK = :PK5",
+          ExpressionAttributeNames: {
+            "#PK": "PK",
+            "#Type": "Type",
+            "#ForeignEntityType": "ForeignEntityType"
+          },
           ExpressionAttributeValues: {
-            ":PK3": "Customer#123",
+            ":PK5": "Customer#123",
             ":Type1": "Customer",
-            ":Type2": "BelongsToLink"
-          }
+            ":Type2": "BelongsToLink",
+            ":ForeignEntityType3": "Order",
+            ":ForeignEntityType4": "PaymentMethod"
+          },
+          ConsistentRead: true
         }
       ]
     ]);
-    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 

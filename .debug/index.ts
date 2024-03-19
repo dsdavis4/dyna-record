@@ -333,6 +333,10 @@ class AttributeTester extends DrewsBrewsTable {
       include: [{ association: "beers" }]
     });
 
+    const bla4 = await Brewery.findById("1");
+
+    debugger;
+
     // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
     //   include: [{ association: "breweries" }]
     // });

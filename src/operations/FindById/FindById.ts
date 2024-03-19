@@ -19,6 +19,7 @@ import {
   isKeyOfEntity,
   isPropertyKey,
   isString,
+  safeAssignEntity,
   tableItemToEntity
 } from "../../utils";
 import OperationBase from "../OperationBase";
@@ -29,10 +30,14 @@ import type {
   SortedQueryResults
 } from "./types";
 import { buildEntityRelationshipMetaObj } from "../utils";
+import {
+  isBelongsToRelationship,
+  isHasAndBelongsToManyRelationship,
+  isHasManyRelationship,
+  isHasOneRelationship
+} from "../../metadata/utils";
 
-// TODO if the item is not found it should return null
-// TODO if relationships are not found it should return an array for has many and null for has one or belongs to
-
+// TODO improve this
 /**
  * FindById operations
  */
@@ -287,8 +292,13 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     transactionResults: TransactGetItemResponses,
     relationsLookup: RelationshipLookup
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
-    const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
+    const parentEntity = tableItemToEntity<T>(
+      this.EntityClass,
+      entityTableItem
+    );
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+
+    this.setIncludedRelationshipDefaults(parentEntity, relationsLookup);
 
     transactionResults.forEach(res => {
       const tableItem = res.Item;
@@ -316,6 +326,31 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
+  }
+
+  // TODO start here... add remianing unit tests. Make sure to add some where query find some relationships and not others
+  //      Also make sure to add type tests for relationships empty states
+  // TODO typedoc
+  private setIncludedRelationshipDefaults(
+    parentEntity: T,
+    relationsLookup: RelationshipLookup
+  ): void {
+    Object.values(relationsLookup).forEach(rel => {
+      if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
+
+      if (isHasManyRelationship(rel)) {
+        safeAssignEntity(parentEntity, rel.propertyName, []);
+      } else if (isBelongsToRelationship(rel)) {
+        // TODO unit test
+        safeAssignEntity(parentEntity, rel.propertyName, null);
+      } else if (isHasOneRelationship(rel)) {
+        // TODO unit test
+        safeAssignEntity(parentEntity, rel.propertyName, null);
+      } else if (isHasAndBelongsToManyRelationship(rel)) {
+        // TODO unit test
+        safeAssignEntity(parentEntity, rel.propertyName, []);
+      }
+    });
   }
 }
 
