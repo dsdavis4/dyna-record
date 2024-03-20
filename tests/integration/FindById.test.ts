@@ -133,6 +133,47 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
+  it("will serialize an entity with a DateNullableAttribute", async () => {
+    expect.assertions(4);
+
+    mockGet.mockResolvedValueOnce({
+      Item: {
+        PK: "Pet#123",
+        SK: "Pet",
+        Id: "123",
+        Name: "Fido",
+        Type: "Pet",
+        CreatedAt: "2023-03-15T04:26:31.148Z",
+        UpdatedAt: "2023-09-15T04:26:31.148Z",
+        AdoptedDate: "2023-09-15T04:26:31.148Z"
+      }
+    });
+
+    const result = await Pet.findById("123");
+
+    expect(result).toBeInstanceOf(Pet);
+    expect(result).toEqual({
+      type: "Pet",
+      pk: "Pet#123",
+      sk: "Pet",
+      id: "123",
+      name: "Fido",
+      createdAt: new Date("2023-03-15T04:26:31.148Z"),
+      updatedAt: new Date("2023-09-15T04:26:31.148Z"),
+      adoptedDate: new Date("2023-09-15T04:26:31.148Z")
+    });
+    expect(mockedGetCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          Key: { PK: "Pet#123", SK: "Pet" },
+          ConsistentRead: true
+        }
+      ]
+    ]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
+  });
+
   it("findByIdOnly - will return undefined if it doesn't find the record", async () => {
     expect.assertions(4);
 

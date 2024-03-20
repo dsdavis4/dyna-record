@@ -12,7 +12,8 @@ import {
   NullableForeignKeyAttribute,
   NullableAttribute,
   DateAttribute,
-  HasAndBelongsToMany
+  HasAndBelongsToMany,
+  DateNullableAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -154,6 +155,9 @@ class Pet extends MockTable {
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
   public readonly owner?: Person;
+
+  @DateNullableAttribute({ alias: "AdoptedDate" })
+  public readonly adoptedDate?: Date;
 }
 
 @Entity

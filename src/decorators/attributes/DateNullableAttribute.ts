@@ -4,8 +4,6 @@ import type { Optional } from "../../types";
 import type { AttributeOptions } from "../types";
 import { dateSerializer } from "./serializers";
 
-// TODO I am missing a unit test where a DateNullable attribute is serialized
-
 /**
  * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
  *
