@@ -1,9 +1,9 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import type { NullableForeignKey } from "../../types";
-import type { AttributeAliasOnlyProp } from "../types";
+import type { AttributeOptions } from "../types";
 
-// TODO typedoc... make sure to link AttributeProps like I did for ForeignKeyAttribute Attribute
+// TODO typedoc... make sure to link AttributeOptions like I did for ForeignKeyAttribute Attribute
 
 // TODO do I need to do something to handle anything in here so that if a NullableForeignKey is "included" on that tht type system knows that the return value might not be defined...
 // EX:
@@ -12,7 +12,7 @@ import type { AttributeAliasOnlyProp } from "../types";
 // const res = Scale.findById("123", {include: [{association: "process"}]})
 
 // TODO dry up with ForeignKeyAttribute
-function NullableForeignKeyAttribute<T>(props?: AttributeAliasOnlyProp) {
+function NullableForeignKeyAttribute<T>(props?: AttributeOptions) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, NullableForeignKey>

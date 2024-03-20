@@ -76,5 +76,14 @@ describe("NullableAttribute", () => {
         public key1?: string;
       }
     });
+
+    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-error: Nullable prop is not allowed
+        @NullableAttribute({ alias: "Key1", nullable: true })
+        public key1?: string;
+      }
+    });
   });
 });

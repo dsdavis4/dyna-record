@@ -1,7 +1,8 @@
-import { SortKeyAttribute } from "../../../src/decorators";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { Entity, SortKeyAttribute } from "../../../src/decorators";
 import { type SortKey } from "../../../src/types";
 import Metadata from "../../../src/metadata";
-import { Customer, Student } from "../../integration/mockModels";
+import { Customer, MockTable, Student } from "../../integration/mockModels";
 
 describe("SortKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -26,14 +27,12 @@ describe("SortKeyAttribute", () => {
 
   describe("types", () => {
     it("requires the attribute to be of type SortKey", () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class MockClass {
         // @ts-expect-no-error: attribute must be of type SortKey
         @SortKeyAttribute({ alias: "SortKeyAlias" })
         public SortKey: SortKey;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class MockClass2 {
         // @ts-expect-error: attribute must be of type SortKey
         @SortKeyAttribute({ alias: "SortKeyAlias" })
@@ -42,11 +41,19 @@ describe("SortKeyAttribute", () => {
     });
 
     it("'alias' is optional", () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class MockClass {
         // @ts-expect-no-error: Alias prop is optional
         @SortKeyAttribute()
         public SortKey: SortKey;
+      }
+    });
+
+    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+      @Entity
+      class MockClass extends MockTable {
+        // @ts-expect-error: Nullable prop is not allowed
+        @SortKeyAttribute({ alias: "Key1", nullable: false })
+        public key1: SortKey;
       }
     });
   });

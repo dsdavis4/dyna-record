@@ -1,6 +1,7 @@
-import { PrimaryKeyAttribute } from "../../../src/decorators";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import { Entity, PrimaryKeyAttribute } from "../../../src/decorators";
 import { type PrimaryKey } from "../../../src/types";
-import { Customer, Student } from "../../integration/mockModels";
+import { Customer, MockTable, Student } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 
 describe("PrimaryKeyAttribute", () => {
@@ -26,15 +27,15 @@ describe("PrimaryKeyAttribute", () => {
 
   describe("types", () => {
     it("requires the attribute to be of type PrimaryKey", () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      class MockClass {
+      @Entity
+      class MockClass extends MockTable {
         // @ts-expect-no-error: attribute must be of type PrimaryKey
         @PrimaryKeyAttribute({ alias: "PrimaryKeyAlias" })
         public primaryKey: PrimaryKey;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      class MockClass2 {
+      @Entity
+      class MockClass2 extends MockTable {
         // @ts-expect-error: attribute must be of type PrimaryKey
         @PrimaryKeyAttribute({ alias: "PrimaryKeyAlias" })
         public primaryKey: string;
@@ -42,11 +43,20 @@ describe("PrimaryKeyAttribute", () => {
     });
 
     it("'alias' is optional", () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      class MockClass {
+      @Entity
+      class MockClass extends MockTable {
         // @ts-expect-no-error: Alias prop is optional
         @PrimaryKeyAttribute()
         public primaryKey: PrimaryKey;
+      }
+    });
+
+    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+      @Entity
+      class MockClass extends MockTable {
+        // @ts-expect-error: Nullable prop is not allowed
+        @PrimaryKeyAttribute({ alias: "Key1", nullable: false })
+        public key1: PrimaryKey;
       }
     });
   });

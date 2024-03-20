@@ -1,13 +1,11 @@
 import type SingleTableDesign from "../../SingleTableDesign";
 import Metadata from "../../metadata";
 import { type SortKey } from "../../types";
-import type { AttributeAliasOnlyProp } from "../types";
+import type { AttributeOptions } from "../types";
 
-// TODO typedoc... make sure to link AttributeProps like I did for ForeignKeyAttribute Attribute
+// TODO typedoc... make sure to link AttributeOptions like I did for ForeignKeyAttribute Attribute
 
-function SortKeyAttribute<T, K extends SortKey>(
-  props?: AttributeAliasOnlyProp
-) {
+function SortKeyAttribute<T, K extends SortKey>(props?: AttributeOptions) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>

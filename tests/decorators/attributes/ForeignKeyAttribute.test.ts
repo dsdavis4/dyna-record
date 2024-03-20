@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Entity, ForeignKeyAttribute } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
 import { MockTable, Order, Assignment } from "../../integration/mockModels";
@@ -27,7 +28,6 @@ describe("ForeignKeyAttribute", () => {
   describe("types", () => {
     it("does not have an error if the decorator is applied to an attribute of type ForeignKey", () => {
       @Entity
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class ModelOne extends MockTable {
         // @ts-expect-no-error: Attribute can be applied to an attribute of type ForeignKey
         @ForeignKeyAttribute({ alias: "Key1" })
@@ -37,7 +37,6 @@ describe("ForeignKeyAttribute", () => {
 
     it("has an error if the decorator is applied to an attribute of type NullableForeignKey", () => {
       @Entity
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
         @ForeignKeyAttribute({ alias: "Key1" })
@@ -47,7 +46,6 @@ describe("ForeignKeyAttribute", () => {
 
     it("has an error if the decorator is applied to an attribute of type string", () => {
       @Entity
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type string
         @ForeignKeyAttribute({ alias: "Key1" })
@@ -57,7 +55,6 @@ describe("ForeignKeyAttribute", () => {
 
     it("has an error if the decorator is applied to an attribute of type ForeignKey but its optional", () => {
       @Entity
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute cannot be applied to an optional property
         @ForeignKeyAttribute({ alias: "Key1" })
@@ -67,11 +64,19 @@ describe("ForeignKeyAttribute", () => {
 
     it("'alias' is optional", () => {
       @Entity
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       class ModelOne extends MockTable {
         // @ts-expect-no-error: 'alias' is optional
         @ForeignKeyAttribute()
         public key1: ForeignKey;
+      }
+    });
+
+    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-error: Nullable prop is not allowed
+        @ForeignKeyAttribute({ alias: "Key1", nullable: false })
+        public key1: string;
       }
     });
   });

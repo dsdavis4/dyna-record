@@ -16,7 +16,7 @@ export type ForeignEntityAttribute<T extends SingleTableDesign> = {
 /**
  * Represents the properties of an attribute that are configurable via the {@link Attribute} decorator.
  */
-export interface AttributeProps {
+export interface AttributeOptions {
   /**
    * An optional alias for the attribute as represented in the database table.
    *
@@ -28,19 +28,4 @@ export interface AttributeProps {
    * scenarios where column names in the database differ from attribute names in the code.
    */
   alias?: string;
-
-  /**
-   * Indicates whether the attribute is allowed to be `null`.
-   *
-   * A value of `true` means the attribute is nullable and can accept `null` values.
-   * A value of `false` or omission of this property implies the attribute must have a non-null value.
-   * This property is essential for defining the attribute's strictness regarding data integrity
-   * and can help in schema validations.
-   */
-  nullable?: boolean;
 }
-
-/**
- * Attribute props used when 'alias' is the only configurable option
- */
-export interface AttributeAliasOnlyProp extends Pick<AttributeProps, "alias"> {}
