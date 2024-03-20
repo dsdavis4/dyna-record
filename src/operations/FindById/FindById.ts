@@ -12,13 +12,15 @@ import type {
   BelongsToLinkDynamoItem,
   RelationshipMetaObj,
   RelationshipLookup,
-  EntityClass
+  EntityClass,
+  Optional
 } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
   isKeyOfEntity,
   isPropertyKey,
   isString,
+  safeAssignEntity,
   tableItemToEntity
 } from "../../utils";
 import OperationBase from "../OperationBase";
@@ -29,10 +31,12 @@ import type {
   SortedQueryResults
 } from "./types";
 import { buildEntityRelationshipMetaObj } from "../utils";
+import {
+  isHasAndBelongsToManyRelationship,
+  isHasManyRelationship
+} from "../../metadata/utils";
 
-// TODO if the item is not found it should return null
-// TODO if relationships are not found it should return an array for has many and null for has one or belongs to
-
+// TODO improve this
 /**
  * FindById operations
  */
@@ -55,7 +59,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   public async run(
     id: string,
     options?: FindByIdOptions<T>
-  ): Promise<T | FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
+  ): Promise<Optional<T | FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
     if (options?.include === undefined) {
       return await this.findByIdOnly(id);
     } else {
@@ -66,9 +70,9 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   /**
    * Find an Entity by id without associations
    * @param {string} id - Entity Id
-   * @returns An entity object or null
+   * @returns An entity object or undefined
    */
-  private async findByIdOnly(id: string): Promise<T | null> {
+  private async findByIdOnly(id: string): Promise<Optional<T>> {
     const { name: tableName } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
@@ -81,8 +85,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
       ConsistentRead: true
     });
 
-    if (res === null) {
-      return null;
+    if (res === undefined) {
+      return undefined;
     } else {
       return tableItemToEntity<T>(this.EntityClass, res);
     }
@@ -98,7 +102,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: IncludedAssociations<T>
-  ): Promise<FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
+  ): Promise<Optional<FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
     const includedRels = this.getIncludedRelationships(includedAssociations);
     const params = this.buildFindByIdIncludesQuery(id, includedRels);
 
@@ -109,7 +113,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     if (queryResults.length === 0) {
-      return null;
+      return undefined;
     }
 
     const sortedQueryResults = this.filterQueryResults(queryResults);
@@ -245,6 +249,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
         const foreignKeyTableAlias: string = attributes[rel.foreignKey].alias;
         const foreignKeyVal: string = item[foreignKeyTableAlias];
 
+        if (foreignKeyVal === undefined) return;
+
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
@@ -287,8 +293,13 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     transactionResults: TransactGetItemResponses,
     relationsLookup: RelationshipLookup
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
-    const parentEntity = tableItemToEntity(this.EntityClass, entityTableItem);
+    const parentEntity = tableItemToEntity<T>(
+      this.EntityClass,
+      entityTableItem
+    );
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+
+    this.setIncludedRelationshipDefaults(parentEntity, relationsLookup);
 
     transactionResults.forEach(res => {
       const tableItem = res.Item;
@@ -316,6 +327,30 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
+  }
+
+  /**
+   * Initializes default values for included relationships on a parent entity. It assigns
+   * an empty array to each relationship property for HasMany and HasAndBelongsToMany specified in `relationsLookup` if the property exists on `parentEntity`.
+   *
+   * @param parentEntity - The parent entity to initialize relationship properties on.
+   * @param relationsLookup - A mapping of relationship identifiers to their descriptions, including the relationship
+   * type and the property name on the parent entity.
+   */
+  private setIncludedRelationshipDefaults(
+    parentEntity: T,
+    relationsLookup: RelationshipLookup
+  ): void {
+    Object.values(relationsLookup).forEach(rel => {
+      if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
+
+      if (
+        isHasManyRelationship(rel) ||
+        isHasAndBelongsToManyRelationship(rel)
+      ) {
+        safeAssignEntity(parentEntity, rel.propertyName, []);
+      }
+    });
   }
 }
 

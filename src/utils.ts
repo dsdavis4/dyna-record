@@ -184,3 +184,60 @@ export const isPropertyKey = (value: any): value is PropertyKey => {
 export const isString = (value: any): value is string => {
   return typeof value === "string";
 };
+
+/**
+ * Safely assigns a value to a property of an object that extends the `SingleTableDesign`.
+ * This utility function is designed to work with objects that follow a specific structure,
+ * ensuring the assignment is type-safe by leveraging TypeScript's type inference and generic
+ * constraints. It's particularly useful for dynamically assigning properties to objects within
+ * the single table design pattern, where the property names might be known but the types could vary.
+ *
+ * The function enforces that the object parameter extends `SingleTableDesign`, thereby ensuring
+ * compatibility with objects designed for use in single table database architectures or similar
+ * patterns. This makes `safeAssignEntity` highly specialized for use cases involving such designs.
+ *
+ * @template TObject - The object type to which the property belongs, constrained to extend `SingleTableDesign`.
+ * @template TKey - The type of the keys of `TObject`, ensuring only property names defined in `SingleTableDesign` or its extensions are acceptable.
+ * @template TValue - The type of the value to be assigned. This method does not constrain `TValue`, allowing for flexible assignments while caution should be exercised to ensure runtime type safety.
+ *
+ * @param {TObject} object - The target object to which the property will be assigned. Must extend `SingleTableDesign`.
+ * @param {TKey} key - The property name under which the value should be assigned. Must be a key of `TObject`.
+ * @param {TValue} value - The value to assign to the property on the object. While the function does not enforce a specific type for `TValue`, the assignment itself is type-checked against `TObject`'s property types.
+ *
+ * @returns {void} - This function does not return a value; it performs the assignment operation directly on the passed object.
+ *
+ * @example
+ * // Assuming SingleTableDesign and a compatible object
+ * interface SingleTableDesign {
+ *   id: string;
+ *   attribute?: any;
+ *   // Other properties specific to the single table design
+ * }
+ *
+ * interface MyEntity extends SingleTableDesign {
+ *   name?: string;
+ *   age?: number;
+ * }
+ *
+ * // Create an object of type MyEntity
+ * let entity: MyEntity = { id: "123" };
+ *
+ * // Safely assign a string to the `name` property
+ * safeAssignEntity(entity, "name", "Jane Doe");
+ *
+ * // Safely assign a number to the `age` property
+ * safeAssignEntity(entity, "age", 32);
+ *
+ * // The function enforces type checks aligned with `SingleTableDesign` and its extensions
+ */
+export const safeAssignEntity = <
+  TObject extends SingleTableDesign,
+  TKey extends keyof TObject,
+  TValue
+>(
+  object: TObject,
+  key: TKey,
+  value: TValue
+): void => {
+  object[key] = value as TObject[TKey];
+};

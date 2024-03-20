@@ -126,7 +126,7 @@ class ContactInformation extends MockTable {
   public customerId?: NullableForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
-  public customer: Customer;
+  public customer?: Customer;
 }
 
 @Entity
@@ -165,7 +165,7 @@ class Home extends MockTable {
   public personId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "personId" })
-  public person?: Person;
+  public person: Person;
 
   @HasOne(() => Address, { foreignKey: "homeId" })
   public address: Address;
@@ -195,7 +195,7 @@ class PhoneBook extends MockTable {
   public edition: string;
 
   @HasMany(() => Address, { foreignKey: "phoneBookId" })
-  public address: Address[];
+  public addresses: Address[];
 }
 
 @Entity
@@ -284,7 +284,7 @@ class Course extends OtherTable {
   public teacherId?: NullableForeignKey;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
-  public teacher?: Teacher;
+  public teacher: Teacher;
 
   @HasMany(() => Assignment, { foreignKey: "courseId" })
   public assignments: Assignment[];

@@ -51,10 +51,10 @@ const dynamo = DynamoDBDocumentClient.from(
 class DynamoClient {
   public async getItem(
     params: GetCommandInput
-  ): Promise<NonNullable<GetCommandOutput["Item"]> | null> {
+  ): Promise<GetCommandOutput["Item"]> {
     console.log("findById", { params });
     const response = await dynamo.send(new GetCommand(params));
-    return response.Item ?? null;
+    return response.Item;
   }
 
   public async query(params: QueryCommandInput): Promise<QueryItems> {

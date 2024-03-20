@@ -36,7 +36,7 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
 function Attribute<T, K extends NativeScalarAttributeValue>(
-  props?: AttributeProps
+  props?: AttributeProps // TODO should not accept optional and add a test for it
 ) {
   return function (
     _value: undefined,

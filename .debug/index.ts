@@ -325,13 +325,24 @@ class AttributeTester extends DrewsBrewsTable {
 
 // TODO find all instances where I throw a plain "Error" and make a custom error
 
+// TODO determine if I want to use the term nullable throughout when its really optional
+
 (async () => {
   try {
     const metadata = Metadata;
 
     const bla3 = await Brewery.findById("1", {
-      include: [{ association: "beers" }]
+      include: [{ association: "beers" }, { association: "users" }]
     });
+
+    if (bla3) {
+      const a = bla3.users;
+      return bla3.beers;
+    }
+
+    const bla4 = await Brewery.findById("1");
+
+    debugger;
 
     // const user = await User.findById("810ff665-5c8a-4a42-9fc2-b443a6194380", {
     //   include: [{ association: "breweries" }]

@@ -15,7 +15,7 @@ import {
   type UpdateOptions,
   Delete
 } from "./operations";
-import type { EntityClass } from "./types";
+import type { EntityClass, Optional } from "./types";
 
 // TODO should this be renamed? Its weird to extend something called Single table design..
 // TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
@@ -60,7 +60,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<T | FindByIdIncludesRes<T, Opts> | null> {
+  ): Promise<Optional<T | FindByIdIncludesRes<T, Opts>>> {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
