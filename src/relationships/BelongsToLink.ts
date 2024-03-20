@@ -11,12 +11,12 @@ interface BelongsToLinkProps extends NoOrm {
 }
 
 class BelongsToLink implements BelongsToLinkProps {
-  public id: string;
-  public type: string;
-  public foreignEntityType: string;
-  public foreignKey: string; // TODO should this be of type ForeignKey?
-  public createdAt: Date;
-  public updatedAt: Date;
+  public readonly id: string;
+  public readonly type: string;
+  public readonly foreignEntityType: string;
+  public readonly foreignKey: string; // TODO should this be of type ForeignKey?
+  public readonly createdAt: Date;
+  public readonly updatedAt: Date;
 
   constructor(item?: BelongsToLink) {
     if (item !== undefined) {

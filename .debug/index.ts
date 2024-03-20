@@ -48,11 +48,11 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
 abstract class DrewsBrewsTable extends NoOrm {
   // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })
-  public pk: PrimaryKey;
+  public readonly pk: PrimaryKey;
 
   // TODO add a test that this can be whatever value the user wants: Ex: public mySortKey: mySortKey
   @SortKeyAttribute({ alias: "SK" })
-  public sk: SortKey;
+  public readonly sk: SortKey;
 
   /**
    * Query the GSI 'ByRoomIdAndConnectionId'
@@ -76,65 +76,65 @@ abstract class DrewsBrewsTable extends NoOrm {
 @Entity
 class Scale extends DrewsBrewsTable {
   @ForeignKeyAttribute({ alias: "BreweryId" })
-  public breweryId: ForeignKey;
+  public readonly breweryId: ForeignKey;
 
   @ForeignKeyAttribute({ alias: "RoomId" })
-  public roomId: ForeignKey;
+  public readonly roomId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
-  public brewery: Brewery;
+  public readonly brewery: Brewery;
 
   @BelongsTo(() => Room, { foreignKey: "roomId" })
-  public room: Room;
+  public readonly room: Room;
 
   @HasOne(() => Process, { foreignKey: "scaleId" })
-  public process?: Process;
+  public readonly process?: Process;
 }
 
 @Entity
 class Beer extends DrewsBrewsTable {
   @ForeignKeyAttribute({ alias: "BreweryId" })
-  public breweryId: ForeignKey;
+  public readonly breweryId: ForeignKey;
 
   @Attribute({ alias: "Style" })
-  public style: string;
+  public readonly style: string;
 
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @Attribute({ alias: "ABV" })
-  public abv: number; // TODO should serialize to number
+  public readonly abv: number; // TODO should serialize to number
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
-  public brewery: Brewery;
+  public readonly brewery: Brewery;
 
   // TODO should this be inveresed to that it belongsTo keg and keg HasOne Beer
   @HasOne(() => Keg, { foreignKey: "beerId" })
-  public keg?: Keg;
+  public readonly keg?: Keg;
 }
 
 @Entity
 class Brewery extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @HasMany(() => Scale, { foreignKey: "breweryId" })
-  public scales: Scale[];
+  public readonly scales: Scale[];
 
   @HasMany(() => Beer, { foreignKey: "breweryId" })
-  public beers: Beer[];
+  public readonly beers: Beer[];
 
   @HasMany(() => Room, { foreignKey: "breweryId" })
-  public rooms: Room[];
+  public readonly rooms: Room[];
 
   @HasMany(() => Keg, { foreignKey: "breweryId" })
-  public kegs: Keg[];
+  public readonly kegs: Keg[];
 
   @HasAndBelongsToMany(() => User, {
     targetKey: "breweries",
     through: () => ({ joinTable: BreweryUser, foreignKey: "breweryId" })
   })
-  public users: User[];
+  public readonly users: User[];
 
   public testing() {
     return "hi";
@@ -144,49 +144,49 @@ class Brewery extends DrewsBrewsTable {
 @Entity
 class Room extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @ForeignKeyAttribute({ alias: "BreweryId" })
-  public breweryId: ForeignKey;
+  public readonly breweryId: ForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
-  public brewery: Brewery;
+  public readonly brewery: Brewery;
 
   @HasMany(() => Scale, { foreignKey: "roomId" })
-  public scales: Scale[];
+  public readonly scales: Scale[];
 
   @HasMany(() => Keg, { foreignKey: "roomId" })
-  public kegs: Keg[];
+  public readonly kegs: Keg[];
 }
 
 @Entity
 class Process extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @Attribute({ alias: "CurrentState" })
-  public currentState: string;
+  public readonly currentState: string;
 
   @Attribute({ alias: "CurrentStateStatus" })
-  public currentStateStatus: string;
+  public readonly currentStateStatus: string;
 
   @NullableAttribute({ alias: "CurrentUserInput" })
-  public currentUserInput?: string;
+  public readonly currentUserInput?: string;
 
   @ForeignKeyAttribute({ alias: "ScaleId" })
-  public scaleId: ForeignKey;
+  public readonly scaleId: ForeignKey;
 
   @BelongsTo(() => Scale, { foreignKey: "scaleId" })
-  public scale: Scale;
+  public readonly scale: Scale;
 }
 
 @Entity
 class WsToken extends DrewsBrewsTable {
   @Attribute({ alias: "ConnectionId" })
-  public connectionId: string;
+  public readonly connectionId: string;
 
   @ForeignKeyAttribute({ alias: "RoomId" })
-  public roomId: ForeignKey;
+  public readonly roomId: ForeignKey;
 
   /**
    * Queries index 'ByRoomIdAndConnectionId' and returns all items for a roomId
@@ -205,75 +205,75 @@ class WsToken extends DrewsBrewsTable {
 @Entity
 class Keg extends DrewsBrewsTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @Attribute({ alias: "Status" })
-  public status: string;
+  public readonly status: string;
 
   @ForeignKeyAttribute({ alias: "BreweryId" })
-  public breweryId: ForeignKey;
+  public readonly breweryId: ForeignKey;
 
   @ForeignKeyAttribute({ alias: "RoomId" })
-  public roomId: ForeignKey;
+  public readonly roomId: ForeignKey;
 
   @NullableForeignKeyAttribute({ alias: "BeerId" })
-  public beerId?: NullableForeignKey;
+  public readonly beerId?: NullableForeignKey;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
-  public brewery: Brewery;
+  public readonly brewery: Brewery;
 
   @BelongsTo(() => Room, { foreignKey: "roomId" })
-  public room: Room;
+  public readonly room: Room;
 
   @BelongsTo(() => Beer, { foreignKey: "beerId" })
-  public beer: Beer;
+  public readonly beer: Beer;
 }
 
 @Entity
 class User extends DrewsBrewsTable {
   @Attribute({ alias: "FirstName" })
-  public firstName: string;
+  public readonly firstName: string;
 
   @Attribute({ alias: "LastName" })
-  public lastName: string;
+  public readonly lastName: string;
 
   @Attribute({ alias: "Email" })
-  public email: string;
+  public readonly email: string;
 
   @Attribute({ alias: "CognitoId" })
-  public cognitoId: string;
+  public readonly cognitoId: string;
 
   @HasAndBelongsToMany(() => Brewery, {
     targetKey: "users",
     through: () => ({ joinTable: BreweryUser, foreignKey: "userId" })
   })
-  public breweries: Brewery[];
+  public readonly breweries: Brewery[];
 }
 
 class BreweryUser extends JoinTable<Brewery, User> {
-  public breweryId: ForeignKey;
-  public userId: ForeignKey;
+  public readonly breweryId: ForeignKey;
+  public readonly userId: ForeignKey;
 }
 
 @Entity
 class AttributeTester extends DrewsBrewsTable {
   @Attribute({ alias: "StringAttr" })
-  public stringAttr: string;
+  public readonly stringAttr: string;
 
   @Attribute({ alias: "IntAttr" })
-  public intAttr: number;
+  public readonly intAttr: number;
 
   @Attribute({ alias: "FloatAttr" })
-  public floatAttr: number;
+  public readonly floatAttr: number;
 
   @Attribute({ alias: "BooleanAttr" })
-  public booleanAttr: boolean;
+  public readonly booleanAttr: boolean;
 
   @DateAttribute({ alias: "DateAttr" })
-  public dateAttr: Date;
+  public readonly dateAttr: Date;
 
   @DateNullableAttribute({ alias: "DateAttr2" })
-  public dateAttr2?: Date;
+  public readonly dateAttr2?: Date;
 }
 
 // TODO should I make a types file for types where there a ton in each file?

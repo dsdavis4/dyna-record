@@ -20,7 +20,7 @@ import {
   isKeyOfEntity,
   isPropertyKey,
   isString,
-  safeAssignEntity,
+  safeAssign,
   tableItemToEntity
 } from "../../utils";
 import OperationBase from "../OperationBase";
@@ -346,7 +346,7 @@ class FindById<T extends NoOrm> extends OperationBase<T> {
         isHasManyRelationship(rel) ||
         isHasAndBelongsToManyRelationship(rel)
       ) {
-        safeAssignEntity(parentEntity, rel.propertyName, []);
+        safeAssign(parentEntity, rel.propertyName, []);
       }
     });
   }

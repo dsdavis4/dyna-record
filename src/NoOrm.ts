@@ -24,20 +24,18 @@ interface NoOrmBase {
   updatedAt: Date;
 }
 
-// TODO should these fields be readonly?
-// TODO add typing for these aliases...
 abstract class NoOrm implements NoOrmBase {
   @Attribute({ alias: tableDefaultFields.id.alias })
-  public id: string;
+  public readonly id: string;
 
   @Attribute({ alias: tableDefaultFields.type.alias })
-  public type: string;
+  public readonly type: string;
 
   @DateAttribute({ alias: tableDefaultFields.createdAt.alias })
-  public createdAt: Date;
+  public readonly createdAt: Date;
 
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
-  public updatedAt: Date;
+  public readonly updatedAt: Date;
 
   /**
    * Find an entity by Id and optionally include associations

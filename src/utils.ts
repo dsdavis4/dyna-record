@@ -64,7 +64,7 @@ export const tableItemToEntity = <T extends NoOrm>(
             ? rawVal
             : serializers?.toEntityAttribute(rawVal);
 
-        entity[entityKey] = val;
+        safeAssign(entity, entityKey, val);
       }
     }
   });
@@ -101,7 +101,7 @@ export const tableItemToBelongsToLink = (
           ? rawVal
           : serializers?.toEntityAttribute(rawVal);
 
-      link[entityKey as keyof BelongsToLink] = val;
+      safeAssign(link, entityKey as keyof BelongsToLink, val);
     }
   });
 
@@ -186,43 +186,24 @@ export const isString = (value: any): value is string => {
 };
 
 /**
- * Safely assigns a value to a property of an object that extends the `NoOrm`.
+ * Safely assigns a value to a property of an object.
  * It's useful for dynamically assigning properties to objects where the property names might be known but the types could vary.
  *
- * @template TObject - The object type to which the property belongs, constrained to extend `NoOrm`.
- * @template TKey - The type of the keys of `TObject`, ensuring only property names defined in `NoOrm` or its extensions are acceptable.
- * @template TValue - The type of the value to be assigned. This method does not constrain `TValue`, allowing for flexible assignments while caution should be exercised to ensure runtime type safety.
+ * @template TObject - The object type to which the property belongs.
+ * @template TKey - The type of the keys of `TObject`
+ * @template TValue - The  value to be assigned.
  *
- * @param {TObject} object - The target object to which the property will be assigned. Must extend `NoOrm`.
+ * @param {TObject} object - The target object to which the property will be assigned.
  * @param {TKey} key - The property name under which the value should be assigned. Must be a key of `TObject`.
- * @param {TValue} value - The value to assign to the property on the object. While the function does not enforce a specific type for `TValue`, the assignment itself is type-checked against `TObject`'s property types.
+ * @param {TValue} value - The value to assign to the property on the object.
  *
  * @returns {void} - This function does not return a value; it performs the assignment operation directly on the passed object.
  *
  * @example
- * // Assuming NoOrm and a compatible object
- * interface NoOrm {
- *   id: string;
- *   attribute?: any;
- * }
- *
- * interface MyEntity extends NoOrm {
- *   name?: string;
- *   age?: number;
- * }
- *
- * // Create an object of type MyEntity
- * let entity: MyEntity = { id: "123" };
- *
- * // Safely assign a string to the `name` property
- * safeAssignEntity(entity, "name", "Jane Doe");
- *
- * // Safely assign a number to the `age` property
- * safeAssignEntity(entity, "age", 32);
- *
- * // The function enforces type checks aligned with `NoOrm` and its extensions
+ * let entity = { id: "123" };
+ * safeAssign(entity, "name", "Jane Doe");
  */
-export const safeAssignEntity = <
+export const safeAssign = <
   TObject extends NoOrm,
   TKey extends keyof TObject,
   TValue

@@ -36,78 +36,78 @@ import type {
 })
 abstract class MockTable extends NoOrm {
   @PrimaryKeyAttribute({ alias: "PK" })
-  public pk: PrimaryKey;
+  public readonly pk: PrimaryKey;
 
   @SortKeyAttribute({ alias: "SK" })
-  public sk: SortKey;
+  public readonly sk: SortKey;
 }
 
 @Entity
 class Order extends MockTable {
   @ForeignKeyAttribute({ alias: "CustomerId" })
-  public customerId: ForeignKey;
+  public readonly customerId: ForeignKey;
 
   @ForeignKeyAttribute({ alias: "PaymentMethodId" })
-  public paymentMethodId: ForeignKey;
+  public readonly paymentMethodId: ForeignKey;
 
   @DateAttribute({ alias: "OrderDate" })
-  public orderDate: Date;
+  public readonly orderDate: Date;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
-  public customer: Customer;
+  public readonly customer: Customer;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
-  public paymentMethod: PaymentMethod;
+  public readonly paymentMethod: PaymentMethod;
 }
 
 @Entity
 class PaymentMethodProvider extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @ForeignKeyAttribute({ alias: "PaymentMethodId" })
-  public paymentMethodId: ForeignKey;
+  public readonly paymentMethodId: ForeignKey;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
-  public paymentMethod: PaymentMethod;
+  public readonly paymentMethod: PaymentMethod;
 }
 
 @Entity
 class PaymentMethod extends MockTable {
   @Attribute({ alias: "LastFour" })
-  public lastFour: string;
+  public readonly lastFour: string;
 
   @ForeignKeyAttribute({ alias: "CustomerId" })
-  public customerId: ForeignKey;
+  public readonly customerId: ForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
-  public customer: Customer;
+  public readonly customer: Customer;
 
   @HasMany(() => Order, { foreignKey: "paymentMethodId" })
-  public orders: Order[];
+  public readonly orders: Order[];
 
   @HasOne(() => PaymentMethodProvider, {
     foreignKey: "paymentMethodId"
   })
-  public paymentMethodProvider: PaymentMethodProvider;
+  public readonly paymentMethodProvider: PaymentMethodProvider;
 }
 
 @Entity
 class Customer extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @Attribute({ alias: "Address" })
-  public address: string;
+  public readonly address: string;
 
   @HasMany(() => Order, { foreignKey: "customerId" })
-  public orders: Order[];
+  public readonly orders: Order[];
 
   @HasMany(() => PaymentMethod, { foreignKey: "customerId" })
-  public paymentMethods: PaymentMethod[];
+  public readonly paymentMethods: PaymentMethod[];
 
   @HasOne(() => ContactInformation, { foreignKey: "customerId" })
-  public contactInformation?: ContactInformation;
+  public readonly contactInformation?: ContactInformation;
 
   public mockCustomInstanceMethod(): string {
     return `${this.name}-${this.id}`;
@@ -117,233 +117,233 @@ class Customer extends MockTable {
 @Entity
 class ContactInformation extends MockTable {
   @Attribute({ alias: "Email" })
-  public email: string;
+  public readonly email: string;
 
   @NullableAttribute({ alias: "Phone" })
-  public phone?: string;
+  public readonly phone?: string;
 
   @NullableForeignKeyAttribute({ alias: "CustomerId" })
-  public customerId?: NullableForeignKey;
+  public readonly customerId?: NullableForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
-  public customer?: Customer;
+  public readonly customer?: Customer;
 }
 
 @Entity
 class Person extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @HasMany(() => Pet, { foreignKey: "ownerId" })
-  public pets: Pet[];
+  public readonly pets: Pet[];
 
   @HasOne(() => Home, { foreignKey: "personId" })
-  public home: Home;
+  public readonly home: Home;
 
   @HasMany(() => Book, { foreignKey: "ownerId" })
-  public books: Book[];
+  public readonly books: Book[];
 }
 
 @Entity
 class Pet extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @NullableForeignKeyAttribute({ alias: "OwnerId" })
-  public ownerId?: NullableForeignKey;
+  public readonly ownerId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
-  public owner?: Person;
+  public readonly owner?: Person;
 }
 
 @Entity
 class Home extends MockTable {
   @Attribute({ alias: "MLS#" })
-  public mlsNum: string;
+  public readonly mlsNum: string;
 
   @NullableForeignKeyAttribute({ alias: "PersonId" })
-  public personId?: NullableForeignKey;
+  public readonly personId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "personId" })
-  public person: Person;
+  public readonly person: Person;
 
   @HasOne(() => Address, { foreignKey: "homeId" })
-  public address: Address;
+  public readonly address: Address;
 }
 
 @Entity
 class Address extends MockTable {
   @Attribute({ alias: "State" })
-  public state: string;
+  public readonly state: string;
 
   @ForeignKeyAttribute({ alias: "HomeId" })
-  public homeId: ForeignKey;
+  public readonly homeId: ForeignKey;
 
   @BelongsTo(() => Home, { foreignKey: "homeId" })
-  public home: Home;
+  public readonly home: Home;
 
   @ForeignKeyAttribute({ alias: "PhoneBookId" })
-  public phoneBookId: ForeignKey;
+  public readonly phoneBookId: ForeignKey;
 
   @BelongsTo(() => PhoneBook, { foreignKey: "phoneBookId" })
-  public phoneBook: PhoneBook;
+  public readonly phoneBook: PhoneBook;
 }
 
 @Entity
 class PhoneBook extends MockTable {
   @Attribute({ alias: "Edition" })
-  public edition: string;
+  public readonly edition: string;
 
   @HasMany(() => Address, { foreignKey: "phoneBookId" })
-  public addresses: Address[];
+  public readonly addresses: Address[];
 }
 
 @Entity
 class Book extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @Attribute({ alias: "NumPages" })
-  public numPages: number;
+  public readonly numPages: number;
 
   @NullableForeignKeyAttribute({ alias: "PersonId" })
-  public ownerId?: NullableForeignKey;
+  public readonly ownerId?: NullableForeignKey;
 
   @HasAndBelongsToMany(() => Author, {
     targetKey: "books",
     through: () => ({ joinTable: AuthorBook, foreignKey: "bookId" })
   })
-  public authors: Author[];
+  public readonly authors: Author[];
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
-  public owner: Person;
+  public readonly owner: Person;
 }
 
 @Entity
 class Author extends MockTable {
   @Attribute({ alias: "Name" })
-  public name: string;
+  public readonly name: string;
 
   @HasAndBelongsToMany(() => Book, {
     targetKey: "authors",
     through: () => ({ joinTable: AuthorBook, foreignKey: "authorId" })
   })
-  public books: Book[];
+  public readonly books: Book[];
 }
 
 class AuthorBook extends JoinTable<Author, Book> {
-  public bookId: ForeignKey;
-  public authorId: ForeignKey;
+  public readonly bookId: ForeignKey;
+  public readonly authorId: ForeignKey;
 }
 
 @Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends NoOrm {
   @PrimaryKeyAttribute()
-  public myPk: PrimaryKey;
+  public readonly myPk: PrimaryKey;
 
   @SortKeyAttribute()
-  public mySk: SortKey;
+  public readonly mySk: SortKey;
 }
 
 @Entity
 class Teacher extends OtherTable {
   @Attribute()
-  public name: string;
+  public readonly name: string;
 
   @HasMany(() => Course, { foreignKey: "teacherId" })
-  public courses: Course[];
+  public readonly courses: Course[];
 
   @HasOne(() => Profile, { foreignKey: "userId" })
-  public profile: Profile;
+  public readonly profile: Profile;
 }
 
 @Entity
 class Student extends OtherTable {
   @Attribute()
-  public name: string;
+  public readonly name: string;
 
   @HasAndBelongsToMany(() => Course, {
     targetKey: "students",
     through: () => ({ joinTable: StudentCourse, foreignKey: "studentId" })
   })
-  public courses: Course[];
+  public readonly courses: Course[];
 
   @HasOne(() => Profile, { foreignKey: "userId" })
-  public profile: Profile;
+  public readonly profile: Profile;
 
   @HasMany(() => Grade, { foreignKey: "studentId" })
-  public grades: Grade[];
+  public readonly grades: Grade[];
 }
 
 @Entity
 class Course extends OtherTable {
   @Attribute()
-  public name: string;
+  public readonly name: string;
 
   @NullableForeignKeyAttribute()
-  public teacherId?: NullableForeignKey;
+  public readonly teacherId?: NullableForeignKey;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
-  public teacher: Teacher;
+  public readonly teacher: Teacher;
 
   @HasMany(() => Assignment, { foreignKey: "courseId" })
-  public assignments: Assignment[];
+  public readonly assignments: Assignment[];
 
   @HasAndBelongsToMany(() => Student, {
     targetKey: "courses",
     through: () => ({ joinTable: StudentCourse, foreignKey: "courseId" })
   })
-  public students: Student[];
+  public readonly students: Student[];
 }
 
 @Entity
 class Assignment extends OtherTable {
   @Attribute()
-  public title: string;
+  public readonly title: string;
 
   @ForeignKeyAttribute()
-  public courseId: ForeignKey;
+  public readonly courseId: ForeignKey;
 
   @BelongsTo(() => Course, { foreignKey: "courseId" })
-  public course: Course;
+  public readonly course: Course;
 
   @HasOne(() => Grade, { foreignKey: "assignmentId" })
-  public grade: Grade;
+  public readonly grade: Grade;
 }
 
 @Entity
 class Grade extends OtherTable {
   @Attribute({ alias: "LetterValue" })
-  public gradeValue: string;
+  public readonly gradeValue: string;
 
   @ForeignKeyAttribute()
-  public assignmentId: ForeignKey;
+  public readonly assignmentId: ForeignKey;
 
   @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
-  public assignment: Assignment;
+  public readonly assignment: Assignment;
 
   @ForeignKeyAttribute()
-  public studentId: ForeignKey;
+  public readonly studentId: ForeignKey;
 
   @BelongsTo(() => Student, { foreignKey: "studentId" })
-  public student: Student;
+  public readonly student: Student;
 }
 
 @Entity
 class Profile extends OtherTable {
   @DateAttribute()
-  public lastLogin: Date;
+  public readonly lastLogin: Date;
 
   @ForeignKeyAttribute()
-  public userId: ForeignKey;
+  public readonly userId: ForeignKey;
 
   @NullableAttribute()
-  public alternateEmail?: string;
+  public readonly alternateEmail?: string;
 }
 
 class StudentCourse extends JoinTable<Student, Course> {
-  public studentId: ForeignKey;
-  public courseId: ForeignKey;
+  public readonly studentId: ForeignKey;
+  public readonly courseId: ForeignKey;
 }
 
 export {
