@@ -102,9 +102,7 @@ describe("FindById", () => {
         Name: "Some Customer",
         Address: "11 Some St",
         Type: "Customer",
-        UpdatedAt: "2023-09-15T04:26:31.148Z",
-        // TODO remove all instances of this
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2023-09-15T04:26:31.148Z"
       }
     });
 
@@ -242,8 +240,7 @@ describe("FindById", () => {
         Type: "BelongsToLink",
         ForeignKey: "111",
         ForeignEntityType: "Order",
-        UpdatedAt: "2022-10-15T09:31:15.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-10-15T09:31:15.148Z"
       },
       {
         PK: "Customer#123",
@@ -252,8 +249,7 @@ describe("FindById", () => {
         Type: "BelongsToLink",
         ForeignKey: "112",
         ForeignEntityType: "Order",
-        UpdatedAt: "2022-11-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-11-01T23:31:21.148Z"
       },
       {
         PK: "Customer#123",
@@ -262,8 +258,7 @@ describe("FindById", () => {
         Type: "BelongsToLink",
         ForeignKey: "113",
         ForeignEntityType: "Order",
-        UpdatedAt: "2022-09-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-09-01T23:31:21.148Z"
       }
     ];
 
@@ -275,8 +270,7 @@ describe("FindById", () => {
         Type: "BelongsToLink",
         ForeignKey: "116",
         ForeignEntityType: "PaymentMethod",
-        UpdatedAt: "2022-10-01T12:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-10-01T12:31:21.148Z"
       },
       {
         PK: "Customer#123",
@@ -285,8 +279,7 @@ describe("FindById", () => {
         Type: "BelongsToLink",
         ForeignKey: "117",
         ForeignEntityType: "PaymentMethod",
-        UpdatedAt: "2022-11-21T12:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-11-21T12:31:21.148Z"
       }
     ];
 
@@ -299,8 +292,7 @@ describe("FindById", () => {
           Name: "Some Customer",
           Address: "11 Some St",
           Type: "Customer",
-          UpdatedAt: "2022-09-15T04:26:31.148Z",
-          SomeAttr: "attribute that is not modeled"
+          UpdatedAt: "2022-09-15T04:26:31.148Z"
         },
         ...orderLinks,
         ...paymentMethodLinks
@@ -487,8 +479,7 @@ describe("FindById", () => {
           Name: "Some Customer",
           Address: "11 Some St",
           Type: "Customer",
-          UpdatedAt: "2022-09-15T04:26:31.148Z",
-          SomeAttr: "attribute that is not modeled"
+          UpdatedAt: "2022-09-15T04:26:31.148Z"
         }
       ]
     });
@@ -857,8 +848,7 @@ describe("FindById", () => {
       Name: "Some Customer",
       Address: "11 Some St",
       Type: "Customer",
-      UpdatedAt: "2022-09-15T04:26:31.148Z",
-      SomeAttr: "attribute that is not modeled"
+      UpdatedAt: "2022-09-15T04:26:31.148Z"
     };
 
     const paymentMethodRes = {
@@ -1165,8 +1155,7 @@ describe("FindById", () => {
         ForeignEntityType: "Order",
         ForeignKey: "111",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-10-15T09:31:15.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-10-15T09:31:15.148Z"
       },
       {
         PK: "PaymentMethod#789",
@@ -1175,8 +1164,7 @@ describe("FindById", () => {
         ForeignEntityType: "Order",
         ForeignKey: "112",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-11-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-11-01T23:31:21.148Z"
       },
       {
         PK: "PaymentMethod#789",
@@ -1185,8 +1173,7 @@ describe("FindById", () => {
         ForeignEntityType: "Order",
         ForeignKey: "113",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-09-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-09-01T23:31:21.148Z"
       }
     ];
 
@@ -1197,8 +1184,7 @@ describe("FindById", () => {
       Name: "Some Customer",
       Address: "11 Some St",
       Type: "Customer",
-      UpdatedAt: "2023-09-15T04:26:31.148Z",
-      SomeAttr: "attribute that is not modeled"
+      UpdatedAt: "2023-09-15T04:26:31.148Z"
     };
 
     mockQuery.mockResolvedValueOnce({
@@ -1362,8 +1348,7 @@ describe("FindById", () => {
         ForeignEntityType: "Author",
         ForeignKey: "111",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-10-15T09:31:15.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-10-15T09:31:15.148Z"
       },
       {
         PK: "Book#789",
@@ -1372,8 +1357,7 @@ describe("FindById", () => {
         ForeignEntityType: "Author",
         ForeignKey: "112",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-11-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-11-01T23:31:21.148Z"
       },
       {
         PK: "Book#789",
@@ -1382,8 +1366,7 @@ describe("FindById", () => {
         ForeignEntityType: "Author",
         ForeignKey: "113",
         Type: "BelongsToLink",
-        UpdatedAt: "2022-09-01T23:31:21.148Z",
-        SomeAttr: "attribute that is not modeled"
+        UpdatedAt: "2022-09-01T23:31:21.148Z"
       }
     ];
 

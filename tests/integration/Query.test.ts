@@ -53,8 +53,7 @@ describe("Query", () => {
             Address: "11 Some St",
             Type: "Customer",
             CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-15T04:26:31.148Z"
           },
           {
             PK: "Customer#123",
@@ -62,8 +61,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
           {
             PK: "Customer#123",
@@ -71,8 +69,7 @@ describe("Query", () => {
             Id: "003",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -80,8 +77,7 @@ describe("Query", () => {
             Id: "004",
             Type: "BelongsToLink",
             CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -89,8 +85,7 @@ describe("Query", () => {
             Id: "007",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-01T12:31:21.148Z",
-            UpdatedAt: "2022-10-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-01T12:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -98,8 +93,7 @@ describe("Query", () => {
             Id: "008",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-21T12:31:21.148Z"
           }
         ]
       });
@@ -187,8 +181,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           }
         ]
       });
@@ -237,8 +230,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
           {
             PK: "Customer#123",
@@ -246,8 +238,7 @@ describe("Query", () => {
             Id: "003",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -255,8 +246,7 @@ describe("Query", () => {
             Id: "004",
             Type: "BelongsToLink",
             CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-01T23:31:21.148Z"
           }
         ]
       });
@@ -323,8 +313,7 @@ describe("Query", () => {
             Id: "008",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-21T12:31:21.148Z"
           }
         ]
       });
@@ -389,8 +378,7 @@ describe("Query", () => {
             Address: "11 Some St",
             Type: "Customer",
             CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-15T04:26:31.148Z"
           }
         ]
       });
@@ -583,8 +571,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
           {
             PK: "Customer#123",
@@ -592,8 +579,7 @@ describe("Query", () => {
             Id: "003",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -601,8 +587,7 @@ describe("Query", () => {
             Id: "004",
             Type: "BelongsToLink",
             CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-01T23:31:21.148Z"
           }
         ]
       });
@@ -702,8 +687,7 @@ describe("Query", () => {
             Address: "11 Some St",
             Type: "Customer",
             CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-15T04:26:31.148Z"
           },
           {
             PK: "Customer#123",
@@ -711,8 +695,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
           {
             PK: "Customer#123",
@@ -720,8 +703,7 @@ describe("Query", () => {
             Id: "003",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -729,8 +711,7 @@ describe("Query", () => {
             Id: "004",
             Type: "BelongsToLink",
             CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -738,8 +719,7 @@ describe("Query", () => {
             Id: "007",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-01T12:31:21.148Z",
-            UpdatedAt: "2022-10-01T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-01T12:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -747,8 +727,7 @@ describe("Query", () => {
             Id: "008",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-21T12:31:21.148Z"
           }
         ]
       });
@@ -836,8 +815,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           }
         ]
       });
@@ -885,8 +863,7 @@ describe("Query", () => {
             Id: "001",
             Type: "BelongsToLink",
             CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-10-15T09:31:15.148Z"
           },
           {
             PK: "Customer#123",
@@ -894,8 +871,7 @@ describe("Query", () => {
             Id: "003",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-01T23:31:21.148Z"
           },
           {
             PK: "Customer#123",
@@ -903,8 +879,7 @@ describe("Query", () => {
             Id: "004",
             Type: "BelongsToLink",
             CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-01T23:31:21.148Z"
           }
         ]
       });
@@ -970,8 +945,7 @@ describe("Query", () => {
             Id: "008",
             Type: "BelongsToLink",
             CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-11-21T12:31:21.148Z"
           }
         ]
       });
@@ -1033,8 +1007,7 @@ describe("Query", () => {
             Address: "11 Some St",
             Type: "Customer",
             CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z",
-            SomeAttr: "attribute that is not modeled"
+            UpdatedAt: "2022-09-15T04:26:31.148Z"
           }
         ]
       });
@@ -1116,7 +1089,7 @@ describe("Query", () => {
     //         Type: "Customer",
     //         CreatedAt: "2021-09-15T04:26:31.148Z",
     //         UpdatedAt: "2022-09-15T04:26:31.148Z",
-    //         SomeAttr: "attribute that is not modeled"
+    //
     //       }
     //     ]
     //   });
