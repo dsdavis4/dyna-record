@@ -431,10 +431,6 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO here
-  // TODO there should be an equivalent for not found HasOne or BelongsTo
-  // TODO make a test where it finds some but not all associations
-  // TODO make sure types on response are correct
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(4);
 
@@ -1712,6 +1708,8 @@ describe("FindById", () => {
     ]);
   });
 
+  // TODO start here... add type tests for empty states of each included rel
+  //      BelongsToLink should be dynamic based on nullable keys...
   describe("types", () => {
     describe("operation results", () => {
       it("HasOne - when including an optional property, the returned type is optional", async () => {

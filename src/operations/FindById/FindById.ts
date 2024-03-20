@@ -330,8 +330,6 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
   }
 
-  // TODO start here... add remianing unit tests. Make sure to add some where query find some relationships and not others
-  //      Also make sure to add type tests for relationships empty states
   // TODO typedoc
   private setIncludedRelationshipDefaults(
     parentEntity: T,
