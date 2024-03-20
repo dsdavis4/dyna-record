@@ -80,47 +80,6 @@ describe("QueryBuilder", () => {
     });
   });
 
-  // TODO should pass. Has extra params around entire expression
-  it.skip("returns QueryCommandInput for an OR filter on a partition", () => {
-    expect.assertions(1);
-
-    const queryBuilder = new QueryBuilder({
-      entityClassName: "Scale",
-      key: { pk: "Scale#123" },
-      options: {
-        filter: {
-          $or: [
-            {
-              type: "Process",
-              createdAt: { $beginsWith: "2021-09-05" },
-              name: ["Process1", "Process2"]
-            }
-          ]
-        }
-      }
-    });
-
-    expect(queryBuilder.build()).toEqual({
-      ExpressionAttributeNames: {
-        "#CreatedAt": "CreatedAt",
-        "#Name": "Name",
-        "#PK": "PK",
-        "#Type": "Type"
-      },
-      ExpressionAttributeValues: {
-        ":CreatedAt2": "2021-09-05",
-        ":Name3": "Process1",
-        ":Name4": "Process2",
-        ":PK5": "Scale#123",
-        ":Type1": "Process"
-      },
-      FilterExpression:
-        "(#Type = :Type1 AND begins_with(#CreatedAt, :CreatedAt2) AND #Name IN (:Name3,:Name4))",
-      KeyConditionExpression: "#PK = :PK5",
-      TableName: "mock-table"
-    });
-  });
-
   it("returns QueryCommandInput for a FindById with included HasMany query", () => {
     expect.assertions(1);
 
@@ -195,10 +154,5 @@ describe("QueryBuilder", () => {
         ":Type3": "Process"
       }
     });
-  });
-
-  // TODO make this test pass
-  it.skip("can query on an index", () => {
-    expect.assertions(1);
   });
 });
