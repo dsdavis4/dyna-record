@@ -5,7 +5,6 @@ import type { AttributeOptions } from "../types";
 
 // TODO typedoc... make sure to link AttributeOptions like I did for ForeignKeyAttribute Attribute
 
-// TODO dry up with ForeignKeyAttribute
 function NullableForeignKeyAttribute<T>(props?: AttributeOptions) {
   return function (
     _value: undefined,
