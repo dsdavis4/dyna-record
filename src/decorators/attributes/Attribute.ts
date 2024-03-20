@@ -4,8 +4,6 @@ import type { ForeignKey, NullableForeignKey } from "../../types";
 import type { AttributeOptions } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
-// TODO should this be named NativeAttribute ? DynamoNativeAttribute?
-
 /**
  * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
  */
