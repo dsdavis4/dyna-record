@@ -356,6 +356,10 @@ class AttributeTester extends DrewsBrewsTable {
       name: "test has and belongs to many"
     });
 
+    const aaa = await Scale.findById("123", {
+      include: [{ association: "process" }]
+    });
+
     // const user = await User.create({
     //   firstName: "testing",
     //   lastName: "bla",
