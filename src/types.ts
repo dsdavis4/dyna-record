@@ -3,46 +3,71 @@ import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 import type NoOrm from "./NoOrm";
 
-// TODO Jsdoc for everything in here
-
+/**
+ * A utility type for branding primitives to ensure type safety with unique identifiers.
+ */
 export type Brand<K, T> = K & { __brand: T };
 
-// TODO can I use symbols here?
-// const ForeignKeyBrand = Symbol('ForeignKey');
-// export type Brand<K, T extends symbol> = K & { readonly [P in T]: true };
-// export type ForeignKey = Brand<string, typeof ForeignKeyBrand>;
-
+/**
+ * A branded string type to represent sort keys in DynamoDB tables
+ */
 export type SortKey = Brand<string, "SortKey">;
-export type PrimaryKey = Brand<string, "PrimaryKey">;
-export type ForeignKey = Brand<string, "ForeignKey">;
-export type NullableForeignKey =
-  | Brand<string, "NullableForeignKey">
-  | undefined;
 
 /**
- * The ForeignKeyAttribute attribute defined on an entity
+ * A branded string type to represent primary keys in DynamoDB tables
+ */
+export type PrimaryKey = Brand<string, "PrimaryKey">;
+
+/**
+ * A branded string type to represent foreign keys in DynamoDB tables
+ */
+export type ForeignKey = Brand<string, "ForeignKey">;
+
+/**
+ * A branded string type to represent nullable foreign keys in DynamoDB tables, which can also be undefined.
+ */
+export type NullableForeignKey = Optional<Brand<string, "NullableForeignKey">>;
+
+/**
+ * Represents a foreign key attribute on an entity within a NoOrm model
  */
 export type ForeignKeyAttribute = keyof NoOrm & ForeignKey;
 
+/**
+ * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
+ */
 export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
 
+/**
+ * A utility type for objects with string keys and string values.
+ */
 export type StringObj = Record<string, string>;
 
+/**
+ * Describes the shape of a DynamoDB item representing a `BelongsToLink`, enforcing type consistency.
+ */
 export interface BelongsToLinkDynamoItem {
   Type: typeof BelongsToLink.name;
   [key: string]: NativeScalarAttributeValue;
 }
 
+/**
+ * A utility type for making a type optional, allowing it to be undefined.
+ */
 export type Optional<T> = T | undefined;
+
+/**
+ * A utility type for making a type nullable, allowing it to be null.
+ */
 export type Nullable<T> = T | null;
 
 /**
- * Object to lookup up Relationship metadata by related entity name (As defined by property key for the relationship)
+ * Represents a lookup object to access relationship metadata by related entity name for NoOrm models.
  */
 export type RelationshipLookup = Record<string, RelationshipMetadata>;
 
 /**
- * Relationship metadata object to perform lookups and reduce iteration during processing
+ * An object structure for holding relationship metadata, aimed at optimizing lookup operations and iterations.
  */
 export interface RelationshipMetaObj {
   relationsLookup: RelationshipLookup;
@@ -50,12 +75,12 @@ export interface RelationshipMetaObj {
 }
 
 /**
- * Make some keys of an object nullable
+ * A utility type for modifying certain keys of an object type to be optional.
  */
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
   Partial<Pick<T, K>>;
 
 /**
- * Generic type representing an instance of a class decorated by the {@link Entity} decorator
+ * Represents an instance of a class decorated with the `Entity` decorator in NoOrm, encapsulating entity logic.
  */
 export type EntityClass<T> = (new () => T) & typeof NoOrm;
