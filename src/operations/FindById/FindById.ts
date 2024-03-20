@@ -329,7 +329,14 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
   }
 
-  // TODO typedoc
+  /**
+   * Initializes default values for included relationships on a parent entity. It assigns
+   * an empty array to each relationship property for HasMany and HasAndBelongsToMany specified in `relationsLookup` if the property exists on `parentEntity`.
+   *
+   * @param parentEntity - The parent entity to initialize relationship properties on.
+   * @param relationsLookup - A mapping of relationship identifiers to their descriptions, including the relationship
+   * type and the property name on the parent entity.
+   */
   private setIncludedRelationshipDefaults(
     parentEntity: T,
     relationsLookup: RelationshipLookup
