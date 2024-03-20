@@ -28,24 +28,11 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
 
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
-// TODO I need to make it so BelongsTo relationshipes are required on the associated model when HasMany/HasOne exist
-//      Right now if I comment out a BelongsTo when a HasOne/HasMany is set up, nothing breaks...
-
 // TODO delete temp tables
-
-// TODO add tests where primary key and sort key are not PK and SK
-
-// TODO keep an eye on this link https://stackoverflow.com/questions/76783862/typescript-5-access-class-constructor-from-a-property-decorator
-//  the accepted comment has conversations about getting class name on class field decorators
-//   this would make it so I dont have to have addInitializer methods
-//
 
 // TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
 //       I think I had a medium article about a library that does this
 
-// TODO Can I ensure that Single table design has a (single) primary key and sort key defined?
-//    https://stackoverflow.com/questions/69771786/how-to-require-a-specific-data-type-in-a-class-or-object-in-typescript
-//    https://stackoverflow.com/questions/60872063/enforce-typescript-object-has-exactly-one-key-from-a-set
 @Table({
   name: "temp-table",
   delimiter: "#",
@@ -276,7 +263,7 @@ class AttributeTester extends DrewsBrewsTable {
   @Attribute({ alias: "IntAttr" })
   public intAttr: number;
 
-  @Attribute({ alias: "FloatAttr", nullable: true })
+  @Attribute({ alias: "FloatAttr" })
   public floatAttr: number;
 
   @Attribute({ alias: "BooleanAttr" })
@@ -306,22 +293,11 @@ class AttributeTester extends DrewsBrewsTable {
 - eslint
 */
 
-// TODO PRE MVP
-// Add comments to each decorator/class etc so that on hover there is a description. See projen for example
-// Should be able to access params with optional chaining or not as appropriate
-// Need to support HasOne where the HasOne is its own parent entity
-//      I will do this after the create methods
-
 // TODO add eslint workflow
 
 // TODO add tsconfig for dev... that includes test files and debug file
 
 // TODO make a logger class to optionally log. Structured logs..
-
-// TODO where possible change code to use Map instead oj objects because it is more efficient (check on this..)
-
-// TODO When I was defining test models with foreign key I found that it was easy to forget setting up the associated BelongsTo rel, and thats required for the rest to work. Can I enforce that the BelongsTo model has both the foreign key and the rel defined?
-//      Idea... I can add the name of the key that a ForeignKey applies to on the other model
 
 // TODO find all instances where I throw a plain "Error" and make a custom error
 
