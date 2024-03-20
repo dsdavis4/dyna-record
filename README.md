@@ -2,8 +2,6 @@
 
 Typescript Object Relational Mapper (ORM) for Dynamo
 
-<!-- TODO check if I need all type libraries -->
-
 <!-- TODO ADD SO MANY DOCS. Maybe tsdoc? -->
 
 <!-- TODO Add some github actions (EX: Unit tests) when I make the repo public because then minutes are free -->
