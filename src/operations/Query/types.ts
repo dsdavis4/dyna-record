@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type {
   KeyConditions,
   QueryOptions as QueryBuilderOptions,
@@ -15,8 +15,8 @@ export type EntityKeyConditions<T> = {
   [K in keyof T]?: KeyConditions;
 };
 
-export type QueryResults<T extends SingleTableDesign> = Array<
+export type QueryResults<T extends NoOrm> = Array<
   EntityAttributes<T> | BelongsToLink
 >;
 
-export type QueryResult<T extends SingleTableDesign> = QueryResults<T>[number];
+export type QueryResult<T extends NoOrm> = QueryResults<T>[number];

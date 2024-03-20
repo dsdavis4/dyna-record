@@ -3,9 +3,9 @@ import {
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage
 } from ".";
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 
-type EntityClass = new (...args: any) => SingleTableDesign;
+type EntityClass = new (...args: any) => NoOrm;
 
 class EntityMetadata {
   /**

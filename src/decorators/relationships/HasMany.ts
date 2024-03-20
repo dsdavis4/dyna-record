@@ -1,13 +1,13 @@
 import Metadata from "../../metadata";
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type { EntityClass, ForeignKeyAttribute } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-interface HasManyProps<T extends SingleTableDesign> {
+interface HasManyProps<T extends NoOrm> {
   foreignKey: ForeignEntityAttribute<T>;
 }
 
-function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
+function HasMany<T extends NoOrm, K extends NoOrm>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
   props: HasManyProps<T>
@@ -15,11 +15,11 @@ function HasMany<T extends SingleTableDesign, K extends SingleTableDesign>(
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: SingleTableDesign = Object.getPrototypeOf(this);
+        const entity: NoOrm = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasMany",
-          propertyName: context.name as keyof SingleTableDesign,
+          propertyName: context.name as keyof NoOrm,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });

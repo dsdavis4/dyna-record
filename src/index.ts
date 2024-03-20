@@ -1,3 +1,3 @@
-import SingleTableDesign from "./SingleTableDesign";
+import NoOrm from "./NoOrm";
 
-export default SingleTableDesign;
+export default NoOrm;

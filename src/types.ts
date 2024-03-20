@@ -1,7 +1,7 @@
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
-import type SingleTableDesign from "./SingleTableDesign";
+import type NoOrm from "./NoOrm";
 
 // TODO Jsdoc for everything in here
 
@@ -22,7 +22,7 @@ export type NullableForeignKey =
 /**
  * The ForeignKeyAttribute attribute defined on an entity
  */
-export type ForeignKeyAttribute = keyof SingleTableDesign & ForeignKey;
+export type ForeignKeyAttribute = keyof NoOrm & ForeignKey;
 
 export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
 
@@ -58,4 +58,4 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
 /**
  * Generic type representing an instance of a class decorated by the {@link Entity} decorator
  */
-export type EntityClass<T> = (new () => T) & typeof SingleTableDesign;
+export type EntityClass<T> = (new () => T) & typeof NoOrm;

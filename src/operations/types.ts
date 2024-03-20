@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import type {
   ForeignKey,
   NullableForeignKey,
@@ -39,17 +39,13 @@ type ForeignKeyToValue<T> = {
  * Returns Keys of T which are HasMany, BelongsTo or HasOne relationships
  */
 export type RelationshipAttributeNames<T> = {
-  [K in keyof T]: Exclude<T[K], undefined> extends
-    | SingleTableDesign
-    | SingleTableDesign[]
-    ? K
-    : never;
+  [K in keyof T]: Exclude<T[K], undefined> extends NoOrm | NoOrm[] ? K : never;
 }[keyof T];
 
 /**
  * Entity attributes excluding relationship attributes
  */
-export type EntityAttributes<T extends SingleTableDesign> = Omit<
+export type EntityAttributes<T extends NoOrm> = Omit<
   T,
   RelationshipAttributeNames<T>
 >;
@@ -62,9 +58,9 @@ export type EntityAttributes<T extends SingleTableDesign> = Omit<
  *   - no-orm default attributes
  *   - Functions defined on the entity
  */
-export type EntityDefinedAttributes<T extends SingleTableDesign> = Omit<
+export type EntityDefinedAttributes<T extends NoOrm> = Omit<
   ForeignKeyToValue<T>,
-  | keyof SingleTableDesign
+  | keyof NoOrm
   | RelationshipAttributeNames<T>
   | FunctionFields<T>
   | PrimaryKeyAttribute<T>

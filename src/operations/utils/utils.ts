@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type { RelationshipMetadata } from "../../metadata";
 import {
   isBelongsToRelationship,
@@ -34,10 +34,10 @@ export const buildEntityRelationshipMetaObj = (
 /**
  * Extracts a ForeignKey value from an entity instance
  * @param relMeta - RelationshipMetadata for associated foreignKey
- * @param entity - instance of SingleTableDesign
+ * @param entity - instance of NoOrm
  * @returns
  */
-export const extractForeignKeyFromEntity = <T extends SingleTableDesign>(
+export const extractForeignKeyFromEntity = <T extends NoOrm>(
   relMeta: RelationshipMetadata,
   entity?: T
 ): Optional<ForeignKey> => {

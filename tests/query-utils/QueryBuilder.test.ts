@@ -1,5 +1,5 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
-import SingleTableDesign from "../../src";
+import NoOrm from "../../src";
 import {
   Table,
   Entity,
@@ -21,7 +21,7 @@ import type { PrimaryKey, SortKey } from "../../src/types";
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-class MockTable extends SingleTableDesign {
+class MockTable extends NoOrm {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 

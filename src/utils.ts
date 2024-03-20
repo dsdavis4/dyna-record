@@ -1,4 +1,4 @@
-import type SingleTableDesign from "./SingleTableDesign";
+import type NoOrm from "./NoOrm";
 import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
 import Metadata, {
   type AttributeMetadata,
@@ -16,7 +16,7 @@ import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
  */
 export const entityToTableItem = (
   entityClassName: string,
-  entityData: Partial<SingleTableDesign>
+  entityData: Partial<NoOrm>
 ): DynamoTableItem => {
   const attributesMeta = Metadata.getEntityAttributes(entityClassName);
 
@@ -44,7 +44,7 @@ export const entityToTableItem = (
  * @param tableItem
  * @returns
  */
-export const tableItemToEntity = <T extends SingleTableDesign>(
+export const tableItemToEntity = <T extends NoOrm>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
@@ -112,9 +112,9 @@ export const tableItemToBelongsToLink = (
  * Type guard to check if the key is defined on the entity
  */
 export const isKeyOfEntity = (
-  entity: SingleTableDesign,
+  entity: NoOrm,
   key: string
-): key is keyof SingleTableDesign => {
+): key is keyof NoOrm => {
   return key in entity;
 };
 
@@ -125,7 +125,7 @@ export const isKeyOfEntity = (
  * @returns
  */
 export const isKeyOfObject = <T>(
-  entity: Partial<SingleTableDesign>,
+  entity: Partial<NoOrm>,
   key: any
 ): key is keyof T => {
   return key in entity;
@@ -186,35 +186,27 @@ export const isString = (value: any): value is string => {
 };
 
 /**
- * Safely assigns a value to a property of an object that extends the `SingleTableDesign`.
- * This utility function is designed to work with objects that follow a specific structure,
- * ensuring the assignment is type-safe by leveraging TypeScript's type inference and generic
- * constraints. It's particularly useful for dynamically assigning properties to objects within
- * the single table design pattern, where the property names might be known but the types could vary.
+ * Safely assigns a value to a property of an object that extends the `NoOrm`.
+ * It's useful for dynamically assigning properties to objects where the property names might be known but the types could vary.
  *
- * The function enforces that the object parameter extends `SingleTableDesign`, thereby ensuring
- * compatibility with objects designed for use in single table database architectures or similar
- * patterns. This makes `safeAssignEntity` highly specialized for use cases involving such designs.
- *
- * @template TObject - The object type to which the property belongs, constrained to extend `SingleTableDesign`.
- * @template TKey - The type of the keys of `TObject`, ensuring only property names defined in `SingleTableDesign` or its extensions are acceptable.
+ * @template TObject - The object type to which the property belongs, constrained to extend `NoOrm`.
+ * @template TKey - The type of the keys of `TObject`, ensuring only property names defined in `NoOrm` or its extensions are acceptable.
  * @template TValue - The type of the value to be assigned. This method does not constrain `TValue`, allowing for flexible assignments while caution should be exercised to ensure runtime type safety.
  *
- * @param {TObject} object - The target object to which the property will be assigned. Must extend `SingleTableDesign`.
+ * @param {TObject} object - The target object to which the property will be assigned. Must extend `NoOrm`.
  * @param {TKey} key - The property name under which the value should be assigned. Must be a key of `TObject`.
  * @param {TValue} value - The value to assign to the property on the object. While the function does not enforce a specific type for `TValue`, the assignment itself is type-checked against `TObject`'s property types.
  *
  * @returns {void} - This function does not return a value; it performs the assignment operation directly on the passed object.
  *
  * @example
- * // Assuming SingleTableDesign and a compatible object
- * interface SingleTableDesign {
+ * // Assuming NoOrm and a compatible object
+ * interface NoOrm {
  *   id: string;
  *   attribute?: any;
- *   // Other properties specific to the single table design
  * }
  *
- * interface MyEntity extends SingleTableDesign {
+ * interface MyEntity extends NoOrm {
  *   name?: string;
  *   age?: number;
  * }
@@ -228,10 +220,10 @@ export const isString = (value: any): value is string => {
  * // Safely assign a number to the `age` property
  * safeAssignEntity(entity, "age", 32);
  *
- * // The function enforces type checks aligned with `SingleTableDesign` and its extensions
+ * // The function enforces type checks aligned with `NoOrm` and its extensions
  */
 export const safeAssignEntity = <
-  TObject extends SingleTableDesign,
+  TObject extends NoOrm,
   TKey extends keyof TObject,
   TValue
 >(

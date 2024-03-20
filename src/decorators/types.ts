@@ -1,11 +1,11 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import { type EntityAttributes } from "../operations/types";
 import type { NullableForeignKey, ForeignKey, Optional } from "../types";
 
 /**
  * Returns attributes on the provided model which are EntityAttributes of type ForeignKey
  */
-export type ForeignEntityAttribute<T extends SingleTableDesign> = {
+export type ForeignEntityAttribute<T extends NoOrm> = {
   [K in keyof T]: T[K] extends ForeignKey
     ? K
     : T[K] extends NullableForeignKey

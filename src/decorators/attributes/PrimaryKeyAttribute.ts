@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -14,7 +14,7 @@ function PrimaryKeyAttribute<T, K extends PrimaryKey>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: SingleTableDesign = Object.getPrototypeOf(this);
+        const entity: NoOrm = Object.getPrototypeOf(this);
 
         Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),

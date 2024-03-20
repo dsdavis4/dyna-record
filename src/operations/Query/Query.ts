@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
@@ -33,7 +33,7 @@ import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 /**
  * Query operations
  */
-class Query<T extends SingleTableDesign> extends OperationBase<T> {
+class Query<T extends NoOrm> extends OperationBase<T> {
   /**
    *
    * @param key EntityId or object with PrimaryKey and optional SortKey conditions

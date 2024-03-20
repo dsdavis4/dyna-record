@@ -1,5 +1,5 @@
 import Metadata from "../../metadata";
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type {
   EntityClass,
   ForeignKeyAttribute,
@@ -8,7 +8,7 @@ import type {
 } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-interface BelongsToProps<T extends SingleTableDesign> {
+interface BelongsToProps<T extends NoOrm> {
   foreignKey: ForeignEntityAttribute<T>;
 }
 
@@ -16,8 +16,8 @@ interface BelongsToProps<T extends SingleTableDesign> {
  * If the relationship is linked by a NullableForeignKey then it allows the field to be optional, otherwise it ensures that is is not optional
  */
 type BelongsToField<
-  T extends SingleTableDesign,
-  K extends SingleTableDesign,
+  T extends NoOrm,
+  K extends NoOrm,
   FK extends ForeignEntityAttribute<T>
 > = FK extends keyof T
   ? T[FK] extends NullableForeignKey
@@ -30,8 +30,8 @@ type BelongsToField<
  * If the relationship is linked by a NullableForeignKey then it ensures the field is optional, otherwise it ensures that is is not
  */
 // type BelongsToField<
-//   T extends SingleTableDesign,
-//   K extends SingleTableDesign,
+//   T extends NoOrm,
+//   K extends NoOrm,
 //   FK extends ForeignEntityAttribute<T>
 // > = FK extends keyof T
 //   ? T[FK] extends NullableForeignKey
@@ -43,7 +43,7 @@ type BelongsToField<
 
 // TODO should this be BelongsToOne?
 //      In the future there could be a BelongsToMany which handles denormalizing links differently
-function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
+function BelongsTo<T extends NoOrm, K extends NoOrm>(
   // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<K>,
   props: BelongsToProps<T>
@@ -57,11 +57,11 @@ function BelongsTo<T extends SingleTableDesign, K extends SingleTableDesign>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: SingleTableDesign = Object.getPrototypeOf(this);
+        const entity: NoOrm = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "BelongsTo",
-          propertyName: context.name as keyof SingleTableDesign,
+          propertyName: context.name as keyof NoOrm,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });

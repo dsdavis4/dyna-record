@@ -1,5 +1,5 @@
 import { AttributeMetadata } from ".";
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import { dateSerializer } from "../decorators";
 import type { BelongsToLink } from "../relationships";
 import type { MakeOptional } from "../types";
@@ -9,7 +9,7 @@ import type { AttributeMetadataOptions } from "./AttributeMetadata";
 
 type DefaultDateFields = "createdAt" | "updatedAt";
 
-export type DefaultFields = keyof SingleTableDesign | keyof BelongsToLink;
+export type DefaultFields = keyof NoOrm | keyof BelongsToLink;
 
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 

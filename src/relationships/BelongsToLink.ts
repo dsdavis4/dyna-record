@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 
 // TODO add tests that all operations work when table keys are not PK or SK
 //      It might be best to solve the dynamic PK and SK problem in BelongsToLinkFirst
 // TODO enforce that these match the default types in metadata types
 
-interface BelongsToLinkProps extends SingleTableDesign {
+interface BelongsToLinkProps extends NoOrm {
   foreignEntityType: string;
   foreignKey: string;
 }

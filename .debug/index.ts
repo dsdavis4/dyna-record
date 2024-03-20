@@ -1,4 +1,4 @@
-import SingleTableDesign from "../src";
+import NoOrm from "../src";
 import {
   Table,
   Entity,
@@ -45,7 +45,7 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-abstract class DrewsBrewsTable extends SingleTableDesign {
+abstract class DrewsBrewsTable extends NoOrm {
   // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;

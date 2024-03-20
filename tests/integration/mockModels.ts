@@ -1,4 +1,4 @@
-import SingleTableDesign from "../../src";
+import NoOrm from "../../src";
 import {
   Table,
   Entity,
@@ -34,7 +34,7 @@ import type {
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-abstract class MockTable extends SingleTableDesign {
+abstract class MockTable extends NoOrm {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 
@@ -237,7 +237,7 @@ class AuthorBook extends JoinTable<Author, Book> {
 }
 
 @Table({ name: "other-table", delimiter: "|" })
-abstract class OtherTable extends SingleTableDesign {
+abstract class OtherTable extends NoOrm {
   @PrimaryKeyAttribute()
   public myPk: PrimaryKey;
 

@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type { EntityClass } from "../../types";
 
 type RelationshipType =
@@ -9,8 +9,8 @@ type RelationshipType =
 
 abstract class RelationshipMetadata {
   public abstract type: RelationshipType;
-  public target: EntityClass<SingleTableDesign>;
-  public propertyName: keyof SingleTableDesign;
+  public target: EntityClass<NoOrm>;
+  public propertyName: keyof NoOrm;
 }
 
 export default RelationshipMetadata;

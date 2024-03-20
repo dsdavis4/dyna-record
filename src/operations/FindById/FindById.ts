@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import Metadata, { type RelationshipMetadata } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
@@ -40,7 +40,7 @@ import {
 /**
  * FindById operations
  */
-class FindById<T extends SingleTableDesign> extends OperationBase<T> {
+class FindById<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactGetBuilder;
 
   constructor(Entity: EntityClass<T>) {

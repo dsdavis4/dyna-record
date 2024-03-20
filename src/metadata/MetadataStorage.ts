@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import type { MakeOptional } from "../types";
 import TableMetadata, {
   type DefaultFields,
@@ -185,7 +185,7 @@ class MetadataStorage {
    * @param options
    */
   public addPrimaryKeyAttribute(
-    entityClass: SingleTableDesign,
+    entityClass: NoOrm,
     options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
@@ -201,7 +201,7 @@ class MetadataStorage {
    * @param options
    */
   public addSortKeyAttribute(
-    entityClass: SingleTableDesign,
+    entityClass: NoOrm,
     options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
@@ -230,9 +230,9 @@ class MetadataStorage {
    * @returns
    */
   private getEntityTableMetadata(
-    classPrototype: SingleTableDesign
+    classPrototype: NoOrm
   ): TableMetadata | undefined {
-    const protoType: SingleTableDesign = Object.getPrototypeOf(classPrototype);
+    const protoType: NoOrm = Object.getPrototypeOf(classPrototype);
 
     if (protoType === null) return;
 

@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
 import Metadata, {
   type TableMetadata,
@@ -28,8 +28,8 @@ type ForeignKeyProperties<T> = {
 interface TransactionProps {
   tableProps: TableMetadata;
   entities: {
-    parentEntity: EntityClass<SingleTableDesign>;
-    linkedEntity: EntityClass<SingleTableDesign>;
+    parentEntity: EntityClass<NoOrm>;
+    linkedEntity: EntityClass<NoOrm>;
   };
   ids: { parentId: string; linkedEntityId: string };
 }
@@ -48,10 +48,7 @@ interface TransactionProps {
  * }
  * ```
  */
-abstract class JoinTable<
-  T extends SingleTableDesign,
-  K extends SingleTableDesign
-> {
+abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
   constructor(
     private readonly type1: EntityClass<T>,
     private readonly type2: EntityClass<K>
@@ -65,8 +62,8 @@ abstract class JoinTable<
    */
   public static async create<
     ThisClass extends JoinTable<T, K>,
-    T extends SingleTableDesign,
-    K extends SingleTableDesign
+    T extends NoOrm,
+    K extends NoOrm
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>
@@ -89,8 +86,8 @@ abstract class JoinTable<
    */
   public static async delete<
     ThisClass extends JoinTable<T, K>,
-    T extends SingleTableDesign,
-    K extends SingleTableDesign
+    T extends NoOrm,
+    K extends NoOrm
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>
@@ -116,7 +113,7 @@ abstract class JoinTable<
    */
   private static createBelongsToLink(
     transactionBuilder: TransactionBuilder,
-    keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
+    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): void {
@@ -169,7 +166,7 @@ abstract class JoinTable<
    */
   private static deleteBelongsToLink(
     transactionBuilder: TransactionBuilder,
-    keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
+    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): void {
@@ -194,7 +191,7 @@ abstract class JoinTable<
   }
 
   private static joinTableKey(
-    keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
+    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): Record<string, string> {
@@ -214,7 +211,7 @@ abstract class JoinTable<
   }
 
   private static transactionProps(
-    keys: ForeignKeyProperties<JoinTable<SingleTableDesign, SingleTableDesign>>,
+    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): TransactionProps {

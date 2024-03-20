@@ -1,4 +1,4 @@
-import SingleTableDesign from "../../SingleTableDesign";
+import NoOrm from "../../NoOrm";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
 import Metadata, { type BelongsToRelationship } from "../../metadata";
@@ -19,7 +19,7 @@ import type { DeleteOptions, ItemKeys } from "./types";
  * Delete operation. Delete an entity, everything in its partition, BelongsToLinks and nullifies ForeignKeys on attributes that BelongTo it
  * If the foreign key is non nullable than it will throw a NullConstraintViolationError
  */
-class Delete<T extends SingleTableDesign> extends OperationBase<T> {
+class Delete<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #tableName: string;
   readonly #primaryKeyField: string;
@@ -54,7 +54,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    const items = await this.EntityClass.query<SingleTableDesign>(id);
+    const items = await this.EntityClass.query<NoOrm>(id);
 
     if (items.length === 0) {
       throw new NotFoundError(`Item does not exist: ${id}`);
@@ -265,7 +265,7 @@ class Delete<T extends SingleTableDesign> extends OperationBase<T> {
    * @returns
    */
   private isEntityClass(item: any): item is T {
-    return item instanceof SingleTableDesign;
+    return item instanceof NoOrm;
   }
 
   /**

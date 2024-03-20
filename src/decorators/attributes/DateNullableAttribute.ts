@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import Metadata from "../../metadata";
 import type { Optional } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -33,7 +33,7 @@ function DateNullableAttribute<T, K extends Date>(props?: AttributeOptions) {
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: SingleTableDesign = Object.getPrototypeOf(this);
+        const entity: NoOrm = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),

@@ -1,7 +1,7 @@
 import Metadata from "../metadata";
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 
-function Entity<T extends SingleTableDesign>(
+function Entity<T extends NoOrm>(
   target: new () => T,
   context: ClassDecoratorContext
 ): void {

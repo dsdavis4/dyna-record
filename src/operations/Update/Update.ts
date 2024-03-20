@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import type {
   RelationshipMetadata,
@@ -18,7 +18,7 @@ import type { EntityClass } from "../../types";
 /**
  * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
  */
-class Update<T extends SingleTableDesign> extends OperationBase<T> {
+class Update<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
   #entity?: T;
@@ -58,7 +58,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const updatedAttrs: Partial<SingleTableDesign> = {
+    const updatedAttrs: Partial<NoOrm> = {
       ...attributes,
       updatedAt: new Date()
     };
@@ -87,7 +87,7 @@ class Update<T extends SingleTableDesign> extends OperationBase<T> {
    */
   private async buildRelationshipTransactions(
     id: string,
-    attributes: Partial<SingleTableDesign>
+    attributes: Partial<NoOrm>
   ): Promise<void> {
     const entityData = { id, ...attributes };
 

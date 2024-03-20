@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, EntityClass } from "../../types";
 import { TransactWriteBuilder } from "../../dynamo-utils";
@@ -7,7 +7,7 @@ import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
 
-class Create<T extends SingleTableDesign> extends OperationBase<T> {
+class Create<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
   constructor(Entity: EntityClass<T>) {
@@ -35,7 +35,7 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
     return tableItemToEntity<T>(this.EntityClass, tableItem);
   }
 
-  private buildEntityData(attributes: CreateOptions<T>): SingleTableDesign {
+  private buildEntityData(attributes: CreateOptions<T>): NoOrm {
     const id = uuidv4();
     const createdAt = new Date();
 
@@ -47,7 +47,7 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const defaultAttrs: SingleTableDesign = {
+    const defaultAttrs: NoOrm = {
       id,
       type: this.EntityClass.name,
       createdAt,
@@ -77,7 +77,7 @@ class Create<T extends SingleTableDesign> extends OperationBase<T> {
    * @param entityData
    */
   private async buildRelationshipTransactions(
-    entityData: SingleTableDesign
+    entityData: NoOrm
   ): Promise<void> {
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,

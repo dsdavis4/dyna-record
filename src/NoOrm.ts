@@ -17,13 +17,7 @@ import {
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 
-// TODO should this be renamed? Its weird to extend something called Single table design..
-// TODO look into "constructor signatures" on this doc https://medium.com/better-programming/all-javascript-and-typescript-features-of-the-last-3-years-629c57e73e42
-//      This might help me replace the EntityClass<T> that I have been passing around...
-// TODO  or look into ConstructorParameters from this https://medium.com/javascript-in-plain-english/15-utility-types-that-every-typescript-developer-should-know-6cf121d4047c
-// TODO  or InstanceType from InstanceType
-
-interface SingleTableDesignBase {
+interface NoOrmBase {
   id: string;
   type: string;
   createdAt: Date;
@@ -32,7 +26,7 @@ interface SingleTableDesignBase {
 
 // TODO should these fields be readonly?
 // TODO add typing for these aliases...
-abstract class SingleTableDesign implements SingleTableDesignBase {
+abstract class NoOrm implements NoOrmBase {
   @Attribute({ alias: tableDefaultFields.id.alias })
   public id: string;
 
@@ -54,7 +48,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    * @returns An entity with included associations serialized
    */
   public static async findById<
-    T extends SingleTableDesign,
+    T extends NoOrm,
     Opts extends FindByIdOptions<T>
   >(
     this: EntityClass<T>,
@@ -72,7 +66,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
    * @param {string=} options.indexName - The name of the index to filter on
    */
-  public static async query<T extends SingleTableDesign>(
+  public static async query<T extends NoOrm>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
@@ -86,13 +80,13 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    * @param {Object=} options.skCondition - Sort Key condition. Can be an exact value or { $beginsWith: "val" }
    * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
    */
-  public static async query<T extends SingleTableDesign>(
+  public static async query<T extends NoOrm>(
     this: EntityClass<T>,
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>>;
 
-  public static async query<T extends SingleTableDesign>(
+  public static async query<T extends NoOrm>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
@@ -106,7 +100,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    * @param attributes - Attributes of the model to create
    * @returns The new Entity
    */
-  public static async create<T extends SingleTableDesign>(
+  public static async create<T extends NoOrm>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>
   ): Promise<T> {
@@ -121,7 +115,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    * @param id - The id of the entity to update
    * @param attributes - Att
    */
-  public static async update<T extends SingleTableDesign>(
+  public static async update<T extends NoOrm>(
     this: EntityClass<T>,
     id: string,
     attributes: UpdateOptions<T>
@@ -136,7 +130,7 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
    *   - Disassociate all foreign keys of linked models
    * @param id - The id of the entity to update
    */
-  public static async delete<T extends SingleTableDesign>(
+  public static async delete<T extends NoOrm>(
     this: EntityClass<T>,
     id: string
   ): Promise<void> {
@@ -155,4 +149,4 @@ abstract class SingleTableDesign implements SingleTableDesignBase {
   }
 }
 
-export default SingleTableDesign;
+export default NoOrm;

@@ -1,6 +1,6 @@
 import Metadata from "../../metadata";
 import { type JoinTable } from "../../relationships";
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type { EntityClass } from "../../types";
 
 /**
@@ -14,9 +14,7 @@ type TargetKey<T, U> = {
  * Represents a function returning metadata for a join table.
  * @template J The type of the join table.
  */
-type ThroughFunction<
-  J extends JoinTable<SingleTableDesign, SingleTableDesign>
-> = () => {
+type ThroughFunction<J extends JoinTable<NoOrm, NoOrm>> = () => {
   /**
    * The constructor function for the join table.
    * @param {...any[]} args Constructor arguments for the join table.
@@ -30,8 +28,8 @@ type ThroughFunction<
 };
 
 interface HasAndBelongsToManyProps<
-  T extends SingleTableDesign,
-  K extends SingleTableDesign,
+  T extends NoOrm,
+  K extends NoOrm,
   J extends JoinTable<T, K>,
   L extends JoinTable<K, T>
 > {
@@ -46,8 +44,8 @@ interface HasAndBelongsToManyProps<
 }
 
 function HasAndBelongsToMany<
-  T extends SingleTableDesign,
-  K extends SingleTableDesign,
+  T extends NoOrm,
+  K extends NoOrm,
   J extends JoinTable<T, K>,
   L extends JoinTable<K, T>
 >(
@@ -58,23 +56,20 @@ function HasAndBelongsToMany<
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: SingleTableDesign = Object.getPrototypeOf(this);
+        const entity: NoOrm = Object.getPrototypeOf(this);
         const target = getTarget();
         const { joinTable, foreignKey } = props.through();
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasAndBelongsToMany",
-          propertyName: context.name as keyof SingleTableDesign,
+          propertyName: context.name as keyof NoOrm,
           target,
           joinTableName: joinTable.name
         });
 
         Metadata.addJoinTable(joinTable.name, {
           entity: target,
-          foreignKey: foreignKey as keyof JoinTable<
-            SingleTableDesign,
-            SingleTableDesign
-          >
+          foreignKey: foreignKey as keyof JoinTable<NoOrm, NoOrm>
         });
       });
     }

@@ -1,4 +1,4 @@
-import type SingleTableDesign from "../../SingleTableDesign";
+import type NoOrm from "../../NoOrm";
 import type { EntityDefinedAttributes } from "../types";
 
 /**
@@ -30,6 +30,6 @@ type AllowNullForNullable<T> = {
  *   nullableAttr: null // Remove the value. This will throw a compile time error if the property is not nullable
  * })
  */
-export type UpdateOptions<T extends SingleTableDesign> = Partial<
+export type UpdateOptions<T extends NoOrm> = Partial<
   AllowNullForNullable<EntityDefinedAttributes<T>>
 >;

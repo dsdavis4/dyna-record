@@ -1,8 +1,8 @@
-import type SingleTableDesign from "../SingleTableDesign";
+import type NoOrm from "../NoOrm";
 import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata";
 import type { EntityClass } from "../types";
 
-abstract class OperationBase<T extends SingleTableDesign> {
+abstract class OperationBase<T extends NoOrm> {
   protected readonly EntityClass: EntityClass<T>;
   protected readonly entityMetadata: EntityMetadata;
   protected readonly tableMetadata: TableMetadata;
