@@ -1,7 +1,7 @@
 import TransactGetBuilder from "../../src/dynamo-utils/TransactGetBuilder";
 
-import DynamoClient from "../../src/DynamoClient";
-jest.mock("../../src/DynamoClient");
+import DynamoClient from "../../src/dynamo-utils/DynamoClient";
+jest.mock("../../src/dynamo-utils/DynamoClient");
 
 describe("TransactGetBuilder", () => {
   afterEach(() => {
@@ -13,10 +13,7 @@ describe("TransactGetBuilder", () => {
 
     const numTransactions = 303;
 
-    const mockTransactGetItems = jest.spyOn(
-      DynamoClient.prototype,
-      "transactGetItems"
-    );
+    const mockTransactGetItems = jest.spyOn(DynamoClient, "transactGetItems");
 
     mockTransactGetItems.mockImplementation(async params => {
       const transactions = params.TransactItems ?? [];

@@ -1,5 +1,5 @@
 import { type TransactGetCommandInput } from "@aws-sdk/lib-dynamodb";
-import DynamoClient, { type TransactGetItemResponses } from "../DynamoClient";
+import DynamoClient, { type TransactGetItemResponses } from "./DynamoClient";
 import { chunkArray } from "../utils";
 
 type TransactItems = NonNullable<TransactGetCommandInput["TransactItems"]>;
@@ -16,8 +16,6 @@ class TransactGetBuilder {
    * Execute the transaction
    */
   async executeTransaction(): Promise<TransactGetItemResponses> {
-    const dynamo = new DynamoClient();
-
     const transactionChunks = chunkArray(
       this.#transactionItems,
       MAX_TRANSACTION_ITEMS
@@ -26,7 +24,8 @@ class TransactGetBuilder {
     // Break transaction into chunks of 100 due to Dynamo limit
     const res = await Promise.all(
       transactionChunks.map(
-        async chunk => await dynamo.transactGetItems({ TransactItems: chunk })
+        async chunk =>
+          await DynamoClient.transactGetItems({ TransactItems: chunk })
       )
     );
 

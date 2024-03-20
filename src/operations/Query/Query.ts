@@ -3,7 +3,7 @@ import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils";
-import DynamoClient from "../../DynamoClient";
+import DynamoClient from "../../dynamo-utils/DynamoClient";
 import type { DynamoTableItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
@@ -68,8 +68,7 @@ class Query<T extends SingleTableDesign> extends OperationBase<T> {
       options
     }).build();
 
-    const dynamo = new DynamoClient();
-    const queryResults = await dynamo.query(params);
+    const queryResults = await DynamoClient.query(params);
 
     return this.resolveQueryResults(queryResults);
   }
@@ -102,8 +101,7 @@ class Query<T extends SingleTableDesign> extends OperationBase<T> {
       options
     }).build();
 
-    const dynamo = new DynamoClient();
-    const queryResults = await dynamo.query(params);
+    const queryResults = await DynamoClient.query(params);
 
     return this.resolveQueryResults(queryResults);
   }

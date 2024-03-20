@@ -1,4 +1,4 @@
-import type { QueryItems } from "../../DynamoClient";
+import type { QueryItems } from "../../dynamo-utils/DynamoClient";
 import type SingleTableDesign from "../../SingleTableDesign";
 import type { EntityAttributes, RelationshipAttributeNames } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";

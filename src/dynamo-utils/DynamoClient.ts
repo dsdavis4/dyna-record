@@ -21,35 +21,13 @@ export type TransactGetItemResponses = NonNullable<
 
 export type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
 
-// const dynamo = DynamoDBDocumentClient.from(
-//   new DynamoDBClient({ region: "us-west-2" })
-// );
-
-// https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/modules/_aws_sdk_lib_dynamodb.html
-// TODO should these be static?
-// TODO do I need to destroy to dynamo connection?
-// const client = new DynamoDBClient({});
-// const ddbDocClient = DynamoDBDocumentClient.from(client);
-
-// // Perform operations on document client.
-
-// ddbDocClient.destroy(); // no-op
-// client.destroy(); // destroys DynamoDBClient
-
-// TODO tsdoc for everything in here
-
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
 
-// TODO should these all be static?
-
-// TODO move to dynamo-utils folder
-
-// TODO typedoc for everything
-
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class DynamoClient {
-  public async getItem(
+  public static async getItem(
     params: GetCommandInput
   ): Promise<GetCommandOutput["Item"]> {
     console.log("findById", { params });
@@ -57,13 +35,13 @@ class DynamoClient {
     return response.Item;
   }
 
-  public async query(params: QueryCommandInput): Promise<QueryItems> {
+  public static async query(params: QueryCommandInput): Promise<QueryItems> {
     console.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
   }
 
-  public async transactGetItems(
+  public static async transactGetItems(
     params: TransactGetCommandInput
   ): Promise<TransactGetItemResponses> {
     console.log("transactGetItems", { params });
@@ -71,7 +49,7 @@ class DynamoClient {
     return response.Responses ?? [];
   }
 
-  public async transactWriteItems(
+  public static async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
     console.log("transactWriteItems", { params });

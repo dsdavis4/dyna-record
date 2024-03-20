@@ -3,7 +3,7 @@ import Metadata, { type RelationshipMetadata } from "../../metadata";
 import DynamoClient, {
   type TransactGetItemResponses,
   type QueryItems
-} from "../../DynamoClient";
+} from "../../dynamo-utils/DynamoClient";
 import { QueryBuilder } from "../../query-utils";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { TransactGetBuilder } from "../../dynamo-utils";
@@ -75,8 +75,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   private async findByIdOnly(id: string): Promise<Optional<T>> {
     const { name: tableName } = this.tableMetadata;
 
-    const dynamo = new DynamoClient();
-    const res = await dynamo.getItem({
+    const res = await DynamoClient.getItem({
       TableName: tableName,
       Key: {
         [this.primaryKeyAlias]: this.EntityClass.primaryKeyValue(id),
@@ -106,8 +105,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     const includedRels = this.getIncludedRelationships(includedAssociations);
     const params = this.buildFindByIdIncludesQuery(id, includedRels);
 
-    const dynamo = new DynamoClient();
-    const queryResults = await dynamo.query({
+    const queryResults = await DynamoClient.query({
       ...params,
       ConsistentRead: true
     });

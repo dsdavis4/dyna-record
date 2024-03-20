@@ -1,5 +1,5 @@
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
-import DynamoClient from "../DynamoClient";
+import DynamoClient from "./DynamoClient";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "./errors";
 
@@ -21,10 +21,8 @@ class TransactionBuilder {
    * Execute the transaction
    */
   public async executeTransaction(): Promise<void> {
-    const dynamo = new DynamoClient();
-
     try {
-      const response = await dynamo.transactWriteItems({
+      const response = await DynamoClient.transactWriteItems({
         TransactItems: this.#transactionItems
       });
       console.log("Transaction successful:", response);
