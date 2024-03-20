@@ -19,8 +19,7 @@ import type {
   PrimaryKey,
   SortKey,
   ForeignKey,
-  NullableForeignKey,
-  Nullable
+  NullableForeignKey
 } from "../../src/types";
 
 @Table({
@@ -196,7 +195,7 @@ class PhoneBook extends MockTable {
   public edition: string;
 
   @HasMany(() => Address, { foreignKey: "phoneBookId" })
-  public address: Address[];
+  public addresses: Address[];
 }
 
 @Entity

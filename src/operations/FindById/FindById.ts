@@ -12,7 +12,8 @@ import type {
   BelongsToLinkDynamoItem,
   RelationshipMetaObj,
   RelationshipLookup,
-  EntityClass
+  EntityClass,
+  Optional
 } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
@@ -31,10 +32,8 @@ import type {
 } from "./types";
 import { buildEntityRelationshipMetaObj } from "../utils";
 import {
-  isBelongsToRelationship,
   isHasAndBelongsToManyRelationship,
-  isHasManyRelationship,
-  isHasOneRelationship
+  isHasManyRelationship
 } from "../../metadata/utils";
 
 // TODO improve this
@@ -60,7 +59,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   public async run(
     id: string,
     options?: FindByIdOptions<T>
-  ): Promise<T | FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
+  ): Promise<Optional<T | FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
     if (options?.include === undefined) {
       return await this.findByIdOnly(id);
     } else {
@@ -71,9 +70,9 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   /**
    * Find an Entity by id without associations
    * @param {string} id - Entity Id
-   * @returns An entity object or null
+   * @returns An entity object or undefined
    */
-  private async findByIdOnly(id: string): Promise<T | null> {
+  private async findByIdOnly(id: string): Promise<Optional<T>> {
     const { name: tableName } = this.tableMetadata;
 
     const dynamo = new DynamoClient();
@@ -86,8 +85,8 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
       ConsistentRead: true
     });
 
-    if (res === null) {
-      return null;
+    if (res === undefined) {
+      return undefined;
     } else {
       return tableItemToEntity<T>(this.EntityClass, res);
     }
@@ -103,7 +102,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
   private async findByIdWithIncludes(
     id: string,
     includedAssociations: IncludedAssociations<T>
-  ): Promise<FindByIdIncludesRes<T, FindByIdOptions<T>> | null> {
+  ): Promise<Optional<FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
     const includedRels = this.getIncludedRelationships(includedAssociations);
     const params = this.buildFindByIdIncludesQuery(id, includedRels);
 
@@ -114,7 +113,7 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     });
 
     if (queryResults.length === 0) {
-      return null;
+      return undefined;
     }
 
     const sortedQueryResults = this.filterQueryResults(queryResults);
@@ -338,16 +337,10 @@ class FindById<T extends SingleTableDesign> extends OperationBase<T> {
     Object.values(relationsLookup).forEach(rel => {
       if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
 
-      if (isHasManyRelationship(rel)) {
-        safeAssignEntity(parentEntity, rel.propertyName, []);
-      } else if (isBelongsToRelationship(rel)) {
-        // TODO unit test
-        safeAssignEntity(parentEntity, rel.propertyName, null);
-      } else if (isHasOneRelationship(rel)) {
-        // TODO unit test
-        safeAssignEntity(parentEntity, rel.propertyName, null);
-      } else if (isHasAndBelongsToManyRelationship(rel)) {
-        // TODO unit test
+      if (
+        isHasManyRelationship(rel) ||
+        isHasAndBelongsToManyRelationship(rel)
+      ) {
         safeAssignEntity(parentEntity, rel.propertyName, []);
       }
     });

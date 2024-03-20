@@ -10,7 +10,10 @@ import {
   Teacher,
   Assignment,
   Student,
-  ContactInformation
+  ContactInformation,
+  Pet,
+  Address,
+  PhoneBook
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -130,14 +133,14 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
-  it("findByIdOnly - will return null if it doesn't find the record", async () => {
+  it("findByIdOnly - will return undefined if it doesn't find the record", async () => {
     expect.assertions(4);
 
     mockGet.mockResolvedValueOnce({});
 
     const result = await Customer.findById("123");
 
-    expect(result).toEqual(null);
+    expect(result).toEqual(undefined);
     expect(mockedGetCommand.mock.calls).toEqual([
       [
         {
@@ -151,7 +154,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
-  it("findByIdWithIncludes - will return null if it doesn't find the record", async () => {
+  it("findByIdWithIncludes - will return undefined if it doesn't find the record", async () => {
     expect.assertions(4);
 
     mockQuery.mockResolvedValueOnce({ Items: [] });
@@ -160,7 +163,7 @@ describe("FindById", () => {
       include: [{ association: "orders" }]
     });
 
-    expect(result).toEqual(null);
+    expect(result).toEqual(undefined);
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
         {
@@ -550,7 +553,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  it("findByIdWithIncludes - will set included HasOne associations to null if it doesn't find any", async () => {
+  it("findByIdWithIncludes - will set included HasOne associations to undefined if it doesn't find any", async () => {
     expect.assertions(4);
 
     mockQuery.mockResolvedValueOnce({
@@ -579,7 +582,7 @@ describe("FindById", () => {
       lastFour: "0000",
       customerId: "123",
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-      paymentMethodProvider: null
+      paymentMethodProvider: undefined
     });
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
@@ -608,7 +611,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  it("findByIdWithIncludes - will set included BelongsTo associations to null if it doesn't find any", async () => {
+  it("findByIdWithIncludes - will set included BelongsTo associations to undefined if it doesn't find any", async () => {
     expect.assertions(4);
 
     mockQuery.mockResolvedValueOnce({
@@ -641,7 +644,7 @@ describe("FindById", () => {
       phone: "555-555-5555",
       createdAt: new Date("2023-09-15T04:26:31.148Z"),
       updatedAt: new Date("2023-09-15T04:26:31.148Z"),
-      customer: null
+      customer: undefined
     });
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
@@ -662,7 +665,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  it("defaults not found entities to empty will find a model with HasMany, HasAndBelongsMany and BelongsTo relationships", async () => {
+  it("defaults not found entities to undefined", async () => {
     expect.assertions(6);
 
     const courseRes = {
@@ -729,7 +732,7 @@ describe("FindById", () => {
       teacherId: undefined,
       createdAt: new Date("2023-01-15T12:12:18.123Z"),
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-      teacher: null,
+      teacher: undefined,
       assignments: [
         {
           myPk: "Assignment|111",
@@ -1708,8 +1711,6 @@ describe("FindById", () => {
     ]);
   });
 
-  // TODO start here... add type tests for empty states of each included rel
-  //      BelongsToLink should be dynamic based on nullable keys...
   describe("types", () => {
     describe("operation results", () => {
       it("HasOne - when including an optional property, the returned type is optional", async () => {
@@ -1768,7 +1769,7 @@ describe("FindById", () => {
         include: [{ association: "customer" }]
       });
 
-      if (paymentMethod !== null) {
+      if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
@@ -1798,7 +1799,7 @@ describe("FindById", () => {
         include: [{ association: "paymentMethod" }]
       });
 
-      if (paymentMethod !== null) {
+      if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
@@ -1824,7 +1825,7 @@ describe("FindById", () => {
         include: [{ association: "paymentMethodProvider" }]
       });
 
-      if (paymentMethod !== null) {
+      if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
@@ -1854,7 +1855,7 @@ describe("FindById", () => {
         include: [{ association: "orders" }]
       });
 
-      if (paymentMethod !== null) {
+      if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
@@ -1884,7 +1885,7 @@ describe("FindById", () => {
         include: [{ association: "authors" }]
       });
 
-      if (book !== null) {
+      if (book !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
         console.log(book.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
@@ -1920,7 +1921,7 @@ describe("FindById", () => {
         include: [{ association: "customer" }]
       });
 
-      if (paymentMethod !== null) {
+      if (paymentMethod !== undefined) {
         // @ts-expect-error: Included relationships should not include associations
         console.log(paymentMethod.customer?.orders);
         // @ts-expect-no-error: Entity attributes should include entity attributes
@@ -1936,7 +1937,7 @@ describe("FindById", () => {
         include: [{ association: "orders" }]
       });
 
-      if (paymentMethod !== null && paymentMethod.orders?.length > 0) {
+      if (paymentMethod !== undefined && paymentMethod.orders?.length > 0) {
         // @ts-expect-error: Included relationships should not include associations
         console.log(paymentMethod.orders[0].customer);
         // @ts-expect-no-error: Entity attributes should include entity attributes
@@ -1952,11 +1953,53 @@ describe("FindById", () => {
         include: [{ association: "authors" }]
       });
 
-      if (book !== null && book.authors?.length > 0) {
+      if (book !== undefined && book.authors?.length > 0) {
         // @ts-expect-error: Included relationships should not include associations
         console.log(book.authors[0].books);
         // @ts-expect-no-error: Entity attributes should include entity attributes
         console.log(book.authors[0].id);
+      }
+    });
+
+    it("BelongsTo includes from NullableForeignKeys might be undefined", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
+
+      const pet = await Pet.findById("789", {
+        include: [{ association: "owner" }]
+      });
+
+      if (pet !== undefined) {
+        // @ts-expect-error: BelongsTo includes from NullableForeignKeys might be undefined
+        console.log(pet.owner.id);
+      }
+    });
+
+    it("BelongsTo includes from (non-nullable) ForeignKeys will not be undefined", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
+
+      const address = await Address.findById("123", {
+        include: [{ association: "home" }]
+      });
+
+      if (address !== undefined) {
+        // @ts-expect-no-error: BelongsTo includes from (non-nullable) ForeignKeys will not be undefined
+        console.log(address.home.id);
+      }
+    });
+
+    it("included HasMany relationships will be an array", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+      mockTransactGetItems.mockResolvedValueOnce({});
+
+      const phoneBook = await PhoneBook.findById("123", {
+        include: [{ association: "addresses" }]
+      });
+
+      if (phoneBook !== undefined) {
+        // @ts-expect-no-error: included HasMany relationships will be an array
+        console.log(phoneBook.addresses.length);
       }
     });
   });
