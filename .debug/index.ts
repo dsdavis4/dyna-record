@@ -35,8 +35,6 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
 // dyna-record TODO this might be it
 // DynamORM
 
-// TODO delete temp tables
-
 // TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
 //       I think I had a medium article about a library that does this
 
@@ -53,11 +51,9 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
   }
 })
 abstract class DrewsBrewsTable extends NoOrm {
-  // TODO add a test that this can be whatever value the user wants: Ex: public myPrimaryKey: PrimaryKey
   @PrimaryKeyAttribute({ alias: "PK" })
   public readonly pk: PrimaryKey;
 
-  // TODO add a test that this can be whatever value the user wants: Ex: public mySortKey: mySortKey
   @SortKeyAttribute({ alias: "SK" })
   public readonly sk: SortKey;
 
@@ -110,12 +106,11 @@ class Beer extends DrewsBrewsTable {
   public readonly name: string;
 
   @Attribute({ alias: "ABV" })
-  public readonly abv: number; // TODO should serialize to number
+  public readonly abv: number;
 
   @BelongsTo(() => Brewery, { foreignKey: "breweryId" })
   public readonly brewery: Brewery;
 
-  // TODO should this be inveresed to that it belongsTo keg and keg HasOne Beer
   @HasOne(() => Keg, { foreignKey: "beerId" })
   public readonly keg?: Keg;
 }
@@ -283,26 +278,11 @@ class AttributeTester extends DrewsBrewsTable {
   public readonly dateAttr2?: Date;
 }
 
-// TODO should I make a types file for types where there a ton in each file?
 // TODO delete seed-table scripts in package.json and ts file
 
 // TODO add dependabot once this is public
 
-/* TODO post mvp
-- add protection so that an attribute/association wont be serialized if that type returned from dynamo is incorrect. 
-  and I could log an error that there is corrupted data when it finds it
-
-- can I improve my testing with this? https://jestjs.io/docs/dynamodb
-- v3 docs https://www.npmjs.com/package/@shelf/jest-dynamodb
-
-- Support projected associations
-
-- eslint
-*/
-
 // TODO add eslint workflow
-
-// TODO add tsconfig for dev... that includes test files and debug file
 
 // TODO make a logger class to optionally log. Structured logs..
 
@@ -313,6 +293,21 @@ class AttributeTester extends DrewsBrewsTable {
 (async () => {
   try {
     const metadata = Metadata;
+
+    const brewery222 = await Brewery.create({ name: "test delete" });
+
+    debugger;
+
+    const beer222 = await Beer.create({
+      name: "bla",
+      abv: 1,
+      style: "testing",
+      breweryId: brewery222.id
+    });
+
+    const t = await Beer.findById(beer222.id);
+
+    debugger;
 
     const bla3 = await Brewery.findById("1", {
       include: [{ association: "beers" }, { association: "users" }]
@@ -858,9 +853,6 @@ class AttributeTester extends DrewsBrewsTable {
     // debugger;
 
     // BelongsTo only
-    // const beer = await Beer.findById("0c381942-30b5-4082-af98-e2ff8a841d81", {
-    //   include: [{ association: "brewery" }]
-    // });
 
     // HasMany only
     // const brewery = await Brewery.findById(

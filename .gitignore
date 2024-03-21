@@ -22,3 +22,5 @@ cdk.out
 coverage
 
 !.eslintrc.js
+
+notes.txt
