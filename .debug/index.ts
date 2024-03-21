@@ -28,6 +28,13 @@ import { BelongsToLink, JoinTable } from "../src/relationships";
 
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
+// no-orm
+// dino-orm
+// dynamo-orm
+// dynam-orm
+// dyna-record TODO this might be it
+// DynamORM
+
 // TODO delete temp tables
 
 // TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered

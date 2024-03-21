@@ -11,6 +11,7 @@ type DefaultDateFields = "createdAt" | "updatedAt";
 
 export type DefaultFields = keyof NoOrm | keyof BelongsToLink;
 
+// TODO this should be updated everywhere to be partitionKey
 const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
 // TODO typedoc
