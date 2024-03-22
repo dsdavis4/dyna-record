@@ -80,7 +80,7 @@ class MetadataStorage {
     return {
       ...entityMetadata.attributes,
       ...tableMeta.defaultAttributes,
-      [tableMeta.primaryKeyAttribute.name]: tableMeta.primaryKeyAttribute,
+      [tableMeta.partitionKeyAttribute.name]: tableMeta.partitionKeyAttribute,
       [tableMeta.sortKeyAttribute.name]: tableMeta.sortKeyAttribute
     };
   }
@@ -99,7 +99,7 @@ class MetadataStorage {
     return {
       ...entityMetadata.tableAttributes,
       ...tableMeta.defaultTableAttributes,
-      [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute,
+      [tableMeta.partitionKeyAttribute.alias]: tableMeta.partitionKeyAttribute,
       [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute
     };
   }
@@ -183,18 +183,18 @@ class MetadataStorage {
   }
 
   /**
-   * Adds the primary key attribute to Table metadata storage
+   * Adds the partition key attribute to Table metadata storage
    * @param entityClass
    * @param options
    */
-  public addPrimaryKeyAttribute(
+  public addPartitionKeyAttribute(
     entityClass: DynaRecord,
-    options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
+    options: Parameters<TableMetadata["addPartitionKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 
     if (tableMetadata !== undefined) {
-      tableMetadata.addPrimaryKeyAttribute(options);
+      tableMetadata.addPartitionKeyAttribute(options);
     }
   }
 
@@ -205,7 +205,7 @@ class MetadataStorage {
    */
   public addSortKeyAttribute(
     entityClass: DynaRecord,
-    options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
+    options: Parameters<TableMetadata["addPartitionKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
 

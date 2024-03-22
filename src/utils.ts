@@ -84,7 +84,9 @@ export const tableItemToBelongsToLink = (
   const link = new BelongsToLink();
 
   const belongsToLinkAttrs: Record<string, AttributeMetadata> = {
-    ...{ [tableMeta.primaryKeyAttribute.alias]: tableMeta.primaryKeyAttribute },
+    ...{
+      [tableMeta.partitionKeyAttribute.alias]: tableMeta.partitionKeyAttribute
+    },
     ...{ [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute },
     ...tableMeta.defaultTableAttributes
   };

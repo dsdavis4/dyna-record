@@ -61,7 +61,7 @@ class RelationshipTransactions<T extends DynaRecord> {
   readonly #props: RelationshipTransactionsProps<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
-  readonly #primaryKeyAlias: string;
+  readonly #partitionKeyAlias: string;
   readonly #sortKeyAlias: string;
 
   constructor(props: RelationshipTransactionsProps<T>) {
@@ -70,7 +70,7 @@ class RelationshipTransactions<T extends DynaRecord> {
     this.#tableMetadata = Metadata.getTable(
       this.#entityMetadata.tableClassName
     );
-    this.#primaryKeyAlias = this.#tableMetadata.primaryKeyAttribute.alias;
+    this.#partitionKeyAlias = this.#tableMetadata.partitionKeyAttribute.alias;
     this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
@@ -129,10 +129,10 @@ class RelationshipTransactions<T extends DynaRecord> {
     const conditionCheck: ConditionCheck = {
       TableName: tableName,
       Key: {
-        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
+        [this.#partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: rel.target.name
       },
-      ConditionExpression: `attribute_exists(${this.#primaryKeyAlias})`
+      ConditionExpression: `attribute_exists(${this.#partitionKeyAlias})`
     };
 
     this.#props.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
@@ -160,14 +160,14 @@ class RelationshipTransactions<T extends DynaRecord> {
       const link = BelongsToLink.build(this.#props.Entity.name, entityId);
 
       const keys = {
-        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
+        [this.#partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: this.#props.Entity.name
       };
 
       const putExpression: Put = {
         TableName: tableName,
         Item: { ...keys, ...entityToTableItem(rel.target, link) },
-        ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
       };
 
       this.#props.transactionBuilder.addPut(
@@ -198,8 +198,8 @@ class RelationshipTransactions<T extends DynaRecord> {
       const link = BelongsToLink.build(this.#props.Entity.name, entityId);
 
       const keys = {
-        [this.#primaryKeyAlias]: rel.target.primaryKeyValue(relationshipId),
-        [this.#sortKeyAlias]: this.#props.Entity.primaryKeyValue(
+        [this.#partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
+        [this.#sortKeyAlias]: this.#props.Entity.partitionKeyValue(
           link.foreignKey
         )
       };
@@ -207,7 +207,7 @@ class RelationshipTransactions<T extends DynaRecord> {
       const putExpression: Put = {
         TableName: tableName,
         Item: { ...keys, ...entityToTableItem(rel.target, link) },
-        ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
       };
 
       this.#props.transactionBuilder.addPut(

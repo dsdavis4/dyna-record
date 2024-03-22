@@ -2,7 +2,7 @@ import DynaRecord from "../../src";
 import {
   Table,
   Entity,
-  PrimaryKeyAttribute,
+  PartitionKeyAttribute,
   SortKeyAttribute,
   Attribute,
   ForeignKeyAttribute,
@@ -17,7 +17,7 @@ import {
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
-  PrimaryKey,
+  PartitionKey,
   SortKey,
   ForeignKey,
   NullableForeignKey
@@ -36,8 +36,8 @@ import type {
   }
 })
 abstract class MockTable extends DynaRecord {
-  @PrimaryKeyAttribute({ alias: "PK" })
-  public readonly pk: PrimaryKey;
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
 
   @SortKeyAttribute({ alias: "SK" })
   public readonly sk: SortKey;
@@ -242,8 +242,8 @@ class AuthorBook extends JoinTable<Author, Book> {
 
 @Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends DynaRecord {
-  @PrimaryKeyAttribute()
-  public readonly myPk: PrimaryKey;
+  @PartitionKeyAttribute()
+  public readonly myPk: PartitionKey;
 
   @SortKeyAttribute()
   public readonly mySk: SortKey;

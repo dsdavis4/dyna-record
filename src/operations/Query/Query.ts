@@ -31,16 +31,16 @@ import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
 // }
 
 /**
- * Provides functionality to query entities from the database based on primary key, sort key, and optional filter conditions.
+ * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
  *
- * The `Query` operation supports two main query patterns: querying by a simple entity ID or by more complex key conditions that include primary key, optional sort key, and filters. It can handle querying for both entities and their relationships, like "BelongsTo" links, based on the provided conditions.
+ * The `Query` operation supports two main query patterns: querying by a simple entity ID or by more complex key conditions that include partition key, optional sort key, and filters. It can handle querying for both entities and their relationships, like "BelongsTo" links, based on the provided conditions.
  *
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  */
 class Query<T extends DynaRecord> extends OperationBase<T> {
   /**
    * Run the query operation
-   * @param key EntityId or object with PrimaryKey and optional SortKey conditions
+   * @param key EntityId or object with PartitionKey and optional SortKey conditions
    * @param options Filter conditions, indexName, or SortKey conditions if querying by keys
    * @returns Array of Entity or BelongsToLinks
    */
@@ -56,8 +56,8 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Query by PrimaryKey and optional SortKey/Filter/Index conditions
-   * @param {Object} key - PrimaryKey value and optional SortKey condition. Keys must be attributes defined on the model
+   * Query by PartitionKey and optional SortKey/Filter/Index conditions
+   * @param {Object} key - PartitionKey value and optional SortKey condition. Keys must be attributes defined on the model
    * @param {Object=} options - QueryBuilderOptions. Supports filter and indexName
    * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
    * @param {string=} options.indexName - The name of the index to filter on
@@ -89,11 +89,11 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
-    const modelPk = this.tableMetadata.primaryKeyAttribute.name;
+    const modelPk = this.tableMetadata.partitionKeyAttribute.name;
     const modelSk = this.tableMetadata.sortKeyAttribute.name;
 
     const keyCondition = {
-      [modelPk]: this.EntityClass.primaryKeyValue(id),
+      [modelPk]: this.EntityClass.partitionKeyValue(id),
       ...(options?.skCondition !== undefined && {
         [modelSk]: options?.skCondition
       })

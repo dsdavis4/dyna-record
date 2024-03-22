@@ -14,9 +14,9 @@ export type Brand<K, T> = K & { __brand: T };
 export type SortKey = Brand<string, "SortKey">;
 
 /**
- * A branded string type to represent primary keys in DynamoDB tables
+ * A branded string type to represent partition keys in DynamoDB tables
  */
-export type PrimaryKey = Brand<string, "PrimaryKey">;
+export type PartitionKey = Brand<string, "PartitionKey">;
 
 /**
  * A branded string type to represent foreign keys in DynamoDB tables

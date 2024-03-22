@@ -34,8 +34,8 @@ interface DynaRecordBase {
  * ```typescript
  * @Table({ name: "my-table", delimiter: "#" })
  * abstract class MyTable extends DynaRecord {
- *   @PrimaryKeyAttribute()
- *   public readonly pk: PrimaryKey;
+ *   @PartitionKeyAttribute()
+ *   public readonly pk: PartitionKey;
  *
  *   @SortKeyAttribute()
  *   public readonly sk: SortKey;
@@ -101,8 +101,8 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Query by PrimaryKey and optional SortKey/Filter/Index conditions
-   * @param {Object} key - PrimaryKey value and optional SortKey condition. Keys must be attributes defined on the model
+   * Query by PartitionKey and optional SortKey/Filter/Index conditions
+   * @param {Object} key - PartitionKey value and optional SortKey condition. Keys must be attributes defined on the model
    * @param {Object=} options - QueryBuilderOptions
    *
    * @example By partition key only
@@ -278,16 +278,16 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Constructs the primary key value
+   * Constructs the partition key value
    * @param {string} id - Entity Id
-   * @returns Constructed primary key value
+   * @returns Constructed partition key value
    *
    * @example
    * ```typescript
-   * const pkValue = User.primaryKeyValue("userId");
+   * const pkValue = User.partitionKeyValue("userId");
    * ```
    */
-  public static primaryKeyValue(id: string): string {
+  public static partitionKeyValue(id: string): string {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
   }

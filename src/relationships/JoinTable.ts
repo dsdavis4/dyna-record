@@ -123,7 +123,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       linkedEntityMeta
     );
     const { name: tableName } = tableProps;
-    const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
+    const { alias: partitionKeyAlias } = tableProps.partitionKeyAttribute;
     const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
     const { parentEntity, linkedEntity } = entities;
     const { parentId, linkedEntityId } = ids;
@@ -138,7 +138,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
             BelongsToLink.build(linkedEntity.name, parentId)
           )
         },
-        ConditionExpression: `attribute_not_exists(${primaryKeyAlias})` // Ensure item doesn't already exist
+        ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
       },
       `${parentEntity.name} with ID ${linkedEntityId} is already linked to ${linkedEntity.name} with ID ${parentId}`
     );
@@ -147,10 +147,10 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       {
         TableName: tableName,
         Key: {
-          [primaryKeyAlias]: parentEntity.primaryKeyValue(linkedEntityId),
+          [partitionKeyAlias]: parentEntity.partitionKeyValue(linkedEntityId),
           [sortKeyAlias]: parentEntity.name
         },
-        ConditionExpression: `attribute_exists(${primaryKeyAlias})`
+        ConditionExpression: `attribute_exists(${partitionKeyAlias})`
       },
       `${parentEntity.name} with ID ${linkedEntityId} does not exist`
     );
@@ -176,7 +176,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     const parentId: string = keys[parentKey];
     const linkedEntityId: string = keys[linkedKey];
 
-    const { name: tableName, primaryKeyAttribute } = Metadata.getEntityTable(
+    const { name: tableName, partitionKeyAttribute } = Metadata.getEntityTable(
       parentEntity.name
     );
 
@@ -184,7 +184,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       {
         TableName: tableName,
         Key: this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta),
-        ConditionExpression: `attribute_exists(${primaryKeyAttribute.alias})`
+        ConditionExpression: `attribute_exists(${partitionKeyAttribute.alias})`
       },
       `${parentEntity.name} with ID ${linkedEntityId} is not linked to ${linkedEntity.name} with ID ${parentId}`
     );
@@ -202,11 +202,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     );
     const { parentEntity, linkedEntity } = entities;
 
-    const { alias: primaryKeyAlias } = tableProps.primaryKeyAttribute;
+    const { alias: partitionKeyAlias } = tableProps.partitionKeyAttribute;
     const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
     return {
-      [primaryKeyAlias]: parentEntity.primaryKeyValue(ids.linkedEntityId),
-      [sortKeyAlias]: linkedEntity.primaryKeyValue(ids.parentId)
+      [partitionKeyAlias]: parentEntity.partitionKeyValue(ids.linkedEntityId),
+      [sortKeyAlias]: linkedEntity.partitionKeyValue(ids.parentId)
     };
   }
 

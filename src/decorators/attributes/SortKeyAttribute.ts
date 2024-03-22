@@ -7,7 +7,7 @@ import type { AttributeOptions } from "../types";
  * A decorator for designating the field for the sort key on the dynamo table.
  *
  * @template T The entity to which the decorator is applied.
- * @template K The type constraint ensuring the field is suitable to be a primary key.
+ * @template K The type constraint ensuring the field is suitable to be a partition key.
  * @param props An optional object of {@link AttributeOptions}, providing additional configuration for the sort key attribute, such as custom metadata.
  * @returns A class field decorator function that targets and initializes the class's prototype to register the sort key with the ORM's metadata system.
  *

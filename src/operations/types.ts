@@ -3,22 +3,22 @@ import type {
   ForeignKey,
   NullableForeignKey,
   Optional,
-  PrimaryKey,
+  PartitionKey,
   SortKey
 } from "../types";
 
 /**
- * Represents the type of the primary key attribute for a given entity. It identifies the specific property of the entity that is marked as the primary key, which uniquely identifies each instance of the entity in the database.
+ * Represents the type of the partition key attribute for a given entity. It identifies the specific property of the entity that is marked as the partition key, which uniquely identifies each instance of the entity in the database.
  *
  * @template T - The type of the entity being examined.
- * @returns The name of the primary key attribute as a string if one exists; otherwise, the result is `never`.
+ * @returns The name of the partition key attribute as a string if one exists; otherwise, the result is `never`.
  */
-export type PrimaryKeyAttribute<T> = {
-  [K in keyof T]: T[K] extends PrimaryKey ? K : never;
+export type PartitionKeyAttribute<T> = {
+  [K in keyof T]: T[K] extends PartitionKey ? K : never;
 }[keyof T];
 
 /**
- * Represents the type of the sort key attribute for a given entity. It identifies the specific property of the entity that is marked as the sort key, used in conjunction with the primary key to provide additional sorting capability within the database.
+ * Represents the type of the sort key attribute for a given entity. It identifies the specific property of the entity that is marked as the sort key, used in conjunction with the partition key to provide additional sorting capability within the database.
  *
  * @template T - The type of the entity being examined.
  * @returns The name of the sort key attribute as a string if one exists; otherwise, the result is `never`.
@@ -73,7 +73,7 @@ export type EntityAttributes<T extends DynaRecord> = Omit<
 /**
  * Attributes that are defined on the Entity using the @Attribute decorators. This excludes:
  *   - relationship attributes
- *   - primary key attribute
+ *   - partition key attribute
  *   - sort key attribute
  *   - dyna-record default attributes
  *   - Functions defined on the entity
@@ -83,6 +83,6 @@ export type EntityDefinedAttributes<T extends DynaRecord> = Omit<
   | keyof DynaRecord
   | RelationshipAttributeNames<T>
   | FunctionFields<T>
-  | PrimaryKeyAttribute<T>
+  | PartitionKeyAttribute<T>
   | SortKeyAttribute<T>
 >;

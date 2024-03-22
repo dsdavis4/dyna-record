@@ -3,11 +3,11 @@ import DynaRecord from "../../src";
 import {
   Table,
   Entity,
-  PrimaryKeyAttribute,
+  PartitionKeyAttribute,
   SortKeyAttribute,
   Attribute
 } from "../../src/decorators";
-import type { PrimaryKey, SortKey } from "../../src/types";
+import type { PartitionKey, SortKey } from "../../src/types";
 
 @Table({
   name: "mock-table",
@@ -22,8 +22,8 @@ import type { PrimaryKey, SortKey } from "../../src/types";
   }
 })
 class MockTable extends DynaRecord {
-  @PrimaryKeyAttribute({ alias: "PK" })
-  public pk: PrimaryKey;
+  @PartitionKeyAttribute({ alias: "PK" })
+  public pk: PartitionKey;
 
   @SortKeyAttribute({ alias: "SK" })
   public sk: SortKey;
