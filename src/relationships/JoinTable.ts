@@ -134,7 +134,7 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
         Item: {
           ...this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta),
           ...entityToTableItem(
-            linkedEntity.name,
+            linkedEntity,
             BelongsToLink.build(linkedEntity.name, parentId)
           )
         },

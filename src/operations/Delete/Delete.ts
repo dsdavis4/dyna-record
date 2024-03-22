@@ -166,13 +166,13 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
         );
       }
 
-      const tableKeys = entityToTableItem(this.EntityClass.name, {
+      const tableKeys = entityToTableItem(this.EntityClass, {
         [this.#primaryKeyField]: relMeta.target.primaryKeyValue(
           item.foreignKey
         ),
         [this.#sortKeyField]: relMeta.target.name
       });
-      const tableAttrs = entityToTableItem(relMeta.target.name, {
+      const tableAttrs = entityToTableItem(relMeta.target, {
         [relMeta.foreignKey]: null
       });
 

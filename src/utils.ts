@@ -7,18 +7,17 @@ import Metadata, {
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
-// TODO should I pass the entity class instead of the name?
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
  * @param entityClassName
  * @param entityData
  * @returns
  */
-export const entityToTableItem = (
-  entityClassName: string,
+export const entityToTableItem = <T extends NoOrm>(
+  EntityClass: new () => T,
   entityData: Partial<NoOrm>
 ): DynamoTableItem => {
-  const attributesMeta = Metadata.getEntityAttributes(entityClassName);
+  const attributesMeta = Metadata.getEntityAttributes(EntityClass.name);
 
   return Object.entries(entityData).reduce<DynamoTableItem>(
     (acc, [key, val]) => {

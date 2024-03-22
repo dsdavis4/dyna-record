@@ -166,7 +166,7 @@ class RelationshipTransactions<T extends NoOrm> {
 
       const putExpression: Put = {
         TableName: tableName,
-        Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+        Item: { ...keys, ...entityToTableItem(rel.target, link) },
         ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 
@@ -206,7 +206,7 @@ class RelationshipTransactions<T extends NoOrm> {
 
       const putExpression: Put = {
         TableName: tableName,
-        Item: { ...keys, ...entityToTableItem(rel.target.name, link) },
+        Item: { ...keys, ...entityToTableItem(rel.target, link) },
         ConditionExpression: `attribute_not_exists(${this.#primaryKeyAlias})` // Ensure item doesn't already exist
       };
 

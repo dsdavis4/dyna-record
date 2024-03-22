@@ -25,7 +25,7 @@ class Create<T extends NoOrm> extends OperationBase<T> {
   public async run(attributes: CreateOptions<T>): Promise<T> {
     const entityData = this.buildEntityData(attributes);
 
-    const tableItem = entityToTableItem(this.EntityClass.name, entityData);
+    const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     this.buildPutItemTransaction(tableItem);
     await this.buildRelationshipTransactions(entityData);

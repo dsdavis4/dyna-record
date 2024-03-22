@@ -62,8 +62,8 @@ class Update<T extends NoOrm> extends OperationBase<T> {
       ...attributes,
       updatedAt: new Date()
     };
-    const tableKeys = entityToTableItem(this.EntityClass.name, keys);
-    const tableAttrs = entityToTableItem(this.EntityClass.name, updatedAttrs);
+    const tableKeys = entityToTableItem(this.EntityClass, keys);
+    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
 
     const expression = expressionBuilder(tableAttrs);
 
