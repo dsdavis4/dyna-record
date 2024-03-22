@@ -94,7 +94,6 @@ class MockInformation extends MockTable {
   public state?: string;
 }
 
-// TODO add types test, similiar to create but with optional properties
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
@@ -1030,12 +1029,6 @@ describe("Update", () => {
                     }
                   },
                   {
-                    // TODO should I make individual tests for each of thee that way its super clear in the description of the test "why" its important?
-                    //      If so do this to all tests with transactions
-                    //      But also keep the ones like this so order of operations is tested
-                    //     ex: it("deletes old BelongsToLink for the entity that is no longer associated")
-                    //       expect(mockTransactWriteCommand).toHaveBeenCalledWith(<block below>)
-                    //      and this would be the only assertion
                     // Delete old BelongsToLink
                     Delete: {
                       TableName: "mock-table",

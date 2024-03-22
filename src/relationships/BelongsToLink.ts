@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type DynaRecord from "../DynaRecord";
+import { ForeignKey } from "../types";
 
 /**
  * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
@@ -30,7 +31,7 @@ class BelongsToLink implements BelongsToLinkProps {
   /**
    * The foreign key value identifying the specific instance of the foreign entity to which the link belongs. While it is a string, it represents the value of a `ForeignKey` attribute in the related entity.
    */
-  public readonly foreignKey: string; // TODO should this be of type ForeignKey?
+  public readonly foreignKey: ForeignKey;
   /**
    * The timestamp marking when the link was created
    */

@@ -3,6 +3,7 @@ import {
   ContactInformation,
   Customer,
   Grade,
+  Home,
   MockTable,
   Order,
   PaymentMethodProvider
@@ -19,14 +20,6 @@ import {
   NullableForeignKeyAttribute
 } from "../../src/decorators";
 import type { NullableForeignKey } from "../../src/types";
-
-// TODO is everything awaited properly in these tests? Do I need to mock resolved value in other tests?
-//      Check all operations tests...
-//      Look at what I did in Update tests for 'return await Promise.resolve(mockTransact());
-// I might need to add below to the mockSend (see update)
-// if (command.name === "TransactWriteCommand") {
-//   return await Promise.resolve(mockTransact());
-// }
 
 jest.mock("uuid");
 
@@ -54,6 +47,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
+            return await Promise.resolve("mock");
           })
         };
       })
@@ -71,7 +65,6 @@ class MyModelNullableAttribute extends MockTable {
   public myAttribute?: string;
 }
 
-// TODO add test for creating entity without relationships
 describe("Create", () => {
   beforeAll(() => {
     jest.useFakeTimers();
@@ -83,6 +76,51 @@ describe("Create", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("will create an entity and without relationship transactions if none are needed", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const home = await Home.create({ mlsNum: "123" });
+
+    expect(home).toEqual({
+      pk: "Home#uuid1",
+      sk: "Home",
+      type: "Home",
+      id: "uuid1",
+      mlsNum: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(home).toBeInstanceOf(Home);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Home#uuid1",
+                  SK: "Home",
+                  Type: "Home",
+                  Id: "uuid1",
+                  "MLS#": "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
   });
 
   it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {

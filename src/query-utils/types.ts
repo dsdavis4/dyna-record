@@ -1,9 +1,6 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
-// TODO I think this is nto working as expected and should instead be:
-// export type KeyConditions = NonNullable<
-//   QueryCommandInput["KeyConditions"],
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
  *
