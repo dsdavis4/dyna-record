@@ -1,6 +1,2 @@
-export {
-  default as QueryBuilder,
-  type KeyConditions,
-  type QueryOptions,
-  type SortKeyCondition
-} from "./QueryBuilder";
+export { default as QueryBuilder } from "./QueryBuilder";
+export * from "./types";

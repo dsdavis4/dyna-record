@@ -5,48 +5,17 @@ import Metadata, {
   type TableMetadata
 } from "../metadata";
 import type { StringObj } from "../types";
-
-// TODO I think this is nto working as expected and should instead be:
-// export type KeyConditions = NonNullable<
-//   QueryCommandInput["KeyConditions"],
-// >;
-export type KeyConditions = Omit<
-  QueryCommandInput["KeyConditions"],
-  "undefined"
->;
-
-interface FilterExpression {
-  values: Record<string, NativeScalarAttributeValue>;
-  expression: string;
-}
-
-type BeginsWithFilter = Record<"$beginsWith", NativeScalarAttributeValue>;
-
-type FilterTypes =
-  | BeginsWithFilter
-  | NativeScalarAttributeValue
-  | NativeScalarAttributeValue[];
-
-// Filter value that does not have an '$or' key
-type AndFilter = Record<string, FilterTypes>;
-export type OrFilter = Record<"$or", AndFilter[]>;
-
-type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
-type FilterParams = (AndFilter | OrFilter) & OrOptional;
-type AndOrFilter = FilterParams & OrFilter;
-
-export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
-
-export interface QueryOptions {
-  indexName?: string;
-  filter?: FilterParams;
-}
-
-interface QueryCommandProps {
-  entityClassName: string;
-  key: KeyConditions;
-  options?: QueryOptions;
-}
+import type {
+  AndFilter,
+  AndOrFilter,
+  BeginsWithFilter,
+  FilterExpression,
+  FilterParams,
+  FilterTypes,
+  KeyConditions,
+  OrFilter,
+  QueryCommandProps
+} from "./types";
 
 // TODO add jsdoc
 class QueryBuilder {
