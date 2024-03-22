@@ -293,6 +293,8 @@ class AttributeTester extends DrewsBrewsTable {
   try {
     const metadata = Metadata;
 
+    debugger;
+
     const brewery222 = await Brewery.create({ name: "test delete" });
 
     debugger;

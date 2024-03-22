@@ -7,6 +7,18 @@ import type NoOrm from "../NoOrm";
 
 type EntityClass = new (...args: any) => NoOrm;
 
+/**
+ * Represents metadata for an entity within the ORM system, encapsulating information about the entity's attributes, relationships, and its associated database table.
+ *
+ * @property {string} tableClassName - The name of the table class instance to which this entity is mapped, providing a link between the entity and its database table.
+ * @property {AttributeMetadataStorage} attributes - A storage mapping for attribute metadata, keyed by entity field names, enabling lookup of attribute configurations.
+ * @property {AttributeMetadataStorage} tableAttributes - A storage mapping for attribute metadata, keyed by table column names (aliases), used for database interactions.
+ * @property {RelationshipMetadataStorage} relationships - A storage for relationship metadata, facilitating the management of entity relationships.
+ * @property {EntityClass} EntityClass - The constructor function of the entity class, allowing instantiation and further metadata enrichment.
+ *
+ * @param {EntityClass} entityClass - The constructor function of the entity class this metadata belongs to.
+ * @param {string} tableClassName - The name of the table class instance that maps to the database table of the entity.
+ */
 class EntityMetadata {
   /**
    * The name of the table class instance to which this entity belongs
@@ -37,6 +49,10 @@ class EntityMetadata {
     this.relationships = {};
   }
 
+  /**
+   * Add attribute metadata to an entity
+   * @param attrMeta
+   */
   public addAttribute(attrMeta: AttributeMetadata): void {
     this.attributes[attrMeta.name] = attrMeta;
     this.tableAttributes[attrMeta.alias] = attrMeta;

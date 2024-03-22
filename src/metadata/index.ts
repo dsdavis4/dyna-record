@@ -10,3 +10,4 @@ export { TableMetadata, EntityMetadata, AttributeMetadata, JoinTableMetadata };
 export * from "./MetadataStorage";
 export * from "./TableMetadata";
 export * from "./relationship-metadata";
+export * from "./types";

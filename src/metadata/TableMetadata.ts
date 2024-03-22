@@ -1,18 +1,15 @@
 import { AttributeMetadata } from ".";
-import type NoOrm from "../NoOrm";
 import { dateSerializer } from "../decorators";
-import type { BelongsToLink } from "../relationships";
-import type { MakeOptional } from "../types";
-import type { AttributeMetadataOptions } from "./AttributeMetadata";
-
-// TODO add typedoc for each of the attributes
-
-type DefaultDateFields = "createdAt" | "updatedAt";
-
-export type DefaultFields = keyof NoOrm | keyof BelongsToLink;
+import type {
+  TableMetadataOptions,
+  DefaultFields,
+  TableDefaultFields,
+  DefaultDateFields,
+  KeysAttributeMetadataOptions
+} from "./types";
 
 // TODO this should be updated everywhere to be partitionKey
-const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
+export const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
 // TODO typedoc
 export const tableDefaultFields: Record<
@@ -27,20 +24,20 @@ export const tableDefaultFields: Record<
   foreignEntityType: { alias: "foreignEntityType" }
 } as const;
 
-type TableDefaultFields = Record<
-  DefaultFields,
-  Pick<AttributeMetadata, "alias">
->;
-
-export type TableMetadataOptions = Pick<TableMetadata, "name" | "delimiter"> & {
-  defaultFields?: Partial<TableDefaultFields>;
-};
-
-type KeysAttributeMetadataOptions = MakeOptional<
-  Omit<AttributeMetadataOptions, "nullable">,
-  "alias"
->;
-
+/**
+ * Represents the metadata for a table within the ORM framework, encapsulating information such as table name, key attributes, and default field mappings. This class is fundamental for defining how entities are mapped to their underlying database tables, providing a schema-like structure that includes both key configuration and default attribute handling.
+ *
+ * The metadata includes the primary and sort key attributes of the table, which are essential for database operations. It also provides a mechanism to include default attributes and their mappings, supporting common fields like `id`, `type`, `createdAt`, and `updatedAt`, along with their serialization strategies, particularly for date fields.
+ *
+ * @property {string} name - The name of the table.
+ * @property {string} delimiter - A delimiter used in the table's composite keys.
+ * @property {Record<DefaultFields, AttributeMetadata>} defaultAttributes - A record of default attributes for the entity, keyed by entity field names.
+ * @property {Record<string, AttributeMetadata>} defaultTableAttributes - A record of default attributes for the table, keyed by table field aliases.
+ * @property {AttributeMetadata} primaryKeyAttribute - Metadata for the table's primary key attribute.
+ * @property {AttributeMetadata} sortKeyAttribute - Metadata for the table's sort key attribute.
+ *
+ * @param {TableMetadataOptions} options - Configuration options for the table metadata.
+ */
 class TableMetadata {
   public readonly name: string;
   public readonly delimiter: string;

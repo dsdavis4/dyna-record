@@ -1,23 +1,26 @@
 import type NoOrm from "../NoOrm";
 import type { MakeOptional } from "../types";
-import TableMetadata, {
-  type DefaultFields,
-  type TableMetadataOptions
-} from "./TableMetadata";
+import TableMetadata from "./TableMetadata";
 import EntityMetadata from "./EntityMetadata";
-import AttributeMetadata, {
-  type AttributeMetadataOptions
-} from "./AttributeMetadata";
+import AttributeMetadata from "./AttributeMetadata";
 import JoinTableMetadata from "./JoinTableMetadata";
 import { createRelationshipInstance } from "./relationship-metadata/utils";
 import type { RelationshipMetadata } from "./relationship-metadata";
+import type {
+  AttributeMetadataStorage,
+  DefaultFields,
+  EntityMetadataStorage,
+  JoinTableMetadataStorage,
+  TableMetadataOptions,
+  TableMetadataStorage,
+  AttributeMetadataOptions
+} from "./types";
 
-export type AttributeMetadataStorage = Record<string, AttributeMetadata>;
-export type RelationshipMetadataStorage = Record<string, RelationshipMetadata>;
-type TableMetadataStorage = Record<string, TableMetadata>;
-type EntityMetadataStorage = Record<string, EntityMetadata>;
-type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
-
+/**
+ * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.
+ * It provides methods for retrieving and adding metadata for entities and their corresponding tables, handling relationships
+ * and attributes, and ensuring the proper initialization of metadata upon first access.
+ */
 class MetadataStorage {
   readonly #tables: TableMetadataStorage = {};
   readonly #entities: EntityMetadataStorage = {};

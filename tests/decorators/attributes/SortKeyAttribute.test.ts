@@ -27,7 +27,7 @@ describe("SortKeyAttribute", () => {
 
   describe("types", () => {
     it("requires the attribute to be of type SortKey", () => {
-      class MockClass {
+      class MockClass extends MockTable {
         // @ts-expect-no-error: attribute must be of type SortKey
         @SortKeyAttribute({ alias: "SortKeyAlias" })
         public SortKey: SortKey;
@@ -41,7 +41,7 @@ describe("SortKeyAttribute", () => {
     });
 
     it("'alias' is optional", () => {
-      class MockClass {
+      class MockClass extends MockTable {
         // @ts-expect-no-error: Alias prop is optional
         @SortKeyAttribute()
         public SortKey: SortKey;

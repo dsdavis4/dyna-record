@@ -1,39 +1,17 @@
-import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-
-// TODO add typedoc for each of the attributes
+import type { AttributeMetadataOptions, Serializers } from "./types";
 
 /**
- * Function that takes a attribute from a Dynamo table item, and serialize it to a non-Dynamo native type (EX: Date)
+ * Represents the metadata for an attribute of an entity, including its name, alias (if any), nullability, and serialization strategies.
+ *
+ * Serialization strategies are essential for attributes whose types do not natively exist in DynamoDB, such as `Date` objects, enabling custom conversion between the entity representation and the database representation. These strategies ensure that the ORM can seamlessly handle a wide range of attribute types beyond those natively supported by DynamoDB.
+ *
+ * @property {string} name - The name of the attribute as defined on the entity. This serves as the primary identifier for the attribute within the ORM.
+ * @property {string} alias - The name of the attribute as defined in the database table. If not provided, it defaults to the name of the attribute. This alias is used for database operations to map the attribute to its corresponding database column.
+ * @property {boolean} nullable - Indicates whether the attribute can be `null`, defining the attribute's nullability constraint within the database.
+ * @property {Serializers | undefined} serializers - Optional serialization strategies for converting the attribute between its database representation and its entity representation. This is particularly useful for custom data types not natively supported by DynamoDB.
+ *
+ * @param {AttributeMetadataOptions} options - Configuration options for the attribute metadata, including the attribute's name, optional alias, nullability, and serialization strategies.
  */
-type EntitySerializer = (param: NativeScalarAttributeValue) => any;
-
-/**
- * Function that takes a attribute from an Entity which is not a native Dynamo type and serializes it a type that is supported by Dynamo
- */
-type TableSerializer = (param: any) => NativeScalarAttributeValue;
-
-/**
- * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item
- * EX: See '@DateAttribute'
- */
-interface Serializers {
-  /**
-   * Function to serialize a Dynamo table item attribute to Entity attribute. Used when the type defined on the entity is not a native type to Dynamo (EX: Date)
-   */
-  toEntityAttribute: EntitySerializer;
-  /**
-   * Function to serialize an Entity attribute to an attribute type that Dynamo supports. (EX: Date->string)
-   */
-  toTableAttribute: TableSerializer;
-}
-
-export interface AttributeMetadataOptions {
-  attributeName: string;
-  alias?: string;
-  nullable: boolean;
-  serializers?: Serializers;
-}
-
 class AttributeMetadata {
   public readonly name: string;
   public readonly alias: string;
