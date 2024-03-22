@@ -1,6 +1,6 @@
 import Metadata from "../../metadata";
 import type DynaRecord from "../../DynaRecord";
-import type { EntityClass, ForeignKeyAttribute } from "../../types";
+import type { EntityClass, ForeignKeyProperty } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
 interface HasManyProps<T extends DynaRecord> {
@@ -24,7 +24,7 @@ interface HasManyProps<T extends DynaRecord> {
  * }
  *
  * class Post extends BaseEntity {
- *   @ForeignKeyAttribute()
+ *   @ForeignKeyProperty()
  *   public readonly userId: ForeignKey;
  *
  *   @BelongsTo(() => User, { foreignKey: "userId" })
@@ -46,7 +46,7 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
           type: "HasMany",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyAttribute
+          foreignKey: props.foreignKey as ForeignKeyProperty
         });
       });
     }

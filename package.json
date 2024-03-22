@@ -13,7 +13,8 @@
     "seed-links-second": "npx ts-node seeds/re-format-belongs-to-links-second.ts",
     "eslint": "npx eslint . --ext .ts",
     "eslint-fix": "npx eslint . --ext .ts --fix",
-    "prettier": "npx prettier . --write"
+    "prettier": "npx prettier . --write",
+    "docs": "npx typedoc"
   },
   "repository": {
     "type": "git",
@@ -49,6 +50,7 @@
     "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
+    "typedoc": "^0.25.12",
     "typescript": "^5.3.3"
   },
   "engines": {

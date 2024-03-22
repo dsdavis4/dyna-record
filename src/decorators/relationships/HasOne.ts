@@ -1,6 +1,6 @@
 import Metadata from "../../metadata";
 import type DynaRecord from "../../DynaRecord";
-import type { EntityClass, ForeignKeyAttribute, Optional } from "../../types";
+import type { EntityClass, ForeignKeyProperty, Optional } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
 interface HasOneProps<T extends DynaRecord> {
@@ -24,7 +24,7 @@ interface HasOneProps<T extends DynaRecord> {
  * }
  *
  * class Profile extends BaseEntity {
- *   @ForeignKeyAttribute()
+ *   @ForeignKeyProperty()
  *   public readonly userId: ForeignKey;
  *
  *   @BelongsTo(() => User, { foreignKey: "userId" })
@@ -49,7 +49,7 @@ function HasOne<T extends DynaRecord, K extends DynaRecord>(
           type: "HasOne",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyAttribute
+          foreignKey: props.foreignKey as ForeignKeyProperty
         });
       });
     }

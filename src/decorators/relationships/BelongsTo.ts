@@ -2,7 +2,7 @@ import Metadata from "../../metadata";
 import type DynaRecord from "../../DynaRecord";
 import type {
   EntityClass,
-  ForeignKeyAttribute,
+  ForeignKeyProperty,
   NullableForeignKey,
   Optional
 } from "../../types";
@@ -44,7 +44,7 @@ type BelongsToField<
  * Usage example:
  * ```typescript
  * class Order extends BaseEntity {
- *   @ForeignKeyAttribute({ alias: "UserId" })
+ *   @ForeignKeyProperty({ alias: "UserId" })
  *   public readonly userId: ForeignKey;
  *
  *   @BelongsTo(() => User, { foreignKey: 'userId' })
@@ -72,7 +72,7 @@ function BelongsTo<T extends DynaRecord, K extends DynaRecord>(
           type: "BelongsTo",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyAttribute
+          foreignKey: props.foreignKey as ForeignKeyProperty
         });
       });
     }
