@@ -1,6 +1,6 @@
 {
   "extends": "@tsconfig/recommended/tsconfig.json",
-  "exclude": ["**/*.test.ts", "**/tests/*"],
+  "exclude": ["**/*.test.ts", "**/tests/*", "dist"],
   "compilerOptions": {
     "declaration": true,
     "declarationMap": true,
