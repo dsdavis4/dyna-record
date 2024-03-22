@@ -43,13 +43,54 @@ interface HasAndBelongsToManyProps<
   through: ThroughFunction<J> | ThroughFunction<L>;
 }
 
+/**
+ * A decorator for defining a many-to-many relationship between entities in a single-table design ORM system. This relationship is facilitated through a join table, representing the connection between the two entities. The decorator simplifies the management of such relationships by automating the setup and handling of the join table metadata, thereby enabling seamless querying and manipulation of related entities.
+ *
+ * @template T The source entity class the decorator is applied to.
+ * @template K The target entity class that T has a many-to-many relationship with.
+ * @template J The join table entity class that associates T with K.
+ * @template L The join table entity class that associates K with T, allowing for bidirectional relationships.
+ * @param getTarget A function that returns the constructor of the target entity class. This enables lazy evaluation and avoids circular dependency issues.
+ * @param props Configuration options for the many-to-many relationship, including the key on the related entity and the details of the join table (through a "through" function) that facilitates the relationship.
+ * @returns A class field decorator function that, when applied to a field, registers the many-to-many relationship in the ORM's metadata system. This registration includes information about the join table and the relationship's configuration, essential for the ORM to handle related entities correctly.
+ *
+ * Usage example:
+ * ```typescript
+ * class User extends BaseEntity {
+ *   @HasAndBelongsToMany(() => Group, {
+ *     targetKey: 'users',
+ *     through: () => ({
+ *       joinTable: UserGroup,
+ *       foreignKey: 'userId'
+ *     })
+ *   })
+ *   public groups: Group[];
+ * }
+ *
+ * class Group extends BaseEntity {
+ *   @HasAndBelongsToMany(() => User, {
+ *     targetKey: 'groups',
+ *     through: () => ({
+ *       joinTable: UserGroup,
+ *       foreignKey: 'groupId'
+ *     })
+ *   })
+ *   public users: User[];
+ * }
+ *
+ * class AuthorBook extends JoinTable<User, Group> {
+ *    public readonly userId: ForeignKey;
+ *    public readonly groupId: ForeignKey;
+ * }
+ * ```
+ * In this example, `User` entities are related to `Group` entities through a many-to-many relationship, with `UserGroupJoin` serving as the join table. The decorator indicates this relationship, allowing for efficient querying and manipulation of related entities.
+ */
 function HasAndBelongsToMany<
   T extends NoOrm,
   K extends NoOrm,
   J extends JoinTable<T, K>,
   L extends JoinTable<K, T>
 >(
-  // Function to obtain Class to which relationship is applied
   getTarget: () => EntityClass<T>,
   props: HasAndBelongsToManyProps<T, K, J, L>
 ) {
