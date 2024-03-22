@@ -22,8 +22,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder = new TransactWriteBuilder();
   }
 
-  // TODO insure idempotency - see here https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
-
   /**
    * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
    * @param attributes

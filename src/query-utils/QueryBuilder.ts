@@ -17,7 +17,11 @@ import type {
   QueryCommandProps
 } from "./types";
 
-// TODO add jsdoc
+/**
+ * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
+ *
+ * Utilizing metadata about the entity and its attributes, `QueryBuilder` generates the necessary DynamoDB expressions to perform precise queries, including support for conditional operators like '=', 'begins_with', and 'IN', as well as logical 'AND' and 'OR' operations.
+ */
 class QueryBuilder {
   readonly #props: QueryCommandProps;
   readonly #tableMetadata: TableMetadata;
@@ -35,6 +39,10 @@ class QueryBuilder {
     );
   }
 
+  /**
+   * Builds and returns the `QueryCommandInput` for a DynamoDB query operation.
+   * @returns {QueryCommandInput} The configured query command input for AWS SDK.
+   */
   public build(): QueryCommandInput {
     const { indexName, filter } = this.#props.options ?? {};
     const filterParams =
@@ -58,6 +66,12 @@ class QueryBuilder {
     };
   }
 
+  /**
+   * Build ExpressionAttributeValues
+   * @param keyParams
+   * @param filterParams
+   * @returns
+   */
   private expressionAttributeValueParams(
     keyParams: FilterExpression,
     filterParams?: FilterExpression
@@ -73,6 +87,10 @@ class QueryBuilder {
     );
   }
 
+  /**
+   * Build ExpressionAttributeNames
+   * @returns
+   */
   private expressionAttributeNames(): QueryCommandInput["ExpressionAttributeNames"] {
     const { filter } = this.#props.options ?? {};
 
@@ -105,10 +123,16 @@ class QueryBuilder {
     return expressionAttributeNames;
   }
 
-  // Note:
-  // Supports 'AND' and 'OR'
-  // Currently only works for '=', 'begins_with' or 'IN' operands
-  // Does not support operations like 'contains' etc yet
+  /**
+   * Creates the filters
+   *
+   * Supports 'AND' and 'OR'
+   * Currently only works for '=', 'begins_with' or 'IN' operands
+   * Does not support operations like 'contains' etc yet
+   *
+   * @param filter
+   * @returns
+   */
   private filterParams(filter: FilterParams): FilterExpression {
     const isOrFilter = this.isOrFilter(filter);
 
@@ -120,6 +144,11 @@ class QueryBuilder {
     }
   }
 
+  /**
+   * Creates an AND OR filter
+   * @param filter
+   * @returns
+   */
   private andOrFilter(filter: AndOrFilter): FilterExpression {
     const { $or: _orFilters, ...andFilters } = filter;
     const orFilterParams = this.orFilter(filter);
@@ -129,6 +158,11 @@ class QueryBuilder {
     return { expression, values };
   }
 
+  /**
+   * Creates an AND filter
+   * @param filter
+   * @returns
+   */
   private andFilter(filter: KeyConditions | AndFilter): FilterExpression {
     const params = Object.entries(filter).reduce(
       (obj, [attr, value]) => {
@@ -144,6 +178,12 @@ class QueryBuilder {
     return params;
   }
 
+  /**
+   * Creates an AND condition
+   * @param attr
+   * @param value
+   * @returns
+   */
   private andCondition(attr: string, value: FilterTypes): FilterExpression {
     const tableKey = this.#attributeMetadata[attr].alias;
 
@@ -169,18 +209,11 @@ class QueryBuilder {
     return { expression: `${condition} AND `, values };
   }
 
-  private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
-    return (filter as BeginsWithFilter).$beginsWith !== undefined;
-  }
-
-  private isAndOrFilter(filter: FilterParams): filter is AndOrFilter {
-    return this.isOrFilter(filter) && Object.keys(filter).length > 1;
-  }
-
-  private isOrFilter(filter: FilterParams): filter is OrFilter {
-    return filter.$or !== undefined;
-  }
-
+  /**
+   * Builds an OR filter
+   * @param filter
+   * @returns
+   */
   private orFilter(filter: OrFilter): FilterExpression {
     const orFilter = filter.$or.reduce<FilterExpression>(
       (filterParams, filter) => {
@@ -196,6 +229,11 @@ class QueryBuilder {
     return orFilter;
   }
 
+  /**
+   * Builds an OR condition
+   * @param andFilter \
+   * @returns
+   */
   private orCondition(andFilter: AndFilter): FilterExpression {
     const andParams = this.filterParams(andFilter);
     const multipleVals = Object.keys(andParams.values).length > 1;
@@ -207,6 +245,33 @@ class QueryBuilder {
       FilterExpression["values"]
     >((obj, [key, val]) => ({ ...obj, [key]: val }), {});
     return { expression, values };
+  }
+
+  /**
+   * Type guard to check if its a BeginsWithFilter
+   * @param filter
+   * @returns
+   */
+  private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
+    return (filter as BeginsWithFilter).$beginsWith !== undefined;
+  }
+
+  /**
+   * Type guard to check if its a AndOrFilter
+   * @param filter
+   * @returns
+   */
+  private isAndOrFilter(filter: FilterParams): filter is AndOrFilter {
+    return this.isOrFilter(filter) && Object.keys(filter).length > 1;
+  }
+
+  /**
+   * Type guard to check if its a OrFilter
+   * @param filter
+   * @returns
+   */
+  private isOrFilter(filter: FilterParams): filter is OrFilter {
+    return filter.$or !== undefined;
   }
 }
 
