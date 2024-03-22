@@ -6,6 +6,8 @@ import type { AttributeOptions } from "../types";
 /**
  * A decorator for annotating class fields as foreign keys within the context of a single-table design entity, aimed at establishing and managing relationships between different entities in a relational manner. This decorator enables the clear and explicit declaration of foreign key relationships, contributing to the ORM's ability to navigate and resolve these associations efficiently.
  *
+ * The entity can belong to its associated entity has a {@link HasOne} or {@link HasMany}
+ *
  * Does not allow property to be optional.
  *
  * @template T The entity the decorator is applied to.
@@ -16,7 +18,10 @@ import type { AttributeOptions } from "../types";
  * ```typescript
  * class Order extends BaseEntity {
  *   @ForeignKeyAttribute({ alias: 'UserID' })
- *   public userId: string; // Foreign key to the User entity
+ *   public userId: ForeignKey; // Foreign key to the User entity. Cannot be optional. See {@link NullableForeignKeyAttribute} if it is nullable
+ *
+ *   @BelongsTo(() => User, { foreignKey: "userId" })
+ *   public readonly user: User; // Cannot be optional
  * }
  * ```
  *

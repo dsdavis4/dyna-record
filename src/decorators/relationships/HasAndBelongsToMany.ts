@@ -78,12 +78,12 @@ interface HasAndBelongsToManyProps<
  *   public users: User[];
  * }
  *
- * class AuthorBook extends JoinTable<User, Group> {
+ * class UserGroup extends JoinTable<User, Group> {
  *    public readonly userId: ForeignKey;
  *    public readonly groupId: ForeignKey;
  * }
  * ```
- * In this example, `User` entities are related to `Group` entities through a many-to-many relationship, with `UserGroupJoin` serving as the join table. The decorator indicates this relationship, allowing for efficient querying and manipulation of related entities.
+ * In this example, `User` entities are related to `Group` entities through a many-to-many relationship, with `UserGroup` serving as the join table. The decorator indicates this relationship, allowing for efficient querying and manipulation of related entities.
  */
 function HasAndBelongsToMany<
   T extends DynaRecord,
