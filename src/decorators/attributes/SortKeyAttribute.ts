@@ -21,7 +21,9 @@ import type { AttributeOptions } from "../types";
  *
  * In this example, `@SortKeyAttribute` decorates the `sk` field of `User`, marking it as the entity's sort key.
  */
-function SortKeyAttribute<T, K extends SortKey>(props?: AttributeOptions) {
+function SortKeyAttribute<T extends NoOrm, K extends SortKey>(
+  props?: AttributeOptions
+) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>

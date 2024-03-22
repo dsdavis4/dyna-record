@@ -29,7 +29,7 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
  *
  * Here, `@Attribute` decorates `stockKeepingUnit` of `Product` as a simple, non-foreign key attribute, facilitating its management within the ORM system.
  */
-function Attribute<T, K extends NativeScalarAttributeValue>(
+function Attribute<T extends NoOrm, K extends NativeScalarAttributeValue>(
   props?: AttributeOptions
 ) {
   return function (

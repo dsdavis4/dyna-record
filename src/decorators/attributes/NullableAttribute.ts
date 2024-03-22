@@ -31,9 +31,10 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function NullableAttribute<T, K extends NativeScalarAttributeValue>(
-  props?: AttributeOptions
-) {
+function NullableAttribute<
+  T extends NoOrm,
+  K extends NativeScalarAttributeValue
+>(props?: AttributeOptions) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, NotForeignKey<K>>

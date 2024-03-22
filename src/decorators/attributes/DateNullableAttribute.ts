@@ -24,7 +24,9 @@ import { dateSerializer } from "./serializers";
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function DateNullableAttribute<T, K extends Date>(props?: AttributeOptions) {
+function DateNullableAttribute<T extends NoOrm, K extends Date>(
+  props?: AttributeOptions
+) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, Optional<K>>

@@ -22,7 +22,7 @@ import type { AttributeOptions } from "../types";
  *
  * Here, `@ForeignKeyAttribute` decorates `userId` of `Order`, designating it as a foreign key that references the `User` entity. This decoration not only clarifies the nature of the relationship but also empowers the ORM to enforce relational integrity and facilitate entity association operations.
  */
-function ForeignKeyAttribute<T>(props?: AttributeOptions) {
+function ForeignKeyAttribute<T extends NoOrm>(props?: AttributeOptions) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, ForeignKey>

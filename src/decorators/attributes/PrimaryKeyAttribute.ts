@@ -23,7 +23,7 @@ import type { AttributeOptions } from "../types";
  *
  * In this example, `@PrimaryKeyAttribute` decorates the `pk` field of `User`, marking it as the entity's primary key.
  */
-function PrimaryKeyAttribute<T, K extends PrimaryKey>(
+function PrimaryKeyAttribute<T extends NoOrm, K extends PrimaryKey>(
   props?: AttributeOptions
 ) {
   return function (
