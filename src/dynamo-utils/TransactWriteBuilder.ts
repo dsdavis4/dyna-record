@@ -17,6 +17,9 @@ export type Put = NonNullable<TransactItems[number]["Put"]>;
 export type Update = NonNullable<TransactItems[number]["Update"]>;
 export type Delete = NonNullable<TransactItems[number]["Delete"]>;
 
+/**
+ * Build and executes a [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html) request
+ */
 class TransactionBuilder {
   readonly #transactionItems: TransactItems = [];
   readonly #errorMessages: Record<number, string> = {};

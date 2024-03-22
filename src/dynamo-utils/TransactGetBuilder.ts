@@ -9,6 +9,9 @@ export type Get = NonNullable<TransactItems[number]["Get"]>;
 // https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactGetItems.html
 const MAX_TRANSACTION_ITEMS = 100;
 
+/**
+ * Build and executes a [TransactGetItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactGetItems.html) request
+ */
 class TransactGetBuilder {
   readonly #transactionItems: TransactItems = [];
 

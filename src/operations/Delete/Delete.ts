@@ -29,7 +29,7 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
   readonly #belongsToRelationships: BelongsToRelationship[];
-  readonly #validationErrors: Error[] = [];
+  readonly #validationErrors: Error[] = []; // TODO  use a custom error
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
@@ -90,6 +90,7 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
     if (this.#validationErrors.length === 0) {
       await this.#transactionBuilder.executeTransaction();
     } else {
+      // TODO I am missing a test for this
       throw new TransactionWriteFailedError(
         this.#validationErrors,
         "Failed Validations"
