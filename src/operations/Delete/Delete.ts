@@ -96,7 +96,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     if (this.#validationErrors.length === 0) {
       await this.#transactionBuilder.executeTransaction();
     } else {
-      // TODO I am missing a test for this
       throw new TransactionWriteFailedError(
         this.#validationErrors,
         "Failed Validations"

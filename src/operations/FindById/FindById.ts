@@ -129,12 +129,6 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
 
     const transactionRes = await this.#transactionBuilder.executeTransaction();
 
-    if (transactionRes.some(res => res.Item === undefined)) {
-      // TODO I am getting this on some queries... why?
-      // TODO delete this code block
-      Logger.error("ERROR - Orphaned Belongs To Links");
-    }
-
     return this.resolveFindByIdIncludesResults(
       sortedQueryResults.item,
       transactionRes,
