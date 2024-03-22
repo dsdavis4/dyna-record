@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type DynaRecord from "../DynaRecord";
-import { ForeignKey } from "../types";
+import type { ForeignKey } from "../types";
 
 /**
  * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.

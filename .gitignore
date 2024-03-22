@@ -29,3 +29,5 @@ seeds
 docs
 
 .debug
+
+.DS_Store

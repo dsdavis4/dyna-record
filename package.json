@@ -1,8 +1,9 @@
 {
   "name": "dyna-record",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Typescript Object Relational Mapper (ORM) for Dynamo",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
@@ -17,7 +18,7 @@
     "url": "git+https://github.com/dsdavis4/dyna-record.git"
   },
   "author": "dsdavis4",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/dsdavis4/dyna-record/issues"
   },
@@ -53,5 +54,8 @@
   "engines": {
     "npm": ">=10.0.0",
     "node": ">=18.0.0"
-  }
+  },
+  "files": [
+    "dist/**/*"
+  ]
 }
