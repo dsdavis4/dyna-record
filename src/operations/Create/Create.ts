@@ -7,6 +7,13 @@ import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
 
+/**
+ * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
+ *
+ * It encapsulates the logic required to translate entity attributes to a format suitable for DynamoDB, execute the creation transaction, and manage any relationships defined by the entity, such as "BelongsTo" or "HasMany" links.
+ *
+ * @template T - The type of the entity being created, extending `NoOrm`.
+ */
 class Create<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
@@ -35,6 +42,11 @@ class Create<T extends NoOrm> extends OperationBase<T> {
     return tableItemToEntity<T>(this.EntityClass, tableItem);
   }
 
+  /**
+   * Builds the entity attributes
+   * @param attributes
+   * @returns
+   */
   private buildEntityData(attributes: CreateOptions<T>): NoOrm {
     const id = uuidv4();
     const createdAt = new Date();

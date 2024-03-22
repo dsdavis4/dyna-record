@@ -47,6 +47,11 @@ export const expressionBuilder = (
   };
 };
 
+/**
+ * Sort attributes based on their operand
+ * @param tableAttrs
+ * @returns
+ */
 const sortAttributesByOperand = (
   tableAttrs: DynamoTableItem
 ): AttributesByOperand => {
@@ -67,6 +72,11 @@ const sortAttributesByOperand = (
   );
 };
 
+/**
+ * Build the update [SET](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.SET) expression
+ * @param tableAttrs
+ * @returns
+ */
 const buildUpdateSetExpression = (
   tableAttrs: DynamoTableItem
 ): UpdateSetExpression => {
@@ -101,6 +111,11 @@ const buildUpdateSetExpression = (
   );
 };
 
+/**
+ * Build the update [REMOVE](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.REMOVE) expression for removing attributes
+ * @param tableAttrs
+ * @returns
+ */
 const buildUpdateRemoveExpression = (
   tableAttrs: DynamoTableItem
 ): UpdateRemoveExpression => {

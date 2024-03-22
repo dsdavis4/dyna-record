@@ -3,24 +3,54 @@ import type NoOrm from "../../NoOrm";
 import type { EntityAttributes, RelationshipAttributeNames } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
 
+/**
+ * Defines options for the `FindById` operation, allowing specification of additional associations to include in the query result.
+ *
+ * @template T - The type of the entity being queried, extending `NoOrm`.
+ *
+ * @property {Array<{ association: RelationshipAttributeNames<T> }>} [include] - An array of association names to be included in the result of the query. Each association name must be a valid relationship attribute name for the entity `T`.
+ */
 export interface FindByIdOptions<T extends NoOrm> {
   include?: Array<{ association: RelationshipAttributeNames<T> }>;
 }
 
+/**
+ * Represents a list of associations to be included in the query result, derived from the `FindByIdOptions`.
+ *
+ * @template T - The type of the entity being queried, extending `NoOrm`.
+ */
 export type IncludedAssociations<T extends NoOrm> = NonNullable<
   FindByIdOptions<T>["include"]
 >;
 
+/**
+ * Describes the structure of query results, sorting them into the main entity item and any associated `BelongsToLink` items. Used during processing
+ *
+ * @property {QueryItems[number]} item - The main entity item retrieved from the query.
+ * @property {BelongsToLinkDynamoItem[]} belongsToLinks - An array of `BelongsToLinkDynamoItem` instances associated with the main entity item.
+ */
 export interface SortedQueryResults {
   item: QueryItems[number];
   belongsToLinks: BelongsToLinkDynamoItem[];
 }
 
+/**
+ * Derives the keys of included associations from `FindByIdOptions`, representing the names of relationships specified to be included in the query result.
+ *
+ * @template T - The type of the entity being queried, extending `NoOrm`.
+ * @template Opts - The options for the `FindById` operation.
+ */
 type IncludedKeys<T extends NoOrm, Opts extends FindByIdOptions<T>> =
   Opts extends Required<FindByIdOptions<T>>
     ? [...NonNullable<Opts>["include"]][number]["association"]
     : never;
 
+/**
+ * Describes the entity attributes, extending them with any specified included associations for comprehensive query results.
+ *
+ * @template T - The type of the entity being queried, extending `NoOrm`.
+ * @template P - The properties of the entity `T`.
+ */
 type EntityKeysWithIncludedAssociations<T extends NoOrm, P extends keyof T> = {
   [K in P]: T[K] extends NoOrm
     ? EntityAttributes<T>
@@ -29,6 +59,12 @@ type EntityKeysWithIncludedAssociations<T extends NoOrm, P extends keyof T> = {
       : T[K];
 };
 
+/**
+ * Represents the result of a `FindById` operation, including the main entity and any specified associated entities.
+ *
+ * @template T - The type of the main entity, extending `NoOrm`.
+ * @template Opts - The options for the `FindById` operation, specifying included associations.
+ */
 export type FindByIdIncludesRes<
   T extends NoOrm,
   Opts extends FindByIdOptions<T>

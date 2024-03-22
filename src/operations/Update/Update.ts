@@ -16,7 +16,11 @@ import type { UpdateOptions } from "./types";
 import type { EntityClass } from "../../types";
 
 /**
- * Update operation. Updates attributes, creates BelongsToLinks and deletes outdated BelongsToLinks
+ * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
+ *
+ * The `Update` operation supports updating entity attributes and ensures consistency in relationships, especially for "BelongsTo" relationships. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
+ *
+ * @template T - The type of the entity being updated, extending `NoOrm`.
  */
 class Update<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;

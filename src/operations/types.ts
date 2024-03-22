@@ -7,14 +7,32 @@ import type {
   SortKey
 } from "../types";
 
+/**
+ * Represents the type of the primary key attribute for a given entity. It identifies the specific property of the entity that is marked as the primary key, which uniquely identifies each instance of the entity in the database.
+ *
+ * @template T - The type of the entity being examined.
+ * @returns The name of the primary key attribute as a string if one exists; otherwise, the result is `never`.
+ */
 type PrimaryKeyAttribute<T> = {
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;
 }[keyof T];
 
+/**
+ * Represents the type of the sort key attribute for a given entity. It identifies the specific property of the entity that is marked as the sort key, used in conjunction with the primary key to provide additional sorting capability within the database.
+ *
+ * @template T - The type of the entity being examined.
+ * @returns The name of the sort key attribute as a string if one exists; otherwise, the result is `never`.
+ */
 type SortKeyAttribute<T> = {
   [K in keyof T]: T[K] extends SortKey ? K : never;
 }[keyof T];
 
+/**
+ * Identifies all properties of a given entity type `T` that are functions. This type is useful for filtering out or working with only the function fields of an entity.
+ *
+ * @template T - The type of the entity being examined.
+ * @returns The names of the function properties as strings if any exist; otherwise, the result is `never`.
+ */
 type FunctionFields<T> = {
   // eslint-disable-next-line @typescript-eslint/ban-types
   [K in keyof T]: T[K] extends Function ? K : never;

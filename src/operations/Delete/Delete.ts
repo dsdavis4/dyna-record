@@ -19,8 +19,14 @@ import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
 
 /**
- * Delete operation. Delete an entity, everything in its partition, BelongsToLinks and nullifies ForeignKeys on attributes that BelongTo it
+ * Implements the operation for deleting an entity and its related data from the database within the ORM framework.
+ *
+ * Delete an entity, everything in its partition, BelongsToLinks and nullifies ForeignKeys on attributes that BelongTo it
  * If the foreign key is non nullable than it will throw a NullConstraintViolationError
+ *
+ * The `Delete` operation supports complex scenarios, such as deleting related entities in "BelongsTo" relationships, nullifying or removing foreign keys to maintain data integrity, and handling many-to-many relationships through join tables.
+ *
+ * @template T - The type of the entity being deleted, extending `NoOrm`.
  */
 class Delete<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;

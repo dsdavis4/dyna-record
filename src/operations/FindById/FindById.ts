@@ -38,9 +38,12 @@ import {
 } from "../../metadata/utils";
 import Logger from "../../Logger";
 
-// TODO improve this
 /**
- * FindById operations
+ * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.
+ *
+ * It supports fetching an entity solely by its ID or along with its related entities through specified associations, allowing for flexible retrieval of complex entity graphs in a single operation.
+ *
+ * @template T - The type of the entity being retrieved, extending `NoOrm`.
  */
 class FindById<T extends NoOrm> extends OperationBase<T> {
   readonly #transactionBuilder: TransactGetBuilder;
