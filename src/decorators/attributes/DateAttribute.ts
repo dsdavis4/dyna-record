@@ -17,7 +17,7 @@ import { dateSerializer } from "./serializers";
  * ```typescript
  * class MyEntity extends MyTable {
  *   @DateAttribute({ alias: 'MyField' })
- *   public myField: string;
+ *   public myField: Date;
  * }
  * ```
  *

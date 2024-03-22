@@ -14,7 +14,7 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
 /**
  * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
  *
- * IMPORTANT - Highly recommended to define property as optional.
+ * IMPORTANT - For optimal type safety mark the class field property as optional
  *
  * @template T The class type that the decorator is applied to, ensuring type safety and integration within specific class instances.
  * @template K A type constraint extending `Date`, ensuring that the decorator is only applied to class fields specifically intended to represent dates.

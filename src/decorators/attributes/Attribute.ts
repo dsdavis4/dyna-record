@@ -10,28 +10,24 @@ import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
 
 /**
- * A decorator to annotate class fields as attributes of a single-table design entity, adding metadata for ORM (Object-Relational Mapping) purposes.
- * This decorator is restricted to attributes with types native to DynamoDB. For attributes of other types, please use the 'PropNameAttribute' decorators, such as @DateAttribute.
+ * A decorator for marking class fields as attributes within the context of a single-table design entity, with a specific restriction against using foreign key types.
  *
- * This decorator function takes an object of {@link AttributeOptions} which defines the configuration for the attribute, such as its alias. It is intended to be used on class fields representing attributes of entities in a single-table design pattern. When applied, it registers the attribute with metadata, including its name and alias, and whether it is nullable.
+ * IMPORTANT! - This decorator explicitly disallows the use of {@link ForeignKey} and {@link NullableForeignKey} types to maintain clear separation between entity relationships and scalar attributes for improved data integrity and type safety.
  *
- * Does not allow property to be optional.
- *
- * @template T The class type that the decorator is applied to.
- * @template K The type of the attribute, extending [See NativeScalarAttributeValue Docs](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-aws-sdk-util-dynamodb/TypeAlias/NativeScalarAttributeValue/), ensuring it is compatible with scalar values supported natively by Dynamo.
- * @param props An object of {@link AttributeOptions}, which includes configuration options like `alias`, specifying an alternative name for the attribute in the database.
- * @returns A class field decorator function that takes the target class instance and the field's context to apply metadata enhancements. It specifically targets fields by adding initializers to the class's prototype, registering each field with the ORM's metadata management.
- *
+ * @template T The entity the decorator is applied to.
+ * @template K The type of the attribute, restricted to native scalar attribute values and excluding foreign key types.
+ * @param props An optional object of {@link AttributeOptions}, including configuration options such as metadata attributes and additional property characteristics.
+ * @returns A class field decorator function that targets and initializes the class's prototype to register the attribute with the ORM's metadata system, ensuring proper handling and validation of the entity's scalar values.
  *
  * Usage example:
  * ```typescript
- * class MyEntity extends MyTable {
- *   @Attribute({ alias: 'MyField' })
- *   public myField: string;
+ * class Product extends BaseEntity {
+ *   @Attribute({ alias: 'SKU' })
+ *   public stockKeepingUnit: string; // Simple scalar attribute representing the product's SKU
  * }
  * ```
  *
- * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
+ * Here, `@Attribute` decorates `stockKeepingUnit` of `Product` as a simple, non-foreign key attribute, facilitating its management within the ORM system.
  */
 function Attribute<T, K extends NativeScalarAttributeValue>(
   props?: AttributeOptions
