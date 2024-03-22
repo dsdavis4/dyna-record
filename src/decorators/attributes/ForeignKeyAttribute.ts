@@ -18,7 +18,7 @@ import type { AttributeOptions } from "../types";
  * ```typescript
  * class Order extends BaseEntity {
  *   @ForeignKeyAttribute({ alias: 'UserID' })
- *   public userId: ForeignKey; // Foreign key to the User entity. Cannot be optional. See {@link NullableForeignKeyAttribute} if it is nullable
+ *   public userId: ForeignKey; // Foreign key to the User entity. Cannot be optional. See NullableForeignKeyAttribute otherwise
  *
  *   @BelongsTo(() => User, { foreignKey: "userId" })
  *   public readonly user: User; // Cannot be optional
