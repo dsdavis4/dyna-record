@@ -9,6 +9,7 @@ module.exports = {
       tsconfig: "tsconfig.dev.json"
     }
   },
+  coveragePathIgnorePatterns: ["README.md", "/node_modules/", "dist"],
   coverageThreshold: {
     global: {
       branches: 90,
