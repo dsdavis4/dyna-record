@@ -4,6 +4,4 @@ Typescript Object Relational Mapper (ORM) for Dynamo
 
 <!-- TODO ADD SO MANY DOCS. Maybe tsdoc? -->
 
-<!-- TODO Add some github actions (EX: Unit tests) when I make the repo public because then minutes are free -->
-
 <!-- TODO add codeowners file when I make it public, or at least permissiosn that only I can merge to main -->
