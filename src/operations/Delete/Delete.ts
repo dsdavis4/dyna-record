@@ -1,5 +1,8 @@
 import NoOrm from "../../NoOrm";
-import { TransactWriteBuilder } from "../../dynamo-utils";
+import {
+  TransactWriteBuilder,
+  TransactionWriteFailedError
+} from "../../dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
 import Metadata, { type BelongsToRelationship } from "../../metadata";
 import {
@@ -87,7 +90,10 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
     if (this.#validationErrors.length === 0) {
       await this.#transactionBuilder.executeTransaction();
     } else {
-      throw new AggregateError(this.#validationErrors, "Failed Validations");
+      throw new TransactionWriteFailedError(
+        this.#validationErrors,
+        "Failed Validations"
+      );
     }
   }
 

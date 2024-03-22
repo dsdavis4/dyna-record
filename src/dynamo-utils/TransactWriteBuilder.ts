@@ -1,7 +1,10 @@
 import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import DynamoClient from "./DynamoClient";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "./errors";
+import {
+  ConditionalCheckFailedError,
+  TransactionWriteFailedError
+} from "./errors";
 import Logger from "../Logger";
 
 type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
@@ -111,8 +114,7 @@ class TransactionBuilder {
 
       if (conditionFailedErrs.length > 0) {
         Logger.error(conditionFailedErrs.map(err => err.message));
-        // TODO should I make this a custom error? TransactionError
-        return new AggregateError(
+        return new TransactionWriteFailedError(
           conditionFailedErrs,
           "Failed Conditional Checks",
           { cause: error }

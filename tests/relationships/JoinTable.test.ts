@@ -215,7 +215,7 @@ describe("JoinTable", () => {
       try {
         await AuthorBook.create({ authorId: "1", bookId: "2" });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Author with ID 1 is already linked to Book with ID 2"
@@ -249,7 +249,7 @@ describe("JoinTable", () => {
       try {
         await AuthorBook.create({ authorId: "1", bookId: "2" });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Author with ID 1 does not exist"
@@ -352,7 +352,7 @@ describe("JoinTable", () => {
       try {
         await AuthorBook.delete({ authorId: "1", bookId: "2" });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Author with ID 1 is not linked to Book with ID 2"

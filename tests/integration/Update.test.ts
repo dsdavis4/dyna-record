@@ -373,7 +373,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
@@ -474,7 +474,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: Customer with ID '456' does not exist"
@@ -747,7 +747,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
@@ -850,7 +850,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: Customer with ID '456' does not exist"
@@ -973,7 +973,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: Customer with id: 456 already has an associated ContactInformation"
@@ -1252,7 +1252,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
@@ -1348,7 +1348,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: Customer with ID '456' does not exist"
@@ -1617,7 +1617,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
@@ -1715,7 +1715,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: Customer with ID '456' does not exist"
@@ -1832,7 +1832,7 @@ describe("Update", () => {
             customerId: "456"
           });
         } catch (e: any) {
-          expect(e.constructor.name).toEqual("AggregateError");
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
               "ConditionalCheckFailed: PaymentMethod with ID '123' already belongs to Customer with Id '456'"

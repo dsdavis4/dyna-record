@@ -664,7 +664,7 @@ describe("Delete", () => {
       try {
         await MockModel.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Failed to delete MockModel with Id: 123"
@@ -734,7 +734,7 @@ describe("Delete", () => {
       try {
         await Pet.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Pet#123"}'
@@ -811,7 +811,7 @@ describe("Delete", () => {
       try {
         await Home.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Home"}'
@@ -914,7 +914,7 @@ describe("Delete", () => {
       try {
         await Person.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Failed to remove foreign key attribute from Pet with Id: 111"
@@ -1030,7 +1030,7 @@ describe("Delete", () => {
       try {
         await PhoneBook.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new NullConstraintViolationError(
             `Cannot set Address with id: '002' attribute 'phoneBookId' to null`
@@ -1091,7 +1091,7 @@ describe("Delete", () => {
       try {
         await Home.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new NullConstraintViolationError(
             `Cannot set Address with id: '002' attribute 'homeId' to null`
@@ -1175,7 +1175,7 @@ describe("Delete", () => {
       try {
         await Person.delete("123");
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Pet#111"}'

@@ -287,8 +287,6 @@ class AttributeTester extends DrewsBrewsTable {
 
 // TODO add eslint workflow
 
-// TODO find all instances where I throw a plain "Error" and make a custom error
-
 // TODO determine if I want to use the term nullable throughout when its really optional
 
 (async () => {

@@ -295,7 +295,7 @@ describe("Create", () => {
           paymentMethodId: "123"
         });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: PaymentMethod with id: 123 already has an associated PaymentMethodProvider"
@@ -437,7 +437,7 @@ describe("Create", () => {
           studentId: "456"
         });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Assignment with id: 123 already has an associated Grade"
@@ -481,7 +481,7 @@ describe("Create", () => {
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Customer with ID '123' does not exist"
@@ -520,7 +520,7 @@ describe("Create", () => {
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Customer with ID '123' does not exist"
@@ -562,7 +562,7 @@ describe("Create", () => {
           orderDate: new Date("2024-01-01")
         });
       } catch (e: any) {
-        expect(e.constructor.name).toEqual("AggregateError");
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: something happened"
