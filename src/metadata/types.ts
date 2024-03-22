@@ -88,7 +88,7 @@ export type TableSerializer = (param: any) => NativeScalarAttributeValue;
 
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item
- * EX: See {@link @DateAttribute}
+ * EX: See DateAttribute decorator
  */
 export interface Serializers {
   /**

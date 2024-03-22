@@ -11,7 +11,9 @@ import type {
 // TODO this should be updated everywhere to be partitionKey
 export const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
 
-// TODO typedoc
+/**
+ * Default fields with default table alias. Can be overwritten through {@link TableMetadataOptions} defaultFields
+ */
 export const tableDefaultFields: Record<
   DefaultFields,
   { alias: DefaultFields }

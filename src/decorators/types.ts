@@ -29,3 +29,10 @@ export interface AttributeOptions {
    */
   alias?: string;
 }
+
+/**
+ * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
+ */
+export type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
+  ? never
+  : T;

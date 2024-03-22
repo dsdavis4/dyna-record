@@ -75,9 +75,7 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * Find an entity by Id and optionally include associations
    * @param {string} id - Entity Id
-   * @param {Object} options - FindById options
-   * @param {Object[]=} options.include - The associations to include in the query
-   * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
+   * @param {Object} options - FindByIdOptions
    * @returns An entity with included associations serialized
    *
    * @example Without included relationships
@@ -105,9 +103,7 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * Query by PrimaryKey and optional SortKey/Filter/Index conditions
    * @param {Object} key - PrimaryKey value and optional SortKey condition. Keys must be attributes defined on the model
-   * @param {Object=} options - QueryBuilderOptions. Supports filter and indexName
-   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
-   * @param {string=} options.indexName - The name of the index to filter on
+   * @param {Object=} options - QueryBuilderOptions
    *
    * @example By partition key only
    * ```typescript
@@ -174,9 +170,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
    * QueryByIndex not supported. Use Query with keys if indexName is needed
    * @param {string} id - Entity Id
-   * @param {Object=} options - QueryOptions. Supports filter and skCondition
-   * @param {Object=} options.skCondition - Sort Key condition. Can be an exact value or { $beginsWith: "val" }
-   * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   * @param {Object=} options - QueryOptions. Supports filter and skCondition. indexName is not supported
    *
    * @example By partition key only
    * ```typescript
@@ -239,7 +233,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * Update an entity. If foreign keys are included in the attribute then:
    *   - BelongsToLinks will be created accordingly
    *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
-   *     - If the foreign key is not nullable then a {@link ValidationError} is thrown. See {@link NullableForeignKeyAttribute}
+   *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown. See {@link NullableForeignKeyAttribute}
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
    * @param attributes - Attributes to update

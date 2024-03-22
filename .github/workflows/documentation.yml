@@ -1,0 +1,44 @@
+# Deploy TypeDoc site to GitHub Pages
+name: Deploy Docs to PAges
+
+on:
+  # Deploy on merge to main
+  push:
+    branches: ["main"]
+  # Allow manual deploy
+  workflow_dispatch:
+
+# Set permissions of the GITHUB_TOKEN to allow deployment to Github Pages
+permissions:
+  contents: read # Clone repo
+  pages: write # Deploy to pages
+  id-token: write # Upload to pages
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and the latest queued
+# Do not cancel i9n-progress runs
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Generate docs
+        run: |
+          npm ci
+          npm run docs
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: "docs"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2

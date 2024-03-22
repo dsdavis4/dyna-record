@@ -1,29 +1,7 @@
 import Metadata from "../../metadata";
 import type DynaRecord from "../../DynaRecord";
-import type {
-  EntityClass,
-  ForeignKeyAttribute,
-  NullableForeignKey,
-  Optional
-} from "../../types";
-import { type ForeignEntityAttribute } from "../types";
-
-interface BelongsToProps<T extends DynaRecord> {
-  foreignKey: ForeignEntityAttribute<T>;
-}
-
-/**
- * If the relationship is linked by a NullableForeignKey then it allows the field to be optional, otherwise it ensures that is is not optional
- */
-type BelongsToField<
-  T extends DynaRecord,
-  K extends DynaRecord,
-  FK extends ForeignEntityAttribute<T>
-> = FK extends keyof T
-  ? T[FK] extends NullableForeignKey
-    ? Optional<K>
-    : K
-  : never;
+import type { EntityClass, ForeignKeyProperty } from "../../types";
+import type { BelongsToField, BelongsToProps } from "./types";
 
 /**
  * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using DynaRecord. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.
@@ -44,7 +22,7 @@ type BelongsToField<
  * Usage example:
  * ```typescript
  * class Order extends BaseEntity {
- *   @ForeignKeyAttribute({ alias: "UserId" })
+ *   @ForeignKeyProperty({ alias: "UserId" })
  *   public readonly userId: ForeignKey;
  *
  *   @BelongsTo(() => User, { foreignKey: 'userId' })
@@ -72,7 +50,7 @@ function BelongsTo<T extends DynaRecord, K extends DynaRecord>(
           type: "BelongsTo",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyAttribute
+          foreignKey: props.foreignKey as ForeignKeyProperty
         });
       });
     }

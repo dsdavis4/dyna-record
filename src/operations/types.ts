@@ -13,7 +13,7 @@ import type {
  * @template T - The type of the entity being examined.
  * @returns The name of the primary key attribute as a string if one exists; otherwise, the result is `never`.
  */
-type PrimaryKeyAttribute<T> = {
+export type PrimaryKeyAttribute<T> = {
   [K in keyof T]: T[K] extends PrimaryKey ? K : never;
 }[keyof T];
 
@@ -23,7 +23,7 @@ type PrimaryKeyAttribute<T> = {
  * @template T - The type of the entity being examined.
  * @returns The name of the sort key attribute as a string if one exists; otherwise, the result is `never`.
  */
-type SortKeyAttribute<T> = {
+export type SortKeyAttribute<T> = {
   [K in keyof T]: T[K] extends SortKey ? K : never;
 }[keyof T];
 
@@ -33,7 +33,7 @@ type SortKeyAttribute<T> = {
  * @template T - The type of the entity being examined.
  * @returns The names of the function properties as strings if any exist; otherwise, the result is `never`.
  */
-type FunctionFields<T> = {
+export type FunctionFields<T> = {
   // eslint-disable-next-line @typescript-eslint/ban-types
   [K in keyof T]: T[K] extends Function ? K : never;
 }[keyof T];
@@ -45,7 +45,7 @@ type FunctionFields<T> = {
  *  This allows" ModelA.create({ attr1: "someVal" })
  *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
  */
-type ForeignKeyToValue<T> = {
+export type ForeignKeyToValue<T> = {
   [K in keyof T]: T[K] extends NullableForeignKey
     ? Optional<string>
     : T[K] extends ForeignKey

@@ -29,9 +29,9 @@ export type ForeignKey = Brand<string, "ForeignKey">;
 export type NullableForeignKey = Optional<Brand<string, "NullableForeignKey">>;
 
 /**
- * Represents a foreign key attribute on an entity within a DynaRecord model
+ * Represents a foreign key property on an entity within a DynaRecord model
  */
-export type ForeignKeyAttribute = keyof DynaRecord & ForeignKey;
+export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 
 /**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
