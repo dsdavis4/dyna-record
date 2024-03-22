@@ -29,8 +29,7 @@ import Logger from "../src/Logger";
 
 process.env.DYNA_RECORD_LOGGING_ENABLED = "true";
 
-// TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
-//       I think I had a medium article about a library that does this
+=
 
 @Table({
   name: "temp-table",

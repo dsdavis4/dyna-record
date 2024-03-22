@@ -24,5 +24,7 @@ coverage
 !.eslintrc.js
 
 notes.txt
+seeds
+_seeds
 
 docs
