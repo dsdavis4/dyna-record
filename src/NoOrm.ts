@@ -24,16 +24,51 @@ interface NoOrmBase {
   updatedAt: Date;
 }
 
+/**
+ * Serves as an abstract base class for entities in the ORM system. It defines standard fields such as `id`, `type`, `createdAt`, and `updatedAt`, and provides static methods for CRUD operations and queries. This class encapsulates common behaviors and properties that all entities share, leveraging decorators for attribute metadata and supporting operations like finding, creating, updating, and deleting entities.
+ *
+ * Table classes should extend this class, and each entity should extend the table class
+ *
+ * Entities extending `NoOrm` can utilize these operations to interact with their corresponding records in the database, including handling relationships between different entities.
+ * @example
+ * ```typescript
+ * @Table({ name: "my-table", delimiter: "#" })
+ * abstract class MyTable extends NoOrm {
+ *   @PrimaryKeyAttribute()
+ *   public readonly pk: PrimaryKey;
+ *
+ *   @SortKeyAttribute()
+ *   public readonly sk: SortKey;
+ * }
+ *
+ * @Entity
+ * class User extends MyTable {
+ *  // User implementation
+ * }
+ * ```
+ */
 abstract class NoOrm implements NoOrmBase {
+  /**
+   * A unique identifier for the entity itself, automatically generated upon creation.
+   */
   @Attribute({ alias: tableDefaultFields.id.alias })
   public readonly id: string;
 
+  /**
+   * The type of the Entity
+   */
   @Attribute({ alias: tableDefaultFields.type.alias })
   public readonly type: string;
 
+  /**
+   * The timestamp marking when the entity was created
+   */
   @DateAttribute({ alias: tableDefaultFields.createdAt.alias })
   public readonly createdAt: Date;
 
+  /**
+   * The timestamp marking the last update to the entity. Initially set to the same value as `createdAt`.
+   */
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public readonly updatedAt: Date;
 
@@ -44,6 +79,16 @@ abstract class NoOrm implements NoOrmBase {
    * @param {Object[]=} options.include - The associations to include in the query
    * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
    * @returns An entity with included associations serialized
+   *
+   * @example Without included relationships
+   * ```typescript
+   * const user = await User.findById("userId");
+   * ```
+   *
+   * @example With included relationships
+   * ```typescript
+   * const user = await User.findById("userId", { include: [{ association: "profile" }] });
+   * ```
    */
   public static async findById<
     T extends NoOrm,
@@ -63,6 +108,61 @@ abstract class NoOrm implements NoOrmBase {
    * @param {Object=} options - QueryBuilderOptions. Supports filter and indexName
    * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
    * @param {string=} options.indexName - The name of the index to filter on
+   *
+   * @example By partition key only
+   * ```typescript
+   * const user = await User.query({ pk: "User#123" });
+   * ```
+   *
+   * @example By partition key and sort key exact match
+   * ```typescript
+   * const user = await User.query({ pk: "User#123", sk: "Profile#123" });
+   * ```
+   *
+   * @example By partition key and sort key begins with
+   * ```typescript
+   * const user = await User.query({ pk: "User#123", sk: { $beginsWith: "Profile" } });
+   * ```
+   *
+   * @example With filter (arbitrary example)
+   * ```typescript
+   * const result = await User.query(
+   *  {
+   *    myPk: "User|123"
+   *  },
+   *  {
+   *    filter: {
+   *    type: ["BelongsToLink", "Profile"],
+   *    createdAt: { $beginsWith: "202" },
+   *    $or: [
+   *      {
+   *        foreignKey: "111",
+   *        updatedAt: { $beginsWith: "2023-02-15" }
+   *      },
+   *      {
+   *        foreignKey: ["222", "333"],
+   *        createdAt: { $beginsWith: "2021-09-15T" },
+   *        foreignEntityType: "Order"
+   *      },
+   *      {
+   *        id: "123"
+   *      }
+   *    ]
+   *  }
+   * }
+   *);
+   * ```
+   *
+   * @example On index
+   * ```typescript
+   *  const result = await User.query(
+   *    {
+   *      pk: "User#123",
+   *      sk: { $beginsWith: "Profile" }
+   *    },
+   *    { indexName: "myIndex" }
+   *  );
+   * ```
    */
   public static async query<T extends NoOrm>(
     this: EntityClass<T>,
@@ -77,6 +177,31 @@ abstract class NoOrm implements NoOrmBase {
    * @param {Object=} options - QueryOptions. Supports filter and skCondition
    * @param {Object=} options.skCondition - Sort Key condition. Can be an exact value or { $beginsWith: "val" }
    * @param {Object=} options.filter - Filter conditions object. Keys must be attributes defined on the model. Value can be exact value for Equality. Array for "IN" or $beginsWith
+   *
+   * @example By partition key only
+   * ```typescript
+   * const user = await User.query("123");
+   * ```
+   *
+   * @example By partition key and sort key exact match
+   * ```typescript
+   * const user = await User.query("123", { skCondition: "Profile#111" });
+   * ```
+   *
+   * @example By partition key and sort key begins with
+   * ```typescript
+   * const user = await User.query("123", { skCondition: { $beginsWith: "Profile" } })
+   * ```
+   *
+   * @example With filter (arbitrary example)
+   * ```typescript
+   * const user = await User.query("123", {
+   *   filter: {
+   *     type: "BelongsToLink",
+   *     createdAt: "2023-11-21T12:31:21.148Z"
+   *    }
+   * });
+   * ```
    */
   public static async query<T extends NoOrm>(
     this: EntityClass<T>,
@@ -97,6 +222,10 @@ abstract class NoOrm implements NoOrmBase {
    * Create an entity. If foreign keys are included in the attributes then BelongsToLinks will be demoralized accordingly
    * @param attributes - Attributes of the model to create
    * @returns The new Entity
+   *
+   * ```typescript
+   * const newUser = await User.create({ name: "Alice", email: "alice@example.com", profileId: "123" });
+   * ```
    */
   public static async create<T extends NoOrm>(
     this: EntityClass<T>,
@@ -110,8 +239,21 @@ abstract class NoOrm implements NoOrmBase {
    * Update an entity. If foreign keys are included in the attribute then:
    *   - BelongsToLinks will be created accordingly
    *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
+   *     - If the foreign key is not nullable then a {@link ValidationError} is thrown. See {@link NullableForeignKeyAttribute}
+   *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
-   * @param attributes - Att
+   * @param attributes - Attributes to update
+   *
+   *
+   * @example Updating an entity.
+   * ```typescript
+   * await User.update("userId", { email: "newemail@example.com", profileId: 789 });
+   * ```
+   *
+   * @example Removing a nullable entities attributes
+   * ```typescript
+   * await User.update("userId", { email: "newemail@example.com", someKey: null });
+   * ```
    */
   public static async update<T extends NoOrm>(
     this: EntityClass<T>,
@@ -127,6 +269,11 @@ abstract class NoOrm implements NoOrmBase {
    *   - Delete all BelongsToLinks
    *   - Disassociate all foreign keys of linked models
    * @param id - The id of the entity to update
+   *
+   * @example Delete an entity
+   * ```typescript
+   * await User.delete("userId");
+   * ```
    */
   public static async delete<T extends NoOrm>(
     this: EntityClass<T>,
@@ -140,6 +287,11 @@ abstract class NoOrm implements NoOrmBase {
    * Constructs the primary key value
    * @param {string} id - Entity Id
    * @returns Constructed primary key value
+   *
+   * @example
+   * ```typescript
+   * const pkValue = User.primaryKeyValue("userId");
+   * ```
    */
   public static primaryKeyValue(id: string): string {
     const { delimiter } = Metadata.getEntityTable(this.name);

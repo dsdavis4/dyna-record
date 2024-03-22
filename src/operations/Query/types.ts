@@ -14,6 +14,9 @@ import type { EntityAttributes } from "../types";
  * @property {SortKeyCondition?} skCondition - An optional condition for the sort key to further refine the query. This can be an exact match condition or a condition specifying a range or beginning match for the sort key.
  */
 export interface QueryOptions extends QueryBuilderOptions {
+  /**
+   * Condition to query sort key by
+   */
   skCondition?: SortKeyCondition;
 }
 
