@@ -1,18 +1,56 @@
 name: Publish Package to npmjs
+
 on:
-  release:
-    types: [published]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write # Clone repo and release
+  id-token: write # Upload to pages
+
+concurrency:
+  group: "release"
+  cancel-in-progress: false
+
 jobs:
+  if-merged:
+    name: Check if PR merged to mai nevent
+    if: github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "PR merged"
+
   build:
+    needs: [if-merged]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       # Setup .npmrc file to publish to npm
       - uses: actions/setup-node@v4
         with:
           registry-url: "https://registry.npmjs.org"
+
       - run: npm ci
+
       - run: npm run build
+
+      - name: get-npm-version
+        id: package-version
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          commitish: ${{github.ref_name }}
+          tag_name: ${{ steps.package-version.outputs.current-version}}
+          release_name: Release ${{ steps.package-version.outputs.current-version}}
+          draft: false
+          prerelease: false
+
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

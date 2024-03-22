@@ -1,5 +1,5 @@
 # Deploy TypeDoc site to GitHub Pages
-name: Deploy Docs to PAges
+name: Deploy Docs to Pages
 
 on:
   # Deploy on merge to main
