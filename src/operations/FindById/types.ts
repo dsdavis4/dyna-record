@@ -1,4 +1,4 @@
-import type { QueryItems } from "../../dynamo-utils/DynamoClient";
+import type { QueryItems } from "../../dynamo-utils";
 import type NoOrm from "../../NoOrm";
 import type { EntityAttributes, RelationshipAttributeNames } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";

@@ -1,4 +1,3 @@
-import { type TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import DynamoClient from "./DynamoClient";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
@@ -6,22 +5,19 @@ import {
   TransactionWriteFailedError
 } from "./errors";
 import Logger from "../Logger";
-
-type TransactItems = NonNullable<TransactWriteCommandInput["TransactItems"]>;
-
-// TODO move these to a types file with similiar pattern to how I did for Operation classes
-export type ConditionCheck = NonNullable<
-  TransactItems[number]["ConditionCheck"]
->;
-export type Put = NonNullable<TransactItems[number]["Put"]>;
-export type Update = NonNullable<TransactItems[number]["Update"]>;
-export type Delete = NonNullable<TransactItems[number]["Delete"]>;
+import type {
+  TransactWriteItems,
+  ConditionCheck,
+  Put,
+  Update,
+  Delete
+} from "./types";
 
 /**
  * Build and executes a [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html) request
  */
 class TransactionBuilder {
-  readonly #transactionItems: TransactItems = [];
+  readonly #transactionItems: TransactWriteItems = [];
   readonly #errorMessages: Record<number, string> = {};
 
   /**

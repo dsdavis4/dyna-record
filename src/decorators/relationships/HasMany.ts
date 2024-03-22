@@ -26,6 +26,9 @@ interface HasManyProps<T extends NoOrm> {
  * class Post extends BaseEntity {
  *   @ForeignKeyAttribute()
  *   public readonly userId: ForeignKey;
+ *
+ *   @BelongsTo(() => User, { foreignKey: "userId" })
+ *   public readonly user: User;
  * }
  * ```
  * In this example, each `User` entity is associated with multiple `Post` entities through a one-to-many relationship. The `@HasMany` decorator is applied to the `posts` field of the `User` class, indicating that a user can have many posts. The `foreignKey` property specifies the attribute in the `Post` entity that establishes the connection back to the `User` entity, enabling the ORM to manage the relationship effectively.

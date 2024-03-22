@@ -6,27 +6,14 @@ import {
   TransactWriteCommand,
   TransactGetCommand,
   type QueryCommandInput,
-  type QueryCommandOutput,
   type GetCommandInput,
   type GetCommandOutput,
   type TransactWriteCommandInput,
   type TransactWriteCommandOutput,
-  type TransactGetCommandInput,
-  type TransactGetCommandOutput
+  type TransactGetCommandInput
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger";
-
-/**
- * Represents the responses from a `TransactGetItems` operation in DynamoDB.
- */
-export type TransactGetItemResponses = NonNullable<
-  TransactGetCommandOutput["Responses"]
->;
-
-/**
- * Represents the items returned from a `Query` operation in DynamoDB.
- */
-export type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
+import type { QueryItems, TransactGetItemResponses } from "./types";
 
 // Initialize the DynamoDB Document Client with a specific AWS region.
 const dynamo = DynamoDBDocumentClient.from(

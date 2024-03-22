@@ -1,10 +1,6 @@
-import { type TransactGetCommandInput } from "@aws-sdk/lib-dynamodb";
-import DynamoClient, { type TransactGetItemResponses } from "./DynamoClient";
+import DynamoClient from "./DynamoClient";
 import { chunkArray } from "../utils";
-
-type TransactItems = NonNullable<TransactGetCommandInput["TransactItems"]>;
-
-export type Get = NonNullable<TransactItems[number]["Get"]>;
+import type { Get, TransactGetItemResponses, TransactGetItems } from "./types";
 
 // https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactGetItems.html
 const MAX_TRANSACTION_ITEMS = 100;
@@ -13,7 +9,7 @@ const MAX_TRANSACTION_ITEMS = 100;
  * Build and executes a [TransactGetItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactGetItems.html) request
  */
 class TransactGetBuilder {
-  readonly #transactionItems: TransactItems = [];
+  readonly #transactionItems: TransactGetItems = [];
 
   /**
    * Execute the transaction

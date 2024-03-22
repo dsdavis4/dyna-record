@@ -1,9 +1,10 @@
 import type NoOrm from "../../NoOrm";
 import Metadata, { type RelationshipMetadata } from "../../metadata";
-import DynamoClient, {
+import {
+  DynamoClient,
   type TransactGetItemResponses,
   type QueryItems
-} from "../../dynamo-utils/DynamoClient";
+} from "../../dynamo-utils";
 import { QueryBuilder } from "../../query-utils";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { TransactGetBuilder } from "../../dynamo-utils";
