@@ -35,7 +35,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
   readonly #belongsToRelationships: BelongsToRelationship[];
-  readonly #validationErrors: Error[] = []; // TODO  use a custom error
+  readonly #validationErrors: Error[] = [];
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);

@@ -1,15 +1,8 @@
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
-import type { ForeignKey, NullableForeignKey, Optional } from "../../types";
-import type { AttributeOptions } from "../types";
+import { type Optional } from "../../types";
+import type { AttributeOptions, NotForeignKey } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-
-/**
- * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
- */
-type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
-  ? never
-  : Optional<T>;
 
 /**
  * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
@@ -37,7 +30,7 @@ function NullableAttribute<
 >(props?: AttributeOptions) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<T, NotForeignKey<K>>
+    context: ClassFieldDecoratorContext<T, Optional<NotForeignKey<K>>>
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {

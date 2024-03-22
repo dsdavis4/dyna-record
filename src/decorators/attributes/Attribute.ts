@@ -1,13 +1,7 @@
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
-import type { ForeignKey, NullableForeignKey } from "../../types";
-import type { AttributeOptions } from "../types";
+import type { AttributeOptions, NotForeignKey } from "../types";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-
-/**
- * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
- */
-type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey ? never : T;
 
 /**
  * A decorator for marking class fields as attributes within the context of a single-table design entity, with a specific restriction against using foreign key types.
