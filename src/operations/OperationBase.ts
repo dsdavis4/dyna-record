@@ -27,9 +27,9 @@ abstract class OperationBase<T extends DynaRecord> {
   protected readonly tableMetadata: TableMetadata;
 
   /**
-   * The alias used for the entity's primary key attribute in the database table, derived from the table metadata.
+   * The alias used for the entity's partition key attribute in the database table, derived from the table metadata.
    */
-  protected readonly primaryKeyAlias: string;
+  protected readonly partitionKeyAlias: string;
 
   /**
    * The alias used for the entity's sort key attribute in the database table, if applicable, derived from the table metadata.
@@ -40,7 +40,7 @@ abstract class OperationBase<T extends DynaRecord> {
     this.EntityClass = Entity;
     this.entityMetadata = Metadata.getEntity(Entity.name);
     this.tableMetadata = Metadata.getTable(this.entityMetadata.tableClassName);
-    this.primaryKeyAlias = this.tableMetadata.primaryKeyAttribute.alias;
+    this.partitionKeyAlias = this.tableMetadata.partitionKeyAttribute.alias;
     this.sortKeyAlias = this.tableMetadata.sortKeyAttribute.alias;
   }
 

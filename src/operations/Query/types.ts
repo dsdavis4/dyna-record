@@ -21,7 +21,7 @@ export interface QueryOptions extends QueryBuilderOptions {
 }
 
 /**
- * Defines primary key conditions for querying entities based on their keys. This type is used to specify the conditions under which an entity or a set of entities can be queried from the database.
+ * Defines partition key conditions for querying entities based on their keys. This type is used to specify the conditions under which an entity or a set of entities can be queried from the database.
  *
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  * @property {KeyConditions} - Conditions applied to entity keys. Each key in the entity can have conditions such as equality, range conditions, or begins with conditions.

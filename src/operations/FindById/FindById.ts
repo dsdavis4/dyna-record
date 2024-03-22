@@ -83,7 +83,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     const res = await DynamoClient.getItem({
       TableName: tableName,
       Key: {
-        [this.primaryKeyAlias]: this.EntityClass.primaryKeyValue(id),
+        [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
         [this.sortKeyAlias]: this.EntityClass.name
       },
       ConsistentRead: true
@@ -152,7 +152,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     includedRelationships: RelationshipMetadata[]
   ): QueryCommandInput {
-    const modelPrimaryKey = this.tableMetadata.primaryKeyAttribute.name;
+    const modelPartitionKey = this.tableMetadata.partitionKeyAttribute.name;
 
     const partitionFilter = includedRelationshipsFilter(
       this.EntityClass.name,
@@ -161,7 +161,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
 
     return new QueryBuilder({
       entityClassName: this.EntityClass.name,
-      key: { [modelPrimaryKey]: this.EntityClass.primaryKeyValue(id) },
+      key: { [modelPartitionKey]: this.EntityClass.partitionKeyValue(id) },
       options: { filter: partitionFilter }
     }).build();
   }
@@ -222,7 +222,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKey),
+            [this.partitionKeyAlias]: rel.target.partitionKeyValue(foreignKey),
             [this.sortKeyAlias]: rel.target.name
           }
         });
@@ -257,7 +257,8 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         this.#transactionBuilder.addGet({
           TableName: tableName,
           Key: {
-            [this.primaryKeyAlias]: rel.target.primaryKeyValue(foreignKeyVal),
+            [this.partitionKeyAlias]:
+              rel.target.partitionKeyValue(foreignKeyVal),
             [this.sortKeyAlias]: rel.target.name
           }
         });

@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, PrimaryKeyAttribute } from "../../../src/decorators";
-import { type PrimaryKey } from "../../../src/types";
+import { Entity, PartitionKeyAttribute } from "../../../src/decorators";
+import { type PartitionKey } from "../../../src/types";
 import { Customer, MockTable, Student } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 
-describe("PrimaryKeyAttribute", () => {
+describe("PartitionKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
@@ -26,19 +26,19 @@ describe("PrimaryKeyAttribute", () => {
   });
 
   describe("types", () => {
-    it("requires the attribute to be of type PrimaryKey", () => {
+    it("requires the attribute to be of type PartitionKey", () => {
       @Entity
       class MockClass extends MockTable {
-        // @ts-expect-no-error: attribute must be of type PrimaryKey
-        @PrimaryKeyAttribute({ alias: "PrimaryKeyAlias" })
-        public primaryKey: PrimaryKey;
+        // @ts-expect-no-error: attribute must be of type PartitionKey
+        @PartitionKeyAttribute({ alias: "PartitionKeyAlias" })
+        public partitionKey: PartitionKey;
       }
 
       @Entity
       class MockClass2 extends MockTable {
-        // @ts-expect-error: attribute must be of type PrimaryKey
-        @PrimaryKeyAttribute({ alias: "PrimaryKeyAlias" })
-        public primaryKey: string;
+        // @ts-expect-error: attribute must be of type PartitionKey
+        @PartitionKeyAttribute({ alias: "PartitionKeyAlias" })
+        public partitionKey: string;
       }
     });
 
@@ -46,8 +46,8 @@ describe("PrimaryKeyAttribute", () => {
       @Entity
       class MockClass extends MockTable {
         // @ts-expect-no-error: Alias prop is optional
-        @PrimaryKeyAttribute()
-        public primaryKey: PrimaryKey;
+        @PartitionKeyAttribute()
+        public partitionKey: PartitionKey;
       }
     });
 
@@ -55,8 +55,8 @@ describe("PrimaryKeyAttribute", () => {
       @Entity
       class MockClass extends MockTable {
         // @ts-expect-error: Nullable prop is not allowed
-        @PrimaryKeyAttribute({ alias: "Key1", nullable: false })
-        public key1: PrimaryKey;
+        @PartitionKeyAttribute({ alias: "Key1", nullable: false })
+        public key1: PartitionKey;
       }
     });
   });

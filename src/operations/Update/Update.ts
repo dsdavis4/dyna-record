@@ -54,11 +54,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const { name: tableName } = this.tableMetadata;
 
-    const pk = this.tableMetadata.primaryKeyAttribute.name;
+    const pk = this.tableMetadata.partitionKeyAttribute.name;
     const sk = this.tableMetadata.sortKeyAttribute.name;
 
     const keys = {
-      [pk]: this.EntityClass.primaryKeyValue(id),
+      [pk]: this.EntityClass.partitionKeyValue(id),
       [sk]: this.EntityClass.name
     };
 
@@ -75,7 +75,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       {
         TableName: tableName,
         Key: tableKeys,
-        ConditionExpression: `attribute_exists(${this.primaryKeyAlias})`, // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
         ...expression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
@@ -128,10 +128,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     if (entity !== undefined && currentId !== undefined) {
       const oldLinkKeys = {
-        [this.primaryKeyAlias]: rel.target.primaryKeyValue(currentId),
+        [this.partitionKeyAlias]: rel.target.partitionKeyValue(currentId),
         [this.sortKeyAlias]:
           relType === "HasMany"
-            ? this.EntityClass.primaryKeyValue(entity.id)
+            ? this.EntityClass.partitionKeyValue(entity.id)
             : this.EntityClass.name
       };
 

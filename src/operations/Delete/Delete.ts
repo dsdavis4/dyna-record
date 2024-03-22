@@ -31,7 +31,7 @@ import type { DeleteOptions, ItemKeys } from "./types";
 class Delete<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #tableName: string;
-  readonly #primaryKeyField: string;
+  readonly #partitionKeyField: string;
   readonly #sortKeyField: string;
   readonly #relationsLookup: RelationshipLookup;
   readonly #belongsToRelationships: BelongsToRelationship[];
@@ -44,7 +44,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     const { name: tableName } = this.tableMetadata;
 
     this.#tableName = tableName;
-    this.#primaryKeyField = this.tableMetadata.primaryKeyAttribute.name;
+    this.#partitionKeyField = this.tableMetadata.partitionKeyAttribute.name;
     this.#sortKeyField = this.tableMetadata.sortKeyAttribute.name;
 
     const relationsObj = buildEntityRelationshipMetaObj(
@@ -81,8 +81,8 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
             {
-              [this.#primaryKeyField]:
-                item[this.#primaryKeyField as keyof BelongsToLink],
+              [this.#partitionKeyField]:
+                item[this.#partitionKeyField as keyof BelongsToLink],
               [this.#sortKeyField]:
                 item[this.#sortKeyField as keyof BelongsToLink]
             }
@@ -112,14 +112,14 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     item: BelongsToLink | ItemKeys<T>,
     options: DeleteOptions
   ): void {
-    const pkField = this.#primaryKeyField as keyof typeof item;
+    const pkField = this.#partitionKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
 
     this.#transactionBuilder.addDelete(
       {
         TableName: this.#tableName,
         Key: {
-          [this.primaryKeyAlias]: item[pkField],
+          [this.partitionKeyAlias]: item[pkField],
           [this.sortKeyAlias]: item[skField]
         }
       },
@@ -137,9 +137,10 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     if (isHasAndBelongsToManyRelationship(relMeta)) {
       // Inverse the keys to delete the other JoinTable entry
       const belongsToLinksKeys: ItemKeys<T> = {
-        [this.#primaryKeyField]:
+        [this.#partitionKeyField]:
           item[this.#sortKeyField as keyof BelongsToLink],
-        [this.#sortKeyField]: item[this.#primaryKeyField as keyof BelongsToLink]
+        [this.#sortKeyField]:
+          item[this.#partitionKeyField as keyof BelongsToLink]
       };
 
       this.buildDeleteItemTransaction(belongsToLinksKeys, {
@@ -174,7 +175,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       }
 
       const tableKeys = entityToTableItem(this.EntityClass, {
-        [this.#primaryKeyField]: relMeta.target.primaryKeyValue(
+        [this.#partitionKeyField]: relMeta.target.partitionKeyValue(
           item.foreignKey
         ),
         [this.#sortKeyField]: relMeta.target.name
@@ -240,8 +241,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     foreignKeyValue: string
   ): void {
     const belongsToLinksKeys: ItemKeys<T> = {
-      [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
-      [this.#sortKeyField]: this.EntityClass.primaryKeyValue(entityId)
+      [this.#partitionKeyField]:
+        relMeta.target.partitionKeyValue(foreignKeyValue),
+      [this.#sortKeyField]: this.EntityClass.partitionKeyValue(entityId)
     };
 
     this.buildDeleteItemTransaction(belongsToLinksKeys, {
@@ -261,7 +263,8 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     foreignKeyValue: string
   ): void {
     const belongsToLinksKeys: ItemKeys<T> = {
-      [this.#primaryKeyField]: relMeta.target.primaryKeyValue(foreignKeyValue),
+      [this.#partitionKeyField]:
+        relMeta.target.partitionKeyValue(foreignKeyValue),
       [this.#sortKeyField]: this.EntityClass.name
     };
 

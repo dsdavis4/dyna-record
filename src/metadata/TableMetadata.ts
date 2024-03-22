@@ -8,8 +8,7 @@ import type {
   KeysAttributeMetadataOptions
 } from "./types";
 
-// TODO this should be updated everywhere to be partitionKey
-export const defaultTableKeys = { primaryKey: "PK", sortKey: "SK" } as const;
+export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
 /**
  * Default fields with default table alias. Can be overwritten through {@link TableMetadataOptions} defaultFields
@@ -29,13 +28,13 @@ export const tableDefaultFields: Record<
 /**
  * Represents the metadata for a table within the ORM framework, encapsulating information such as table name, key attributes, and default field mappings. This class is fundamental for defining how entities are mapped to their underlying database tables, providing a schema-like structure that includes both key configuration and default attribute handling.
  *
- * The metadata includes the primary and sort key attributes of the table, which are essential for database operations. It also provides a mechanism to include default attributes and their mappings, supporting common fields like `id`, `type`, `createdAt`, and `updatedAt`, along with their serialization strategies, particularly for date fields.
+ * The metadata includes the partition and sort key attributes of the table, which are essential for database operations. It also provides a mechanism to include default attributes and their mappings, supporting common fields like `id`, `type`, `createdAt`, and `updatedAt`, along with their serialization strategies, particularly for date fields.
  *
  * @property {string} name - The name of the table.
  * @property {string} delimiter - A delimiter used in the table's composite keys.
  * @property {Record<DefaultFields, AttributeMetadata>} defaultAttributes - A record of default attributes for the entity, keyed by entity field names.
  * @property {Record<string, AttributeMetadata>} defaultTableAttributes - A record of default attributes for the table, keyed by table field aliases.
- * @property {AttributeMetadata} primaryKeyAttribute - Metadata for the table's primary key attribute.
+ * @property {AttributeMetadata} partitionKeyAttribute - Metadata for the table's partition key attribute.
  * @property {AttributeMetadata} sortKeyAttribute - Metadata for the table's sort key attribute.
  *
  * @param {TableMetadataOptions} options - Configuration options for the table metadata.
@@ -45,7 +44,7 @@ class TableMetadata {
   public readonly delimiter: string;
   public readonly defaultAttributes: Record<DefaultFields, AttributeMetadata>;
   public readonly defaultTableAttributes: Record<string, AttributeMetadata>;
-  public primaryKeyAttribute: AttributeMetadata;
+  public partitionKeyAttribute: AttributeMetadata;
   public sortKeyAttribute: AttributeMetadata;
 
   constructor(options: TableMetadataOptions) {
@@ -56,9 +55,9 @@ class TableMetadata {
     this.defaultAttributes = defaultAttrMeta.entityDefaults;
     this.defaultTableAttributes = defaultAttrMeta.tableDefaults;
     // Placeholders, these are set later
-    this.primaryKeyAttribute = {
+    this.partitionKeyAttribute = {
       name: "",
-      alias: defaultTableKeys.primaryKey,
+      alias: defaultTableKeys.partitionKey,
       nullable: false,
       serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" }
     };
@@ -107,12 +106,12 @@ class TableMetadata {
   }
 
   /**
-   * Adds the primary key attribute to Table metadata storage
+   * Adds the partition key attribute to Table metadata storage
    * @param options
    */
-  public addPrimaryKeyAttribute(options: KeysAttributeMetadataOptions): void {
+  public addPartitionKeyAttribute(options: KeysAttributeMetadataOptions): void {
     const opts = { ...options, nullable: false };
-    this.primaryKeyAttribute = new AttributeMetadata(opts);
+    this.partitionKeyAttribute = new AttributeMetadata(opts);
   }
 
   /**

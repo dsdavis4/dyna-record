@@ -51,11 +51,11 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const id = uuidv4();
     const createdAt = new Date();
 
-    const pk = this.tableMetadata.primaryKeyAttribute.name;
+    const pk = this.tableMetadata.partitionKeyAttribute.name;
     const sk = this.tableMetadata.sortKeyAttribute.name;
 
     const keys = {
-      [pk]: this.EntityClass.primaryKeyValue(id),
+      [pk]: this.EntityClass.partitionKeyValue(id),
       [sk]: this.EntityClass.name
     };
 
@@ -79,7 +79,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const putExpression = {
       TableName: tableName,
       Item: tableItem,
-      ConditionExpression: `attribute_not_exists(${this.primaryKeyAlias})` // Ensure item doesn't already exist
+      ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
     };
     this.#transactionBuilder.addPut(putExpression);
   }

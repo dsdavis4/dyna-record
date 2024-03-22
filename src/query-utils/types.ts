@@ -5,7 +5,7 @@ import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 // export type KeyConditions = NonNullable<
 //   QueryCommandInput["KeyConditions"],
 /**
- * Represents conditions used to specify the primary key and sort key (if applicable) for querying items in DynamoDB.
+ * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
  *
  * @type {KeyConditions} - Derived from the `KeyConditions` part of the `QueryCommandInput` from AWS SDK, excluding the "undefined" type to ensure type safety.
  */
@@ -102,7 +102,7 @@ export interface QueryOptions {
  * Combines key conditions and query options to define the properties for a query command.
  *
  * @property {string} entityClassName - The name of the entity class being queried.
- * @property {KeyConditions} key - The primary key conditions for the query.
+ * @property {KeyConditions} key - The partition key conditions for the query.
  * @property {QueryOptions?} options - Optional additional query options.
  */
 export interface QueryCommandProps {
