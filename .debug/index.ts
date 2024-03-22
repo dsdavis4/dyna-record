@@ -25,6 +25,9 @@ import {
 
 import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
+import Logger from "../src/Logger";
+
+process.env.NO_ORM_LOGGING_ENABLED = "true";
 
 // TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
 
@@ -283,8 +286,6 @@ class AttributeTester extends DrewsBrewsTable {
 // TODO add dependabot once this is public
 
 // TODO add eslint workflow
-
-// TODO make a logger class to optionally log. Structured logs..
 
 // TODO find all instances where I throw a plain "Error" and make a custom error
 
@@ -870,9 +871,9 @@ class AttributeTester extends DrewsBrewsTable {
 
     debugger;
 
-    // console.log(JSON.stringify(results, null, 4));
+    // Logger.log(JSON.stringify(results, null, 4));
   } catch (err) {
-    console.log("error", err);
+    Logger.log("error", err);
     debugger;
   }
 })();

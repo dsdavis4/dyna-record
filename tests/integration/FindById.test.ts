@@ -21,6 +21,7 @@ import {
   QueryCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
+import Logger from "../../src/Logger";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
@@ -1795,23 +1796,23 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.pk);
+        Logger.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.sk);
+        Logger.log(paymentMethod.sk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.id);
+        Logger.log(paymentMethod.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.lastFour);
+        Logger.log(paymentMethod.lastFour);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.customerId);
+        Logger.log(paymentMethod.customerId);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.updatedAt);
+        Logger.log(paymentMethod.updatedAt);
         // @ts-expect-no-error: Included associations are allowed
-        console.log(paymentMethod.customer);
+        Logger.log(paymentMethod.customer);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.orders);
+        Logger.log(paymentMethod.orders);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.paymentMethodProvider);
+        Logger.log(paymentMethod.paymentMethodProvider);
       }
     });
 
@@ -1825,19 +1826,19 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.pk);
+        Logger.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.sk);
+        Logger.log(paymentMethod.sk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.id);
+        Logger.log(paymentMethod.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.name);
+        Logger.log(paymentMethod.name);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.paymentMethodId);
+        Logger.log(paymentMethod.paymentMethodId);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.updatedAt);
+        Logger.log(paymentMethod.updatedAt);
         // @ts-expect-no-error: Included associations are allowed
-        console.log(paymentMethod.paymentMethod);
+        Logger.log(paymentMethod.paymentMethod);
       }
     });
 
@@ -1851,23 +1852,23 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.pk);
+        Logger.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.sk);
+        Logger.log(paymentMethod.sk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.id);
+        Logger.log(paymentMethod.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.lastFour);
+        Logger.log(paymentMethod.lastFour);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.customerId);
+        Logger.log(paymentMethod.customerId);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.updatedAt);
+        Logger.log(paymentMethod.updatedAt);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.customer);
+        Logger.log(paymentMethod.customer);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.orders);
+        Logger.log(paymentMethod.orders);
         // @ts-expect-no-error: Included associations are allowed
-        console.log(paymentMethod.paymentMethodProvider);
+        Logger.log(paymentMethod.paymentMethodProvider);
       }
     });
 
@@ -1881,23 +1882,23 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.pk);
+        Logger.log(paymentMethod.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.sk);
+        Logger.log(paymentMethod.sk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.id);
+        Logger.log(paymentMethod.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.lastFour);
+        Logger.log(paymentMethod.lastFour);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.customerId);
+        Logger.log(paymentMethod.customerId);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(paymentMethod.updatedAt);
+        Logger.log(paymentMethod.updatedAt);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.customer);
+        Logger.log(paymentMethod.customer);
         // @ts-expect-no-error: Included associations are allowed
-        console.log(paymentMethod.orders);
+        Logger.log(paymentMethod.orders);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(paymentMethod.paymentMethodProvider);
+        Logger.log(paymentMethod.paymentMethodProvider);
       }
     });
 
@@ -1911,29 +1912,29 @@ describe("FindById", () => {
 
       if (book !== undefined) {
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.pk);
+        Logger.log(book.pk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.sk);
+        Logger.log(book.sk);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.id);
+        Logger.log(book.id);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.type);
+        Logger.log(book.type);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.name);
+        Logger.log(book.name);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.numPages);
+        Logger.log(book.numPages);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.ownerId);
+        Logger.log(book.ownerId);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.createdAt);
+        Logger.log(book.createdAt);
         // @ts-expect-no-error: Entity Attributes are allowed
-        console.log(book.updatedAt);
+        Logger.log(book.updatedAt);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(book.customer);
+        Logger.log(book.customer);
         // @ts-expect-no-error: Included associations are allowed
-        console.log(book.authors);
+        Logger.log(book.authors);
         // @ts-expect-error: Not included associations are not allowed
-        console.log(book.owner);
+        Logger.log(book.owner);
       }
     });
 
@@ -1947,9 +1948,9 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined) {
         // @ts-expect-error: Included relationships should not include associations
-        console.log(paymentMethod.customer?.orders);
+        Logger.log(paymentMethod.customer?.orders);
         // @ts-expect-no-error: Entity attributes should include entity attributes
-        console.log(paymentMethod.customer?.id);
+        Logger.log(paymentMethod.customer?.id);
       }
     });
 
@@ -1963,9 +1964,9 @@ describe("FindById", () => {
 
       if (paymentMethod !== undefined && paymentMethod.orders?.length > 0) {
         // @ts-expect-error: Included relationships should not include associations
-        console.log(paymentMethod.orders[0].customer);
+        Logger.log(paymentMethod.orders[0].customer);
         // @ts-expect-no-error: Entity attributes should include entity attributes
-        console.log(paymentMethod.orders[0].id);
+        Logger.log(paymentMethod.orders[0].id);
       }
     });
 
@@ -1979,9 +1980,9 @@ describe("FindById", () => {
 
       if (book !== undefined && book.authors?.length > 0) {
         // @ts-expect-error: Included relationships should not include associations
-        console.log(book.authors[0].books);
+        Logger.log(book.authors[0].books);
         // @ts-expect-no-error: Entity attributes should include entity attributes
-        console.log(book.authors[0].id);
+        Logger.log(book.authors[0].id);
       }
     });
 
@@ -1995,7 +1996,7 @@ describe("FindById", () => {
 
       if (pet !== undefined) {
         // @ts-expect-error: BelongsTo includes from NullableForeignKeys might be undefined
-        console.log(pet.owner.id);
+        Logger.log(pet.owner.id);
       }
     });
 
@@ -2009,7 +2010,7 @@ describe("FindById", () => {
 
       if (address !== undefined) {
         // @ts-expect-no-error: BelongsTo includes from (non-nullable) ForeignKeys will not be undefined
-        console.log(address.home.id);
+        Logger.log(address.home.id);
       }
     });
 
@@ -2023,7 +2024,7 @@ describe("FindById", () => {
 
       if (phoneBook !== undefined) {
         // @ts-expect-no-error: included HasMany relationships will be an array
-        console.log(phoneBook.addresses.length);
+        Logger.log(phoneBook.addresses.length);
       }
     });
   });

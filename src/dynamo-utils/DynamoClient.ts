@@ -14,6 +14,7 @@ import {
   type TransactGetCommandInput,
   type TransactGetCommandOutput
 } from "@aws-sdk/lib-dynamodb";
+import Logger from "../Logger";
 
 /**
  * Represents the responses from a `TransactGetItems` operation in DynamoDB.
@@ -46,7 +47,7 @@ class DynamoClient {
   public static async getItem(
     params: GetCommandInput
   ): Promise<GetCommandOutput["Item"]> {
-    console.log("getItem", { params });
+    Logger.log("getItem", { params });
     const response = await dynamo.send(new GetCommand(params));
     return response.Item;
   }
@@ -57,7 +58,7 @@ class DynamoClient {
    * @returns A Promise resolving to an array of the queried items.
    */
   public static async query(params: QueryCommandInput): Promise<QueryItems> {
-    console.log("query", { params });
+    Logger.log("query", { params });
     const response = await dynamo.send(new QueryCommand(params));
     return response.Items ?? [];
   }
@@ -70,7 +71,7 @@ class DynamoClient {
   public static async transactGetItems(
     params: TransactGetCommandInput
   ): Promise<TransactGetItemResponses> {
-    console.log("transactGetItems", { params });
+    Logger.log("transactGetItems", { params });
     const response = await dynamo.send(new TransactGetCommand(params));
     return response.Responses ?? [];
   }
@@ -83,7 +84,7 @@ class DynamoClient {
   public static async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
-    console.log("transactWriteItems", { params });
+    Logger.log("transactWriteItems", { params });
     return await dynamo.send(new TransactWriteCommand(params));
   }
 }

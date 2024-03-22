@@ -35,6 +35,7 @@ import {
   isHasAndBelongsToManyRelationship,
   isHasManyRelationship
 } from "../../metadata/utils";
+import Logger from "../../Logger";
 
 // TODO improve this
 /**
@@ -127,7 +128,7 @@ class FindById<T extends NoOrm> extends OperationBase<T> {
     if (transactionRes.some(res => res.Item === undefined)) {
       // TODO I am getting this on some queries... why?
       // TODO delete this code block
-      console.error("ERROR - Orphaned Belongs To Links");
+      Logger.error("ERROR - Orphaned Belongs To Links");
     }
 
     return this.resolveFindByIdIncludesResults(
@@ -222,7 +223,7 @@ class FindById<T extends NoOrm> extends OperationBase<T> {
           }
         });
       } else {
-        console.error(
+        Logger.error(
           // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
           `Corrupted foreign key value. Invalid type. ${foreignEntityType} - ${foreignKey}`
         );

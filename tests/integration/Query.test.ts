@@ -664,10 +664,10 @@ describe("Query", () => {
           !(paymentMethod instanceof BelongsToLink)
         ) {
           // @ts-expect-error: Query does not include HasOne or BelongsTo associations
-          console.log(paymentMethod.customer);
+          Logger.log(paymentMethod.customer);
 
           // @ts-expect-error: Query does not include HasMany relationship associations
-          console.log(paymentMethod.orders);
+          Logger.log(paymentMethod.orders);
         }
       });
     });
@@ -1088,10 +1088,10 @@ describe("Query", () => {
           !(paymentMethod instanceof BelongsToLink)
         ) {
           // @ts-expect-error: Query does not include HasOne or BelongsTo associations
-          console.log(paymentMethod.customer);
+          Logger.log(paymentMethod.customer);
 
           // @ts-expect-error: Query does not include HasMany relationship associations
-          console.log(paymentMethod.orders);
+          Logger.log(paymentMethod.orders);
         }
       });
 

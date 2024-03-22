@@ -162,10 +162,10 @@ export const chunkArray = <T>(array: T[], size: number): T[][] => {
  * @returns `true` if the value is a `string`, `number`, or `symbol` (i.e., a valid property key); otherwise, `false`.
  *
  * @example
- * console.log(isPropertyKey('test')); // true
- * console.log(isPropertyKey(123)); // true
- * console.log(isPropertyKey(Symbol('sym'))); // true
- * console.log(isPropertyKey({})); // false
+ * Logger.log(isPropertyKey('test')); // true
+ * Logger.log(isPropertyKey(123)); // true
+ * Logger.log(isPropertyKey(Symbol('sym'))); // true
+ * Logger.log(isPropertyKey({})); // false
  */
 export const isPropertyKey = (value: any): value is PropertyKey => {
   return (
