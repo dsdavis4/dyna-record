@@ -25,6 +25,8 @@ coverage
 
 notes.txt
 seeds
-_seeds
 
 docs
+
+.debug2
+.debug
