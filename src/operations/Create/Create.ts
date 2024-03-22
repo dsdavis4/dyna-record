@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, EntityClass } from "../../types";
 import { TransactWriteBuilder } from "../../dynamo-utils";
@@ -12,9 +12,9 @@ import type { CreateOptions } from "./types";
  *
  * It encapsulates the logic required to translate entity attributes to a format suitable for DynamoDB, execute the creation transaction, and manage any relationships defined by the entity, such as "BelongsTo" or "HasMany" links.
  *
- * @template T - The type of the entity being created, extending `NoOrm`.
+ * @template T - The type of the entity being created, extending `DynaRecord`.
  */
-class Create<T extends NoOrm> extends OperationBase<T> {
+class Create<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
   constructor(Entity: EntityClass<T>) {
@@ -47,7 +47,7 @@ class Create<T extends NoOrm> extends OperationBase<T> {
    * @param attributes
    * @returns
    */
-  private buildEntityData(attributes: CreateOptions<T>): NoOrm {
+  private buildEntityData(attributes: CreateOptions<T>): DynaRecord {
     const id = uuidv4();
     const createdAt = new Date();
 
@@ -59,7 +59,7 @@ class Create<T extends NoOrm> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const defaultAttrs: NoOrm = {
+    const defaultAttrs: DynaRecord = {
       id,
       type: this.EntityClass.name,
       createdAt,
@@ -89,7 +89,7 @@ class Create<T extends NoOrm> extends OperationBase<T> {
    * @param entityData
    */
   private async buildRelationshipTransactions(
-    entityData: NoOrm
+    entityData: DynaRecord
   ): Promise<void> {
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,

@@ -1,6 +1,6 @@
 import Metadata from "../../metadata";
 import { type JoinTable } from "../../relationships";
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type { EntityClass } from "../../types";
 
 /**
@@ -14,7 +14,7 @@ type TargetKey<T, U> = {
  * Represents a function returning metadata for a join table.
  * @template J The type of the join table.
  */
-type ThroughFunction<J extends JoinTable<NoOrm, NoOrm>> = () => {
+type ThroughFunction<J extends JoinTable<DynaRecord, DynaRecord>> = () => {
   /**
    * The constructor function for the join table.
    * @param {...any[]} args Constructor arguments for the join table.
@@ -28,8 +28,8 @@ type ThroughFunction<J extends JoinTable<NoOrm, NoOrm>> = () => {
 };
 
 interface HasAndBelongsToManyProps<
-  T extends NoOrm,
-  K extends NoOrm,
+  T extends DynaRecord,
+  K extends DynaRecord,
   J extends JoinTable<T, K>,
   L extends JoinTable<K, T>
 > {
@@ -86,8 +86,8 @@ interface HasAndBelongsToManyProps<
  * In this example, `User` entities are related to `Group` entities through a many-to-many relationship, with `UserGroupJoin` serving as the join table. The decorator indicates this relationship, allowing for efficient querying and manipulation of related entities.
  */
 function HasAndBelongsToMany<
-  T extends NoOrm,
-  K extends NoOrm,
+  T extends DynaRecord,
+  K extends DynaRecord,
   J extends JoinTable<T, K>,
   L extends JoinTable<K, T>
 >(
@@ -97,20 +97,20 @@ function HasAndBelongsToMany<
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
         const target = getTarget();
         const { joinTable, foreignKey } = props.through();
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasAndBelongsToMany",
-          propertyName: context.name as keyof NoOrm,
+          propertyName: context.name as keyof DynaRecord,
           target,
           joinTableName: joinTable.name
         });
 
         Metadata.addJoinTable(joinTable.name, {
           entity: target,
-          foreignKey: foreignKey as keyof JoinTable<NoOrm, NoOrm>
+          foreignKey: foreignKey as keyof JoinTable<DynaRecord, DynaRecord>
         });
       });
     }

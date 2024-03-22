@@ -1,7 +1,7 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type { EntityDefinedAttributes } from "../types";
 
 /**
- * Entity attribute fields that can be set on create. Excludes that are managed by no-orm
+ * Entity attribute fields that can be set on create. Excludes that are managed by dyna-record
  */
-export type CreateOptions<T extends NoOrm> = EntityDefinedAttributes<T>;
+export type CreateOptions<T extends DynaRecord> = EntityDefinedAttributes<T>;

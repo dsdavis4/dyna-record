@@ -1,4 +1,4 @@
-import NoOrm from "../../src";
+import DynaRecord from "../../src";
 import {
   Table,
   Entity,
@@ -35,7 +35,7 @@ import type {
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-abstract class MockTable extends NoOrm {
+abstract class MockTable extends DynaRecord {
   @PrimaryKeyAttribute({ alias: "PK" })
   public readonly pk: PrimaryKey;
 
@@ -241,7 +241,7 @@ class AuthorBook extends JoinTable<Author, Book> {
 }
 
 @Table({ name: "other-table", delimiter: "|" })
-abstract class OtherTable extends NoOrm {
+abstract class OtherTable extends DynaRecord {
   @PrimaryKeyAttribute()
   public readonly myPk: PrimaryKey;
 

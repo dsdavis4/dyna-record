@@ -1,5 +1,5 @@
 {
-  "name": "no-orm",
+  "name": "dyna-record",
   "version": "1.0.0",
   "description": "Typescript Object Relational Mapper (ORM) for Dynamo",
   "main": "index.js",
@@ -17,14 +17,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsdavis4/no-orm.git"
+    "url": "git+https://github.com/dsdavis4/dyna-record.git"
   },
   "author": "dsdavis4",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/dsdavis4/no-orm/issues"
+    "url": "https://github.com/dsdavis4/dyna-record/issues"
   },
-  "homepage": "https://github.com/dsdavis4/no-orm#readme",
+  "homepage": "https://github.com/dsdavis4/dyna-record#readme",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.502.0",
     "@aws-sdk/lib-dynamodb": "^3.502.0",

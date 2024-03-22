@@ -1,4 +1,4 @@
-import type NoOrm from "./NoOrm";
+import type DynaRecord from "./DynaRecord";
 import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
 import Metadata, {
   type AttributeMetadata,
@@ -13,9 +13,9 @@ import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
  * @param entityData
  * @returns
  */
-export const entityToTableItem = <T extends NoOrm>(
+export const entityToTableItem = <T extends DynaRecord>(
   EntityClass: new () => T,
-  entityData: Partial<NoOrm>
+  entityData: Partial<DynaRecord>
 ): DynamoTableItem => {
   const attributesMeta = Metadata.getEntityAttributes(EntityClass.name);
 
@@ -43,7 +43,7 @@ export const entityToTableItem = <T extends NoOrm>(
  * @param tableItem
  * @returns
  */
-export const tableItemToEntity = <T extends NoOrm>(
+export const tableItemToEntity = <T extends DynaRecord>(
   EntityClass: new () => T,
   tableItem: DynamoTableItem
 ): T => {
@@ -111,9 +111,9 @@ export const tableItemToBelongsToLink = (
  * Type guard to check if the key is defined on the entity
  */
 export const isKeyOfEntity = (
-  entity: NoOrm,
+  entity: DynaRecord,
   key: string
-): key is keyof NoOrm => {
+): key is keyof DynaRecord => {
   return key in entity;
 };
 
@@ -124,7 +124,7 @@ export const isKeyOfEntity = (
  * @returns
  */
 export const isKeyOfObject = <T>(
-  entity: Partial<NoOrm>,
+  entity: Partial<DynaRecord>,
   key: any
 ): key is keyof T => {
   return key in entity;
@@ -203,7 +203,7 @@ export const isString = (value: any): value is string => {
  * safeAssign(entity, "name", "Jane Doe");
  */
 export const safeAssign = <
-  TObject extends NoOrm,
+  TObject extends DynaRecord,
   TKey extends keyof TObject,
   TValue
 >(

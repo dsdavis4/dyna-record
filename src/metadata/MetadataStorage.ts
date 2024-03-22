@@ -1,4 +1,4 @@
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import type { MakeOptional } from "../types";
 import TableMetadata from "./TableMetadata";
 import EntityMetadata from "./EntityMetadata";
@@ -188,7 +188,7 @@ class MetadataStorage {
    * @param options
    */
   public addPrimaryKeyAttribute(
-    entityClass: NoOrm,
+    entityClass: DynaRecord,
     options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
@@ -204,7 +204,7 @@ class MetadataStorage {
    * @param options
    */
   public addSortKeyAttribute(
-    entityClass: NoOrm,
+    entityClass: DynaRecord,
     options: Parameters<TableMetadata["addPrimaryKeyAttribute"]>[number]
   ): void {
     const tableMetadata = this.getEntityTableMetadata(entityClass);
@@ -233,9 +233,9 @@ class MetadataStorage {
    * @returns
    */
   private getEntityTableMetadata(
-    classPrototype: NoOrm
+    classPrototype: DynaRecord
   ): TableMetadata | undefined {
-    const protoType: NoOrm = Object.getPrototypeOf(classPrototype);
+    const protoType: DynaRecord = Object.getPrototypeOf(classPrototype);
 
     if (protoType === null) return;
 

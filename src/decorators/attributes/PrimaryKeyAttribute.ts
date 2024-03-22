@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import { type PrimaryKey } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -23,7 +23,7 @@ import type { AttributeOptions } from "../types";
  *
  * In this example, `@PrimaryKeyAttribute` decorates the `pk` field of `User`, marking it as the entity's primary key.
  */
-function PrimaryKeyAttribute<T extends NoOrm, K extends PrimaryKey>(
+function PrimaryKeyAttribute<T extends DynaRecord, K extends PrimaryKey>(
   props?: AttributeOptions
 ) {
   return function (
@@ -32,7 +32,7 @@ function PrimaryKeyAttribute<T extends NoOrm, K extends PrimaryKey>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addPrimaryKeyAttribute(entity, {
           attributeName: context.name.toString(),

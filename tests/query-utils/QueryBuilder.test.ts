@@ -1,5 +1,5 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
-import NoOrm from "../../src";
+import DynaRecord from "../../src";
 import {
   Table,
   Entity,
@@ -21,7 +21,7 @@ import type { PrimaryKey, SortKey } from "../../src/types";
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-class MockTable extends NoOrm {
+class MockTable extends DynaRecord {
   @PrimaryKeyAttribute({ alias: "PK" })
   public pk: PrimaryKey;
 

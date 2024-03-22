@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type {
   ConditionCheck,
   Put,
@@ -19,9 +19,9 @@ import type { EntityClass, Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
 import { extractForeignKeyFromEntity } from "./utils";
 
-type EntityData<T extends NoOrm> = Pick<T, "id"> & Partial<T>;
+type EntityData<T extends DynaRecord> = Pick<T, "id"> & Partial<T>;
 
-interface RelationshipTransactionsProps<T extends NoOrm> {
+interface RelationshipTransactionsProps<T extends DynaRecord> {
   /**
    * Entity for which relationships are being persisted
    */
@@ -57,7 +57,7 @@ interface RelationshipTransactionsProps<T extends NoOrm> {
  *   - Sets/removes ForeignKeys
  *   - Adds/removes BelongsToLinks
  */
-class RelationshipTransactions<T extends NoOrm> {
+class RelationshipTransactions<T extends DynaRecord> {
   readonly #props: RelationshipTransactionsProps<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
@@ -74,7 +74,7 @@ class RelationshipTransactions<T extends NoOrm> {
     this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
-  public async build<T extends NoOrm>(
+  public async build<T extends DynaRecord>(
     entityData: EntityData<T>
   ): Promise<void> {
     const { relationships } = this.#entityMetadata;

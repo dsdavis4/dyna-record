@@ -6,7 +6,7 @@ import type {
   HasOneRelationship,
   HasAndBelongsToManyRelationship
 } from ".";
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import type { RelationshipMetadataWithForeignKey } from "./types";
 import type { EntityClass } from "../types";
 
@@ -63,7 +63,7 @@ export const isRelationshipMetadataWithForeignKey = (
  * @param rel
  * @returns
  */
-export const doesEntityBelongToRelAsHasOne = <T extends NoOrm>(
+export const doesEntityBelongToRelAsHasOne = <T extends DynaRecord>(
   Entity: EntityClass<T>,
   rel: BelongsToRelationship
 ): boolean => {
@@ -81,7 +81,7 @@ export const doesEntityBelongToRelAsHasOne = <T extends NoOrm>(
  * @param foreignKey
  * @returns
  */
-export const doesEntityBelongToRelAsHasMany = <T extends NoOrm>(
+export const doesEntityBelongToRelAsHasMany = <T extends DynaRecord>(
   Entity: EntityClass<T>,
   rel: BelongsToRelationship
 ): boolean => {

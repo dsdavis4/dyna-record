@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
@@ -35,9 +35,9 @@ import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
  *
  * The `Query` operation supports two main query patterns: querying by a simple entity ID or by more complex key conditions that include primary key, optional sort key, and filters. It can handle querying for both entities and their relationships, like "BelongsTo" links, based on the provided conditions.
  *
- * @template T - The type of the entity being queried, extending `NoOrm`.
+ * @template T - The type of the entity being queried, extending `DynaRecord`.
  */
-class Query<T extends NoOrm> extends OperationBase<T> {
+class Query<T extends DynaRecord> extends OperationBase<T> {
   /**
    * Run the query operation
    * @param key EntityId or object with PrimaryKey and optional SortKey conditions

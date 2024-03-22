@@ -10,9 +10,9 @@ describe("Logger", () => {
     jest.clearAllMocks();
   });
 
-  describe("when NO_ORM_LOGGING_ENABLED is true", () => {
+  describe("when DYNA_RECORD_LOGGING_ENABLED is true", () => {
     beforeEach(() => {
-      process.env.NO_ORM_LOGGING_ENABLED = "true";
+      process.env.DYNA_RECORD_LOGGING_ENABLED = "true";
     });
 
     it("should call console.log when Logger.log is called", () => {
@@ -40,9 +40,9 @@ describe("Logger", () => {
     });
   });
 
-  describe("when NO_ORM_LOGGING_ENABLED is false", () => {
+  describe("when DYNA_RECORD_LOGGING_ENABLED is false", () => {
     beforeEach(() => {
-      process.env.NO_ORM_LOGGING_ENABLED = "false";
+      process.env.DYNA_RECORD_LOGGING_ENABLED = "false";
     });
 
     it("should not call console.log when Logger.log is called", () => {

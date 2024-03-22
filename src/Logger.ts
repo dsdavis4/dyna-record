@@ -4,7 +4,7 @@
 type LogLevels = "log" | "warn" | "error" | "info";
 
 /**
- * Facilitates logging throughout the ORM system with support for different log levels: log, warn, error, and info. Logging can be toggled through the `NO_ORM_LOGGING_ENABLED` environment variable. When enabled, logs are output to the console, allowing for easy tracking and debugging of the system's operations.
+ * Facilitates logging throughout the ORM system with support for different log levels: log, warn, error, and info. Logging can be toggled through the `DYNA_RECORD_LOGGING_ENABLED` environment variable. When enabled, logs are output to the console, allowing for easy tracking and debugging of the system's operations.
  *
  * The Logger class abstracts the console's logging methods, providing a unified API for logging across different severity levels. This encapsulation allows for more flexible logging strategies and makes it easier to modify logging behavior centrally.
  *
@@ -22,7 +22,7 @@ class Logger {
    * @param logParams
    */
   private static _log(level: LogLevels, ...logParams: any[]): void {
-    if (process.env.NO_ORM_LOGGING_ENABLED === "true") {
+    if (process.env.DYNA_RECORD_LOGGING_ENABLED === "true") {
       console[level](...logParams);
     }
   }

@@ -749,24 +749,24 @@ describe("Create", () => {
       });
     });
 
-    it("will not accept DefaultFields on create because they are managed by no-orm", async () => {
+    it("will not accept DefaultFields on create because they are managed by dyna-record", async () => {
       await Order.create({
-        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         id: "123"
       });
 
       await Order.create({
-        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         type: "456"
       });
 
       await Order.create({
-        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         createdAt: new Date()
       });
 
       await Order.create({
-        // @ts-expect-error default fields are not accepted on create, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         updatedAt: new Date()
       });
     });

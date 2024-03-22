@@ -1,9 +1,9 @@
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import type { JoinTable } from "../relationships";
 import type { EntityClass } from "../types";
 
-type Entity = EntityClass<NoOrm>;
-type ForeignKey = keyof JoinTable<NoOrm, NoOrm>;
+type Entity = EntityClass<DynaRecord>;
+type ForeignKey = keyof JoinTable<DynaRecord, DynaRecord>;
 
 /**
  * Represents the metadata for a join table used in many-to-many relationships within the ORM system. This metadata includes the entity class and the foreign key used in the join table.

@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { ForeignKey, NullableForeignKey, Optional } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -32,7 +32,7 @@ type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
 function NullableAttribute<
-  T extends NoOrm,
+  T extends DynaRecord,
   K extends NativeScalarAttributeValue
 >(props?: AttributeOptions) {
   return function (
@@ -41,7 +41,7 @@ function NullableAttribute<
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),

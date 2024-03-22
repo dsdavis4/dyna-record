@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata, { type RelationshipMetadata } from "../../metadata";
 import {
   DynamoClient,
@@ -43,9 +43,9 @@ import Logger from "../../Logger";
  *
  * It supports fetching an entity solely by its ID or along with its related entities through specified associations, allowing for flexible retrieval of complex entity graphs in a single operation.
  *
- * @template T - The type of the entity being retrieved, extending `NoOrm`.
+ * @template T - The type of the entity being retrieved, extending `DynaRecord`.
  */
-class FindById<T extends NoOrm> extends OperationBase<T> {
+class FindById<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactGetBuilder;
 
   constructor(Entity: EntityClass<T>) {

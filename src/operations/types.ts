@@ -1,4 +1,4 @@
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import type {
   ForeignKey,
   NullableForeignKey,
@@ -57,13 +57,15 @@ type ForeignKeyToValue<T> = {
  * Returns Keys of T which are HasMany, BelongsTo or HasOne relationships
  */
 export type RelationshipAttributeNames<T> = {
-  [K in keyof T]: Exclude<T[K], undefined> extends NoOrm | NoOrm[] ? K : never;
+  [K in keyof T]: Exclude<T[K], undefined> extends DynaRecord | DynaRecord[]
+    ? K
+    : never;
 }[keyof T];
 
 /**
  * Entity attributes excluding relationship attributes
  */
-export type EntityAttributes<T extends NoOrm> = Omit<
+export type EntityAttributes<T extends DynaRecord> = Omit<
   T,
   RelationshipAttributeNames<T>
 >;
@@ -73,12 +75,12 @@ export type EntityAttributes<T extends NoOrm> = Omit<
  *   - relationship attributes
  *   - primary key attribute
  *   - sort key attribute
- *   - no-orm default attributes
+ *   - dyna-record default attributes
  *   - Functions defined on the entity
  */
-export type EntityDefinedAttributes<T extends NoOrm> = Omit<
+export type EntityDefinedAttributes<T extends DynaRecord> = Omit<
   ForeignKeyToValue<T>,
-  | keyof NoOrm
+  | keyof DynaRecord
   | RelationshipAttributeNames<T>
   | FunctionFields<T>
   | PrimaryKeyAttribute<T>

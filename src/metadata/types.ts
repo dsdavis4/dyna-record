@@ -6,7 +6,7 @@ import type {
   RelationshipMetadata,
   TableMetadata
 } from ".";
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import type { BelongsToLink } from "../relationships";
 import type { MakeOptional } from "../types";
 
@@ -15,7 +15,7 @@ import type { MakeOptional } from "../types";
  */
 export type RelationshipMetadataWithForeignKey = Extract<
   RelationshipMetadata,
-  { foreignKey: keyof NoOrm }
+  { foreignKey: keyof DynaRecord }
 >;
 
 /**
@@ -49,9 +49,9 @@ export type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
 export type DefaultDateFields = "createdAt" | "updatedAt";
 
 /**
- * Specifies the default fields used in entities, including fields from `NoOrm` or `BelongsToLink`.
+ * Specifies the default fields used in entities, including fields from `DynaRecord` or `BelongsToLink`.
  */
-export type DefaultFields = keyof NoOrm | keyof BelongsToLink;
+export type DefaultFields = keyof DynaRecord | keyof BelongsToLink;
 
 /**
  * Defines the structure for default fields within a table, mapping field names to their `AttributeMetadata` aliases.

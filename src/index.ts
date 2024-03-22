@@ -1,3 +1,3 @@
-import NoOrm from "./NoOrm";
+import DynaRecord from "./DynaRecord";
 
-export default NoOrm;
+export default DynaRecord;

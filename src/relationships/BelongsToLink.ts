@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 
 /**
- * Extends `NoOrm` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
+ * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
  */
-interface BelongsToLinkProps extends NoOrm {
+interface BelongsToLinkProps extends DynaRecord {
   foreignEntityType: string;
   foreignKey: string;
 }

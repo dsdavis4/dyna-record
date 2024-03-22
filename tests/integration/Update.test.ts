@@ -2309,24 +2309,24 @@ describe("Update", () => {
       });
     });
 
-    it("will not accept DefaultFields on update because they are managed by no-orm", async () => {
+    it("will not accept DefaultFields on update because they are managed by dyna-record", async () => {
       await Order.update("123", {
-        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
         id: "123"
       });
 
       await Order.update("123", {
-        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
         type: "456"
       });
 
       await Order.update("123", {
-        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
         createdAt: new Date()
       });
 
       await Order.update("123", {
-        // @ts-expect-error default fields are not accepted on update, they are managed by no-orm
+        // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
         updatedAt: new Date()
       });
     });

@@ -1,5 +1,5 @@
 import Metadata from "../../metadata";
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type {
   EntityClass,
   ForeignKeyAttribute,
@@ -8,7 +8,7 @@ import type {
 } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-interface BelongsToProps<T extends NoOrm> {
+interface BelongsToProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T>;
 }
 
@@ -16,8 +16,8 @@ interface BelongsToProps<T extends NoOrm> {
  * If the relationship is linked by a NullableForeignKey then it allows the field to be optional, otherwise it ensures that is is not optional
  */
 type BelongsToField<
-  T extends NoOrm,
-  K extends NoOrm,
+  T extends DynaRecord,
+  K extends DynaRecord,
   FK extends ForeignEntityAttribute<T>
 > = FK extends keyof T
   ? T[FK] extends NullableForeignKey
@@ -26,7 +26,7 @@ type BelongsToField<
   : never;
 
 /**
- * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using NoOrm. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.
+ * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using DynaRecord. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.
  *
  * The decorator must reference a foreign key defined on the model.
  *
@@ -53,7 +53,7 @@ type BelongsToField<
  * ```
  * In this example, `@BelongsTo` decorates the `user` field of the `Order` entity, establishing a "BelongsTo" relationship with the `User` entity via the `userId` foreign key. This decoration signifies that each `Order` instance is related to a specific `User` instance.
  */
-function BelongsTo<T extends NoOrm, K extends NoOrm>(
+function BelongsTo<T extends DynaRecord, K extends DynaRecord>(
   getTarget: () => EntityClass<K>,
   props: BelongsToProps<T>
 ) {
@@ -66,11 +66,11 @@ function BelongsTo<T extends NoOrm, K extends NoOrm>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "BelongsTo",
-          propertyName: context.name as keyof NoOrm,
+          propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });

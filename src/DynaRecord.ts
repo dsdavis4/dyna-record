@@ -17,7 +17,7 @@ import {
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 
-interface NoOrmBase {
+interface DynaRecordBase {
   id: string;
   type: string;
   createdAt: Date;
@@ -29,11 +29,11 @@ interface NoOrmBase {
  *
  * Table classes should extend this class, and each entity should extend the table class
  *
- * Entities extending `NoOrm` can utilize these operations to interact with their corresponding records in the database, including handling relationships between different entities.
+ * Entities extending `DynaRecord` can utilize these operations to interact with their corresponding records in the database, including handling relationships between different entities.
  * @example
  * ```typescript
  * @Table({ name: "my-table", delimiter: "#" })
- * abstract class MyTable extends NoOrm {
+ * abstract class MyTable extends DynaRecord {
  *   @PrimaryKeyAttribute()
  *   public readonly pk: PrimaryKey;
  *
@@ -47,7 +47,7 @@ interface NoOrmBase {
  * }
  * ```
  */
-abstract class NoOrm implements NoOrmBase {
+abstract class DynaRecord implements DynaRecordBase {
   /**
    * A unique identifier for the entity itself, automatically generated upon creation.
    */
@@ -91,7 +91,7 @@ abstract class NoOrm implements NoOrmBase {
    * ```
    */
   public static async findById<
-    T extends NoOrm,
+    T extends DynaRecord,
     Opts extends FindByIdOptions<T>
   >(
     this: EntityClass<T>,
@@ -164,7 +164,7 @@ abstract class NoOrm implements NoOrmBase {
    *  );
    * ```
    */
-  public static async query<T extends NoOrm>(
+  public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
@@ -203,13 +203,13 @@ abstract class NoOrm implements NoOrmBase {
    * });
    * ```
    */
-  public static async query<T extends NoOrm>(
+  public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
     options?: Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>>;
 
-  public static async query<T extends NoOrm>(
+  public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
@@ -227,7 +227,7 @@ abstract class NoOrm implements NoOrmBase {
    * const newUser = await User.create({ name: "Alice", email: "alice@example.com", profileId: "123" });
    * ```
    */
-  public static async create<T extends NoOrm>(
+  public static async create<T extends DynaRecord>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>
   ): Promise<T> {
@@ -255,7 +255,7 @@ abstract class NoOrm implements NoOrmBase {
    * await User.update("userId", { email: "newemail@example.com", someKey: null });
    * ```
    */
-  public static async update<T extends NoOrm>(
+  public static async update<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
     attributes: UpdateOptions<T>
@@ -275,7 +275,7 @@ abstract class NoOrm implements NoOrmBase {
    * await User.delete("userId");
    * ```
    */
-  public static async delete<T extends NoOrm>(
+  public static async delete<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string
   ): Promise<void> {
@@ -299,4 +299,4 @@ abstract class NoOrm implements NoOrmBase {
   }
 }
 
-export default NoOrm;
+export default DynaRecord;

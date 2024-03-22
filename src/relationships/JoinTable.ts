@@ -1,4 +1,4 @@
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
 import Metadata, {
   type TableMetadata,
@@ -28,8 +28,8 @@ type ForeignKeyProperties<T> = {
 interface TransactionProps {
   tableProps: TableMetadata;
   entities: {
-    parentEntity: EntityClass<NoOrm>;
-    linkedEntity: EntityClass<NoOrm>;
+    parentEntity: EntityClass<DynaRecord>;
+    linkedEntity: EntityClass<DynaRecord>;
   };
   ids: { parentId: string; linkedEntityId: string };
 }
@@ -48,7 +48,7 @@ interface TransactionProps {
  * }
  * ```
  */
-abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
+abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
   constructor(
     private readonly type1: EntityClass<T>,
     private readonly type2: EntityClass<K>
@@ -62,8 +62,8 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
    */
   public static async create<
     ThisClass extends JoinTable<T, K>,
-    T extends NoOrm,
-    K extends NoOrm
+    T extends DynaRecord,
+    K extends DynaRecord
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>
@@ -86,8 +86,8 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
    */
   public static async delete<
     ThisClass extends JoinTable<T, K>,
-    T extends NoOrm,
-    K extends NoOrm
+    T extends DynaRecord,
+    K extends DynaRecord
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>
@@ -113,7 +113,7 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
    */
   private static createBelongsToLink(
     transactionBuilder: TransactionBuilder,
-    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
+    keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): void {
@@ -166,7 +166,7 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
    */
   private static deleteBelongsToLink(
     transactionBuilder: TransactionBuilder,
-    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
+    keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): void {
@@ -191,7 +191,7 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
   }
 
   private static joinTableKey(
-    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
+    keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): Record<string, string> {
@@ -211,7 +211,7 @@ abstract class JoinTable<T extends NoOrm, K extends NoOrm> {
   }
 
   private static transactionProps(
-    keys: ForeignKeyProperties<JoinTable<NoOrm, NoOrm>>,
+    keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata
   ): TransactionProps {

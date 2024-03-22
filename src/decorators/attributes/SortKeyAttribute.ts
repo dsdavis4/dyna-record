@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import { type SortKey } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -21,7 +21,7 @@ import type { AttributeOptions } from "../types";
  *
  * In this example, `@SortKeyAttribute` decorates the `sk` field of `User`, marking it as the entity's sort key.
  */
-function SortKeyAttribute<T extends NoOrm, K extends SortKey>(
+function SortKeyAttribute<T extends DynaRecord, K extends SortKey>(
   props?: AttributeOptions
 ) {
   return function (
@@ -30,7 +30,7 @@ function SortKeyAttribute<T extends NoOrm, K extends SortKey>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),

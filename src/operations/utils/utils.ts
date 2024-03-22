@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type { RelationshipMetadata } from "../../metadata";
 import {
   isBelongsToRelationship,
@@ -34,10 +34,10 @@ export const buildEntityRelationshipMetaObj = (
 /**
  * Extracts a ForeignKey value from an entity instance
  * @param relMeta - RelationshipMetadata for associated foreignKey
- * @param entity - instance of NoOrm
+ * @param entity - instance of DynaRecord
  * @returns
  */
-export const extractForeignKeyFromEntity = <T extends NoOrm>(
+export const extractForeignKeyFromEntity = <T extends DynaRecord>(
   relMeta: RelationshipMetadata,
   entity?: T
 ): Optional<ForeignKey> => {

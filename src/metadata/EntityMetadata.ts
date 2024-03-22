@@ -3,9 +3,9 @@ import {
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage
 } from ".";
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 
-type EntityClass = new (...args: any) => NoOrm;
+type EntityClass = new (...args: any) => DynaRecord;
 
 /**
  * Represents metadata for an entity within the ORM system, encapsulating information about the entity's attributes, relationships, and its associated database table.

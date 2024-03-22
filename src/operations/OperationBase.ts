@@ -1,16 +1,16 @@
-import type NoOrm from "../NoOrm";
+import type DynaRecord from "../DynaRecord";
 import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata";
 import type { EntityClass } from "../types";
 
 /**
  * Serves as an abstract base class for various operation classes within the ORM system that perform actions on entities, such as creating, updating, querying, or deleting. This class provides shared properties and functionality that are common across different types of operations, centralizing the handling of entity and table metadata.
  *
- * @template T - The type of the entity that the operation will be performed on, extending `NoOrm`.
+ * @template T - The type of the entity that the operation will be performed on, extending `DynaRecord`.
  *
  * @method run
  * An abstract method that must be implemented by subclasses to execute the specific operation. The parameters and return type of this method can vary depending on the operation being performed.
  */
-abstract class OperationBase<T extends NoOrm> {
+abstract class OperationBase<T extends DynaRecord> {
   /**
    * The class of the entity on which the operation is performed, providing static methods and properties related to the entity.
    */

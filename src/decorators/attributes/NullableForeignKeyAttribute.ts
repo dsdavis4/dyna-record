@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { NullableForeignKey } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -22,7 +22,7 @@ import type { AttributeOptions } from "../types";
  *
  * Here, `@NullableForeignKeyAttribute` decorates `profileId` of `User`, indicating it as a nullable foreign key.
  */
-function NullableForeignKeyAttribute<T extends NoOrm>(
+function NullableForeignKeyAttribute<T extends DynaRecord>(
   props?: AttributeOptions
 ) {
   return function (
@@ -31,7 +31,7 @@ function NullableForeignKeyAttribute<T extends NoOrm>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),

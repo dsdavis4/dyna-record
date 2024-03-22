@@ -1,9 +1,9 @@
 import Metadata from "../../metadata";
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyAttribute } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-interface HasManyProps<T extends NoOrm> {
+interface HasManyProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T>;
 }
 
@@ -33,18 +33,18 @@ interface HasManyProps<T extends NoOrm> {
  * ```
  * In this example, each `User` entity is associated with multiple `Post` entities through a one-to-many relationship. The `@HasMany` decorator is applied to the `posts` field of the `User` class, indicating that a user can have many posts. The `foreignKey` property specifies the attribute in the `Post` entity that establishes the connection back to the `User` entity, enabling the ORM to manage the relationship effectively.
  */
-function HasMany<T extends NoOrm, K extends NoOrm>(
+function HasMany<T extends DynaRecord, K extends DynaRecord>(
   getTarget: () => EntityClass<T>,
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasMany",
-          propertyName: context.name as keyof NoOrm,
+          propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });

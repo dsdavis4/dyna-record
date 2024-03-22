@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import { TransactWriteBuilder } from "../../dynamo-utils";
 import type {
   RelationshipMetadata,
@@ -20,9 +20,9 @@ import type { EntityClass } from "../../types";
  *
  * The `Update` operation supports updating entity attributes and ensures consistency in relationships, especially for "BelongsTo" relationships. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
  *
- * @template T - The type of the entity being updated, extending `NoOrm`.
+ * @template T - The type of the entity being updated, extending `DynaRecord`.
  */
-class Update<T extends NoOrm> extends OperationBase<T> {
+class Update<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
   #entity?: T;
@@ -62,7 +62,7 @@ class Update<T extends NoOrm> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const updatedAttrs: Partial<NoOrm> = {
+    const updatedAttrs: Partial<DynaRecord> = {
       ...attributes,
       updatedAt: new Date()
     };
@@ -91,7 +91,7 @@ class Update<T extends NoOrm> extends OperationBase<T> {
    */
   private async buildRelationshipTransactions(
     id: string,
-    attributes: Partial<NoOrm>
+    attributes: Partial<DynaRecord>
   ): Promise<void> {
     const entityData = { id, ...attributes };
 

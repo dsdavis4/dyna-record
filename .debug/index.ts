@@ -1,4 +1,4 @@
-import NoOrm from "../src";
+import DynaRecord from "../src";
 import {
   Table,
   Entity,
@@ -27,16 +27,7 @@ import Metadata from "../src/metadata";
 import { BelongsToLink, JoinTable } from "../src/relationships";
 import Logger from "../src/Logger";
 
-process.env.NO_ORM_LOGGING_ENABLED = "true";
-
-// TODO a possible repo name could be "dino-orm" to sound like dynamo be be a dinosaur
-
-// no-orm
-// dino-orm
-// dynamo-orm
-// dynam-orm
-// dyna-record TODO this might be it
-// DynamORM
+process.env.DYNA_RECORD_LOGGING_ENABLED = "true";
 
 // TODO I should validate data types before saving to ensure that even if someone overrides the type system, then the type validations are preservered
 //       I think I had a medium article about a library that does this
@@ -53,7 +44,7 @@ process.env.NO_ORM_LOGGING_ENABLED = "true";
     foreignEntityType: { alias: "ForeignEntityType" }
   }
 })
-abstract class DrewsBrewsTable extends NoOrm {
+abstract class DrewsBrewsTable extends DynaRecord {
   @PrimaryKeyAttribute({ alias: "PK" })
   public readonly pk: PrimaryKey;
 

@@ -1,4 +1,4 @@
-import NoOrm from "../../NoOrm";
+import DynaRecord from "../../DynaRecord";
 import {
   TransactWriteBuilder,
   TransactionWriteFailedError
@@ -26,9 +26,9 @@ import type { DeleteOptions, ItemKeys } from "./types";
  *
  * The `Delete` operation supports complex scenarios, such as deleting related entities in "BelongsTo" relationships, nullifying or removing foreign keys to maintain data integrity, and handling many-to-many relationships through join tables.
  *
- * @template T - The type of the entity being deleted, extending `NoOrm`.
+ * @template T - The type of the entity being deleted, extending `DynaRecord`.
  */
-class Delete<T extends NoOrm> extends OperationBase<T> {
+class Delete<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
   readonly #tableName: string;
   readonly #primaryKeyField: string;
@@ -63,7 +63,7 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    const items = await this.EntityClass.query<NoOrm>(id);
+    const items = await this.EntityClass.query<DynaRecord>(id);
 
     if (items.length === 0) {
       throw new NotFoundError(`Item does not exist: ${id}`);
@@ -278,7 +278,7 @@ class Delete<T extends NoOrm> extends OperationBase<T> {
    * @returns
    */
   private isEntityClass(item: any): item is T {
-    return item instanceof NoOrm;
+    return item instanceof DynaRecord;
   }
 
   /**

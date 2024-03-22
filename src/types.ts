@@ -1,7 +1,7 @@
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
-import type NoOrm from "./NoOrm";
+import type DynaRecord from "./DynaRecord";
 
 /**
  * A utility type for branding primitives to ensure type safety with unique identifiers.
@@ -29,9 +29,9 @@ export type ForeignKey = Brand<string, "ForeignKey">;
 export type NullableForeignKey = Optional<Brand<string, "NullableForeignKey">>;
 
 /**
- * Represents a foreign key attribute on an entity within a NoOrm model
+ * Represents a foreign key attribute on an entity within a DynaRecord model
  */
-export type ForeignKeyAttribute = keyof NoOrm & ForeignKey;
+export type ForeignKeyAttribute = keyof DynaRecord & ForeignKey;
 
 /**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
@@ -62,7 +62,7 @@ export type Optional<T> = T | undefined;
 export type Nullable<T> = T | null;
 
 /**
- * Represents a lookup object to access relationship metadata by related entity name for NoOrm models.
+ * Represents a lookup object to access relationship metadata by related entity name for DynaRecord models.
  */
 export type RelationshipLookup = Record<string, RelationshipMetadata>;
 
@@ -81,6 +81,6 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
   Partial<Pick<T, K>>;
 
 /**
- * Represents an instance of a class decorated with the `Entity` decorator in NoOrm, encapsulating entity logic.
+ * Represents an instance of a class decorated with the `Entity` decorator in DynaRecord, encapsulating entity logic.
  */
-export type EntityClass<T> = (new () => T) & typeof NoOrm;
+export type EntityClass<T> = (new () => T) & typeof DynaRecord;

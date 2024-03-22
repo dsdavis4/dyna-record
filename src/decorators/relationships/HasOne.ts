@@ -1,9 +1,9 @@
 import Metadata from "../../metadata";
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyAttribute, Optional } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-interface HasOneProps<T extends NoOrm> {
+interface HasOneProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T> & keyof T;
 }
 
@@ -33,7 +33,7 @@ interface HasOneProps<T extends NoOrm> {
  * ```
  * Here, the `@HasOne` decorator is applied to the `profile` field of the `User` class, establishing a one-to-one relationship between a `User` and a `Profile`. The foreign key (`userId`) in the `Profile` entity points back to the `User` entity, enabling the ORM to manage this relationship by linking a user to at most one profile.
  */
-function HasOne<T extends NoOrm, K extends NoOrm>(
+function HasOne<T extends DynaRecord, K extends DynaRecord>(
   getTarget: () => EntityClass<T>,
   props: HasOneProps<T>
 ) {
@@ -43,11 +43,11 @@ function HasOne<T extends NoOrm, K extends NoOrm>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityRelationship(entity.constructor.name, {
           type: "HasOne",
-          propertyName: context.name as keyof NoOrm,
+          propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
           foreignKey: props.foreignKey as ForeignKeyAttribute
         });

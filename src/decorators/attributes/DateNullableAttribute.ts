@@ -1,4 +1,4 @@
-import type NoOrm from "../../NoOrm";
+import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { Optional } from "../../types";
 import type { AttributeOptions } from "../types";
@@ -24,7 +24,7 @@ import { dateSerializer } from "./serializers";
  *
  * Here, `@Attribute` decorates `myField` of `MyEntity`, marking it as an entity attribute with an alias 'MyField' for ORM purposes.
  */
-function DateNullableAttribute<T extends NoOrm, K extends Date>(
+function DateNullableAttribute<T extends DynaRecord, K extends Date>(
   props?: AttributeOptions
 ) {
   return function (
@@ -33,7 +33,7 @@ function DateNullableAttribute<T extends NoOrm, K extends Date>(
   ) {
     if (context.kind === "field") {
       context.addInitializer(function () {
-        const entity: NoOrm = Object.getPrototypeOf(this);
+        const entity: DynaRecord = Object.getPrototypeOf(this);
 
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
