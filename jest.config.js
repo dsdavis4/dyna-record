@@ -9,7 +9,12 @@ module.exports = {
       tsconfig: "tsconfig.dev.json"
     }
   },
-  coveragePathIgnorePatterns: ["README.md", "/node_modules/", "dist"],
+  coveragePathIgnorePatterns: [
+    "README.md",
+    "/node_modules/",
+    "dist",
+    "tests/integration/mockModels.ts"
+  ],
   coverageThreshold: {
     global: {
       branches: 85,
