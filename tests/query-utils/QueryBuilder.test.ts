@@ -1,5 +1,5 @@
 import QueryBuilder from "../../src/query-utils/QueryBuilder";
-import DynaRecord from "../../src";
+import DynaRecord from "../../index";
 import {
   Table,
   Entity,
