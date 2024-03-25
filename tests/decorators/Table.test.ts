@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import DynaRecord from "../../src";
+import DynaRecord from "../../index";
 import { Table } from "../../src/decorators";
 
 describe("Table metadata", () => {
