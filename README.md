@@ -22,6 +22,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Delete](#delete)
 - [Type Safety Features](#type-safety-features)
 - [Best Practices](#best-practices)
+- [Debug Logging](#debug-logging)
 
 ## Getting Started
 
