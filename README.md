@@ -276,10 +276,10 @@ To use the create method, call it on the model class you wish to create a new re
 #### Basic Usage
 
 ```typescript
-const order: Order = await Order.create({
-  customerId: "123",
-  paymentMethodId: "456",
-  orderDate: new Date("2024-01-01")
+const myModel: MyModel = await MyModel.create({
+  someAttr: "123",
+  otherAttr: 456,
+  someDate: new Date("2024-01-01")
 });
 ```
 
@@ -369,7 +369,7 @@ const result = await Customer.query("123", {
 });
 ```
 
-##### Query by id
+##### Query by primary key
 
 To be more precise to the underlying data, you can specify the partition key and sort key directly. The keys here will be the partition and sort keys defined on the [table](#table) class.
 
@@ -409,7 +409,7 @@ const result = await Course.query(
 );
 ```
 
-### Querying on an indexes
+### Querying on an index
 
 For querying based on secondary indexes, you can specify the index name in the options.
 
