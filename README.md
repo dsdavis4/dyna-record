@@ -53,6 +53,14 @@ Create a table class that extends [DynaRecord base class](https://dyna-record.co
 #### Basic usage
 
 ```typescript
+import DynaRecord, {
+  Table,
+  PartitionKeyAttribute,
+  SortKeyAttribute,
+  PartitionKey,
+  SortKey
+} from "dyna-record";
+
 @Table({ name: "my-table", delimiter: "#" })
 abstract class MyTable extends DynaRecord {
   @PartitionKeyAttribute({ alias: "PK" })
@@ -66,6 +74,14 @@ abstract class MyTable extends DynaRecord {
 #### Customizing the default field table aliases
 
 ```typescript
+import DynaRecord, {
+  Table,
+  PartitionKeyAttribute,
+  SortKeyAttribute,
+  PartitionKey,
+  SortKey
+} from "dyna-record";
+
 @Table({
   name: "mock-table",
   delimiter: "#",
@@ -103,6 +119,8 @@ By default, each entity will have [default attributes](https://dyna-record.com/t
 - [updatedAt](https://dyna-record.com/classes/default.html#updatedAt) - Timestamp of when the entity was updated last
 
 ```typescript
+import { Entity } from "dyna-record";
+
 @Entity
 class Student extends MyTable {
   // ...
@@ -124,6 +142,8 @@ For [natively supported data types](https://docs.aws.amazon.com/amazondynamodb/l
 - Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
 ```typescript
+import { Entity, Attribute, NullableAttribute } from "dyna-record";
+
 @Entity
 class Student extends MyTable {
   @Attribute({ alias: "Username" }) // Sets alias if field in Dynamo is different then on the model
@@ -146,6 +166,8 @@ Dates are not natively supported in Dynamo. To define a date attribute use [@Dat
 - Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
 ```typescript
+import { Entity, DateAttribute, NullableDateAttribute } from "dyna-record";
+
 @Entity
 class Student extends MyTable {
   @DateAttribute()
@@ -165,6 +187,15 @@ Define foreign keys in order to support [@BelongsTo](https://dyna-record.com/fun
 - Attempting to remove an entity from a non-nullable foreign key will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
 ```typescript
+import {
+  Entity,
+  ForeignKeyAttribute,
+  ForeignKey,
+  NullableForeignKeyAttribute,
+  NullableForeignKey,
+  BelongsTo
+} from "dyna-record";
+
 @Entity
 class Assignment extends MyTable {
   @ForeignKeyAttribute()
@@ -199,6 +230,14 @@ A relationship can be defined as nullable or non-nullable. Non-nullable relation
 [Docs](https://dyna-record.com/functions/HasOne.html)
 
 ```typescript
+import {
+  Entity,
+  ForeignKeyAttribute,
+  ForeignKey,
+  BelongsTo,
+  HasOne
+} from "dyna-record";
+
 @Entity
 class Assignment extends MyTable {
   // 'assignmentId' must be defined on associated model
@@ -222,6 +261,14 @@ class Grade extends MyTable {
 [Docs](https://dyna-record.com/functions/HasMany.html)
 
 ```typescript
+import {
+  Entity,
+  NullableForeignKeyAttribute,
+  NullableForeignKey,
+  BelongsTo,
+  HasMany
+} from "dyna-record";
+
 @Entity
 class Teacher extends MyTable {
   // 'teacherId' must be defined on associated model
@@ -247,6 +294,13 @@ class Course extends MyTable {
 HasAndBelongsToMany relationships require a [JoinTable](https://dyna-record.com/classes/JoinTable.html) class. This represents a virtual table to support the relationship
 
 ```typescript
+import {
+  Entity,
+  JoinTable,
+  ForeignKey,
+  HasAndBelongsToMany
+} from "dyna-record";
+
 class StudentCourse extends JoinTable<Student, Course> {
   public readonly studentId: ForeignKey;
   public readonly courseId: ForeignKey;
