@@ -22,9 +22,8 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Relationships](#relationships)
 - [CRUD Operations](#crud-operations)
   - [Create](#create)
-  - [Read](#read)
-    - [FindById](#findbyid)
-    - [Query](#query)
+  - [FindById](#findbyid)
+  - [Query](#query)
   - [Update](#update)
   - [Delete](#delete)
 - [Type Safety Features](#type-safety-features)
@@ -257,7 +256,7 @@ To use the create method, call it on the model class you wish to create a new re
 #### Basic Usage
 
 ```typescript
-const newOrder = await Order.create({
+const order: Order = await Order.create({
   customerId: "123",
   paymentMethodId: "456",
   orderDate: new Date("2024-01-01")
@@ -267,7 +266,7 @@ const newOrder = await Order.create({
 #### Example: Creating an Entity with Relationships
 
 ```typescript
-const grade = await Grade.create({
+const grade: Grade = await Grade.create({
   gradeValue: "A+",
   assignmentId: "123",
   studentId: "456"
@@ -286,11 +285,9 @@ The method is designed to throw errors under various conditions, such as transac
 - Conditional Checks: To ensure data integrity, the create method performs various conditional checks, such as verifying the existence of entities that new records relate to.
 - Error Handling: Errors during the creation process are handled gracefully, with specific errors thrown for different failure scenarios, such as conditional check failures or transaction cancellations.
 
-### Read
+### FindById
 
-#### FindById
-
-[Docs](file:///Users/drewdavis/code/dyna-record/docs/classes/default.html#findById)
+[Docs](https://dyna-record.com/classes/default.html#findById)
 
 Retrieve a single record by its primary key.
 
@@ -303,7 +300,7 @@ If no record is found matching the provided ID, findById returns undefined. This
 ##### Find an entity by id
 
 ```typescript
-const user = await Course.findById("123");
+const course: Course = await Course.findById("123");
 
 // user.id; - ok for any attribute
 // user.teacher; - Error! teacher relationship was not included in query
@@ -313,7 +310,7 @@ const user = await Course.findById("123");
 #### Including related entities
 
 ```typescript
-const result = await Course.findById("123", {
+const course: Course = await Course.findById("123", {
   include: [{ association: "teacher" }, { association: "assignments" }]
 });
 
@@ -322,7 +319,7 @@ const result = await Course.findById("123", {
 // user.assignments - ok because assignments is in include
 ```
 
-#### Query
+### Query
 
 Query records based on primary key attributes and other conditions.
 
