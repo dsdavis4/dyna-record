@@ -288,7 +288,7 @@ class Course extends OtherTable {
   public readonly teacherId?: NullableForeignKey;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
-  public readonly teacher: Teacher;
+  public readonly teacher?: Teacher;
 
   @HasMany(() => Assignment, { foreignKey: "courseId" })
   public readonly assignments: Assignment[];
