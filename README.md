@@ -321,13 +321,86 @@ const course: Course = await Course.findById("123", {
 
 ### Query
 
-Query records based on primary key attributes and other conditions.
+[Docs](https://dyna-record.com/classes/default.html#query)
+
+The query method is a versatile tool for querying data from DynamoDB tables using primary key conditions and various optional filters. This method enables fetching multiple items that match specific criteria, making it ideal for situations where more than one item needs to be retrieved based on attributes of the primary key (partition key and sort key).
+
+There are two main patterns; query by id and query by primary key
+
+#### Basic usage
+
+To query items using the id, simply pass the partition key value as the first parameter. This fetches all items that share the same partition key value.
+
+The result will be an array of the entity and [BelongsToLinks](https://dyna-record.com/classes/BelongsToLink.html)
+
+##### Query by id
+
+Querying using the id will abstract away setting up the partition key conditions.
 
 ```typescript
-const users = await User.query({
-  pk: "User#123",
-  sk: { $beginsWith: "Order" }
+const customers = await Customer.query("123");
+```
+
+Query by partition key and sort key
+
+```typescript
+const result = await Customer.query("123", {
+  skCondition: "Order"
 });
+```
+
+##### Query by id
+
+To be more precise to the underlying data, you can specify the partition key and sort key directly. The keys here will be the partition and sort keys defined on the [table](#table) class.
+
+```
+const orderLinks = await Customer.query({ pk: "Customer#123", sk: { $beginsWith: "Order" } });
+```
+
+### Advanced usage
+
+The query method supports advanced filtering using the filter option. This allows for more complex queries, such as filtering items by attributes other than the primary key.
+
+```typescript
+const result = await Course.query(
+  {
+    myPk: "Course|123"
+  },
+  {
+    filter: {
+      type: ["BelongsToLink", "Brewery"],
+      createdAt: { $beginsWith: "202" },
+      $or: [
+        {
+          foreignKey: "111",
+          updatedAt: { $beginsWith: "2023-02-15" }
+        },
+        {
+          foreignKey: ["222", "333"],
+          createdAt: { $beginsWith: "2021-09-15T" },
+          foreignEntityType: "Assignment"
+        },
+        {
+          id: "123"
+        }
+      ]
+    }
+  }
+);
+```
+
+### Querying on an indexes
+
+For querying based on secondary indexes, you can specify the index name in the options.
+
+```typescript
+const result = await Customer.query(
+  {
+    pk: "Customer#123",
+    sk: { $beginsWith: "Order" }
+  },
+  { indexName: "myIndex" }
+);
 ```
 
 ### Update
