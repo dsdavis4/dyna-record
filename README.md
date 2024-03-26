@@ -73,6 +73,15 @@ abstract class MyTable extends DynaRecord {
 
 Each entity must extend the Table class. To support single table design patterns, they must extend the same tables class.
 
+By default, each entity will have [default attributes](https://dyna-record.com/types/_internal_.DefaultFields.html)
+
+- The partition key defined on the [table](#table) class
+- The sort key defined on the [table](#table) class
+- [id](https://dyna-record.com/classes/default.html#id) - The auto generated uuid for the model
+- [type](https://dyna-record.com/classes/default.html#type) - The type of the entity. Value is the entity class name
+- [createdAt](https://dyna-record.com/classes/default.html#updatedAt) - The timestamp of when the entity was created
+- [updatedAt](https://dyna-record.com/classes/default.html#updatedAt) - Timestamp of when the entity was updated last
+
 ```typescript
 @Entity
 class Student extends MyTable {
