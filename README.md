@@ -191,7 +191,7 @@ Dyna-Record supports defining relationships between entities such as [@HasOne](h
 A relationship can be defined as nullable or non-nullable. Non-nullable relationships will be enforced via transactions and violations will result in [NullConstraintViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
 - [@ForeignKeyAttribute](https://dyna-record.com/functions/ForeignKeyAttribute.html) is used to define a foreign key that links to another entity and is not nullable.
-- @[NullableForeignKeyAttribute](https://dyna-record.com/functions/NullableForeignKeyAttribute.html) is used to define a foreign key that links to another entity and is nullable.
+- [@NullableForeignKeyAttribute](https://dyna-record.com/functions/NullableForeignKeyAttribute.html) is used to define a foreign key that links to another entity and is nullable.
 - Relationship decorators ([@HasOne](#hasone), [@HasMany](#hasmany), [@BelongsTo](https://dyna-record.com/functions/BelongsTo.html), [@HasAndBelongsToMany](#hasandbelongstomany)) define how entities relate to each other.
 
 #### HasOne
