@@ -6,12 +6,6 @@ Dyna-Record is a strongly typed ORM (Object-Relational Mapping) tool designed fo
 
 Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)
 
-<!-- TODO add quliafer about acid -->
-
-<!-- TODO here -->
-
-<!-- TODO add debug logging docs -->
-
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -45,17 +39,17 @@ or
 yarn add dyna-record
 ```
 
-### Required Permissions
-
-<!-- TODO add minimum required permissions -->
-
 ## Defining Entities
 
 Entities in Dyna-Record represent your DynamoDB table structures and relationships. Each entity corresponds to a DynamoDB table.
 
 ### Table
 
+[Docs](https://dyna-record.com/functions/Table.html)
+
 Create a table class that extends [DynaRecord base class](https://dyna-record.com/classes/default.html) and us decorated with the [Table decorator](https://dyna-record.com/functions/Table.html). At a minimum, the table class define the [PartitionKeyAttribute](https://dyna-record.com/functions/PartitionKeyAttribute.html) and [SortKeyAttribute](https://dyna-record.com/functions/SortKeyAttribute.html).
+
+#### Basic usage
 
 ```typescript
 @Table({ name: "my-table", delimiter: "#" })
@@ -68,7 +62,33 @@ abstract class MyTable extends DynaRecord {
 }
 ```
 
+#### Customizing the default field table aliases
+
+```typescript
+@Table({
+  name: "mock-table",
+  delimiter: "#",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" },
+    foreignKey: { alias: "ForeignKey" },
+    foreignEntityType: { alias: "ForeignEntityType" }
+  }
+})
+abstract class MyTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+```
+
 ### Entity
+
+[Docs](https://dyna-record.com/functions/Entity.html)
 
 Each entity must extend the Table class. To support single table design patterns, they must extend the same tables class.
 
@@ -504,3 +524,7 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Use Type Aliases for Foreign Keys**: Utilize TypeScript's type aliases for foreign keys to enhance code readability and maintainability.
 - **Leverage Type Safety**: Take advantage of Dyna-Record's type safety features to catch errors early in development.
 - **Define Access Patterns**: Dynamo is not as flexible as a relational database. Try to define all access patterns up front.
+
+## Debug logging
+
+To enable debug logging set `process.env.DYNA_RECORD_LOGGING_ENABLED` to `"true"`. When enabled, dyna-record will log to console the dynamo operations it is performing.
