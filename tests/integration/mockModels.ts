@@ -1,4 +1,4 @@
-import DynaRecord from "../../src";
+import DynaRecord from "../../index";
 import {
   Table,
   Entity,
