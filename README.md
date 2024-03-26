@@ -453,11 +453,42 @@ await Pet.update("123", {
 
 ### Delete
 
-Delete records by their primary key.
+[Docs](https://dyna-record.com/classes/default.html#delete)
+
+The delete method is used to remove an entity from a DynamoDB table, along with handling the deletion of associated items in relationships (like HasMany, HasOne, BelongsTo) to maintain the integrity of the database schema.
 
 ```typescript
 await User.delete("user-id");
 ```
+
+#### Handling HasMany and HasOne Relationships
+
+When deleting entities involved in HasMany or HasOne relationships:
+
+If a Pet belongs to an Owner (HasMany relationship), deleting the Pet will remove its BelongsToLink from the Owner's partition.
+If a Home belongs to a Person (HasOne relationship), deleting the Home will remove its BelongsToLink from the Person's partition.
+
+```typescript
+await Home.delete("123");
+```
+
+This deletes the Home entity and its BelongsToLink with a Person.
+
+#### Deleting Entities from HasAndBelongsToMany Relationships
+
+For entities part of a HasAndBelongsToMany relationship, deleting one entity will remove the association links (join table entries) with the related entities.
+
+If a Book has and belongs to many authors:
+
+```typescript
+await Book.delete("123");
+```
+
+This deletes a Book entity and its association links with Author entities.
+
+#### Error Handling
+
+If deleting an entity or its relationships fails due to database constraints or errors during transaction execution, a TransactionWriteFailedError is thrown, possibly with details such as ConditionalCheckFailedError or NullConstraintViolationError for more specific issues related to relationship constraints or nullability violations.
 
 ## Type Safety Features
 
@@ -472,5 +503,4 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Define Clear Entity Relationships**: Clearly define how your entities relate to each other for easier data retrieval and manipulation.
 - **Use Type Aliases for Foreign Keys**: Utilize TypeScript's type aliases for foreign keys to enhance code readability and maintainability.
 - **Leverage Type Safety**: Take advantage of Dyna-Record's type safety features to catch errors early in development.
-
-Dyna-Record offers a robust and type-safe ORM layer for DynamoDB, making it easier to manage complex data structures and relationships in your applications. By following the guidelines and practices outlined in this documentation, you can effectively utilize Dyna-Record to
+- **Define Access Patterns**: Dynamo is not as flexible as a relational database. Try to define all access patterns up front.
