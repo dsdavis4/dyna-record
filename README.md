@@ -405,11 +405,49 @@ const result = await Customer.query(
 
 ### Update
 
-Update existing records. You can also update foreign keys, which automatically handles related entities.
+[Docs](https://dyna-record.com/classes/default.html#update)
+
+The update method enables modifications to existing items in a DynamoDB table. It supports updating simple attributes, handling nullable fields, and managing relationships between entities, including updating and removing foreign keys.
+
+#### Updating simple attributes
 
 ```typescript
-await User.update("user-id", {
-  username: "jane_doe"
+await Customer.update("123", {
+  name: "New Name",
+  address: "New Address"
+});
+```
+
+#### Removing attributes
+
+Note: Attempting to remove a non nullable attribute will result in a [NullConstraintViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
+
+```typescript
+await ContactInformation.update("123", {
+  email: "new@example.com",
+  phone: null
+});
+```
+
+#### Updating Foreign Key References
+
+To update the foreign key reference of an entity to point to a different entity, simply pass the new foreign key value
+
+```typescript
+await PaymentMethod.update("123", {
+  customerId: "456"
+});
+```
+
+#### Removing Foreign Key References
+
+Nullable Foreign key references can be removed by setting them to null
+
+Note: Attempting to remove a non nullable foreign key will result in a [NullConstraintViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
+
+```typescript
+await Pet.update("123", {
+  ownerId: null
 });
 ```
 
