@@ -328,7 +328,7 @@ If no record is found matching the provided ID, findById returns undefined. This
 ##### Find an entity by id
 
 ```typescript
-const course: Course = await Course.findById("123");
+const course = await Course.findById("123");
 
 // user.id; - ok for any attribute
 // user.teacher; - Error! teacher relationship was not included in query
@@ -338,7 +338,7 @@ const course: Course = await Course.findById("123");
 #### Including related entities
 
 ```typescript
-const course: Course = await Course.findById("123", {
+const course = await Course.findById("123", {
   include: [{ association: "teacher" }, { association: "assignments" }]
 });
 
