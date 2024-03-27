@@ -1,4 +1,4 @@
-name: Check that package.json version changed
+name: Check that package version changed
 
 on:
   pull_request:
@@ -26,5 +26,5 @@ jobs:
         id: check
         uses: EndBug/version-check@v2 # You can choose the version/branch you prefer.
         with:
-          file-url: https://www.npmjs.com/package/dyna-record?activeTab=code
+          file-url: https://unpkg.com/dyna-record@latest/package.json
           static-checking: localIsNew
