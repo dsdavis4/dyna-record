@@ -26,4 +26,5 @@ jobs:
         id: check
         uses: EndBug/version-check@v2 # You can choose the version/branch you prefer.
         with:
-          diff-search: true
+          file-url: https://github.com/dsdavis4/dyna-record/blob/main/package.json
+          static-checking: localIsNew
