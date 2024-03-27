@@ -48,7 +48,7 @@ Entities in Dyna-Record represent your DynamoDB table structures and relationshi
 
 [Docs](https://dyna-record.com/functions/Table.html)
 
-Create a table class that extends [DynaRecord base class](https://dyna-record.com/classes/default.html) and us decorated with the [Table decorator](https://dyna-record.com/functions/Table.html). At a minimum, the table class define the [PartitionKeyAttribute](https://dyna-record.com/functions/PartitionKeyAttribute.html) and [SortKeyAttribute](https://dyna-record.com/functions/SortKeyAttribute.html).
+Create a table class that extends [DynaRecord base class](https://dyna-record.com/classes/default.html) and is decorated with the [Table decorator](https://dyna-record.com/functions/Table.html). At a minimum, the table class must define the [PartitionKeyAttribute](https://dyna-record.com/functions/PartitionKeyAttribute.html) and [SortKeyAttribute](https://dyna-record.com/functions/SortKeyAttribute.html).
 
 #### Basic usage
 
@@ -357,7 +357,7 @@ const grade: Grade = await Grade.create({
 
 #### Error handling
 
-The method is designed to throw errors under various conditions, such as transaction cancellation due to failed conditional checks. For instance, if you attempt to create a `Grade` for an `Assignment` that already has one, the method throws a `TransactionWriteFailedError`.
+The method is designed to throw errors under various conditions, such as transaction cancellation due to failed conditional checks. For instance, if you attempt to create a `Grade` for an `Assignment` that already has one, the method throws a [TransactionWriteFailedError](https://dyna-record.com/classes/TransactionWriteFailedError.html).
 
 #### Notes
 
