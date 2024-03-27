@@ -26,4 +26,4 @@ jobs:
         id: check
         uses: EndBug/version-check@v2 # You can choose the version/branch you prefer.
         with:
-          static-checking: localIsNew
+          diff-search: true
