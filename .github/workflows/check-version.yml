@@ -28,3 +28,9 @@ jobs:
         with:
           file-url: https://unpkg.com/dyna-record@latest/package.json
           static-checking: localIsNew
+
+      - name: Fail if condition is false
+        if: steps.check.outputs.changed == 'false'
+        run: |
+          echo "package.json version is not changed. Run `npm version <patch|minor|major>` and push changes."
+          exit 1
