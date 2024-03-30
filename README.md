@@ -42,7 +42,7 @@ yarn add dyna-record
 
 ## Defining Entities
 
-Entities in Dyna-Record represent your DynamoDB table structures and relationships. Each entity corresponds to a DynamoDB table.
+Entities in Dyna-Record represent your DynamoDB table structure and relationships. Think of each entity as a table in a relational database, even though they will be represented on a single table.
 
 ### Table
 
@@ -128,9 +128,8 @@ class Student extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  ...
+  /// ...
 }
-
 ```
 
 ### Attributes
