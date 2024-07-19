@@ -1,6 +1,9 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 
+// TODO typedoc
+export type EntityAttributes<T> = keyof T;
+
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
  *
@@ -47,35 +50,36 @@ export type FilterTypes =
  *
  * @type {AndFilter} - A record mapping attribute names to their filter conditions, implying all conditions must be met (AND logic).
  */
-export type AndFilter = Record<string, FilterTypes>;
+export type AndFilter<T> = Record<EntityAttributes<T>, FilterTypes>;
 
 /**
  * Represents a filter condition using an OR logical operator, allowing for grouping of multiple `AndFilter` conditions under a single '$or' key.
  *
  * @type {OrFilter} - A record with an "$or" key containing an array of `AndFilter` objects, indicating any of the conditions can be met (OR logic).
  */
-export type OrFilter = Record<"$or", AndFilter[]>;
+export type OrFilter<T> = Record<"$or", Array<AndFilter<T>>>;
 
 /**
  * Makes the '$or' key optional in an `OrFilter`, allowing for filters that primarily use AND logic but optionally include OR conditions.
  *
  * @type {OrOptional} - An `OrFilter` type with the '$or' key made optional.
  */
-export type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
+export type OrOptional<T> = Omit<OrFilter<T>, "$or"> &
+  Partial<Pick<OrFilter<T>, "$or">>;
 
 /**
  * Combines `AndFilter` and `OrFilter` types, supporting complex filters that use both AND and OR logic within the same filter structure.
  *
  * @type {FilterParams} - A combination of `AndFilter` or `OrFilter` with optional OR conditions.
  */
-export type FilterParams = (AndFilter | OrFilter) & OrOptional;
+export type FilterParams<T> = (AndFilter<T> | OrFilter<T>) & OrOptional<T>;
 
 /**
  * Represents complex filters combining AND and OR logic, specifically allowing for an 'OrFilter' at the top level.
  *
  * @type {AndOrFilter} - A `FilterParams` type further combined with an `OrFilter` for additional flexibility.
  */
-export type AndOrFilter = FilterParams & OrFilter;
+export type AndOrFilter<T> = FilterParams<T> & OrFilter<T>;
 
 /**
  * Defines the condition for a sort key in a query, allowing for exact matches or "begins with" conditions.
@@ -90,9 +94,9 @@ export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
  * @property {string?} indexName - Optional name of the secondary index to use in the query.
  * @property {FilterParams?} filter - Optional filter conditions to apply to the query.
  */
-export interface QueryOptions {
+export interface QueryOptions<T> {
   indexName?: string;
-  filter?: FilterParams;
+  filter?: FilterParams<T>;
 }
 
 /**
@@ -102,8 +106,8 @@ export interface QueryOptions {
  * @property {KeyConditions} key - The partition key conditions for the query.
  * @property {QueryOptions?} options - Optional additional query options.
  */
-export interface QueryCommandProps {
+export interface QueryCommandProps<T> {
   entityClassName: string;
   key: KeyConditions;
-  options?: QueryOptions;
+  options?: QueryOptions<T>;
 }

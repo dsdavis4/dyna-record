@@ -163,7 +163,7 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
-    options?: QueryBuilderOptions
+    options?: QueryBuilderOptions<T>
   ): Promise<QueryResults<T>>;
 
   /**
@@ -200,13 +200,13 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
-    options?: Omit<QueryOptions, "indexName">
+    options?: Omit<QueryOptions<T>, "indexName">
   ): Promise<QueryResults<T>>;
 
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
-    options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
+    options?: QueryBuilderOptions<T> | Omit<QueryOptions<T>, "indexName">
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
