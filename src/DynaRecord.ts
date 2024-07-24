@@ -8,7 +8,6 @@ import {
   Query,
   type QueryOptions,
   type EntityKeyConditions,
-  type QueryResults,
   Create,
   type CreateOptions,
   Update,
@@ -164,7 +163,7 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: QueryBuilderOptions
-  ): Promise<QueryResults<T>>;
+  ): Promise<ReturnType<Query<T>["run"]>>;
 
   /**
    * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
@@ -201,13 +200,13 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     options?: Omit<QueryOptions, "indexName">
-  ): Promise<QueryResults<T>>;
+  ): Promise<ReturnType<Query<T>["run"]>>;
 
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
-  ): Promise<QueryResults<T>> {
+  ): Promise<ReturnType<Query<T>["run"]>> {
     const op = new Query<T>(this);
     return await op.run(key, options);
   }
