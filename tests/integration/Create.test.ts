@@ -815,5 +815,15 @@ describe("Create", () => {
         myAttribute: null
       });
     });
+
+    it("relationships are not part of return value", async () => {
+      const res = await Order.create({
+        // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
+        createdAt: new Date()
+      });
+
+      // @ts-expect-error relationships are not part of return value
+      console.log(res.paymentMethod);
+    });
   });
 });

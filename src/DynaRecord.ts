@@ -224,7 +224,7 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async create<T extends DynaRecord>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>
-  ): Promise<T> {
+  ): Promise<ReturnType<Create<T>["run"]>> {
     const op = new Create<T>(this);
     return await op.run(attributes);
   }
