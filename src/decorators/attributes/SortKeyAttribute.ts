@@ -21,11 +21,9 @@ import type { NonNullAttributeOptions } from "../types";
  *
  * In this example, `@SortKeyAttribute` decorates the `sk` field of `User`, marking it as the entity's sort key.
  */
-function SortKeyAttribute<
-  T extends DynaRecord,
-  K extends SortKey,
-  P extends NonNullAttributeOptions
->(props?: P) {
+function SortKeyAttribute<T extends DynaRecord, K extends SortKey>(
+  props?: NonNullAttributeOptions
+) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>

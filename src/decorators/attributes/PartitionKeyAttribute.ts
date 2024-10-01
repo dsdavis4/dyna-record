@@ -21,11 +21,9 @@ import type { NonNullAttributeOptions } from "../types";
  *
  * In this example, `@PartitionKeyAttribute` decorates the `pk` field of `User`, marking it as the entity's partition key.
  */
-function PartitionKeyAttribute<
-  T extends DynaRecord,
-  K extends PartitionKey,
-  P extends NonNullAttributeOptions
->(props?: P) {
+function PartitionKeyAttribute<T extends DynaRecord, K extends PartitionKey>(
+  props?: NonNullAttributeOptions
+) {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
