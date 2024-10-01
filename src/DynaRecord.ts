@@ -233,7 +233,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * Update an entity. If foreign keys are included in the attribute then:
    *   - BelongsToLinks will be created accordingly
    *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
-   *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown. See {@link NullableForeignKeyAttribute}
+   *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
    * @param attributes - Attributes to update
