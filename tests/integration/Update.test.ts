@@ -17,8 +17,7 @@ import {
   BelongsTo,
   Entity,
   HasMany,
-  HasOne,
-  NullableAttribute
+  HasOne
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
 
@@ -75,7 +74,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
-  @NullableAttribute({ alias: "MyAttribute" })
+  @Attribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
@@ -87,10 +86,10 @@ class MockInformation extends MockTable {
   @Attribute({ alias: "Email" })
   public email: string;
 
-  @NullableAttribute({ alias: "Phone" })
+  @Attribute({ alias: "Phone", nullable: true })
   public phone?: string;
 
-  @NullableAttribute({ alias: "State" })
+  @Attribute({ alias: "State", nullable: true })
   public state?: string;
 }
 

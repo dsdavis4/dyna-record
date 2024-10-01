@@ -21,7 +21,7 @@ class AttributeMetadata {
   constructor(options: AttributeMetadataOptions) {
     this.name = options.attributeName;
     this.alias = options.alias ?? options.attributeName;
-    this.nullable = options.nullable;
+    this.nullable = options.nullable ?? false;
     this.serializers = options.serializers;
   }
 }

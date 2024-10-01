@@ -9,11 +9,8 @@ import {
   HasMany,
   BelongsTo,
   HasOne,
-  NullableForeignKeyAttribute,
-  NullableAttribute,
   DateAttribute,
-  HasAndBelongsToMany,
-  DateNullableAttribute
+  HasAndBelongsToMany
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -120,10 +117,10 @@ class ContactInformation extends MockTable {
   @Attribute({ alias: "Email" })
   public readonly email: string;
 
-  @NullableAttribute({ alias: "Phone" })
+  @Attribute({ alias: "Phone", nullable: true })
   public readonly phone?: string;
 
-  @NullableForeignKeyAttribute({ alias: "CustomerId" })
+  @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })
   public readonly customerId?: NullableForeignKey;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
@@ -150,13 +147,13 @@ class Pet extends MockTable {
   @Attribute({ alias: "Name" })
   public readonly name: string;
 
-  @NullableForeignKeyAttribute({ alias: "OwnerId" })
+  @ForeignKeyAttribute({ alias: "OwnerId", nullable: true })
   public readonly ownerId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
   public readonly owner?: Person;
 
-  @DateNullableAttribute({ alias: "AdoptedDate" })
+  @DateAttribute({ alias: "AdoptedDate", nullable: true })
   public readonly adoptedDate?: Date;
 }
 
@@ -165,7 +162,7 @@ class Home extends MockTable {
   @Attribute({ alias: "MLS#" })
   public readonly mlsNum: string;
 
-  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
   public readonly personId?: NullableForeignKey;
 
   @BelongsTo(() => Person, { foreignKey: "personId" })
@@ -210,7 +207,7 @@ class Book extends MockTable {
   @Attribute({ alias: "NumPages" })
   public readonly numPages: number;
 
-  @NullableForeignKeyAttribute({ alias: "PersonId" })
+  @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
   public readonly ownerId?: NullableForeignKey;
 
   @HasAndBelongsToMany(() => Author, {
@@ -284,7 +281,7 @@ class Course extends OtherTable {
   @Attribute()
   public readonly name: string;
 
-  @NullableForeignKeyAttribute()
+  @ForeignKeyAttribute({ nullable: true })
   public readonly teacherId?: NullableForeignKey;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
@@ -341,7 +338,7 @@ class Profile extends OtherTable {
   @ForeignKeyAttribute()
   public readonly userId: ForeignKey;
 
-  @NullableAttribute()
+  @Attribute({ nullable: true })
   public readonly alternateEmail?: string;
 }
 

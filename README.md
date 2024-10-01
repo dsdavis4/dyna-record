@@ -185,6 +185,9 @@ Define foreign keys in order to support [@BelongsTo](https://dyna-record.com/fun
 - Set nullable foreign key attributes as optional for optimal type safety
 - Attempting to remove an entity from a non-nullable foreign key will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
+// TODO update readme for examples using new nullable
+// TODO find all references of deletes constructors and update them
+
 ```typescript
 import {
   Entity,

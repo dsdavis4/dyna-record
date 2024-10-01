@@ -63,12 +63,38 @@ describe("DateAttribute", () => {
       }
     });
 
-    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+    it("if nullable is false the attribute can is required", () => {
       @Entity
-      class ModelOne extends MockTable {
-        // @ts-expect-error: Nullable prop is not allowed
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
         @DateAttribute({ alias: "Key1", nullable: false })
-        public key1: string;
+        public key1: Date;
+
+        // @ts-expect-error: Nullable properties are required
+        @DateAttribute({ alias: "Key2", nullable: false })
+        public key2?: Date;
+      }
+    });
+
+    it("nullable defaults to false and makes the property required", () => {
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
+        @DateAttribute({ alias: "Key1" })
+        public key1: Date;
+
+        // @ts-expect-error: Nullable properties are required
+        @DateAttribute({ alias: "Key2" })
+        public key2?: Date;
+      }
+    });
+
+    it("when nullable is true, it will allow the property to be optional", () => {
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
+        @DateAttribute({ alias: "Key1", nullable: true })
+        public key1?: Date;
       }
     });
   });

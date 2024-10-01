@@ -51,10 +51,17 @@ describe("PartitionKeyAttribute", () => {
       }
     });
 
-    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+    it("nullable is not a valid property because its always non nullable", () => {
       @Entity
-      class MockClass extends MockTable {
-        // @ts-expect-error: Nullable prop is not allowed
+      class SomeModel extends MockTable {
+        // @ts-expect-error: nullable property is not valid
+        @PartitionKeyAttribute({ alias: "Key1", nullable: true })
+        public key1: PartitionKey;
+      }
+
+      @Entity
+      class OtherModel extends MockTable {
+        // @ts-expect-error: nullable property is not valid
         @PartitionKeyAttribute({ alias: "Key1", nullable: false })
         public key1: PartitionKey;
       }

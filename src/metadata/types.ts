@@ -112,6 +112,6 @@ export interface Serializers {
 export interface AttributeMetadataOptions {
   attributeName: string;
   alias?: string;
-  nullable: boolean;
+  nullable?: boolean;
   serializers?: Serializers;
 }
