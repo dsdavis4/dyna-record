@@ -20,7 +20,7 @@ import {
   HasOne
 } from "../../src/decorators";
 import type { ForeignKey, NullableForeignKey } from "../../src/types";
-import { nullable, ZodError } from "zod";
+import { ValidationError } from "../../src";
 
 jest.mock("uuid");
 
@@ -146,37 +146,36 @@ describe("Create", () => {
   });
 
   it("will error if any required attributes are missing", async () => {
-    expect.assertions(3);
+    expect.assertions(5);
 
     try {
       await MyClassWithAttributes.create({} as any);
-    } catch (e) {
-      expect(e).toEqual(
-        // TODO doesnt include attribute for now because its type any, this will be removed when there is one per type
-        new ZodError([
-          {
-            code: "invalid_type",
-            expected: "date",
-            received: "undefined",
-            path: ["dateAttribute"],
-            message: "Required"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            received: "undefined",
-            path: ["foreignKeyAttribute"],
-            message: "Required"
-          }
-        ])
-      );
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          received: "undefined",
+          path: ["dateAttribute"],
+          message: "Required"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          received: "undefined",
+          path: ["foreignKeyAttribute"],
+          message: "Required"
+        }
+      ]);
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     }
   });
 
   it("will error if any required attributes are the wrong type", async () => {
-    expect.assertions(3);
+    expect.assertions(5);
 
     try {
       await MyClassWithAttributes.create({
@@ -187,39 +186,39 @@ describe("Create", () => {
         foreignKeyAttribute: 5,
         nullableForeignKeyAttribute: 6
       } as any);
-    } catch (e) {
-      expect(e).toEqual(
-        new ZodError([
-          {
-            code: "invalid_type",
-            expected: "date",
-            received: "number",
-            path: ["dateAttribute"],
-            message: "Expected date, received number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            received: "number",
-            path: ["nullableDateAttribute"],
-            message: "Expected date, received number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            received: "number",
-            path: ["foreignKeyAttribute"],
-            message: "Expected string, received number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            received: "number",
-            path: ["nullableForeignKeyAttribute"],
-            message: "Expected string, received number"
-          }
-        ])
-      );
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          received: "number",
+          path: ["dateAttribute"],
+          message: "Expected date, received number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          received: "number",
+          path: ["nullableDateAttribute"],
+          message: "Expected date, received number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          received: "number",
+          path: ["foreignKeyAttribute"],
+          message: "Expected string, received number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          received: "number",
+          path: ["nullableForeignKeyAttribute"],
+          message: "Expected string, received number"
+        }
+      ]);
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     }

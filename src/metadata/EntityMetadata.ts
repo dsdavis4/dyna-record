@@ -1,10 +1,11 @@
-import { z, type ZodSchema, type ZodType } from "zod";
+import { z, ZodError, type ZodSchema, type ZodType } from "zod";
 import {
   type AttributeMetadata,
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage
 } from ".";
 import type DynaRecord from "../DynaRecord";
+import { ValidationError } from "../errors";
 
 type EntityClass = new (...args: any) => DynaRecord;
 
@@ -69,16 +70,20 @@ class EntityMetadata {
     this.#zodAttributes[attrMeta.name] = attrMeta.type;
   }
 
-  // TODO start here... fix this then work on update
   // TODO typedoc
   public validateFull(attributes: DynaRecord): void {
     if (this.#schema === undefined) {
       this.#schema = z.object(this.#zodAttributes);
     }
 
-    this.#schema.parse(attributes);
+    try {
+      this.#schema.parse(attributes);
+    } catch (error) {
+      this.handleValidationError(error);
+    }
   }
 
+  // TODO START HERE work on update....
   // TODO typedoc
   // TODO something like this for updates?
   public validatePartial(attributes: DynaRecord): void {
@@ -86,7 +91,17 @@ class EntityMetadata {
       this.#schemaPartial = z.object(this.#zodAttributes).partial();
     }
 
-    this.#schemaPartial.parse(attributes);
+    try {
+      this.#schemaPartial.parse(attributes);
+    } catch (error) {
+      this.handleValidationError(error);
+    }
+  }
+
+  private handleValidationError(error: unknown): void {
+    const errorOptions =
+      error instanceof ZodError ? { cause: error.issues } : undefined;
+    throw new ValidationError("Validation errors", errorOptions);
   }
 }
 

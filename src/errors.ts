@@ -11,3 +11,10 @@ export class NullConstraintViolationError extends Error {
 export class NotFoundError extends Error {
   public readonly code = "NotFoundError";
 }
+
+/**
+ * Represents an error indicating that an entities attributes are not valid
+ */
+export class ValidationError extends Error {
+  public readonly code = "ValidationError";
+}
