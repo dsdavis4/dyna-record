@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { ZodAny } from "zod";
 import { Entity, Attribute } from "../../../src/decorators";
 import Metadata from "../../../src/metadata";
 import type { ForeignKey, NullableForeignKey } from "../../../src/types";
@@ -11,7 +12,8 @@ describe("Attribute", () => {
     expect(Metadata.getEntityAttributes(Customer.name).name).toEqual({
       name: "name",
       alias: "Name",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodAny)
     });
   });
 
@@ -21,7 +23,8 @@ describe("Attribute", () => {
     expect(Metadata.getEntityAttributes(Student.name).name).toEqual({
       name: "name",
       alias: "name",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodAny)
     });
   });
 

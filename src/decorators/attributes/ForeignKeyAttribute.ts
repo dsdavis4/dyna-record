@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { ForeignKey, NullableForeignKey } from "../../types";
@@ -51,6 +52,7 @@ function ForeignKeyAttribute<T extends DynaRecord, P extends AttributeOptions>(
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
+          type: z.string(),
           ...props
         });
       });

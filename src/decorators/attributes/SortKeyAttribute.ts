@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import { type SortKey } from "../../types";
@@ -34,6 +35,7 @@ function SortKeyAttribute<T extends DynaRecord, K extends SortKey>(
 
         Metadata.addSortKeyAttribute(entity, {
           attributeName: context.name.toString(),
+          type: z.string(),
           ...props
         });
       });

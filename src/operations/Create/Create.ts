@@ -7,6 +7,7 @@ import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
 import { type EntityAttributes } from "../types";
+import Metadata from "../../metadata";
 
 /**
  * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
@@ -30,6 +31,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    */
   public async run(attributes: CreateOptions<T>): Promise<EntityAttributes<T>> {
     const entityData = this.buildEntityData(attributes);
+
+    const entityMeta = Metadata.getEntity(this.EntityClass.name);
+    entityMeta.validateFull(entityData);
 
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 

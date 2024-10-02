@@ -8,6 +8,8 @@ import type { ForeignKey, EntityClass } from "../types";
 import { entityToTableItem } from "../utils";
 import BelongsToLink from "./BelongsToLink";
 
+// TODO should I do zod validations in here?
+
 /**
  * Exclude the type1 type2 instance keys
  */

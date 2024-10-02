@@ -3,6 +3,7 @@ import { Entity, ForeignKeyAttribute } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
 import { MockTable, Order, Assignment } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
+import { ZodString } from "zod";
 
 describe("ForeignKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -11,7 +12,8 @@ describe("ForeignKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Order.name).customerId).toEqual({
       name: "customerId",
       alias: "CustomerId",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -21,7 +23,8 @@ describe("ForeignKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Assignment.name).courseId).toEqual({
       name: "courseId",
       alias: "courseId",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 

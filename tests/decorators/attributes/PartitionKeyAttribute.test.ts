@@ -3,6 +3,7 @@ import { Entity, PartitionKeyAttribute } from "../../../src/decorators";
 import { type PartitionKey } from "../../../src/types";
 import { Customer, MockTable, Student } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
+import { ZodString } from "zod";
 
 describe("PartitionKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -11,7 +12,8 @@ describe("PartitionKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Customer.name).pk).toEqual({
       name: "pk",
       alias: "PK",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -21,7 +23,8 @@ describe("PartitionKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Student.name).myPk).toEqual({
       name: "myPk",
       alias: "myPk",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 

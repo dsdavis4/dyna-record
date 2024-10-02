@@ -3,6 +3,7 @@ import { Entity, SortKeyAttribute } from "../../../src/decorators";
 import { type SortKey } from "../../../src/types";
 import Metadata from "../../../src/metadata";
 import { Customer, MockTable, Student } from "../../integration/mockModels";
+import { ZodString } from "zod";
 
 describe("SortKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -11,7 +12,8 @@ describe("SortKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Customer.name).sk).toEqual({
       name: "sk",
       alias: "SK",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -21,7 +23,8 @@ describe("SortKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Student.name).mySk).toEqual({
       name: "mySk",
       alias: "mySk",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 

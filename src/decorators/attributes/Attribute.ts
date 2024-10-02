@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type {
@@ -46,6 +47,7 @@ function Attribute<
         Metadata.addEntityAttribute(entity.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
+          type: z.any(), // TODO I need to make an attribute per supported type
           ...props
         });
       });

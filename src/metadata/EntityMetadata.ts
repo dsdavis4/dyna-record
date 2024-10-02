@@ -1,3 +1,4 @@
+import { z, type ZodSchema, type ZodType } from "zod";
 import {
   type AttributeMetadata,
   type AttributeMetadataStorage,
@@ -40,6 +41,12 @@ class EntityMetadata {
 
   public readonly EntityClass: EntityClass;
 
+  // TODO typedoc
+  #schema?: ZodSchema;
+
+  // TODO typedoc
+  #zodAttributes: Record<string, ZodType> = {};
+
   constructor(entityClass: EntityClass, tableClassName: string) {
     this.EntityClass = entityClass;
 
@@ -56,7 +63,30 @@ class EntityMetadata {
   public addAttribute(attrMeta: AttributeMetadata): void {
     this.attributes[attrMeta.name] = attrMeta;
     this.tableAttributes[attrMeta.alias] = attrMeta;
+
+    this.#zodAttributes[attrMeta.name] = attrMeta.type;
   }
+
+  // TODO typedoc
+  // TODO fix any type....
+  public validateFull(attributes: any): void {
+    if (this.#schema === undefined) {
+      this.#schema = z.object(this.#zodAttributes);
+    }
+
+    this.#schema.parse(attributes);
+  }
+
+  // TODO typedoc
+  // TODO fix any type....
+  // TODO something like this for updates?
+  // public validatePartial(attributes: any): void {
+  //   if (this.#schema === undefined) {
+  //     this.#schema = z.object(this.#zodAttributes);
+  //   }
+
+  //   this.#schema.partial().parse(attributes);
+  // }
 }
 
 export default EntityMetadata;

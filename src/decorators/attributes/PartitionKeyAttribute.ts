@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import { type PartitionKey } from "../../types";
@@ -34,6 +35,7 @@ function PartitionKeyAttribute<T extends DynaRecord, K extends PartitionKey>(
 
         Metadata.addPartitionKeyAttribute(entity, {
           attributeName: context.name.toString(),
+          type: z.string(),
           ...props
         });
       });

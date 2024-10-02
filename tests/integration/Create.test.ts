@@ -14,11 +14,13 @@ import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   Attribute,
   BelongsTo,
+  DateAttribute,
   Entity,
   ForeignKeyAttribute,
   HasOne
 } from "../../src/decorators";
-import type { NullableForeignKey } from "../../src/types";
+import type { ForeignKey, NullableForeignKey } from "../../src/types";
+import { nullable, ZodError } from "zod";
 
 jest.mock("uuid");
 
@@ -62,6 +64,27 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 class MyModelNullableAttribute extends MockTable {
   @Attribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
+}
+
+@Entity
+class MyClassWithAttributes extends MockTable {
+  @Attribute()
+  public attribute: string;
+
+  @Attribute({ nullable: true })
+  public nullableAttribute?: string;
+
+  @DateAttribute()
+  public dateAttribute: Date;
+
+  @DateAttribute({ nullable: true })
+  public nullableDateAttribute?: Date;
+
+  @ForeignKeyAttribute()
+  public foreignKeyAttribute: ForeignKey;
+
+  @ForeignKeyAttribute({ nullable: true })
+  public nullableForeignKeyAttribute: NullableForeignKey;
 }
 
 describe("Create", () => {
@@ -120,6 +143,86 @@ describe("Create", () => {
         }
       ]
     ]);
+  });
+
+  it("will error if any required attributes are missing", async () => {
+    expect.assertions(3);
+
+    try {
+      await MyClassWithAttributes.create({} as any);
+    } catch (e) {
+      expect(e).toEqual(
+        // TODO doesnt include attribute for now because its type any, this will be removed when there is one per type
+        new ZodError([
+          {
+            code: "invalid_type",
+            expected: "date",
+            received: "undefined",
+            path: ["dateAttribute"],
+            message: "Required"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            received: "undefined",
+            path: ["foreignKeyAttribute"],
+            message: "Required"
+          }
+        ])
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if any required attributes are the wrong type", async () => {
+    expect.assertions(3);
+
+    try {
+      await MyClassWithAttributes.create({
+        attribute: 1,
+        nullableAttribute: 2,
+        dateAttribute: 3,
+        nullableDateAttribute: 4,
+        foreignKeyAttribute: 5,
+        nullableForeignKeyAttribute: 6
+      } as any);
+    } catch (e) {
+      expect(e).toEqual(
+        new ZodError([
+          {
+            code: "invalid_type",
+            expected: "date",
+            received: "number",
+            path: ["dateAttribute"],
+            message: "Expected date, received number"
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            received: "number",
+            path: ["nullableDateAttribute"],
+            message: "Expected date, received number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            received: "number",
+            path: ["foreignKeyAttribute"],
+            message: "Expected string, received number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            received: "number",
+            path: ["nullableForeignKeyAttribute"],
+            message: "Expected string, received number"
+          }
+        ])
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
   });
 
   it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
@@ -788,21 +891,33 @@ describe("Create", () => {
 
     it("will not accept DefaultFields on create because they are managed by dyna-record", async () => {
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         id: "123"
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         type: "456"
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         createdAt: new Date()
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         updatedAt: new Date()
       });
@@ -817,6 +932,9 @@ describe("Create", () => {
 
     it("relationships are not part of return value", async () => {
       const res = await Order.create({
+        customerId: "123",
+        paymentMethodId: "456",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         createdAt: new Date()
       });
