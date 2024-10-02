@@ -44,6 +44,8 @@ class EntityMetadata {
   // TODO typedoc
   #schema?: ZodSchema;
 
+  #schemaPartial?: ZodSchema;
+
   // TODO typedoc
   #zodAttributes: Record<string, ZodType> = {};
 
@@ -67,9 +69,9 @@ class EntityMetadata {
     this.#zodAttributes[attrMeta.name] = attrMeta.type;
   }
 
+  // TODO start here... fix this then work on update
   // TODO typedoc
-  // TODO fix any type....
-  public validateFull(attributes: any): void {
+  public validateFull(attributes: DynaRecord): void {
     if (this.#schema === undefined) {
       this.#schema = z.object(this.#zodAttributes);
     }
@@ -78,15 +80,14 @@ class EntityMetadata {
   }
 
   // TODO typedoc
-  // TODO fix any type....
   // TODO something like this for updates?
-  // public validatePartial(attributes: any): void {
-  //   if (this.#schema === undefined) {
-  //     this.#schema = z.object(this.#zodAttributes);
-  //   }
+  public validatePartial(attributes: DynaRecord): void {
+    if (this.#schemaPartial === undefined) {
+      this.#schemaPartial = z.object(this.#zodAttributes).partial();
+    }
 
-  //   this.#schema.partial().parse(attributes);
-  // }
+    this.#schemaPartial.parse(attributes);
+  }
 }
 
 export default EntityMetadata;
