@@ -1,6 +1,6 @@
 import Metadata, { tableDefaultFields } from "./metadata";
 import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
-import { Attribute, DateAttribute } from "./decorators";
+import { DateAttribute, StringAttribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
@@ -51,13 +51,13 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * A unique identifier for the entity itself, automatically generated upon creation.
    */
-  @Attribute({ alias: tableDefaultFields.id.alias })
+  @StringAttribute({ alias: tableDefaultFields.id.alias })
   public readonly id: string;
 
   /**
    * The type of the Entity
    */
-  @Attribute({ alias: tableDefaultFields.type.alias })
+  @StringAttribute({ alias: tableDefaultFields.type.alias })
   public readonly type: string;
 
   /**

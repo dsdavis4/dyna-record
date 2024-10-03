@@ -12,13 +12,13 @@ import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
-  Attribute,
   ForeignKeyAttribute,
   BelongsTo,
   Entity,
   HasMany,
   HasOne,
-  DateAttribute
+  DateAttribute,
+  StringAttribute
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
@@ -76,7 +76,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
-  @Attribute({ alias: "MyAttribute", nullable: true })
+  @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
@@ -88,16 +88,16 @@ class MyModelNonNullableAttribute extends MockTable {
 
 @Entity
 class MockInformation extends MockTable {
-  @Attribute({ alias: "Address" })
+  @StringAttribute({ alias: "Address" })
   public address: string;
 
-  @Attribute({ alias: "Email" })
+  @StringAttribute({ alias: "Email" })
   public email: string;
 
-  @Attribute({ alias: "Phone", nullable: true })
+  @StringAttribute({ alias: "Phone", nullable: true })
   public phone?: string;
 
-  @Attribute({ alias: "State", nullable: true })
+  @StringAttribute({ alias: "State", nullable: true })
   public state?: string;
 
   @DateAttribute({ nullable: true })
@@ -2129,7 +2129,7 @@ describe("Update", () => {
 
     @Entity
     class Model3 extends MockTable {
-      @Attribute({ alias: "Name" })
+      @StringAttribute({ alias: "Name" })
       public name: string;
 
       @ForeignKeyAttribute({ alias: "Model1Id" })
@@ -2411,7 +2411,7 @@ describe("Update", () => {
     it("will not accept function attributes on update", async () => {
       @Entity
       class MyModel extends MockTable {
-        @Attribute({ alias: "MyAttribute" })
+        @StringAttribute({ alias: "MyAttribute" })
         public myAttribute: string;
 
         public someMethod(): string {

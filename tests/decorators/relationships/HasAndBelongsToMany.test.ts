@@ -1,7 +1,7 @@
 import {
   Entity,
-  Attribute,
-  HasAndBelongsToMany
+  HasAndBelongsToMany,
+  StringAttribute
 } from "../../../src/decorators";
 import { JoinTable } from "../../../src/relationships";
 import type { ForeignKey } from "../../../src/types";
@@ -74,7 +74,7 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "SomeVal" })
+        @StringAttribute({ alias: "SomeVal" })
         public someVal: string;
 
         @HasAndBelongsToMany(() => ModelOne, {
@@ -111,7 +111,7 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "SomeVal" })
+        @StringAttribute({ alias: "SomeVal" })
         public someVal: string;
 
         // @ts-expect-error: attribute is not an array of ModelOne

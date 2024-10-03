@@ -1,10 +1,10 @@
 import {
   Entity,
-  Attribute,
   ForeignKeyAttribute,
   BelongsTo,
   HasOne,
-  HasMany
+  HasMany,
+  StringAttribute
 } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
 import { MockTable } from "../../integration/mockModels";
@@ -32,7 +32,7 @@ describe("BelongsTo", () => {
     it("requires the foreign key attribute to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @StringAttribute({ alias: "Key1" })
         public key1: string; // This has to be ForeignKey
 
         // @ts-expect-error: foreign key must be of type ForeignKey
@@ -133,7 +133,7 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "Key2" })
+        @StringAttribute({ alias: "Key2" })
         public key2: string;
 
         @HasOne(() => ModelOne, { foreignKey: "key1" })

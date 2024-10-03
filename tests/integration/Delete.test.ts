@@ -8,7 +8,7 @@ import {
   Book,
   Course
 } from "./mockModels";
-import { Attribute, Entity } from "../../src/decorators";
+import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
@@ -23,10 +23,10 @@ const mockTransact = jest.fn();
 
 @Entity
 class MockModel extends MockTable {
-  @Attribute({ alias: "MyVar1" })
+  @StringAttribute({ alias: "MyVar1" })
   public myVar1: string;
 
-  @Attribute({ alias: "MyVar2" })
+  @NumberAttribute({ alias: "MyVar2" })
   public myVar2: number;
 }
 

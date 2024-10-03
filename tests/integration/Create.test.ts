@@ -13,11 +13,11 @@ import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
-  Attribute,
   BelongsTo,
   Entity,
   ForeignKeyAttribute,
-  HasOne
+  HasOne,
+  StringAttribute
 } from "../../src/decorators";
 import type { NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
@@ -62,7 +62,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
-  @Attribute({ alias: "MyAttribute", nullable: true })
+  @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
@@ -841,7 +841,7 @@ describe("Create", () => {
     it("will not accept function attributes on create", async () => {
       @Entity
       class MyModel extends MockTable {
-        @Attribute({ alias: "MyAttribute" })
+        @StringAttribute({ alias: "MyAttribute" })
         public myAttribute: string;
 
         public someMethod(): string {
@@ -859,10 +859,10 @@ describe("Create", () => {
     it("optional attributes are not required", async () => {
       @Entity
       class SomeModel extends MockTable {
-        @Attribute({ alias: "MyAttribute1" })
+        @StringAttribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
-        @Attribute({ alias: "MyAttribute2", nullable: true })
+        @StringAttribute({ alias: "MyAttribute2", nullable: true })
         public myAttribute2?: string;
       }
 
@@ -903,10 +903,10 @@ describe("Create", () => {
     it("will allow a NullableForeignKey attribute to be omitted if its defined as optional on the model", async () => {
       @Entity
       class ContactInformationLocal extends MockTable {
-        @Attribute({ alias: "Email" })
+        @StringAttribute({ alias: "Email" })
         public email: string;
 
-        @Attribute({ alias: "Phone" })
+        @StringAttribute({ alias: "Phone" })
         public phone: string;
 
         @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })

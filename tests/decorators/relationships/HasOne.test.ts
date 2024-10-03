@@ -1,9 +1,9 @@
 import {
   Entity,
-  Attribute,
   ForeignKeyAttribute,
   HasOne,
-  BelongsTo
+  BelongsTo,
+  StringAttribute
 } from "../../../src/decorators";
 import { type ForeignKey } from "../../../src/types";
 import { MockTable } from "../../integration/mockModels";
@@ -31,7 +31,7 @@ describe("HasOne", () => {
     it("requires the foreign key to be an attribute to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @StringAttribute({ alias: "Key1" })
         public key1: string;
 
         // @ts-expect-error: foreign key must be of type ForeignKey
@@ -59,7 +59,7 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "Key2" })
+        @StringAttribute({ alias: "Key2" })
         public key2: string;
 
         // @ts-expect-error: foreign key cannot be defined on itself
@@ -138,7 +138,7 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "Key2" })
+        @StringAttribute({ alias: "Key2" })
         public key2: string;
 
         // @ts-expect-error: a HasOne rel cannot be an array
