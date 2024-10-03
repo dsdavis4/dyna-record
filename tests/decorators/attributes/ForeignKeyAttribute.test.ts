@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Entity, ForeignKeyAttribute } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
-import { MockTable, Order, Assignment } from "../../integration/mockModels";
+import {
+  MockTable,
+  Order,
+  Assignment,
+  MyClassWithAllAttributeTypes
+} from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodString } from "zod";
+import { ZodNullable, ZodString } from "zod";
 
 describe("ForeignKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -25,6 +30,20 @@ describe("ForeignKeyAttribute", () => {
       alias: "courseId",
       nullable: false,
       type: expect.any(ZodString)
+    });
+  });
+
+  it("zod type is optional if nullable is true", () => {
+    expect.assertions(1);
+
+    expect(
+      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
+        .nullableForeignKeyAttribute
+    ).toEqual({
+      name: "nullableForeignKeyAttribute",
+      alias: "nullableForeignKeyAttribute",
+      nullable: true,
+      type: expect.any(ZodNullable<ZodString>)
     });
   });
 
