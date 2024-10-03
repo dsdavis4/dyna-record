@@ -2,7 +2,7 @@
 import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators";
 import { MockTable, Order, Profile, Pet } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { z, ZodDate, ZodOptional } from "zod";
+import { z, ZodDate, ZodNullable, ZodOptional } from "zod";
 
 describe("DateAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -38,7 +38,7 @@ describe("DateAttribute", () => {
       alias: "AdoptedDate",
       nullable: true,
       serializers: dateSerializer,
-      type: expect.any(ZodOptional<ZodDate>)
+      type: expect.any(ZodNullable<ZodOptional<ZodDate>>)
     });
   });
 

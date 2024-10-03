@@ -29,7 +29,7 @@ class AttributeMetadata {
 
     // // TODO perhaps this should change to required?
     if (options.nullable === true) {
-      this.type = options.type.optional();
+      this.type = options.type.optional().nullable();
     } else {
       this.type = options.type;
     }

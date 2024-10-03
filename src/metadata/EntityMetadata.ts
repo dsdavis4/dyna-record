@@ -83,10 +83,8 @@ class EntityMetadata {
     }
   }
 
-  // TODO START HERE work on update....
   // TODO typedoc
-  // TODO something like this for updates?
-  public validatePartial(attributes: DynaRecord): void {
+  public validatePartial(attributes: Partial<DynaRecord>): void {
     if (this.#schemaPartial === undefined) {
       this.#schemaPartial = z.object(this.#zodAttributes).partial();
     }
@@ -98,6 +96,7 @@ class EntityMetadata {
     }
   }
 
+  // TODO typedoc
   private handleValidationError(error: unknown): void {
     const errorOptions =
       error instanceof ZodError ? { cause: error.issues } : undefined;

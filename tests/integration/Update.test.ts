@@ -20,6 +20,7 @@ import {
   HasOne
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
+import { ValidationError } from "../../src";
 
 jest.mock("uuid");
 
@@ -2333,9 +2334,24 @@ describe("Update", () => {
     });
 
     it("will not allow non nullable attributes to be removed (set to null)", async () => {
+      expect.assertions(3);
+
+      // Tests that the type system does not allow null, and also that if types are ignored the value is checked at runtime
       await Order.update("123", {
         // @ts-expect-error non-nullable fields cannot be removed (set to null)
         paymentMethodId: null
+      }).catch(e => {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received null",
+            path: ["paymentMethodId"],
+            received: "null"
+          }
+        ]);
       });
     });
 
