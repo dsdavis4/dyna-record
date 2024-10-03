@@ -42,12 +42,19 @@ class EntityMetadata {
 
   public readonly EntityClass: EntityClass;
 
-  // TODO typedoc
+  /**
+   * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
+   */
   #schema?: ZodSchema;
 
+  /**
+   * Zod schema for runtime validation on entity attributes. Validates partial attributes (used on Update)
+   */
   #schemaPartial?: ZodSchema;
 
-  // TODO typedoc
+  /**
+   * Object containing zod attributes. Built programmatically via decorators and used to create schemas
+   */
   #zodAttributes: Record<string, ZodType> = {};
 
   constructor(entityClass: EntityClass, tableClassName: string) {
@@ -70,7 +77,10 @@ class EntityMetadata {
     this.#zodAttributes[attrMeta.name] = attrMeta.type;
   }
 
-  // TODO typedoc
+  /**
+   * Validate all an entities attributes (used on create)
+   * @param attributes
+   */
   public validateFull(attributes: DynaRecord): void {
     if (this.#schema === undefined) {
       this.#schema = z.object(this.#zodAttributes);
@@ -83,7 +93,10 @@ class EntityMetadata {
     }
   }
 
-  // TODO typedoc
+  /**
+   * Validate partial entities attributes (used on update)
+   * @param attributes
+   */
   public validatePartial(attributes: Partial<DynaRecord>): void {
     if (this.#schemaPartial === undefined) {
       this.#schemaPartial = z.object(this.#zodAttributes).partial();
@@ -96,7 +109,10 @@ class EntityMetadata {
     }
   }
 
-  // TODO typedoc
+  /**
+   * Throw validation errors with the cause
+   * @param error
+   */
   private handleValidationError(error: unknown): void {
     const errorOptions =
       error instanceof ZodError ? { cause: error.issues } : undefined;
