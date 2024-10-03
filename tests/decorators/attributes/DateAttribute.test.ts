@@ -2,7 +2,7 @@
 import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators";
 import { MockTable, Order, Profile, Pet } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { z, ZodDate, ZodNullable, ZodOptional } from "zod";
+import { ZodDate, ZodNullable, type ZodOptional } from "zod";
 
 describe("DateAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {

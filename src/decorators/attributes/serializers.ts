@@ -14,5 +14,5 @@ export const dateSerializer = {
     }
     return val;
   },
-  toTableAttribute: (val: Date) => val.toISOString()
+  toTableAttribute: (val?: Date) => val?.toISOString() ?? undefined
 };

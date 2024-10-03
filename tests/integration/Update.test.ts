@@ -17,7 +17,8 @@ import {
   BelongsTo,
   Entity,
   HasMany,
-  HasOne
+  HasOne,
+  DateAttribute
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
@@ -80,6 +81,12 @@ class MyModelNullableAttribute extends MockTable {
 }
 
 @Entity
+class MyModelNonNullableAttribute extends MockTable {
+  @DateAttribute({ alias: "DateAttribute", nullable: false })
+  public myAttribute: Date;
+}
+
+@Entity
 class MockInformation extends MockTable {
   @Attribute({ alias: "Address" })
   public address: string;
@@ -92,6 +99,9 @@ class MockInformation extends MockTable {
 
   @Attribute({ alias: "State", nullable: true })
   public state?: string;
+
+  @DateAttribute({ nullable: true })
+  public someDate?: Date;
 }
 
 describe("Update", () => {
@@ -237,6 +247,130 @@ describe("Update", () => {
                 TableName: "mock-table",
                 UpdateExpression:
                   "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #State, #Phone"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will error if any attributes are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MockInformation.update("123", {
+        someDate: "111" as any // Force any to test runtime validations
+      });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received string",
+          path: ["someDate"],
+          received: "string"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([undefined]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will allow nullable attributes to be set to null", async () => {
+    expect.assertions(5);
+
+    await MockInformation.update("123", {
+      someDate: null
+    });
+
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":someDate": undefined
+                },
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will not allow non nullable attributes to be null", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyModelNonNullableAttribute.update("123", {
+        myAttribute: null as any // Force any to test runtime validations
+      });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received null",
+          path: ["myAttribute"],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([undefined]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will allow nullable attributes to be set to null", async () => {
+    expect.assertions(5);
+
+    await MockInformation.update("123", {
+      someDate: null
+    });
+
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":someDate": undefined
+                },
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
               }
             }
           ]
