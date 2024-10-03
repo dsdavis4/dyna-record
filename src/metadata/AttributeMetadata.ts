@@ -27,7 +27,6 @@ class AttributeMetadata {
     this.nullable = options.nullable ?? false;
     this.serializers = options.serializers;
 
-    // // TODO perhaps this should change to required?
     if (options.nullable === true) {
       this.type = options.type.optional().nullable();
     } else {
