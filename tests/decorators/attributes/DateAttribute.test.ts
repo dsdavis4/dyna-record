@@ -29,7 +29,6 @@ describe("DateAttribute", () => {
     });
   });
 
-  // TODO test like this for each attribute type
   it("zod type is optional if nullable is true", () => {
     expect.assertions(1);
 

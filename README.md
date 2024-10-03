@@ -1,8 +1,5 @@
 # Dyna-Record
 
-<!-- TODO start here... -->
-<!-- Install zod, work on building runtime validations -->
-<!-- I will likely need to make an attribute for each type, string etc -->
 <!-- TODO do global search for @Attribute and @nullable varieties to remove -->
 
 <!-- TODO make sure all docs are up to date especially in regards to native types, nullables, validations and removing Attribute -->

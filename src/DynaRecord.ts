@@ -291,8 +291,6 @@ abstract class DynaRecord implements DynaRecordBase {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
   }
-
-  // TODO should I make a public method for validating?
 }
 
 export default DynaRecord;
