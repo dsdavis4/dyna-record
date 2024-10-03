@@ -11,7 +11,8 @@ import {
   HasOne,
   DateAttribute,
   StringAttribute,
-  HasAndBelongsToMany
+  HasAndBelongsToMany,
+  BooleanAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -238,6 +239,34 @@ class AuthorBook extends JoinTable<Author, Book> {
   public readonly authorId: ForeignKey;
 }
 
+// TODO ensure all types are here
+@Entity
+class MyClassWithAllAttributeTypes extends MockTable {
+  @StringAttribute()
+  public stringAttribute: string;
+
+  @StringAttribute({ nullable: true })
+  public nullableStringAttribute?: string;
+
+  @DateAttribute()
+  public dateAttribute: Date;
+
+  @DateAttribute({ nullable: true })
+  public nullableDateAttribute?: Date;
+
+  @BooleanAttribute()
+  public boolAttribute: boolean;
+
+  @BooleanAttribute({ nullable: true })
+  public nullableBoolAttribute?: boolean;
+
+  @ForeignKeyAttribute()
+  public foreignKeyAttribute: ForeignKey;
+
+  @ForeignKeyAttribute({ nullable: true })
+  public nullableForeignKeyAttribute: NullableForeignKey;
+}
+
 @Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends DynaRecord {
   @PartitionKeyAttribute()
@@ -364,6 +393,7 @@ export {
   Author,
   Book,
   AuthorBook,
+  MyClassWithAllAttributeTypes,
   // OtherTable exports
   OtherTable,
   Teacher,

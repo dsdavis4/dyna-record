@@ -5,6 +5,7 @@ import {
   Grade,
   Home,
   MockTable,
+  MyClassWithAllAttributeTypes,
   Order,
   PaymentMethodProvider
 } from "./mockModels";
@@ -14,12 +15,11 @@ import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   Attribute,
   BelongsTo,
-  DateAttribute,
   Entity,
   ForeignKeyAttribute,
   HasOne
 } from "../../src/decorators";
-import type { ForeignKey, NullableForeignKey } from "../../src/types";
+import type { NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
 
 jest.mock("uuid");
@@ -64,27 +64,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 class MyModelNullableAttribute extends MockTable {
   @Attribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
-}
-
-@Entity
-class MyClassWithAttributes extends MockTable {
-  @Attribute()
-  public attribute: string;
-
-  @Attribute({ nullable: true })
-  public nullableAttribute?: string;
-
-  @DateAttribute()
-  public dateAttribute: Date;
-
-  @DateAttribute({ nullable: true })
-  public nullableDateAttribute?: Date;
-
-  @ForeignKeyAttribute()
-  public foreignKeyAttribute: ForeignKey;
-
-  @ForeignKeyAttribute({ nullable: true })
-  public nullableForeignKeyAttribute: NullableForeignKey;
 }
 
 describe("Create", () => {
@@ -149,24 +128,38 @@ describe("Create", () => {
     expect.assertions(5);
 
     try {
-      await MyClassWithAttributes.create({} as any);
+      await MyClassWithAllAttributeTypes.create({} as any);
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
       expect(e.cause).toEqual([
         {
           code: "invalid_type",
+          expected: "string",
+          message: "Required",
+          path: ["stringAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
           expected: "date",
-          received: "undefined",
+          message: "Required",
           path: ["dateAttribute"],
-          message: "Required"
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Required",
+          path: ["boolAttribute"],
+          received: "undefined"
         },
         {
           code: "invalid_type",
           expected: "string",
-          received: "undefined",
+          message: "Required",
           path: ["foreignKeyAttribute"],
-          message: "Required"
+          received: "undefined"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -178,13 +171,15 @@ describe("Create", () => {
     expect.assertions(5);
 
     try {
-      await MyClassWithAttributes.create({
-        attribute: 1,
-        nullableAttribute: 2,
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: 1,
+        nullableStringAttribute: 2,
         dateAttribute: 3,
         nullableDateAttribute: 4,
         foreignKeyAttribute: 5,
-        nullableForeignKeyAttribute: 6
+        nullableForeignKeyAttribute: 6,
+        boolAttribute: 7,
+        nullableBoolAttribute: 7
       } as any);
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
@@ -192,31 +187,61 @@ describe("Create", () => {
       expect(e.cause).toEqual([
         {
           code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["stringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableStringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
           expected: "date",
-          received: "number",
+          message: "Expected date, received number",
           path: ["dateAttribute"],
-          message: "Expected date, received number"
+          received: "number"
         },
         {
           code: "invalid_type",
           expected: "date",
-          received: "number",
+          message: "Expected date, received number",
           path: ["nullableDateAttribute"],
-          message: "Expected date, received number"
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["boolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["nullableBoolAttribute"],
+          received: "number"
         },
         {
           code: "invalid_type",
           expected: "string",
-          received: "number",
+          // TODO get this to say expected ForeignKey by using zod brand
+          message: "Expected string, received number",
           path: ["foreignKeyAttribute"],
-          message: "Expected string, received number"
+          received: "number"
         },
         {
           code: "invalid_type",
           expected: "string",
-          received: "number",
+          // TODO get this to say expected NullableForeignKey by using zod brand
+          message: "Expected string, received number",
           path: ["nullableForeignKeyAttribute"],
-          message: "Expected string, received number"
+          received: "number"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
