@@ -10,6 +10,7 @@ import {
   BelongsTo,
   HasOne,
   DateAttribute,
+  StringAttribute,
   HasAndBelongsToMany
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
@@ -60,7 +61,7 @@ class Order extends MockTable {
 
 @Entity
 class PaymentMethodProvider extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @ForeignKeyAttribute({ alias: "PaymentMethodId" })
@@ -72,7 +73,7 @@ class PaymentMethodProvider extends MockTable {
 
 @Entity
 class PaymentMethod extends MockTable {
-  @Attribute({ alias: "LastFour" })
+  @StringAttribute({ alias: "LastFour" })
   public readonly lastFour: string;
 
   @ForeignKeyAttribute({ alias: "CustomerId" })
@@ -92,7 +93,7 @@ class PaymentMethod extends MockTable {
 
 @Entity
 class Customer extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @Attribute({ alias: "Address" })
@@ -114,10 +115,10 @@ class Customer extends MockTable {
 
 @Entity
 class ContactInformation extends MockTable {
-  @Attribute({ alias: "Email" })
+  @StringAttribute({ alias: "Email" })
   public readonly email: string;
 
-  @Attribute({ alias: "Phone", nullable: true })
+  @StringAttribute({ alias: "Phone", nullable: true })
   public readonly phone?: string;
 
   @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })
@@ -129,7 +130,7 @@ class ContactInformation extends MockTable {
 
 @Entity
 class Person extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @HasMany(() => Pet, { foreignKey: "ownerId" })
@@ -144,7 +145,7 @@ class Person extends MockTable {
 
 @Entity
 class Pet extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @ForeignKeyAttribute({ alias: "OwnerId", nullable: true })
@@ -159,7 +160,7 @@ class Pet extends MockTable {
 
 @Entity
 class Home extends MockTable {
-  @Attribute({ alias: "MLS#" })
+  @StringAttribute({ alias: "MLS#" })
   public readonly mlsNum: string;
 
   @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
@@ -174,7 +175,7 @@ class Home extends MockTable {
 
 @Entity
 class Address extends MockTable {
-  @Attribute({ alias: "State" })
+  @StringAttribute({ alias: "State" })
   public readonly state: string;
 
   @ForeignKeyAttribute({ alias: "HomeId" })
@@ -192,7 +193,7 @@ class Address extends MockTable {
 
 @Entity
 class PhoneBook extends MockTable {
-  @Attribute({ alias: "Edition" })
+  @StringAttribute({ alias: "Edition" })
   public readonly edition: string;
 
   @HasMany(() => Address, { foreignKey: "phoneBookId" })
@@ -201,7 +202,7 @@ class PhoneBook extends MockTable {
 
 @Entity
 class Book extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @Attribute({ alias: "NumPages" })
@@ -222,7 +223,7 @@ class Book extends MockTable {
 
 @Entity
 class Author extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
   @HasAndBelongsToMany(() => Book, {
@@ -248,7 +249,7 @@ abstract class OtherTable extends DynaRecord {
 
 @Entity
 class Teacher extends OtherTable {
-  @Attribute()
+  @StringAttribute()
   public readonly name: string;
 
   @HasMany(() => Course, { foreignKey: "teacherId" })
@@ -260,7 +261,7 @@ class Teacher extends OtherTable {
 
 @Entity
 class Student extends OtherTable {
-  @Attribute()
+  @StringAttribute()
   public readonly name: string;
 
   @HasAndBelongsToMany(() => Course, {
@@ -278,7 +279,7 @@ class Student extends OtherTable {
 
 @Entity
 class Course extends OtherTable {
-  @Attribute()
+  @StringAttribute()
   public readonly name: string;
 
   @ForeignKeyAttribute({ nullable: true })
@@ -299,7 +300,7 @@ class Course extends OtherTable {
 
 @Entity
 class Assignment extends OtherTable {
-  @Attribute()
+  @StringAttribute()
   public readonly title: string;
 
   @ForeignKeyAttribute()
@@ -314,7 +315,7 @@ class Assignment extends OtherTable {
 
 @Entity
 class Grade extends OtherTable {
-  @Attribute({ alias: "LetterValue" })
+  @StringAttribute({ alias: "LetterValue" })
   public readonly gradeValue: string;
 
   @ForeignKeyAttribute()
@@ -338,7 +339,7 @@ class Profile extends OtherTable {
   @ForeignKeyAttribute()
   public readonly userId: ForeignKey;
 
-  @Attribute({ nullable: true })
+  @StringAttribute({ nullable: true })
   public readonly alternateEmail?: string;
 }
 

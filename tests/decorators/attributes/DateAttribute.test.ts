@@ -52,11 +52,20 @@ describe("DateAttribute", () => {
       }
     });
 
-    it("does not allow the property its applied to to be optional", () => {
+    it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
-        // @ts-expect-error: DateAttributes are not nullable
+        // @ts-expect-error: DateAttributes cant be optional unless nullable
         @DateAttribute({ alias: "Key1" })
+        public key1?: Date;
+      }
+    });
+
+    it("does allow the property its applied to to be optional if its nullable", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-no-error: DateAttributes can be optional if nullable
+        @DateAttribute({ alias: "Key1", nullable: true })
         public key1?: Date;
       }
     });
@@ -79,7 +88,7 @@ describe("DateAttribute", () => {
       }
     });
 
-    it("if nullable is false the attribute can is required", () => {
+    it("if nullable is false the attribute is required", () => {
       @Entity
       class SomeModel extends MockTable {
         // @ts-expect-no-error: Nullable properties are required

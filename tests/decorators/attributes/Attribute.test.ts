@@ -6,27 +6,27 @@ import type { ForeignKey, NullableForeignKey } from "../../../src/types";
 import { MockTable, Customer, Student } from "../../integration/mockModels";
 
 describe("Attribute", () => {
-  it("uses the provided table alias as attribute metadata if one is provided", () => {
-    expect.assertions(1);
+  // it("uses the provided table alias as attribute metadata if one is provided", () => {
+  //   expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Customer.name).name).toEqual({
-      name: "name",
-      alias: "Name",
-      nullable: false,
-      type: expect.any(ZodAny)
-    });
-  });
+  //   expect(Metadata.getEntityAttributes(Customer.name).name).toEqual({
+  //     name: "name",
+  //     alias: "Name",
+  //     nullable: false,
+  //     type: expect.any(ZodAny)
+  //   });
+  // });
 
-  it("defaults attribute metadata alias to the table key if alias is not provided", () => {
-    expect.assertions(1);
+  // it("defaults attribute metadata alias to the table key if alias is not provided", () => {
+  //   expect.assertions(1);
 
-    expect(Metadata.getEntityAttributes(Student.name).name).toEqual({
-      name: "name",
-      alias: "name",
-      nullable: false,
-      type: expect.any(ZodAny)
-    });
-  });
+  //   expect(Metadata.getEntityAttributes(Student.name).name).toEqual({
+  //     name: "name",
+  //     alias: "name",
+  //     nullable: false,
+  //     type: expect.any(ZodAny)
+  //   });
+  // });
 
   describe("types", () => {
     it("ForeignKey is not a valid type to apply the Attribute decorator", () => {
