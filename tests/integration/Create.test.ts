@@ -156,6 +156,13 @@ describe("Create", () => {
         },
         {
           code: "invalid_type",
+          expected: "number",
+          message: "Required",
+          path: ["numberAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
           expected: "string",
           message: "Required",
           path: ["foreignKeyAttribute"],
@@ -179,7 +186,9 @@ describe("Create", () => {
         foreignKeyAttribute: 5,
         nullableForeignKeyAttribute: 6,
         boolAttribute: 7,
-        nullableBoolAttribute: 7
+        nullableBoolAttribute: 8,
+        numberAttribute: "9",
+        nullableNumberAttribute: "10"
       } as any);
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
@@ -229,8 +238,21 @@ describe("Create", () => {
         },
         {
           code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["numberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableNumberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
           expected: "string",
-          // TODO get this to say expected ForeignKey by using zod brand
           message: "Expected string, received number",
           path: ["foreignKeyAttribute"],
           received: "number"
@@ -238,7 +260,6 @@ describe("Create", () => {
         {
           code: "invalid_type",
           expected: "string",
-          // TODO get this to say expected NullableForeignKey by using zod brand
           message: "Expected string, received number",
           path: ["nullableForeignKeyAttribute"],
           received: "number"

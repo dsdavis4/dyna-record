@@ -4,7 +4,6 @@ import {
   Entity,
   PartitionKeyAttribute,
   SortKeyAttribute,
-  Attribute,
   ForeignKeyAttribute,
   HasMany,
   BelongsTo,
@@ -12,7 +11,8 @@ import {
   DateAttribute,
   StringAttribute,
   HasAndBelongsToMany,
-  BooleanAttribute
+  BooleanAttribute,
+  NumberAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -97,7 +97,7 @@ class Customer extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @Attribute({ alias: "Address" })
+  @StringAttribute({ alias: "Address" })
   public readonly address: string;
 
   @HasMany(() => Order, { foreignKey: "customerId" })
@@ -206,7 +206,7 @@ class Book extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @Attribute({ alias: "NumPages" })
+  @NumberAttribute({ alias: "NumPages" })
   public readonly numPages: number;
 
   @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
@@ -239,7 +239,6 @@ class AuthorBook extends JoinTable<Author, Book> {
   public readonly authorId: ForeignKey;
 }
 
-// TODO ensure all types are here
 @Entity
 class MyClassWithAllAttributeTypes extends MockTable {
   @StringAttribute()
@@ -259,6 +258,12 @@ class MyClassWithAllAttributeTypes extends MockTable {
 
   @BooleanAttribute({ nullable: true })
   public nullableBoolAttribute?: boolean;
+
+  @NumberAttribute()
+  public numberAttribute: number;
+
+  @NumberAttribute({ nullable: true })
+  public nullableNumberAttribute?: number;
 
   @ForeignKeyAttribute()
   public foreignKeyAttribute: ForeignKey;
