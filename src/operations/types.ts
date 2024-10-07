@@ -71,7 +71,7 @@ export type EntityAttributes<T extends DynaRecord> = Omit<
 >;
 
 /**
- * Attributes that are defined on the Entity using the @Attribute decorators. This excludes:
+ * Attributes that are defined on the Entity using the attribute decorators. This excludes:
  *   - relationship attributes
  *   - partition key attribute
  *   - sort key attribute

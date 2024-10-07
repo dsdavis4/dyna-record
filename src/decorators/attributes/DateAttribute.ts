@@ -5,7 +5,9 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 import { dateSerializer } from "./serializers";
 
 /**
- * Similar to '@Attribute' but specific to Dates since Dates are not native types to dynamo
+ * A decorator for marking class fields as date attributes within the context of a single-table design entity
+ *
+ * Because dates are not natively supported data types in dynamo, they will be converted to iso string's within dynamo, and serialized to date objects on the entity class
  *
  * Can be set to nullable via decorator props
  *

@@ -1,9 +1,5 @@
 # Dyna-Record
 
-<!-- TODO do global search for @Attribute and @nullable varieties to remove -->
-
-<!-- TODO make sure all docs are up to date especially in regards to native types, nullables, validations and removing Attribute -->
-
 [API Documentation](https://dyna-record.com/)
 
 Dyna-Record is a strongly typed ORM (Object-Relational Mapping) tool designed for modeling and interacting with data stored in DynamoDB in a structured and type-safe manner. It simplifies the process of defining data models (entities), performing CRUD operations, and handling complex queries. To support relational data, dyna-record implements a flavor of the [single-table design pattern](https://aws.amazon.com/blogs/compute/creating-a-single-table-design-with-amazon-dynamodb/) and the [adjacency list design pattern](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-adjacency-graphs.html). All operations are [ACID compliant transactions\*](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)\.
@@ -140,6 +136,15 @@ class Course extends MyTable {
 
 For [natively supported data types](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.DataTypes), define attributes using the [@Attribute](https://dyna-record.com/functions/Attribute.html) decorator. This decorator maps class properties to DynamoDB table attributes.
 
+Use the attribute decorators below to define attributes on a model. The decorator maps class properties to DynamoDB table attributes.
+
+- Attribute decorators
+
+  - [@StringAttribute](https://dyna-record.com/functions/StringAttribute.html)
+  - [@NumberAttribute](https://dyna-record.com/functions/NumberAttribute.html)
+  - [@BooleanAttribute](https://dyna-record.com/functions/BooleanAttribute.html)
+  - [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html)
+
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable attributes as optional for optimal type safety
 - Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
@@ -149,35 +154,14 @@ import { Entity, Attribute } from "dyna-record";
 
 @Entity
 class Student extends MyTable {
-  @Attribute({ alias: "Username" }) // Sets alias if field in Dynamo is different then on the model
+  @StringAttribute({ alias: "Username" }) // Sets alias if field in Dynamo is different then on the model
   public username: string;
 
-  @Attribute() // Dynamo field and entity field are the same
+  @StringAttribute() // Dynamo field and entity field are the same
   public email: string;
 
-  @Attribute({ nullable: true })
+  @NumberAttribute({ nullable: true })
   public someAttribute?: number; // Mark as optional
-}
-```
-
-### Date Attributes
-
-Dates are not natively supported in Dynamo. To define a date attribute use [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html) decorator. dyna-record will save the values as ISO strings in Dynamo, but serialize them as JS date objects on the entity instance
-
-- The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
-- Set nullable attributes as optional for optimal type safety
-- Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
-
-```typescript
-import { Entity, DateAttribute } from "dyna-record";
-
-@Entity
-class Student extends MyTable {
-  @DateAttribute()
-  public readonly signUpDate: Date;
-
-  @DateAttribute({ alias: "LastLogin", nullable: true })
-  public readonly lastLogin?: Date; // Set as optional
 }
 ```
 
