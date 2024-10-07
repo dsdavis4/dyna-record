@@ -134,8 +134,6 @@ class Course extends MyTable {
 
 ### Attributes
 
-For [natively supported data types](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.DataTypes), define attributes using the [@Attribute](https://dyna-record.com/functions/Attribute.html) decorator. This decorator maps class properties to DynamoDB table attributes.
-
 Use the attribute decorators below to define attributes on a model. The decorator maps class properties to DynamoDB table attributes.
 
 - Attribute decorators
