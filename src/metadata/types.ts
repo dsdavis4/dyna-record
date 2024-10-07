@@ -9,6 +9,7 @@ import type {
 import type DynaRecord from "../DynaRecord";
 import type { BelongsToLink } from "../relationships";
 import type { MakeOptional } from "../types";
+import type { ZodType } from "zod";
 
 /**
  * Represents relationship metadata that includes a foreign key reference to another entity.
@@ -111,7 +112,8 @@ export interface Serializers {
  */
 export interface AttributeMetadataOptions {
   attributeName: string;
+  type: ZodType;
   alias?: string;
-  nullable: boolean;
+  nullable?: boolean;
   serializers?: Serializers;
 }

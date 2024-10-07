@@ -1,11 +1,10 @@
 import {
   Entity,
-  Attribute,
   ForeignKeyAttribute,
   BelongsTo,
   HasOne,
-  NullableForeignKeyAttribute,
-  HasMany
+  HasMany,
+  StringAttribute
 } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
 import { MockTable } from "../../integration/mockModels";
@@ -33,7 +32,7 @@ describe("BelongsTo", () => {
     it("requires the foreign key attribute to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
-        @Attribute({ alias: "Key1" })
+        @StringAttribute({ alias: "Key1" })
         public key1: string; // This has to be ForeignKey
 
         // @ts-expect-error: foreign key must be of type ForeignKey
@@ -52,7 +51,7 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasOne: The BelongsTo can be defined as optional if linked through a NullableForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
-        @NullableForeignKeyAttribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
         public key1?: NullableForeignKey;
 
         // @ts-expect-no-error: BelongsTo attribute can be optional when linked through a NullableForeignKey
@@ -88,7 +87,7 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasMany: The BelongsTo can be defined as optional if linked through a NullableForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
-        @NullableForeignKeyAttribute({ alias: "Key1" })
+        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
         public key1?: NullableForeignKey;
 
         // @ts-expect-no-error: BelongsTo attribute can be optional when linked through a NullableForeignKey
@@ -134,7 +133,7 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
-        @Attribute({ alias: "Key2" })
+        @StringAttribute({ alias: "Key2" })
         public key2: string;
 
         @HasOne(() => ModelOne, { foreignKey: "key1" })

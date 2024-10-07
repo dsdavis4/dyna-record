@@ -12,15 +12,16 @@ import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
-  Attribute,
   ForeignKeyAttribute,
   BelongsTo,
   Entity,
   HasMany,
   HasOne,
-  NullableAttribute
+  DateAttribute,
+  StringAttribute
 } from "../../src/decorators";
 import { type ForeignKey } from "../../src/types";
+import { ValidationError } from "../../src";
 
 jest.mock("uuid");
 
@@ -75,23 +76,32 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
-  @NullableAttribute({ alias: "MyAttribute" })
+  @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
 @Entity
+class MyModelNonNullableAttribute extends MockTable {
+  @DateAttribute({ alias: "DateAttribute", nullable: false })
+  public myAttribute: Date;
+}
+
+@Entity
 class MockInformation extends MockTable {
-  @Attribute({ alias: "Address" })
+  @StringAttribute({ alias: "Address" })
   public address: string;
 
-  @Attribute({ alias: "Email" })
+  @StringAttribute({ alias: "Email" })
   public email: string;
 
-  @NullableAttribute({ alias: "Phone" })
+  @StringAttribute({ alias: "Phone", nullable: true })
   public phone?: string;
 
-  @NullableAttribute({ alias: "State" })
+  @StringAttribute({ alias: "State", nullable: true })
   public state?: string;
+
+  @DateAttribute({ nullable: true })
+  public someDate?: Date;
 }
 
 describe("Update", () => {
@@ -237,6 +247,130 @@ describe("Update", () => {
                 TableName: "mock-table",
                 UpdateExpression:
                   "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #State, #Phone"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will error if any attributes are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MockInformation.update("123", {
+        someDate: "111" as any // Force any to test runtime validations
+      });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received string",
+          path: ["someDate"],
+          received: "string"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([undefined]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will allow nullable attributes to be set to null", async () => {
+    expect.assertions(5);
+
+    await MockInformation.update("123", {
+      someDate: null
+    });
+
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":someDate": undefined
+                },
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will not allow non nullable attributes to be null", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyModelNonNullableAttribute.update("123", {
+        myAttribute: null as any // Force any to test runtime validations
+      });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received null",
+          path: ["myAttribute"],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([undefined]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will allow nullable attributes to be set to null", async () => {
+    expect.assertions(5);
+
+    await MockInformation.update("123", {
+      someDate: null
+    });
+
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockGet.mock.calls).toEqual([]);
+    expect(mockedGetCommand.mock.calls).toEqual([]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":someDate": undefined
+                },
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                TableName: "mock-table",
+                UpdateExpression:
+                  "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
               }
             }
           ]
@@ -1995,7 +2129,7 @@ describe("Update", () => {
 
     @Entity
     class Model3 extends MockTable {
-      @Attribute({ alias: "Name" })
+      @StringAttribute({ alias: "Name" })
       public name: string;
 
       @ForeignKeyAttribute({ alias: "Model1Id" })
@@ -2277,7 +2411,7 @@ describe("Update", () => {
     it("will not accept function attributes on update", async () => {
       @Entity
       class MyModel extends MockTable {
-        @Attribute({ alias: "MyAttribute" })
+        @StringAttribute({ alias: "MyAttribute" })
         public myAttribute: string;
 
         public someMethod(): string {
@@ -2334,9 +2468,24 @@ describe("Update", () => {
     });
 
     it("will not allow non nullable attributes to be removed (set to null)", async () => {
+      expect.assertions(3);
+
+      // Tests that the type system does not allow null, and also that if types are ignored the value is checked at runtime
       await Order.update("123", {
         // @ts-expect-error non-nullable fields cannot be removed (set to null)
         paymentMethodId: null
+      }).catch(e => {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received null",
+            path: ["paymentMethodId"],
+            received: "null"
+          }
+        ]);
       });
     });
 

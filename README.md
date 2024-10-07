@@ -134,46 +134,34 @@ class Course extends MyTable {
 
 ### Attributes
 
-For [natively supported data types](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.DataTypes), define attributes using the [@Attribute](https://dyna-record.com/functions/Attribute.html) or [@NullableAttribute](https://dyna-record.com/functions/NullableAttribute.html) decorators. This decorator maps class properties to DynamoDB table attributes.
+For [natively supported data types](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.NamingRulesDataTypes.html#HowItWorks.DataTypes), define attributes using the [@Attribute](https://dyna-record.com/functions/Attribute.html) decorator. This decorator maps class properties to DynamoDB table attributes.
+
+Use the attribute decorators below to define attributes on a model. The decorator maps class properties to DynamoDB table attributes.
+
+- Attribute decorators
+
+  - [@StringAttribute](https://dyna-record.com/functions/StringAttribute.html)
+  - [@NumberAttribute](https://dyna-record.com/functions/NumberAttribute.html)
+  - [@BooleanAttribute](https://dyna-record.com/functions/BooleanAttribute.html)
+  - [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html)
 
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable attributes as optional for optimal type safety
 - Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
 ```typescript
-import { Entity, Attribute, NullableAttribute } from "dyna-record";
+import { Entity, Attribute } from "dyna-record";
 
 @Entity
 class Student extends MyTable {
-  @Attribute({ alias: "Username" }) // Sets alias if field in Dynamo is different then on the model
+  @StringAttribute({ alias: "Username" }) // Sets alias if field in Dynamo is different then on the model
   public username: string;
 
-  @Attribute() // Dynamo field and entity field are the same
+  @StringAttribute() // Dynamo field and entity field are the same
   public email: string;
 
-  @NullableAttribute()
+  @NumberAttribute({ nullable: true })
   public someAttribute?: number; // Mark as optional
-}
-```
-
-### Date Attributes
-
-Dates are not natively supported in Dynamo. To define a date attribute use [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html) or [@NullableDateAttribute](https://dyna-record.com/functions/DateNullableAttribute.html) decorators. dyna-record will save the values as ISO strings in Dynamo, but serialize them as JS date objects on the entity instance
-
-- The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
-- Set nullable attributes as optional for optimal type safety
-- Attempting to remove a non-nullable attribute will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
-
-```typescript
-import { Entity, DateAttribute, NullableDateAttribute } from "dyna-record";
-
-@Entity
-class Student extends MyTable {
-  @DateAttribute()
-  public readonly signUpDate: Date;
-
-  @NullableDateAttribute({ alias: "LastLogin" })
-  public readonly lastLogin?: Date; // Set as optional
 }
 ```
 
@@ -190,7 +178,6 @@ import {
   Entity,
   ForeignKeyAttribute,
   ForeignKey,
-  NullableForeignKeyAttribute,
   NullableForeignKey,
   BelongsTo
 } from "dyna-record";
@@ -206,7 +193,7 @@ class Assignment extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  @NullableForeignKeyAttribute()
+  @ForeignKeyAttribute({ nullable: true })
   public readonly teacherId?: NullableForeignKey; // Set as optional
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
@@ -220,8 +207,7 @@ Dyna-Record supports defining relationships between entities such as [@HasOne](h
 
 A relationship can be defined as nullable or non-nullable. Non-nullable relationships will be enforced via transactions and violations will result in [NullConstraintViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
-- [@ForeignKeyAttribute](https://dyna-record.com/functions/ForeignKeyAttribute.html) is used to define a foreign key that links to another entity and is not nullable.
-- [@NullableForeignKeyAttribute](https://dyna-record.com/functions/NullableForeignKeyAttribute.html) is used to define a foreign key that links to another entity and is nullable.
+- [@ForeignKeyAttribute](https://dyna-record.com/functions/ForeignKeyAttribute.html) is used to define a foreign key that links to another entity
 - Relationship decorators ([@HasOne](#hasone), [@HasMany](#hasmany), [@BelongsTo](https://dyna-record.com/functions/BelongsTo.html), [@HasAndBelongsToMany](#hasandbelongstomany)) define how entities relate to each other.
 
 #### HasOne
@@ -260,13 +246,7 @@ class Grade extends MyTable {
 [Docs](https://dyna-record.com/functions/HasMany.html)
 
 ```typescript
-import {
-  Entity,
-  NullableForeignKeyAttribute,
-  NullableForeignKey,
-  BelongsTo,
-  HasMany
-} from "dyna-record";
+import { Entity, NullableForeignKey, BelongsTo, HasMany } from "dyna-record";
 
 @Entity
 class Teacher extends MyTable {
@@ -277,8 +257,8 @@ class Teacher extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  @NullableForeignKeyAttribute()
-  public readonly teacherId?: NullableForeignKey;
+  @ForeignKeyAttribute({ nullable: true })
+  public readonly teacherId?: NullableForeignKey; // Mark as optional
 
   // 'teacherId' Must be defined on self as ForeignKey or NullableForeignKey
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })

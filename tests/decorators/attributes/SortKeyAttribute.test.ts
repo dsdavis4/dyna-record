@@ -3,6 +3,7 @@ import { Entity, SortKeyAttribute } from "../../../src/decorators";
 import { type SortKey } from "../../../src/types";
 import Metadata from "../../../src/metadata";
 import { Customer, MockTable, Student } from "../../integration/mockModels";
+import { ZodString } from "zod";
 
 describe("SortKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -11,7 +12,8 @@ describe("SortKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Customer.name).sk).toEqual({
       name: "sk",
       alias: "SK",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -21,7 +23,8 @@ describe("SortKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Student.name).mySk).toEqual({
       name: "mySk",
       alias: "mySk",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -48,10 +51,17 @@ describe("SortKeyAttribute", () => {
       }
     });
 
-    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+    it("nullable is not a valid property because its always non nullable", () => {
       @Entity
-      class MockClass extends MockTable {
-        // @ts-expect-error: Nullable prop is not allowed
+      class SomeModel extends MockTable {
+        // @ts-expect-error: nullable property is not valid
+        @SortKeyAttribute({ alias: "Key1", nullable: true })
+        public key1: SortKey;
+      }
+
+      @Entity
+      class OtherModel extends MockTable {
+        // @ts-expect-error: nullable property is not valid
         @SortKeyAttribute({ alias: "Key1", nullable: false })
         public key1: SortKey;
       }

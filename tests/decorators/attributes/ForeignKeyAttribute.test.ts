@@ -1,8 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Entity, ForeignKeyAttribute } from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
-import { MockTable, Order, Assignment } from "../../integration/mockModels";
+import {
+  MockTable,
+  Order,
+  Assignment,
+  MyClassWithAllAttributeTypes
+} from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
+import { ZodNullable, ZodString } from "zod";
 
 describe("ForeignKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -11,7 +17,8 @@ describe("ForeignKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Order.name).customerId).toEqual({
       name: "customerId",
       alias: "CustomerId",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
     });
   });
 
@@ -21,7 +28,22 @@ describe("ForeignKeyAttribute", () => {
     expect(Metadata.getEntityAttributes(Assignment.name).courseId).toEqual({
       name: "courseId",
       alias: "courseId",
-      nullable: false
+      nullable: false,
+      type: expect.any(ZodString)
+    });
+  });
+
+  it("zod type is optional if nullable is true", () => {
+    expect.assertions(1);
+
+    expect(
+      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
+        .nullableForeignKeyAttribute
+    ).toEqual({
+      name: "nullableForeignKeyAttribute",
+      alias: "nullableForeignKeyAttribute",
+      nullable: true,
+      type: expect.any(ZodNullable<ZodString>)
     });
   });
 
@@ -35,12 +57,21 @@ describe("ForeignKeyAttribute", () => {
       }
     });
 
-    it("has an error if the decorator is applied to an attribute of type NullableForeignKey", () => {
+    it("has an error if the decorator is applied to an attribute of type NullableForeignKey when its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
         @ForeignKeyAttribute({ alias: "Key1" })
         public key1: NullableForeignKey;
+      }
+    });
+
+    it("has an error if the decorator is applied to an attribute of type ForeignKey when its nullable", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
+        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
+        public key1: ForeignKey;
       }
     });
 
@@ -71,12 +102,38 @@ describe("ForeignKeyAttribute", () => {
       }
     });
 
-    it("'nullable' is not valid because its expected to use @NullableAttribute", () => {
+    it("if nullable is false the attribute can is required", () => {
       @Entity
-      class ModelOne extends MockTable {
-        // @ts-expect-error: Nullable prop is not allowed
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
         @ForeignKeyAttribute({ alias: "Key1", nullable: false })
-        public key1: string;
+        public key1: ForeignKey;
+
+        // @ts-expect-error: Nullable properties are required
+        @ForeignKeyAttribute({ alias: "Key2", nullable: false })
+        public key2?: ForeignKey;
+      }
+    });
+
+    it("nullable defaults to false and makes the property required", () => {
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
+        @ForeignKeyAttribute({ alias: "Key1" })
+        public key1: ForeignKey;
+
+        // @ts-expect-error: Nullable properties are required
+        @ForeignKeyAttribute({ alias: "Key2" })
+        public key2?: ForeignKey;
+      }
+    });
+
+    it("when nullable is true, it will allow the property to be optional and be NullableForeignKey", () => {
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-no-error: Nullable properties are required
+        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
+        public key1?: NullableForeignKey;
       }
     });
   });

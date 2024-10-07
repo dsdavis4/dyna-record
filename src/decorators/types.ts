@@ -28,7 +28,17 @@ export interface AttributeOptions {
    * scenarios where column names in the database differ from attribute names in the code.
    */
   alias?: string;
+
+  /**
+   * Whether or not the attribute is nullable. Defaults to false
+   */
+  nullable?: boolean;
 }
+
+/**
+ * Attribute options for attributes which are not nullable
+ */
+export type NonNullAttributeOptions = Omit<AttributeOptions, "nullable">;
 
 /**
  * Do not allow ForeignKey or NullableForeignKey types when using the Attribute decorator
@@ -36,3 +46,9 @@ export interface AttributeOptions {
 export type NotForeignKey<T> = T extends ForeignKey | NullableForeignKey
   ? never
   : T;
+
+export type AttributeDecoratorContext<
+  T extends DynaRecord,
+  K,
+  P extends AttributeOptions
+> = ClassFieldDecoratorContext<T, P["nullable"] extends true ? Optional<K> : K>;

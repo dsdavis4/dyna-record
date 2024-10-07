@@ -5,7 +5,7 @@ import {
   Entity,
   PartitionKeyAttribute,
   SortKeyAttribute,
-  Attribute
+  StringAttribute
 } from "../../src/decorators";
 import type { PartitionKey, SortKey } from "../../src/types";
 
@@ -32,14 +32,14 @@ class MockTable extends DynaRecord {
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Scale extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public name: string;
 }
 
 @Entity
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Room extends MockTable {
-  @Attribute({ alias: "Name" })
+  @StringAttribute({ alias: "Name" })
   public name: string;
 }
 

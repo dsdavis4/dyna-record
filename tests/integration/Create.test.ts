@@ -5,6 +5,7 @@ import {
   Grade,
   Home,
   MockTable,
+  MyClassWithAllAttributeTypes,
   Order,
   PaymentMethodProvider
 } from "./mockModels";
@@ -12,14 +13,14 @@ import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
-  Attribute,
   BelongsTo,
   Entity,
+  ForeignKeyAttribute,
   HasOne,
-  NullableAttribute,
-  NullableForeignKeyAttribute
+  StringAttribute
 } from "../../src/decorators";
 import type { NullableForeignKey } from "../../src/types";
+import { ValidationError } from "../../src";
 
 jest.mock("uuid");
 
@@ -61,7 +62,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
-  @NullableAttribute({ alias: "MyAttribute" })
+  @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
@@ -121,6 +122,152 @@ describe("Create", () => {
         }
       ]
     ]);
+  });
+
+  it("will error if any required attributes are missing", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({} as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Required",
+          path: ["stringAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["dateAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Required",
+          path: ["boolAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Required",
+          path: ["numberAttribute"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Required",
+          path: ["foreignKeyAttribute"],
+          received: "undefined"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if any required attributes are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: 1,
+        nullableStringAttribute: 2,
+        dateAttribute: 3,
+        nullableDateAttribute: 4,
+        foreignKeyAttribute: 5,
+        nullableForeignKeyAttribute: 6,
+        boolAttribute: 7,
+        nullableBoolAttribute: 8,
+        numberAttribute: "9",
+        nullableNumberAttribute: "10"
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["stringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableStringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["dateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["nullableDateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["boolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["nullableBoolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["numberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableNumberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["foreignKeyAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableForeignKeyAttribute"],
+          received: "number"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
   });
 
   it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
@@ -694,7 +841,7 @@ describe("Create", () => {
     it("will not accept function attributes on create", async () => {
       @Entity
       class MyModel extends MockTable {
-        @Attribute({ alias: "MyAttribute" })
+        @StringAttribute({ alias: "MyAttribute" })
         public myAttribute: string;
 
         public someMethod(): string {
@@ -712,10 +859,10 @@ describe("Create", () => {
     it("optional attributes are not required", async () => {
       @Entity
       class SomeModel extends MockTable {
-        @Attribute({ alias: "MyAttribute1" })
+        @StringAttribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
-        @NullableAttribute({ alias: "MyAttribute2" })
+        @StringAttribute({ alias: "MyAttribute2", nullable: true })
         public myAttribute2?: string;
       }
 
@@ -756,13 +903,13 @@ describe("Create", () => {
     it("will allow a NullableForeignKey attribute to be omitted if its defined as optional on the model", async () => {
       @Entity
       class ContactInformationLocal extends MockTable {
-        @Attribute({ alias: "Email" })
+        @StringAttribute({ alias: "Email" })
         public email: string;
 
-        @Attribute({ alias: "Phone" })
+        @StringAttribute({ alias: "Phone" })
         public phone: string;
 
-        @NullableForeignKeyAttribute({ alias: "CustomerId" })
+        @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })
         public customerId?: NullableForeignKey;
 
         @BelongsTo(() => CustomerLocal, { foreignKey: "customerId" })
@@ -789,21 +936,33 @@ describe("Create", () => {
 
     it("will not accept DefaultFields on create because they are managed by dyna-record", async () => {
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         id: "123"
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         type: "456"
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         createdAt: new Date()
       });
 
       await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         updatedAt: new Date()
       });
@@ -818,6 +977,9 @@ describe("Create", () => {
 
     it("relationships are not part of return value", async () => {
       const res = await Order.create({
+        customerId: "123",
+        paymentMethodId: "456",
+        orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         createdAt: new Date()
       });

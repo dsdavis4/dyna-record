@@ -1,5 +1,6 @@
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata from "../../src/metadata";
+import { z } from "zod";
 jest.mock("../../src/metadata");
 
 describe("Attribute metadata", () => {
@@ -10,7 +11,8 @@ describe("Attribute metadata", () => {
         Metadata.addEntityAttribute("SomeEntityName", {
           attributeName: "attributeName",
           alias: "alias",
-          nullable: true
+          nullable: true,
+          type: z.any()
         });
       });
 
@@ -39,6 +41,7 @@ describe("Attribute metadata", () => {
           attributeName: "attributeName",
           alias: "alias",
           nullable: true,
+          type: z.any(),
           // @ts-expect-no-error: Both serializer functions are defined
           serializers: {
             toEntityAttribute: (val: NativeScalarAttributeValue) => val,

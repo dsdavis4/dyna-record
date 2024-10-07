@@ -1,9 +1,11 @@
+import { z, ZodError, type ZodSchema, type ZodType } from "zod";
 import {
   type AttributeMetadata,
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage
 } from ".";
 import type DynaRecord from "../DynaRecord";
+import { ValidationError } from "../errors";
 
 type EntityClass = new (...args: any) => DynaRecord;
 
@@ -40,6 +42,21 @@ class EntityMetadata {
 
   public readonly EntityClass: EntityClass;
 
+  /**
+   * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
+   */
+  #schema?: ZodSchema;
+
+  /**
+   * Zod schema for runtime validation on entity attributes. Validates partial attributes (used on Update)
+   */
+  #schemaPartial?: ZodSchema;
+
+  /**
+   * Object containing zod attributes. Built programmatically via decorators and used to create schemas
+   */
+  #zodAttributes: Record<string, ZodType> = {};
+
   constructor(entityClass: EntityClass, tableClassName: string) {
     this.EntityClass = entityClass;
 
@@ -56,6 +73,50 @@ class EntityMetadata {
   public addAttribute(attrMeta: AttributeMetadata): void {
     this.attributes[attrMeta.name] = attrMeta;
     this.tableAttributes[attrMeta.alias] = attrMeta;
+
+    this.#zodAttributes[attrMeta.name] = attrMeta.type;
+  }
+
+  /**
+   * Validate all an entities attributes (used on create)
+   * @param attributes
+   */
+  public validateFull(attributes: DynaRecord): void {
+    if (this.#schema === undefined) {
+      this.#schema = z.object(this.#zodAttributes);
+    }
+
+    try {
+      this.#schema.parse(attributes);
+    } catch (error) {
+      this.handleValidationError(error);
+    }
+  }
+
+  /**
+   * Validate partial entities attributes (used on update)
+   * @param attributes
+   */
+  public validatePartial(attributes: Partial<DynaRecord>): void {
+    if (this.#schemaPartial === undefined) {
+      this.#schemaPartial = z.object(this.#zodAttributes).partial();
+    }
+
+    try {
+      this.#schemaPartial.parse(attributes);
+    } catch (error) {
+      this.handleValidationError(error);
+    }
+  }
+
+  /**
+   * Throw validation errors with the cause
+   * @param error
+   */
+  private handleValidationError(error: unknown): void {
+    const errorOptions =
+      error instanceof ZodError ? { cause: error.issues } : undefined;
+    throw new ValidationError("Validation errors", errorOptions);
   }
 }
 

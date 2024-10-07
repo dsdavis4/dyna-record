@@ -132,7 +132,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
-  it("will serialize an entity with a DateNullableAttribute", async () => {
+  it("will serialize an entity with a nullable date attribute", async () => {
     expect.assertions(4);
 
     mockGet.mockResolvedValueOnce({

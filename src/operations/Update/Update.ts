@@ -14,6 +14,7 @@ import {
 import OperationBase from "../OperationBase";
 import type { UpdateOptions } from "./types";
 import type { EntityClass } from "../../types";
+import Metadata from "../../metadata";
 
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
@@ -38,6 +39,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes Attributes on the model to update.
    */
   public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
+    const entityMeta = Metadata.getEntity(this.EntityClass.name);
+    entityMeta.validatePartial(attributes);
+
     this.buildUpdateItemTransaction(id, attributes);
     await this.buildRelationshipTransactions(id, attributes);
     await this.#transactionBuilder.executeTransaction();
