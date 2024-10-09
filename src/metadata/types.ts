@@ -49,10 +49,18 @@ export type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
  */
 export type DefaultDateFields = "createdAt" | "updatedAt";
 
+// TODO add unit test that instance method keys are not allowed whereever this isused
+// TODO use the exclude on Functionfields
 /**
- * Specifies the default fields used in entities, including fields from `DynaRecord` or `BelongsToLink`.
+ * Specifies the default fields used in entities, including fields from `DynaRecord` or `BelongsToLink`. Instance methods are excluded
  */
-export type DefaultFields = keyof DynaRecord | keyof BelongsToLink;
+export type DefaultFields =
+  | {
+      [K in keyof DynaRecord]: DynaRecord[K] extends (...args: any[]) => any
+        ? never
+        : K;
+    }[keyof DynaRecord]
+  | keyof BelongsToLink;
 
 /**
  * Defines the structure for default fields within a table, mapping field names to their `AttributeMetadata` aliases.

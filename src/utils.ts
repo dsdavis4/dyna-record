@@ -6,6 +6,7 @@ import Metadata, {
 } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type EntityAttributes } from "./operations";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
@@ -65,6 +66,24 @@ export const tableItemToEntity = <T extends DynaRecord>(
 
         safeAssign(entity, entityKey, val);
       }
+    }
+  });
+
+  return entity;
+};
+
+/* The line `const updatedInstanceAttrs = structuredClone(this);` is creating a deep copy of the
+current instance object `this` using the `structuredClone` function. This is typically done to
+ensure that any modifications made to the copied object do not affect the original object. */
+export const createInstance = <T extends DynaRecord>(
+  EntityClass: new () => T,
+  attributes: EntityAttributes<T>
+): T => {
+  const entity = new EntityClass();
+
+  Object.entries(attributes).forEach(([attrName, val]) => {
+    if (isKeyOfEntity(entity, attrName)) {
+      safeAssign(entity, attrName, val);
     }
   });
 
@@ -205,7 +224,7 @@ export const isString = (value: any): value is string => {
  * safeAssign(entity, "name", "Jane Doe");
  */
 export const safeAssign = <
-  TObject extends DynaRecord,
+  TObject extends EntityAttributes<DynaRecord>,
   TKey extends keyof TObject,
   TValue
 >(

@@ -6,6 +6,7 @@ import {
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
+import { type EntityAttributes } from "../operations";
 
 type EntityClass = new (...args: any) => DynaRecord;
 
@@ -81,7 +82,7 @@ class EntityMetadata {
    * Validate all an entities attributes (used on create)
    * @param attributes
    */
-  public validateFull(attributes: DynaRecord): void {
+  public validateFull(attributes: EntityAttributes<DynaRecord>): void {
     if (this.#schema === undefined) {
       this.#schema = z.object(this.#zodAttributes);
     }

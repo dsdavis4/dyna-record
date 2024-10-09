@@ -13,9 +13,11 @@ import {
   type CreateOptions,
   Update,
   type UpdateOptions,
-  Delete
+  Delete,
+  EntityAttributes
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
+import { createInstance } from "./utils";
 
 interface DynaRecordBase {
   id: string;
@@ -256,6 +258,31 @@ abstract class DynaRecord implements DynaRecordBase {
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes);
+  }
+
+  // // // TODO typedoc
+  // TODO add to readme
+  // TODO test that this returns instance of class
+  // TDO
+  public async update<T extends DynaRecord>(
+    attributes: UpdateOptions<T>
+  ): Promise<T> {
+    const InstanceClass = this.constructor as EntityClass<T>;
+    const op = new Update<T>(InstanceClass);
+    await op.run(this.id, attributes);
+
+    // TODO test that calling instance wasnt mutated
+    const updatedInstanceAttrs = structuredClone(
+      this
+    ) as unknown as EntityAttributes<T>;
+
+    // Update the current instance with new attributes
+    Object.assign(updatedInstanceAttrs, attributes);
+
+    // TODO test that calling instance wasnt mutated
+
+    // Return the updated instance, which is of type `this`
+    return createInstance<T>(InstanceClass, updatedInstanceAttrs);
   }
 
   /**

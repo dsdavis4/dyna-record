@@ -1,6 +1,10 @@
 import type { QueryItems } from "../../dynamo-utils";
 import type DynaRecord from "../../DynaRecord";
-import type { EntityAttributes, RelationshipAttributeNames } from "../types";
+import type {
+  EntityAttributes,
+  FunctionFields,
+  RelationshipAttributeNames
+} from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
 
 /**
@@ -62,6 +66,7 @@ type EntityKeysWithIncludedAssociations<
       : T[K];
 };
 
+// TODO add test that instance method "update" is included
 /**
  * Represents the result of a `FindById` operation, including the main entity and any specified associated entities.
  *
@@ -73,5 +78,5 @@ export type FindByIdIncludesRes<
   Opts extends FindByIdOptions<T>
 > = EntityKeysWithIncludedAssociations<
   T,
-  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
+  keyof EntityAttributes<T> | IncludedKeys<T, Opts> | FunctionFields<T>
 >;

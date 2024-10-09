@@ -6,7 +6,7 @@ import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
-import { type EntityAttributes } from "../types";
+import { type EntityAttributeDefaultFields, type EntityAttributes } from "../types";
 import Metadata from "../../metadata";
 
 /**
@@ -50,7 +50,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes
    * @returns
    */
-  private buildEntityData(attributes: CreateOptions<T>): DynaRecord {
+  private buildEntityData(
+    attributes: CreateOptions<T>
+  ): EntityAttributes<DynaRecord> {
     const id = uuidv4();
     const createdAt = new Date();
 
@@ -62,7 +64,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const defaultAttrs: DynaRecord = {
+    const defaultAttrs: EntityAttributeDefaultFields = {
       id,
       type: this.EntityClass.name,
       createdAt,
@@ -92,7 +94,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param entityData
    */
   private async buildRelationshipTransactions(
-    entityData: DynaRecord
+    entityData: EntityAttributes<DynaRecord>
   ): Promise<void> {
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
