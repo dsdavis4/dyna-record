@@ -6,7 +6,10 @@ import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
-import { type EntityAttributeDefaultFields, type EntityAttributes } from "../types";
+import {
+  type EntityAttributeDefaultFields,
+  type EntityAttributes
+} from "../types";
 import Metadata from "../../metadata";
 
 /**
