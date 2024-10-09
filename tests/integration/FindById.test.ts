@@ -2025,6 +2025,12 @@ describe("FindById", () => {
       if (phoneBook !== undefined) {
         // @ts-expect-no-error: included HasMany relationships will be an array
         Logger.log(phoneBook.addresses.length);
+
+        // @ts-expect-error: included HasMany relationships do not have attributes of the parent class instance
+        Logger.log(phoneBook.addresses.some(address => address.edition));
+
+        // @ts-expect-no-error: included HasMany relationships only have attributes of the included relationship entity class instance
+        Logger.log(phoneBook.addresses.some(address => address.homeId));
       }
     });
   });

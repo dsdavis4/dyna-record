@@ -58,7 +58,7 @@ type EntityKeysWithIncludedAssociations<
   [K in P]: T[K] extends DynaRecord
     ? EntityAttributes<T>
     : T[K] extends DynaRecord[]
-      ? Array<EntityAttributes<T>>
+      ? Array<EntityAttributes<T[K][number]>>
       : T[K];
 };
 
