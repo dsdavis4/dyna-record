@@ -40,11 +40,6 @@ const mockTransact = jest.fn();
 
 const mockedUuidv4 = jest.mocked(uuidv4);
 
-// TODO start here... add tests.
-//     - Make a describe for the static tests
-//     - and make a describe for instance tests that copies/modefies all of them
-// TODO do the same for types test
-
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
     TransactionCanceledException: jest.fn().mockImplementation((...params) => {
