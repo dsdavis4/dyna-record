@@ -14,7 +14,7 @@ import {
   Update,
   type UpdateOptions,
   Delete,
-  EntityAttributes
+  type EntityAttributes
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -263,26 +263,29 @@ abstract class DynaRecord implements DynaRecordBase {
   // // // TODO typedoc
   // TODO add to readme
   // TODO test that this returns instance of class
-  // TDO
-  public async update<T extends DynaRecord>(
+  // TODO test that only updatedable attributes can be updated. Meaning EntityDefinedAttributes
+  // TODO add unit test that only entity defined attributes can be set onthis
+  //      - for example setting id is not allowed (for types and via schemas)
+  //           - this should be tested via type tests AND runtime schema tests
+  //      - If there are not equivalent tests for the static method paramters then add those
+  public async update<T extends this>(
     attributes: UpdateOptions<T>
   ): Promise<T> {
     const InstanceClass = this.constructor as EntityClass<T>;
     const op = new Update<T>(InstanceClass);
-    await op.run(this.id, attributes);
+    const updatedAttributes = await op.run(this.id, attributes);
 
-    // TODO test that calling instance wasnt mutated
-    const updatedInstanceAttrs = structuredClone(
-      this
-    ) as unknown as EntityAttributes<T>;
+    const clone = structuredClone(this);
 
     // Update the current instance with new attributes
-    Object.assign(updatedInstanceAttrs, attributes);
+    Object.assign(clone, updatedAttributes);
 
-    // TODO test that calling instance wasnt mutated
+    const updatedInstance = Object.fromEntries(
+      Object.entries(clone).filter(([_, value]) => value !== null)
+    ) as EntityAttributes<T>;
 
     // Return the updated instance, which is of type `this`
-    return createInstance<T>(InstanceClass, updatedInstanceAttrs);
+    return createInstance<T>(InstanceClass, updatedInstance);
   }
 
   /**
