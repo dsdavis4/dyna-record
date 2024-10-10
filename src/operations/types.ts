@@ -70,7 +70,6 @@ export type EntityAttributes<T extends DynaRecord> = Omit<
   RelationshipAttributeNames<T> | FunctionFields<T>
 >;
 
-// // TODO add unit test that methods are not used where every this is used
 /**
  * Entity attributes for default fields
  */

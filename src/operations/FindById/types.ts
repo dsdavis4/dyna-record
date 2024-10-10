@@ -66,7 +66,6 @@ type EntityKeysWithIncludedAssociations<
       : T[K];
 };
 
-// TODO add test that instance method "update" is included
 /**
  * Represents the result of a `FindById` operation, including the main entity and any specified associated entities.
  *

@@ -132,6 +132,27 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
   });
 
+  it("the returned model will have a instance method for update", async () => {
+    expect.assertions(1);
+
+    mockGet.mockResolvedValueOnce({
+      Item: {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        UpdatedAt: "2023-09-15T04:26:31.148Z"
+      }
+    });
+
+    const result = await Customer.findById("123");
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(result?.update).toBeInstanceOf(Function);
+  });
+
   it("will serialize an entity with a nullable date attribute", async () => {
     expect.assertions(4);
 

@@ -78,8 +78,6 @@ class EntityMetadata {
     this.#zodAttributes[attrMeta.name] = attrMeta.type;
   }
 
-  // TODO check that if I were to pass non entity defined attributes such as pk or id (such as by using 'any' to remove type checks) that there are runtime checks that only attributes that are updatedable can be updated
-  //     would that be a different method?
   /**
    * Validate all an entities attributes (used on create)
    * @param attributes
@@ -96,9 +94,6 @@ class EntityMetadata {
     }
   }
 
-  // TODO I think that this needs to be validating on entity defined attributes only....
-  //      otherwise would this allow things like "id" "pk" etc to be updated without runtime schema validation?
-  //      add tests for this
   // In which case I think this needs to be renamed? or a new method and this validates pre input?
   // Are changes needed to validate full as well?
   /**

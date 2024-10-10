@@ -2538,7 +2538,7 @@ describe("Update", () => {
 
   describe("instance method", () => {
     it("will update an entity without foreign key attributes", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
       jest.setSystemTime(now);
@@ -2566,6 +2566,7 @@ describe("Update", () => {
         createdAt: new Date("2023-10-01"),
         updatedAt: now // Updated at gets updated
       });
+      expect(updatedInstance).toBeInstanceOf(Customer);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockGet.mock.calls).toEqual([]);
       expect(mockedGetCommand.mock.calls).toEqual([]);
@@ -2609,7 +2610,7 @@ describe("Update", () => {
     });
 
     it("will update an entity and remove attributes", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
       jest.setSystemTime(now);
@@ -2640,6 +2641,7 @@ describe("Update", () => {
         createdAt: new Date("2023-10-01"),
         updatedAt: now
       });
+      expect(updatedInstance).toBeInstanceOf(ContactInformation);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockGet.mock.calls).toEqual([]);
       expect(mockedGetCommand.mock.calls).toEqual([]);
@@ -2687,7 +2689,7 @@ describe("Update", () => {
     });
 
     it("will update and remove multiple attributes", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
       jest.setSystemTime(now);
@@ -2724,6 +2726,7 @@ describe("Update", () => {
         createdAt: new Date("2023-10-01"),
         updatedAt: now
       });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockGet.mock.calls).toEqual([]);
       expect(mockedGetCommand.mock.calls).toEqual([]);
@@ -2810,7 +2813,7 @@ describe("Update", () => {
     });
 
     it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
       jest.setSystemTime(now);
@@ -2844,6 +2847,7 @@ describe("Update", () => {
         createdAt: new Date("2023-10-01"),
         updatedAt: now
       });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockGet.mock.calls).toEqual([]);
       expect(mockedGetCommand.mock.calls).toEqual([]);
@@ -2924,7 +2928,7 @@ describe("Update", () => {
     });
 
     it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(7);
+      expect.assertions(8);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
       jest.setSystemTime(now);
@@ -2958,6 +2962,7 @@ describe("Update", () => {
         createdAt: new Date("2023-10-01"),
         updatedAt: now
       });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockGet.mock.calls).toEqual([]);
       expect(mockedGetCommand.mock.calls).toEqual([]);
@@ -3027,7 +3032,7 @@ describe("Update", () => {
         });
 
         it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(ContactInformation, {
             pk: "test-pk" as PartitionKey,
@@ -3056,6 +3061,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -3482,7 +3488,7 @@ describe("Update", () => {
         });
 
         it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(ContactInformation, {
             pk: "test-pk" as PartitionKey,
@@ -3512,6 +3518,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -3992,7 +3999,7 @@ describe("Update", () => {
         });
 
         it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(ContactInformation, {
             pk: "test-pk" as PartitionKey,
@@ -4022,6 +4029,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -4111,7 +4119,7 @@ describe("Update", () => {
         });
 
         it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(PaymentMethod, {
             pk: "test-pk" as PartitionKey,
@@ -4139,6 +4147,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(PaymentMethod);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -4430,7 +4439,7 @@ describe("Update", () => {
         });
 
         it("will remove a nullable foreign key", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(Pet, {
             pk: "test-pk" as PartitionKey,
@@ -4468,6 +4477,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(Pet);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -4547,7 +4557,7 @@ describe("Update", () => {
         });
 
         it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(PaymentMethod, {
             pk: "test-pk" as PartitionKey,
@@ -4575,6 +4585,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(PaymentMethod);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -5012,7 +5023,7 @@ describe("Update", () => {
         });
 
         it("will remove a nullable foreign key and delete the associated BelongsToLinks", async () => {
-          expect.assertions(7);
+          expect.assertions(8);
 
           const instance = createInstance(Pet, {
             pk: "test-pk" as PartitionKey,
@@ -5050,6 +5061,7 @@ describe("Update", () => {
             createdAt: new Date("2023-10-01"),
             updatedAt: now
           });
+          expect(updatedInstance).toBeInstanceOf(Pet);
           expect(mockSend.mock.calls).toEqual([
             [{ name: "GetCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -5153,7 +5165,7 @@ describe("Update", () => {
       });
 
       it("can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(7);
+        expect.assertions(8);
 
         const instance = createInstance(OtherModel3, {
           pk: "test-pk" as PartitionKey,
@@ -5196,6 +5208,7 @@ describe("Update", () => {
           createdAt: new Date("2023-10-01"),
           updatedAt: now
         });
+        expect(updatedInstance).toBeInstanceOf(OtherModel3);
         expect(mockSend.mock.calls).toEqual([
           [{ name: "GetCommand" }],
           [{ name: "TransactWriteCommand" }]
@@ -5301,7 +5314,7 @@ describe("Update", () => {
       });
 
       it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(7);
+        expect.assertions(8);
 
         const instance = createInstance(Grade, {
           myPk: "Grade#123" as PartitionKey,
@@ -5346,6 +5359,7 @@ describe("Update", () => {
           createdAt: new Date("2023-10-01"),
           updatedAt: now
         });
+        expect(updatedInstance).toBeInstanceOf(Grade);
         expect(mockSend.mock.calls).toEqual([
           [{ name: "GetCommand" }],
           [{ name: "TransactWriteCommand" }]

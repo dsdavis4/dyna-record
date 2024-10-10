@@ -513,6 +513,16 @@ await Pet.update("123", {
 });
 ```
 
+#### Instance Method
+
+There is an instance `update` method that has the same rules above, but returns the full updated instance.
+
+```typescript
+const updatedInstance = await petInstance.update({
+  ownerId: null
+});
+```
+
 ### Delete
 
 [Docs](https://dyna-record.com/classes/default.html#delete)
