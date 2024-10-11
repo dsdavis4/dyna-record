@@ -21,6 +21,8 @@ import Metadata from "../../metadata";
  *
  * The `Update` operation supports updating entity attributes and ensures consistency in relationships, especially for "BelongsTo" relationships. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
  *
+ * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
+ *
  * @template T - The type of the entity being updated, extending `DynaRecord`.
  */
 class Update<T extends DynaRecord> extends OperationBase<T> {

@@ -17,6 +17,8 @@ import Metadata from "../../metadata";
  *
  * It encapsulates the logic required to translate entity attributes to a format suitable for DynamoDB, execute the creation transaction, and manage any relationships defined by the entity, such as "BelongsTo" or "HasMany" links.
  *
+ * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
+ *
  * @template T - The type of the entity being created, extending `DynaRecord`.
  */
 class Create<T extends DynaRecord> extends OperationBase<T> {
