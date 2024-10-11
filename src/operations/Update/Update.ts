@@ -43,11 +43,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     attributes: UpdateOptions<T>
   ): Promise<UpdatedAttributes<T>> {
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
-    entityMeta.validatePartial(attributes);
+    const entityAttrs =
+      entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    const updatedAttrs = this.buildUpdateItemTransaction(id, attributes);
+    const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
 
-    await this.buildRelationshipTransactions(id, attributes);
+    await this.buildRelationshipTransactions(id, entityAttrs);
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;

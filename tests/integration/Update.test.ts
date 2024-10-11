@@ -169,6 +169,60 @@ describe("Update", () => {
       ]);
     });
 
+    it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
+      expect.assertions(6);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Customer.update("123", {
+          // Begin reserved keys
+          pk: "2",
+          sk: "3",
+          id: "4",
+          type: "bad type",
+          updatedAt: new Date(),
+          createdAt: new Date(),
+          update: () => {},
+          // End reserved keys
+          name: "New Name",
+          address: "new Address"
+        } as any) // Use any to force bad type and allow runtime checks to be tested
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockGet.mock.calls).toEqual([]);
+      expect(mockedGetCommand.mock.calls).toEqual([]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Customer#123", SK: "Customer" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #Address = :Address, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Address": "Address",
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Address": "new Address",
+                    ":Name": "New Name",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("will update an entity and remove attributes", async () => {
       expect.assertions(6);
 
@@ -256,7 +310,7 @@ describe("Update", () => {
                   Key: { PK: "MockInformation#123", SK: "MockInformation" },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #State, #Phone"
+                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State"
                 }
               }
             ]
@@ -2491,6 +2545,18 @@ describe("Update", () => {
         });
       });
 
+      it("will not accept partition and sort keys on update because they are managed by dyna-record", async () => {
+        await Order.update("123", {
+          // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
+          pk: "123"
+        });
+
+        await Order.update("123", {
+          // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
+          sk: "456"
+        });
+      });
+
       it("does not require all of an entity attributes to be passed", async () => {
         await Order.update("123", {
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
@@ -2550,6 +2616,89 @@ describe("Update", () => {
       });
 
       const updatedInstance = await instance.update({ name: "newName" });
+
+      expect(updatedInstance).toEqual({
+        pk: "test-pk",
+        sk: "test-sk",
+        id: "123",
+        name: "newName", // Updated name
+        type: "Customer",
+        address: "test-address",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: now // Updated at gets updated
+      });
+      expect(updatedInstance).toBeInstanceOf(Customer);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockGet.mock.calls).toEqual([]);
+      expect(mockedGetCommand.mock.calls).toEqual([]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Customer#123", SK: "Customer" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "newName",
+                    ":UpdatedAt": now.toISOString()
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: "test-pk",
+        sk: "test-sk",
+        id: "123",
+        name: "test-name",
+        type: "Customer",
+        address: "test-address",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+    });
+
+    it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
+      expect.assertions(8);
+
+      const now = new Date("2023-10-16T03:31:35.918Z");
+      jest.setSystemTime(now);
+
+      const instance = createInstance(Customer, {
+        pk: "test-pk" as PartitionKey,
+        sk: "test-sk" as SortKey,
+        id: "123",
+        name: "test-name",
+        address: "test-address",
+        type: "Customer",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        // Begin reserved keys
+        pk: "2",
+        sk: "3",
+        id: "4",
+        type: "bad type",
+        updatedAt: new Date(),
+        createdAt: new Date(),
+        update: () => {},
+        // End reserved keys
+        name: "newName"
+      } as any); // Use any to force bad type and allow runtime checks to be tested
 
       expect(updatedInstance).toEqual({
         pk: "test-pk",
@@ -2748,7 +2897,7 @@ describe("Update", () => {
                   Key: { PK: "MockInformation#123", SK: "MockInformation" },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #State, #Phone"
+                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State"
                 }
               }
             ]
@@ -5546,6 +5695,20 @@ describe("Update", () => {
         await instance.update({
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           updatedAt: new Date()
+        });
+      });
+
+      it("will not accept partition and sort keys on update because they are managed by dyna-record", async () => {
+        const instance = new Order();
+
+        await instance.update({
+          // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
+          pk: "123"
+        });
+
+        await instance.update({
+          // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
+          sk: "456"
         });
       });
 

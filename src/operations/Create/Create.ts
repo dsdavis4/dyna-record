@@ -33,10 +33,11 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @returns
    */
   public async run(attributes: CreateOptions<T>): Promise<EntityAttributes<T>> {
-    const entityData = this.buildEntityData(attributes);
-
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
-    entityMeta.validateFull(entityData);
+    const entityAttrs = entityMeta.parseRawEntityDefinedAttributes(attributes);
+
+    const reservedAttrs = this.buildReservedAttributes();
+    const entityData = { ...reservedAttrs, ...entityAttrs };
 
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
@@ -53,9 +54,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes
    * @returns
    */
-  private buildEntityData(
-    attributes: CreateOptions<T>
-  ): EntityAttributes<DynaRecord> {
+  private buildReservedAttributes(): EntityAttributes<DynaRecord> {
     const id = uuidv4();
     const createdAt = new Date();
 
@@ -74,7 +73,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       updatedAt: createdAt
     };
 
-    return { ...keys, ...attributes, ...defaultAttrs };
+    return { ...keys, ...defaultAttrs };
   }
 
   /**
