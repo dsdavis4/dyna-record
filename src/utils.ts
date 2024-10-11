@@ -72,9 +72,9 @@ export const tableItemToEntity = <T extends DynaRecord>(
   return entity;
 };
 
-/* The line `const updatedInstanceAttrs = structuredClone(this);` is creating a deep copy of the
-current instance object `this` using the `structuredClone` function. This is typically done to
-ensure that any modifications made to the copied object do not affect the original object. */
+/**
+ * Create an instance of a dyna record class
+ */
 export const createInstance = <T extends DynaRecord>(
   EntityClass: new () => T,
   attributes: EntityAttributes<T>
