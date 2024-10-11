@@ -1,6 +1,10 @@
 import type { QueryItems } from "../../dynamo-utils";
 import type DynaRecord from "../../DynaRecord";
-import type { EntityAttributes, RelationshipAttributeNames } from "../types";
+import type {
+  EntityAttributes,
+  FunctionFields,
+  RelationshipAttributeNames
+} from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
 
 /**
@@ -73,5 +77,5 @@ export type FindByIdIncludesRes<
   Opts extends FindByIdOptions<T>
 > = EntityKeysWithIncludedAssociations<
   T,
-  keyof EntityAttributes<T> | IncludedKeys<T, Opts>
+  keyof EntityAttributes<T> | IncludedKeys<T, Opts> | FunctionFields<T>
 >;

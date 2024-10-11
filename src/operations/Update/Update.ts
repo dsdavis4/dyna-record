@@ -12,7 +12,7 @@ import {
   extractForeignKeyFromEntity
 } from "../utils";
 import OperationBase from "../OperationBase";
-import type { UpdateOptions } from "./types";
+import type { UpdatedAttributes, UpdateOptions } from "./types";
 import type { EntityClass } from "../../types";
 import Metadata from "../../metadata";
 
@@ -20,6 +20,8 @@ import Metadata from "../../metadata";
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
  *
  * The `Update` operation supports updating entity attributes and ensures consistency in relationships, especially for "BelongsTo" relationships. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
+ *
+ * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
  *
  * @template T - The type of the entity being updated, extending `DynaRecord`.
  */
@@ -38,13 +40,20 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param id The id of the entity being updated
    * @param attributes Attributes on the model to update.
    */
-  public async run(id: string, attributes: UpdateOptions<T>): Promise<void> {
+  public async run(
+    id: string,
+    attributes: UpdateOptions<T>
+  ): Promise<UpdatedAttributes<T>> {
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
-    entityMeta.validatePartial(attributes);
+    const entityAttrs =
+      entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    this.buildUpdateItemTransaction(id, attributes);
-    await this.buildRelationshipTransactions(id, attributes);
+    const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
+
+    await this.buildRelationshipTransactions(id, entityAttrs);
     await this.#transactionBuilder.executeTransaction();
+
+    return updatedAttrs;
   }
 
   /**
@@ -55,7 +64,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   private buildUpdateItemTransaction(
     id: string,
     attributes: UpdateOptions<T>
-  ): void {
+  ): UpdatedAttributes<T> {
     const { name: tableName } = this.tableMetadata;
 
     const pk = this.tableMetadata.partitionKeyAttribute.name;
@@ -66,7 +75,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const updatedAttrs: Partial<DynaRecord> = {
+    const updatedAttrs: UpdatedAttributes<T> = {
       ...attributes,
       updatedAt: new Date()
     };
@@ -84,6 +93,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
     );
+
+    return updatedAttrs;
   }
 
   /**

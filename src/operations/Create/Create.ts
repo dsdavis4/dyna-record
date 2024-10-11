@@ -6,13 +6,18 @@ import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
-import { type EntityAttributes } from "../types";
+import {
+  type EntityAttributeDefaultFields,
+  type EntityAttributes
+} from "../types";
 import Metadata from "../../metadata";
 
 /**
  * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
  *
  * It encapsulates the logic required to translate entity attributes to a format suitable for DynamoDB, execute the creation transaction, and manage any relationships defined by the entity, such as "BelongsTo" or "HasMany" links.
+ *
+ * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
  *
  * @template T - The type of the entity being created, extending `DynaRecord`.
  */
@@ -30,10 +35,11 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @returns
    */
   public async run(attributes: CreateOptions<T>): Promise<EntityAttributes<T>> {
-    const entityData = this.buildEntityData(attributes);
-
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
-    entityMeta.validateFull(entityData);
+    const entityAttrs = entityMeta.parseRawEntityDefinedAttributes(attributes);
+
+    const reservedAttrs = this.buildReservedAttributes();
+    const entityData = { ...reservedAttrs, ...entityAttrs };
 
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
@@ -50,7 +56,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes
    * @returns
    */
-  private buildEntityData(attributes: CreateOptions<T>): DynaRecord {
+  private buildReservedAttributes(): EntityAttributes<DynaRecord> {
     const id = uuidv4();
     const createdAt = new Date();
 
@@ -62,14 +68,14 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       [sk]: this.EntityClass.name
     };
 
-    const defaultAttrs: DynaRecord = {
+    const defaultAttrs: EntityAttributeDefaultFields = {
       id,
       type: this.EntityClass.name,
       createdAt,
       updatedAt: createdAt
     };
 
-    return { ...keys, ...attributes, ...defaultAttrs };
+    return { ...keys, ...defaultAttrs };
   }
 
   /**
@@ -92,7 +98,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param entityData
    */
   private async buildRelationshipTransactions(
-    entityData: DynaRecord
+    entityData: EntityAttributes<DynaRecord>
   ): Promise<void> {
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,

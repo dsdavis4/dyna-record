@@ -6,6 +6,8 @@ import {
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
+import { type EntityDefinedAttributes } from "../operations";
+import Metadata from ".";
 
 type EntityClass = new (...args: any) => DynaRecord;
 
@@ -78,45 +80,59 @@ class EntityMetadata {
   }
 
   /**
-   * Validate all an entities attributes (used on create)
+   * Parse raw entity defined attributes (not reserved/relationship attributes) from input and ensure they are entity defined attributes.
+   * Any reserved attributes such as primary key, sort key, id, type ,createdAt, updatedAt etc will be omitted.
+   * If any attributes do not match their schema, a ValidationError is thrown
    * @param attributes
    */
-  public validateFull(attributes: DynaRecord): void {
+  public parseRawEntityDefinedAttributes(
+    attributes: EntityDefinedAttributes<DynaRecord>
+  ): EntityDefinedAttributes<DynaRecord> {
     if (this.#schema === undefined) {
-      this.#schema = z.object(this.#zodAttributes);
+      const tableMeta = Metadata.getTable(this.tableClassName);
+      this.#schema = z.object(this.#zodAttributes).omit(tableMeta.reservedKeys);
     }
 
     try {
-      this.#schema.parse(attributes);
+      return this.#schema.parse(attributes);
     } catch (error) {
-      this.handleValidationError(error);
+      throw this.buildValidationError(error);
     }
   }
 
   /**
-   * Validate partial entities attributes (used on update)
+   * Partial parse raw entity defined attributes (not reserved/relationship attributes) from input and ensure they are entity defined attributes.
+   * This is similar to `parseRawEntityDefinedAttributes` but will do a partial validation, only validating the entity defined attributes that are present and not rejected if fields are missing.
+   * Any reserved attributes such as primary key, sort key, id, type ,createdAt, updatedAt etc will be omitted.
+   * If any attributes do not match their schema, a ValidationError is thrown
    * @param attributes
    */
-  public validatePartial(attributes: Partial<DynaRecord>): void {
+  public parseRawEntityDefinedAttributesPartial(
+    attributes: Partial<EntityDefinedAttributes<DynaRecord>>
+  ): Partial<EntityDefinedAttributes<DynaRecord>> {
     if (this.#schemaPartial === undefined) {
-      this.#schemaPartial = z.object(this.#zodAttributes).partial();
+      const tableMeta = Metadata.getTable(this.tableClassName);
+      this.#schemaPartial = z
+        .object(this.#zodAttributes)
+        .omit(tableMeta.reservedKeys)
+        .partial();
     }
 
     try {
-      this.#schemaPartial.parse(attributes);
+      return this.#schemaPartial.parse(attributes);
     } catch (error) {
-      this.handleValidationError(error);
+      throw this.buildValidationError(error);
     }
   }
 
   /**
-   * Throw validation errors with the cause
+   * Build validation errors with the cause
    * @param error
    */
-  private handleValidationError(error: unknown): void {
+  private buildValidationError(error: unknown): ValidationError {
     const errorOptions =
       error instanceof ZodError ? { cause: error.issues } : undefined;
-    throw new ValidationError("Validation errors", errorOptions);
+    return new ValidationError("Validation errors", errorOptions);
   }
 }
 

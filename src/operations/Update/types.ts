@@ -33,3 +33,11 @@ type AllowNullForNullable<T> = {
 export type UpdateOptions<T extends DynaRecord> = Partial<
   AllowNullForNullable<EntityDefinedAttributes<T>>
 >;
+
+/**
+ * Attributes of an entity that were updated. Including the auto generated updatedAt date
+ */
+export type UpdatedAttributes<T extends DynaRecord> = Pick<
+  Partial<T>,
+  "updatedAt"
+>;

@@ -1,4 +1,5 @@
 import type DynaRecord from "../DynaRecord";
+import { type DefaultFields } from "../metadata";
 import type {
   ForeignKey,
   NullableForeignKey,
@@ -34,8 +35,7 @@ export type SortKeyAttribute<T> = {
  * @returns The names of the function properties as strings if any exist; otherwise, the result is `never`.
  */
 export type FunctionFields<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T]: T[K] extends Function ? K : never;
+  [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
 }[keyof T];
 
 /**
@@ -67,7 +67,15 @@ export type RelationshipAttributeNames<T> = {
  */
 export type EntityAttributes<T extends DynaRecord> = Omit<
   T,
-  RelationshipAttributeNames<T>
+  RelationshipAttributeNames<T> | FunctionFields<T>
+>;
+
+/**
+ * Entity attributes for default fields
+ */
+export type EntityAttributeDefaultFields = Pick<
+  DynaRecord,
+  Extract<keyof DynaRecord, DefaultFields>
 >;
 
 /**

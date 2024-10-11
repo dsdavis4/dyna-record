@@ -2,7 +2,7 @@
 
 [API Documentation](https://dyna-record.com/)
 
-Dyna-Record is a strongly typed ORM (Object-Relational Mapping) tool designed for modeling and interacting with data stored in DynamoDB in a structured and type-safe manner. It simplifies the process of defining data models (entities), performing CRUD operations, and handling complex queries. To support relational data, dyna-record implements a flavor of the [single-table design pattern](https://aws.amazon.com/blogs/compute/creating-a-single-table-design-with-amazon-dynamodb/) and the [adjacency list design pattern](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-adjacency-graphs.html). All operations are [ACID compliant transactions\*](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)\.
+Dyna-Record is a strongly typed ORM (Object-Relational Mapping) tool designed for modeling and interacting with data stored in DynamoDB in a structured and type-safe manner. It simplifies the process of defining data models (entities), performing CRUD operations, and handling complex queries. To support relational data, dyna-record implements a flavor of the [single-table design pattern](https://aws.amazon.com/blogs/compute/creating-a-single-table-design-with-amazon-dynamodb/) and the [adjacency list design pattern](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-adjacency-graphs.html). All operations are [ACID compliant transactions\*](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)\. To enforce data integrity beyond the type system, schema validation is performed at runtime.
 
 Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)
 
@@ -310,7 +310,7 @@ class Student extends OtherTable {
 
 The create method is used to insert a new record into a DynamoDB table. This method automatically handles key generation (using UUIDs), timestamps for [createdAt](https://dyna-record.com/classes/default.html#createdAt) and [updatedAt](https://dyna-record.com/classes/default.html#updatedAt) fields, and the management of relationships between entities. It leverages AWS SDK's [TransactWriteCommand](https://www.google.com/search?q=aws+transact+write+command&oq=aws+transact+write+command&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIGCAEQRRg7MgYIAhBFGDvSAQgzMjAzajBqN6gCALACAA&sourceid=chrome&ie=UTF-8) for transactional integrity, ensuring either complete success or rollback in case of any failure. The method handles conditional checks to ensure data integrity and consistency during creation. If a foreignKey is set on create, dyna-record will de-normalize the data required in order to support the relationship
 
-To use the create method, call it on the model class you wish to create a new record for. Pass the properties of the new record as an object argument to the method.
+To use the create method, call it on the model class you wish to create a new record for. Pass the properties of the new record as an object argument to the method. Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
 
 #### Basic Usage
 
@@ -469,7 +469,7 @@ const result = await Customer.query(
 
 [Docs](https://dyna-record.com/classes/default.html#update)
 
-The update method enables modifications to existing items in a DynamoDB table. It supports updating simple attributes, handling nullable fields, and managing relationships between entities, including updating and removing foreign keys.
+The update method enables modifications to existing items in a DynamoDB table. It supports updating simple attributes, handling nullable fields, and managing relationships between entities, including updating and removing foreign keys. Only attributes defined on the model can be updated, and will be enforced via types and runtime schema validation.
 
 #### Updating simple attributes
 
@@ -509,6 +509,16 @@ Note: Attempting to remove a non nullable foreign key will result in a [NullCons
 
 ```typescript
 await Pet.update("123", {
+  ownerId: null
+});
+```
+
+#### Instance Method
+
+There is an instance `update` method that has the same rules above, but returns the full updated instance.
+
+```typescript
+const updatedInstance = await petInstance.update({
   ownerId: null
 });
 ```

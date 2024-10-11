@@ -48,6 +48,25 @@ class TableMetadata {
   public partitionKeyAttribute: AttributeMetadata;
   public sortKeyAttribute: AttributeMetadata;
 
+  /**
+   * Represents the keys that should be excluded from schema validation.
+   * These keys are reserved by dyna-record and should be managed internally.
+   *
+   * While dyna-record employs type guards to prevent the setting of these keys,
+   * this ensures additional runtime validation.
+   *
+   * The reserved keys include:
+   *   - pk
+   *   - sk
+   *   - id
+   *   - type
+   *   - createdAt
+   *   - updatedAt
+   *   - foreignKey
+   *   - foreignEntityType
+   */
+  public reservedKeys: Record<string, true>;
+
   constructor(options: TableMetadataOptions) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
 
@@ -70,6 +89,12 @@ class TableMetadata {
       serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" },
       type: z.string()
     };
+
+    const defaultAttrNames = Object.keys(this.defaultAttributes);
+    // Set the default keys as reserved keys, the user defined primary and sort key are set later
+    this.reservedKeys = Object.fromEntries(
+      defaultAttrNames.map(key => [key, true])
+    );
   }
 
   /**
@@ -116,6 +141,8 @@ class TableMetadata {
   public addPartitionKeyAttribute(options: KeysAttributeMetadataOptions): void {
     const opts = { ...options, nullable: false };
     this.partitionKeyAttribute = new AttributeMetadata(opts);
+    // Set the user defined primary key as reserved key so that its managed by dyna-record
+    this.reservedKeys[options.attributeName] = true;
   }
 
   /**
@@ -125,6 +152,8 @@ class TableMetadata {
   public addSortKeyAttribute(options: KeysAttributeMetadataOptions): void {
     const opts = { ...options, nullable: false };
     this.sortKeyAttribute = new AttributeMetadata(opts);
+    // Set the user defined primary key as reserved key so that its managed by dyna-record
+    this.reservedKeys[options.attributeName] = true;
   }
 }
 

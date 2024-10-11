@@ -1,11 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import type DynaRecord from "../DynaRecord";
 import type { ForeignKey } from "../types";
+import type { EntityAttributes } from "../operations";
 
 /**
  * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
  */
-interface BelongsToLinkProps extends DynaRecord {
+interface BelongsToLinkProps extends EntityAttributes<DynaRecord> {
   foreignEntityType: string;
   foreignKey: string;
 }

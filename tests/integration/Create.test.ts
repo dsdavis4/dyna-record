@@ -124,6 +124,62 @@ describe("Create", () => {
     ]);
   });
 
+  it("has runtime schema validation to ensure that reserved keys are not set on create. They will be omitted from create", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const home = await Home.create({
+      // Begin reserved keys
+      pk: "2",
+      sk: "3",
+      id: "4",
+      type: "bad type",
+      updatedAt: new Date(),
+      createdAt: new Date(),
+      update: () => {},
+      // End reserved keys
+      mlsNum: "123"
+    } as any); // Use any to force bad type and allow runtime checks to be tested
+
+    expect(home).toEqual({
+      pk: "Home#uuid1",
+      sk: "Home",
+      type: "Home",
+      id: "uuid1",
+      mlsNum: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(home).toBeInstanceOf(Home);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Home#uuid1",
+                  SK: "Home",
+                  Type: "Home",
+                  Id: "uuid1",
+                  "MLS#": "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   it("will error if any required attributes are missing", async () => {
     expect.assertions(5);
 
@@ -851,8 +907,14 @@ describe("Create", () => {
 
       await MyModel.create({
         myAttribute: "someVal",
-        // @ts-expect-error function attributes are not allowed
+        // @ts-expect-error custom function attributes are not allowed
         someMethod: () => "123"
+      });
+
+      await MyModel.create({
+        myAttribute: "someVal",
+        // @ts-expect-error built in function attributes are not allowed
+        update: () => "123"
       });
     });
 
@@ -934,7 +996,7 @@ describe("Create", () => {
       });
     });
 
-    it("will not accept DefaultFields on create because they are managed by dyna-record", async () => {
+    it("will not accept DefaultFields (reserved) on create because they are managed by dyna-record", async () => {
       await Order.create({
         customerId: "customerId",
         paymentMethodId: "paymentMethodId",
@@ -965,6 +1027,24 @@ describe("Create", () => {
         orderDate: new Date(),
         // @ts-expect-error default fields are not accepted on create, they are managed by dyna-record
         updatedAt: new Date()
+      });
+    });
+
+    it("will not accept partition and sort keys on create because those are reserved and managed by dyna-record", async () => {
+      await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
+        // @ts-expect-error primary key fields are not accepted on create, they are managed by dyna-record
+        pk: "123"
+      });
+
+      await Order.create({
+        customerId: "customerId",
+        paymentMethodId: "paymentMethodId",
+        orderDate: new Date(),
+        // @ts-expect-error sort key fields are not accepted on create, they are managed by dyna-record
+        sk: "123"
       });
     });
 
