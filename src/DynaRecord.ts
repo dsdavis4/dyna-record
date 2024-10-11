@@ -260,13 +260,6 @@ abstract class DynaRecord implements DynaRecordBase {
     await op.run(id, attributes);
   }
 
-  // TODO test that only updatedable attributes can be updated. Meaning EntityDefinedAttributes
-  // TODO add unit test that only entity defined attributes can be set onthis
-  //      - for example setting id is not allowed (for types and via schemas)
-  //           - this should be tested via type tests AND runtime schema tests
-  //           - This includes checking pk, sk, id, createdAt, updatedAt, type and instance methods like update
-  //      - If there are not equivalent tests for the static method paramters then add those
-
   /**
    *  Same as the static `update` method but on an instance. Returns the full updated instance
    *
