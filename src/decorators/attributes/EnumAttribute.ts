@@ -3,13 +3,7 @@ import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 
-// TODO copy tests from string attribute and apply them
-// TODO make sure to include positive/negative type tests for this
-// @EnumAttribute({ alias: "Bla", values: ["1", "2"] })
-// public readonly bla: "1" | "2";
 // TODO add docs, and links to readme
-
-// TODO add to create/update tests with enum...
 
 interface EnumAttributeOptions extends AttributeOptions {
   // track this issue for supporting more than strings with zod runtime validations

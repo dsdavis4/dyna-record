@@ -12,7 +12,8 @@ import {
   StringAttribute,
   HasAndBelongsToMany,
   BooleanAttribute,
-  NumberAttribute
+  NumberAttribute,
+  EnumAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -269,7 +270,13 @@ class MyClassWithAllAttributeTypes extends MockTable {
   public foreignKeyAttribute: ForeignKey;
 
   @ForeignKeyAttribute({ nullable: true })
-  public nullableForeignKeyAttribute: NullableForeignKey;
+  public nullableForeignKeyAttribute?: NullableForeignKey;
+
+  @EnumAttribute({ values: ["val-1", "val-2"] })
+  public enumAttribute: "val-1" | "val-2";
+
+  @EnumAttribute({ values: ["val-1", "val-2"], nullable: true })
+  public nullableEnumAttribute?: "val-1" | "val-2";
 }
 
 @Table({ name: "other-table", delimiter: "|" })
