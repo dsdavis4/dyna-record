@@ -124,6 +124,86 @@ describe("Create", () => {
     ]);
   });
 
+  it("can create an entity with all attribute types", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const instance = await MyClassWithAllAttributeTypes.create({
+      stringAttribute: "1",
+      nullableStringAttribute: "2",
+      dateAttribute: new Date(),
+      nullableDateAttribute: new Date(),
+      foreignKeyAttribute: "1111",
+      nullableForeignKeyAttribute: "22222",
+      boolAttribute: true,
+      nullableBoolAttribute: false,
+      numberAttribute: 9,
+      nullableNumberAttribute: 10,
+      enumAttribute: "val-1",
+      nullableEnumAttribute: "val-2"
+    });
+
+    expect(instance).toEqual({
+      pk: "MyClassWithAllAttributeTypes#uuid1",
+      sk: "MyClassWithAllAttributeTypes",
+      type: "MyClassWithAllAttributeTypes",
+      id: "uuid1",
+      stringAttribute: "1",
+      nullableStringAttribute: "2",
+      dateAttribute: new Date(),
+      nullableDateAttribute: new Date(),
+      foreignKeyAttribute: "1111",
+      nullableForeignKeyAttribute: "22222",
+      boolAttribute: true,
+      nullableBoolAttribute: false,
+      numberAttribute: 9,
+      nullableNumberAttribute: 10,
+      enumAttribute: "val-1",
+      nullableEnumAttribute: "val-2",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(instance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  Id: "uuid1",
+                  PK: "MyClassWithAllAttributeTypes#uuid1",
+                  SK: "MyClassWithAllAttributeTypes",
+                  Type: "MyClassWithAllAttributeTypes",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  boolAttribute: true,
+                  dateAttribute: "2023-10-16T03:31:35.918Z",
+                  enumAttribute: "val-1",
+                  foreignKeyAttribute: "1111",
+                  nullableBoolAttribute: false,
+                  nullableDateAttribute: "2023-10-16T03:31:35.918Z",
+                  nullableEnumAttribute: "val-2",
+                  nullableForeignKeyAttribute: "22222",
+                  nullableNumberAttribute: 10,
+                  nullableStringAttribute: "2",
+                  numberAttribute: 9,
+                  stringAttribute: "1"
+                },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   it("has runtime schema validation to ensure that reserved keys are not set on create. They will be omitted from create", async () => {
     expect.assertions(4);
 
@@ -223,6 +303,13 @@ describe("Create", () => {
           message: "Required",
           path: ["foreignKeyAttribute"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "'val-1' | 'val-2'",
+          message: "Required",
+          path: ["enumAttribute"],
+          received: "undefined"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -244,7 +331,9 @@ describe("Create", () => {
         boolAttribute: 7,
         nullableBoolAttribute: 8,
         numberAttribute: "9",
-        nullableNumberAttribute: "10"
+        nullableNumberAttribute: "10",
+        enumAttribute: "val-3",
+        nullableEnumAttribute: "val-4"
       } as any);
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
@@ -319,6 +408,22 @@ describe("Create", () => {
           message: "Expected string, received number",
           path: ["nullableForeignKeyAttribute"],
           received: "number"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
+          options: ["val-1", "val-2"],
+          path: ["enumAttribute"],
+          received: "val-3"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
+          options: ["val-1", "val-2"],
+          path: ["nullableEnumAttribute"],
+          received: "val-4"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);

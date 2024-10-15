@@ -4,6 +4,7 @@ import {
   Customer,
   Grade,
   MockTable,
+  MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
   Pet
@@ -223,6 +224,85 @@ describe("Update", () => {
       ]);
     });
 
+    it("can update all attribute types", async () => {
+      expect.assertions(6);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: "1",
+          nullableStringAttribute: "2",
+          dateAttribute: new Date(),
+          nullableDateAttribute: new Date(),
+          foreignKeyAttribute: "1111",
+          nullableForeignKeyAttribute: "22222",
+          boolAttribute: true,
+          nullableBoolAttribute: false,
+          numberAttribute: 9,
+          nullableNumberAttribute: 10,
+          enumAttribute: "val-1",
+          nullableEnumAttribute: "val-2"
+        })
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockGet.mock.calls).toEqual([]);
+      expect(mockedGetCommand.mock.calls).toEqual([]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#boolAttribute": "boolAttribute",
+                    "#dateAttribute": "dateAttribute",
+                    "#enumAttribute": "enumAttribute",
+                    "#foreignKeyAttribute": "foreignKeyAttribute",
+                    "#nullableBoolAttribute": "nullableBoolAttribute",
+                    "#nullableDateAttribute": "nullableDateAttribute",
+                    "#nullableEnumAttribute": "nullableEnumAttribute",
+                    "#nullableForeignKeyAttribute":
+                      "nullableForeignKeyAttribute",
+                    "#nullableNumberAttribute": "nullableNumberAttribute",
+                    "#nullableStringAttribute": "nullableStringAttribute",
+                    "#numberAttribute": "numberAttribute",
+                    "#stringAttribute": "stringAttribute"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":boolAttribute": true,
+                    ":dateAttribute": "2023-10-16T03:31:35.918Z",
+                    ":enumAttribute": "val-1",
+                    ":foreignKeyAttribute": "1111",
+                    ":nullableBoolAttribute": false,
+                    ":nullableDateAttribute": "2023-10-16T03:31:35.918Z",
+                    ":nullableEnumAttribute": "val-2",
+                    ":nullableForeignKeyAttribute": "22222",
+                    ":nullableNumberAttribute": 10,
+                    ":nullableStringAttribute": "2",
+                    ":numberAttribute": 9,
+                    ":stringAttribute": "1"
+                  },
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("will update an entity and remove attributes", async () => {
       expect.assertions(6);
 
@@ -323,19 +403,109 @@ describe("Update", () => {
       expect.assertions(5);
 
       try {
-        await MockInformation.update("123", {
-          someDate: "111" as any // Force any to test runtime validations
-        });
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: 1,
+          nullableStringAttribute: 2,
+          dateAttribute: 3,
+          nullableDateAttribute: 4,
+          foreignKeyAttribute: 5,
+          nullableForeignKeyAttribute: 6,
+          boolAttribute: 7,
+          nullableBoolAttribute: 8,
+          numberAttribute: "9",
+          nullableNumberAttribute: "10",
+          enumAttribute: "val-3",
+          nullableEnumAttribute: "val-4"
+        } as any); // Force any to test runtime validations
       } catch (e: any) {
         expect(e).toBeInstanceOf(ValidationError);
         expect(e.message).toEqual("Validation errors");
         expect(e.cause).toEqual([
           {
             code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["stringAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["nullableStringAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
             expected: "date",
-            message: "Expected date, received string",
-            path: ["someDate"],
+            message: "Expected date, received number",
+            path: ["dateAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Expected date, received number",
+            path: ["nullableDateAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "boolean",
+            message: "Expected boolean, received number",
+            path: ["boolAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "boolean",
+            message: "Expected boolean, received number",
+            path: ["nullableBoolAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Expected number, received string",
+            path: ["numberAttribute"],
             received: "string"
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Expected number, received string",
+            path: ["nullableNumberAttribute"],
+            received: "string"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["foreignKeyAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["nullableForeignKeyAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_enum_value",
+            message:
+              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
+            options: ["val-1", "val-2"],
+            path: ["enumAttribute"],
+            received: "val-3"
+          },
+          {
+            code: "invalid_enum_value",
+            message:
+              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
+            options: ["val-1", "val-2"],
+            path: ["nullableEnumAttribute"],
+            received: "val-4"
           }
         ]);
         expect(mockSend.mock.calls).toEqual([undefined]);
@@ -2753,6 +2923,135 @@ describe("Update", () => {
       });
     });
 
+    it("can update all attribute types", async () => {
+      expect.assertions(8);
+
+      const now = new Date("2023-10-16T03:31:35.918Z");
+      jest.setSystemTime(now);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "test-pk" as PartitionKey,
+        sk: "test-sk" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        stringAttribute: "new-1",
+        nullableStringAttribute: "new-2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "new-1111",
+        nullableForeignKeyAttribute: "22222",
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2"
+      });
+
+      expect(updatedInstance).toEqual({
+        pk: "test-pk",
+        sk: "test-sk",
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "new-1",
+        nullableStringAttribute: "new-2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "new-1111",
+        nullableForeignKeyAttribute: "22222",
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: now
+      });
+      expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockGet.mock.calls).toEqual([]);
+      expect(mockedGetCommand.mock.calls).toEqual([]);
+      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#boolAttribute": "boolAttribute",
+                    "#dateAttribute": "dateAttribute",
+                    "#enumAttribute": "enumAttribute",
+                    "#foreignKeyAttribute": "foreignKeyAttribute",
+                    "#nullableBoolAttribute": "nullableBoolAttribute",
+                    "#nullableDateAttribute": "nullableDateAttribute",
+                    "#nullableEnumAttribute": "nullableEnumAttribute",
+                    "#nullableForeignKeyAttribute":
+                      "nullableForeignKeyAttribute",
+                    "#nullableNumberAttribute": "nullableNumberAttribute",
+                    "#nullableStringAttribute": "nullableStringAttribute",
+                    "#numberAttribute": "numberAttribute",
+                    "#stringAttribute": "stringAttribute"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":boolAttribute": true,
+                    ":dateAttribute": "2023-10-16T03:31:35.918Z",
+                    ":enumAttribute": "val-1",
+                    ":foreignKeyAttribute": "new-1111",
+                    ":nullableBoolAttribute": false,
+                    ":nullableDateAttribute": "2023-10-16T03:31:35.918Z",
+                    ":nullableEnumAttribute": "val-2",
+                    ":nullableForeignKeyAttribute": "22222",
+                    ":nullableNumberAttribute": 10,
+                    ":nullableStringAttribute": "new-2",
+                    ":numberAttribute": 9,
+                    ":stringAttribute": "new-1"
+                  },
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+      // Assert original instance is not mutated
+      expect(instance).toEqual({
+        pk: "test-pk",
+        sk: "test-sk",
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111",
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+    });
+
     it("will update an entity and remove attributes", async () => {
       expect.assertions(8);
 
@@ -2922,33 +3221,125 @@ describe("Update", () => {
     it("will error if any attributes are the wrong type", async () => {
       expect.assertions(5);
 
-      const instance = createInstance(MockInformation, {
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
         pk: "test-pk" as PartitionKey,
         sk: "test-sk" as SortKey,
         id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        state: "SomeState",
-        phone: "555-555-5555",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          someDate: "111" as any // Force any to test runtime validations
-        });
+          stringAttribute: 1,
+          nullableStringAttribute: 2,
+          dateAttribute: 3,
+          nullableDateAttribute: 4,
+          foreignKeyAttribute: 5,
+          nullableForeignKeyAttribute: 6,
+          boolAttribute: 7,
+          nullableBoolAttribute: 8,
+          numberAttribute: "9",
+          nullableNumberAttribute: "10",
+          enumAttribute: "val-3",
+          nullableEnumAttribute: "val-4"
+        } as any); // Force any to test runtime validations
       } catch (e: any) {
         expect(e).toBeInstanceOf(ValidationError);
         expect(e.message).toEqual("Validation errors");
         expect(e.cause).toEqual([
           {
             code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["stringAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["nullableStringAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
             expected: "date",
-            message: "Expected date, received string",
-            path: ["someDate"],
+            message: "Expected date, received number",
+            path: ["dateAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Expected date, received number",
+            path: ["nullableDateAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "boolean",
+            message: "Expected boolean, received number",
+            path: ["boolAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "boolean",
+            message: "Expected boolean, received number",
+            path: ["nullableBoolAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Expected number, received string",
+            path: ["numberAttribute"],
             received: "string"
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Expected number, received string",
+            path: ["nullableNumberAttribute"],
+            received: "string"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["foreignKeyAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Expected string, received number",
+            path: ["nullableForeignKeyAttribute"],
+            received: "number"
+          },
+          {
+            code: "invalid_enum_value",
+            message:
+              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
+            options: ["val-1", "val-2"],
+            path: ["enumAttribute"],
+            received: "val-3"
+          },
+          {
+            code: "invalid_enum_value",
+            message:
+              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
+            options: ["val-1", "val-2"],
+            path: ["nullableEnumAttribute"],
+            received: "val-4"
           }
         ]);
         expect(mockSend.mock.calls).toEqual([undefined]);

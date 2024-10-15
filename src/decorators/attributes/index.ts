@@ -5,4 +5,5 @@ export { default as DateAttribute } from "./DateAttribute";
 export { default as StringAttribute } from "./StringAttribute";
 export { default as BooleanAttribute } from "./BooleanAttribute";
 export { default as NumberAttribute } from "./NumberAttribute";
+export { default as EnumAttribute } from "./EnumAttribute";
 export * from "./serializers";
