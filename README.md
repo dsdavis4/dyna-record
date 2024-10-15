@@ -142,6 +142,7 @@ Use the attribute decorators below to define attributes on a model. The decorato
   - [@NumberAttribute](https://dyna-record.com/functions/NumberAttribute.html)
   - [@BooleanAttribute](https://dyna-record.com/functions/BooleanAttribute.html)
   - [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html)
+  - [@EnumAttribute](https://dyna-record.com/functions/EnumAttribute.html)
 
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable attributes as optional for optimal type safety
