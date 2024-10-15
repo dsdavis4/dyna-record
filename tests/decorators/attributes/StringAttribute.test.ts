@@ -119,7 +119,7 @@ describe("StringAttribute", () => {
     it("when nullable is true, it will allow the property to be optional", () => {
       @Entity
       class SomeModel extends MockTable {
-        // @ts-expect-no-error: Nullable properties are required
+        // @ts-expect-no-error: Nullable properties are optional
         @StringAttribute({ alias: "Key1", nullable: true })
         public key1?: string;
       }

@@ -9,8 +9,10 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 // public readonly bla: "1" | "2";
 // TODO add docs, and links to readme
 
+// TODO add to create/update tests with enum...
+
 interface EnumAttributeOptions extends AttributeOptions {
-  // track this issue for supporting more than strings
+  // track this issue for supporting more than strings with zod runtime validations
   // https://github.com/colinhacks/zod/issues/2686
   values: [string, ...string[]];
 }
@@ -47,10 +49,6 @@ function EnumAttribute<
 >(props: P) {
   return function (
     _value: undefined,
-    // TODO make sure to not allow foreign and nullable foreign keys like I do for strings
-    // TODO    - I cant do but add a test for what I have below (with nullable too)
-    // @EnumAttribute({ alias: "Bla", values: ["1", "2"] })
-    // public readonly bla: ffreignKey;
     context: AttributeDecoratorContext<T, K, P>
   ) {
     if (context.kind === "field") {
