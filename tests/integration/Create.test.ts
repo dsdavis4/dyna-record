@@ -7,7 +7,8 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethodProvider
+  PaymentMethodProvider,
+  User
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -116,6 +117,54 @@ describe("Create", () => {
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
                 }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will create an entity that has a custom id field", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    const user = await User.create({
+      name: "test-name",
+      email: "email@email.com"
+    });
+
+    expect(user).toEqual({
+      pk: "User#email@email.com",
+      sk: "User",
+      type: "User",
+      id: "email@email.com",
+      email: "email@email.com",
+      name: "test-name",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(user).toBeInstanceOf(User);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "User",
+                  Type: "User",
+                  Id: "email@email.com",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
               }
             }
           ]
@@ -540,7 +589,83 @@ describe("Create", () => {
     ]);
   });
 
+  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const user = await User.create({
+      name: "test-name",
+      email: "email@email.com",
+      orgId: "123"
+    });
+
+    expect(user).toEqual({
+      pk: "User#email@email.com",
+      sk: "User",
+      type: "User",
+      id: "email@email.com",
+      email: "email@email.com",
+      name: "test-name",
+      orgId: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(user).toBeInstanceOf(User);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "User",
+                  Type: "User",
+                  Id: "email@email.com",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  OrgId: "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
+              }
+            },
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Organization#123", SK: "Organization" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Organization#123",
+                  SK: "User#email@email.com",
+                  Type: "BelongsToLink",
+                  Id: "uuid1",
+                  ForeignEntityType: "User",
+                  ForeignKey: "email@email.com",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   describe("entity BelongsTo an entity who HasOne of it", () => {
+    // TODO one of these with entity with custom id
     it("will create the entity if the parent is not already associated to an entity of this type", async () => {
       expect.assertions(4);
 
@@ -652,6 +777,7 @@ describe("Create", () => {
   });
 
   describe("entity BelongsTo an entity which HasOne of it and another entity HasMany of it", () => {
+    // TODO one of these with entity with custom id
     it("will create the entity and de-normalize the BelongsToLinks", async () => {
       expect.assertions(4);
 

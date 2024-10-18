@@ -13,7 +13,8 @@ import {
   HasAndBelongsToMany,
   BooleanAttribute,
   NumberAttribute,
-  EnumAttribute
+  EnumAttribute,
+  IdAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -279,6 +280,31 @@ class MyClassWithAllAttributeTypes extends MockTable {
   public nullableEnumAttribute?: "val-1" | "val-2";
 }
 
+@Entity
+class User extends MockTable {
+  @IdAttribute
+  @StringAttribute({ alias: "Email" })
+  public readonly email: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @BelongsTo(() => Organization, { foreignKey: "orgId" })
+  public readonly org: Organization;
+
+  @ForeignKeyAttribute({ alias: "OrgId", nullable: true })
+  public readonly orgId?: NullableForeignKey;
+}
+
+@Entity
+class Organization extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasMany(() => User, { foreignKey: "orgId" })
+  public readonly users: User[];
+}
+
 @Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends DynaRecord {
   @PartitionKeyAttribute()
@@ -406,6 +432,8 @@ export {
   Book,
   AuthorBook,
   MyClassWithAllAttributeTypes,
+  User,
+  Organization,
   // OtherTable exports
   OtherTable,
   Teacher,
