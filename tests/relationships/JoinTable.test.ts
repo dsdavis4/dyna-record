@@ -1,4 +1,8 @@
-import { AuthorBook, StudentCourse } from "../integration/mockModels";
+import {
+  AuthorBook,
+  StudentCourse,
+  UserWebsite
+} from "../integration/mockModels";
 import { v4 as uuidv4 } from "uuid";
 import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -193,6 +197,73 @@ describe("JoinTable", () => {
       ]);
     });
 
+    it("with custom id field - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+      expect.assertions(3);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await UserWebsite.create({ userId: "email@email.com", websiteId: "2" })
+      ).toEqual(undefined);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Website#2",
+                    SK: "User#email@email.com",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid1",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Website#2", SK: "Website" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Website#2",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "Website",
+                    ForeignKey: "2",
+                    Id: "uuid2",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "User#email@email.com", SK: "User" },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("throws an error if the request fails because the entities are already linked", async () => {
       expect.assertions(2);
 
@@ -327,6 +398,38 @@ describe("JoinTable", () => {
                   TableName: "other-table",
                   Key: { myPk: "Student|1", mySk: "Course|2" },
                   ConditionExpression: "attribute_exists(myPk)"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("with custom id field - will delete a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+      expect.assertions(3);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await UserWebsite.delete({ userId: "email@email.com", websiteId: "2" })
+      ).toEqual(undefined);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Website#2", SK: "User#email@email.com" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Delete: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "User#email@email.com", SK: "Website#2" },
+                  TableName: "mock-table"
                 }
               }
             ]

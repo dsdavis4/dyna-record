@@ -300,6 +300,12 @@ class User extends MockTable {
 
   @ForeignKeyAttribute({ alias: "DeskId", nullable: true })
   public readonly deskId?: NullableForeignKey;
+
+  @HasAndBelongsToMany(() => Website, {
+    targetKey: "users",
+    through: () => ({ joinTable: UserWebsite, foreignKey: "userId" })
+  })
+  public readonly websites: Website[];
 }
 
 @Entity
@@ -318,6 +324,23 @@ class Desk extends MockTable {
 
   @HasOne(() => User, { foreignKey: "deskId" })
   public readonly user?: User;
+}
+
+@Entity
+class Website extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => User, {
+    targetKey: "websites",
+    through: () => ({ joinTable: UserWebsite, foreignKey: "websiteId" })
+  })
+  public readonly users: User[];
+}
+
+class UserWebsite extends JoinTable<User, Website> {
+  public readonly userId: ForeignKey;
+  public readonly websiteId: ForeignKey;
 }
 
 @Table({ name: "other-table", delimiter: "|" })
@@ -449,6 +472,8 @@ export {
   MyClassWithAllAttributeTypes,
   User,
   Organization,
+  Website,
+  UserWebsite,
   // OtherTable exports
   OtherTable,
   Teacher,
