@@ -1,8 +1,7 @@
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 
-// TODO test this can only be appleid to strings
-// TODO test they cant be nullable
+// TODO typedoc
 function IdAttribute<T extends DynaRecord, K extends string>(
   _value: undefined,
   context: ClassFieldDecoratorContext<T, K>
