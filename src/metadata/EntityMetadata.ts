@@ -44,6 +44,9 @@ class EntityMetadata {
 
   public readonly EntityClass: EntityClass;
 
+  // TODO typedoc
+  public idField: string;
+
   /**
    * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
    */

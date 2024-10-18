@@ -182,6 +182,12 @@ class MetadataStorage {
     entityMetadata.addAttribute(meta);
   }
 
+  // TODO typedoc
+  public addEntityIdField(entityName: string, fieldName: string): void {
+    const entityMetadata = this.#entities[entityName];
+    entityMetadata.idField = fieldName;
+  }
+
   /**
    * Adds the partition key attribute to Table metadata storage
    * @param entityClass
