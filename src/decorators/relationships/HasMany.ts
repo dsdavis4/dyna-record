@@ -39,10 +39,8 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityRelationship(entity.constructor.name, {
+      context.addInitializer(function (this: K) {
+        Metadata.addEntityRelationship(this.constructor.name, {
           type: "HasMany",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),

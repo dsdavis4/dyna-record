@@ -40,10 +40,8 @@ function StringAttribute<
     context: AttributeDecoratorContext<T, NotForeignKey<K>, P>
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityAttribute(entity.constructor.name, {
+      context.addInitializer(function (this: T) {
+        Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: z.string(),

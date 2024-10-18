@@ -8,7 +8,6 @@ function IdAttribute<T extends DynaRecord, K extends string>(
   context: ClassFieldDecoratorContext<T, K>
 ) {
   return function (this: T, value: K) {
-    // TODO should I update other places to not use the objet.get prototype of?
     Metadata.addEntityIdField(this.constructor.name, context.name.toString());
     return value;
   };

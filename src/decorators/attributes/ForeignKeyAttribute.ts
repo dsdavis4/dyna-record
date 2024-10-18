@@ -46,10 +46,8 @@ function ForeignKeyAttribute<T extends DynaRecord, P extends AttributeOptions>(
     >
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityAttribute(entity.constructor.name, {
+      context.addInitializer(function (this: T) {
+        Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: z.string(),

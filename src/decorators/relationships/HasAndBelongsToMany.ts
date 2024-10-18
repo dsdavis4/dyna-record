@@ -96,12 +96,11 @@ function HasAndBelongsToMany<
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
+      context.addInitializer(function (this: K) {
         const target = getTarget();
         const { joinTable, foreignKey } = props.through();
 
-        Metadata.addEntityRelationship(entity.constructor.name, {
+        Metadata.addEntityRelationship(this.constructor.name, {
           type: "HasAndBelongsToMany",
           propertyName: context.name as keyof DynaRecord,
           target,

@@ -43,10 +43,8 @@ function BelongsTo<T extends DynaRecord, K extends DynaRecord>(
     >
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityRelationship(entity.constructor.name, {
+      context.addInitializer(function (this: T) {
+        Metadata.addEntityRelationship(this.constructor.name, {
           type: "BelongsTo",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),
