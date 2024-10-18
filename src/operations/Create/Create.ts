@@ -7,11 +7,10 @@ import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
 import type { CreateOptions } from "./types";
 import {
-  EntityDefinedAttributes,
+  type EntityDefinedAttributes,
   type EntityAttributeDefaultFields,
   type EntityAttributes
 } from "../types";
-import Metadata from "../../metadata";
 
 /**
  * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
