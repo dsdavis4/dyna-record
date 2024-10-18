@@ -294,6 +294,12 @@ class User extends MockTable {
 
   @ForeignKeyAttribute({ alias: "OrgId", nullable: true })
   public readonly orgId?: NullableForeignKey;
+
+  @BelongsTo(() => Desk, { foreignKey: "deskId" })
+  public readonly desk: Desk;
+
+  @ForeignKeyAttribute({ alias: "DeskId", nullable: true })
+  public readonly deskId?: NullableForeignKey;
 }
 
 @Entity
@@ -303,6 +309,15 @@ class Organization extends MockTable {
 
   @HasMany(() => User, { foreignKey: "orgId" })
   public readonly users: User[];
+}
+
+@Entity
+class Desk extends MockTable {
+  @NumberAttribute({ alias: "DeskNum" })
+  public readonly num: number;
+
+  @HasOne(() => User, { foreignKey: "deskId" })
+  public readonly user?: User;
 }
 
 @Table({ name: "other-table", delimiter: "|" })

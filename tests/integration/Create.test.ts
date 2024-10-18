@@ -665,7 +665,6 @@ describe("Create", () => {
   });
 
   describe("entity BelongsTo an entity who HasOne of it", () => {
-    // TODO one of these with entity with custom id
     it("will create the entity if the parent is not already associated to an entity of this type", async () => {
       expect.assertions(4);
 
@@ -742,6 +741,81 @@ describe("Create", () => {
       ]);
     });
 
+    it("with custom id field - will create the entity if the parent is not already associated to an entity of this type", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const user = await User.create({
+        email: "email@email.com",
+        name: "user-1",
+        deskId: "123"
+      });
+
+      expect(user).toEqual({
+        pk: "User#email@email.com",
+        sk: "User",
+        type: "User",
+        id: "email@email.com",
+        email: "email@email.com",
+        name: "user-1",
+        deskId: "123",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(user).toBeInstanceOf(User);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "User",
+                    Type: "User",
+                    Id: "email@email.com",
+                    Email: "email@email.com",
+                    Name: "user-1",
+                    DeskId: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Desk#123", SK: "Desk" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Desk#123",
+                    SK: "User",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid1",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("throws an error if the request fails because the parent already has an entity of this type associated with it", async () => {
       expect.assertions(2);
 
@@ -777,7 +851,6 @@ describe("Create", () => {
   });
 
   describe("entity BelongsTo an entity which HasOne of it and another entity HasMany of it", () => {
-    // TODO one of these with entity with custom id
     it("will create the entity and de-normalize the BelongsToLinks", async () => {
       expect.assertions(4);
 
@@ -871,6 +944,107 @@ describe("Create", () => {
                     createdAt: "2023-10-16T03:31:35.918Z",
                     updatedAt: "2023-10-16T03:31:35.918Z"
                   }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("with a custom id field - will create the entity and de-normalize the BelongsToLinks", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      const user = await User.create({
+        name: "test-name",
+        email: "email@email.com",
+        orgId: "123",
+        deskId: "456"
+      });
+
+      expect(user).toEqual({
+        pk: "User#email@email.com",
+        sk: "User",
+        type: "User",
+        id: "email@email.com",
+        email: "email@email.com",
+        name: "test-name",
+        orgId: "123",
+        deskId: "456",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(user).toBeInstanceOf(User);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "User",
+                    Type: "User",
+                    Id: "email@email.com",
+                    Email: "email@email.com",
+                    Name: "test-name",
+                    OrgId: "123",
+                    DeskId: "456",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Organization#123", SK: "Organization" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Organization#123",
+                    SK: "User#email@email.com",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid1",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Desk#456", SK: "Desk" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Desk#456",
+                    SK: "User",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid2",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
                 }
               }
             ]
