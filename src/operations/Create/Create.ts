@@ -44,7 +44,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
-    this.buildPutItemTransaction(tableItem);
+    this.buildPutItemTransaction(tableItem, entityData.id);
     await this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
@@ -92,7 +92,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * Build the transaction for the parent entity Create item request
    * @param tableItem
    */
-  private buildPutItemTransaction(tableItem: DynamoTableItem): void {
+  private buildPutItemTransaction(
+    tableItem: DynamoTableItem,
+    id: string
+  ): void {
     const { name: tableName } = this.tableMetadata;
 
     const putExpression = {
@@ -100,7 +103,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       Item: tableItem,
       ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
     };
-    this.#transactionBuilder.addPut(putExpression);
+    this.#transactionBuilder.addPut(
+      putExpression,
+      `${this.EntityClass.name} with id: ${id} already exists`
+    );
   }
 
   /**

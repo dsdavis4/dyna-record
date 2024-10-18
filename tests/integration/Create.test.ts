@@ -8,6 +8,8 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethodProvider,
+  Person,
+  Teacher,
   User
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -1097,6 +1099,86 @@ describe("Create", () => {
   });
 
   describe("error handling", () => {
+    describe("will return an error if an entity with that id already exists", () => {
+      it("when there is a id attribute alias", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await Person.create({ name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Person with id: uuid1 already exists"
+            )
+          ]);
+        }
+      });
+
+      it("alternate table style - when there is not an id attribute alias", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await Teacher.create({ name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Teacher with id: uuid1 already exists"
+            )
+          ]);
+        }
+      });
+
+      it("when there is a a custom id field", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await User.create({ email: "email@email.com", name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: User with id: email@email.com already exists"
+            )
+          ]);
+        }
+      });
+    });
+
     it("will return an AggregateError for a failed conditional check", async () => {
       expect.assertions(2);
 
@@ -1173,45 +1255,6 @@ describe("Create", () => {
           ),
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: PaymentMethod with ID '456' does not exist"
-          )
-        ]);
-      }
-    });
-
-    it("will use the default error message is a conditional check does not have a custom error message", async () => {
-      expect.assertions(2);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
-
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "ConditionalCheckFailed", Message: "something happened" },
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
-      });
-
-      try {
-        await Order.create({
-          customerId: "123",
-          paymentMethodId: "456",
-          orderDate: new Date("2024-01-01")
-        });
-      } catch (e: any) {
-        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-        expect(e.errors).toEqual([
-          new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: something happened"
           )
         ]);
       }
