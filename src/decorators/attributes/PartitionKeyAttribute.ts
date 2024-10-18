@@ -14,7 +14,7 @@ import type { NonNullAttributeOptions } from "../types";
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @PartitionKeyAttribute()
  *   public pk: PartitionKey;
  * }
@@ -30,10 +30,8 @@ function PartitionKeyAttribute<T extends DynaRecord, K extends PartitionKey>(
     context: ClassFieldDecoratorContext<T, K>
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addPartitionKeyAttribute(entity, {
+      context.addInitializer(function (this: T) {
+        Metadata.addPartitionKeyAttribute(this, {
           attributeName: context.name.toString(),
           type: z.string(),
           ...props

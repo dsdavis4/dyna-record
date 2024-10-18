@@ -45,6 +45,11 @@ class EntityMetadata {
   public readonly EntityClass: EntityClass;
 
   /**
+   * Optional attribute of an entity, used with @IdAttribute decorator when an entity has a custom id field
+   */
+  public idField: string;
+
+  /**
    * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
    */
   #schema?: ZodSchema;

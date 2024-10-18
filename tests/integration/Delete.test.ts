@@ -6,7 +6,8 @@ import {
   Home,
   PhoneBook,
   Book,
-  Course
+  Course,
+  User
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -599,6 +600,82 @@ describe("Delete", () => {
               Delete: {
                 TableName: "other-table",
                 Key: { myPk: "Student|333", mySk: "Course|123" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("with custom id field - will delete an entity from a HasAndBelongsToMany relationship and a BelongsTo -> HasMany relationship", async () => {
+    expect.assertions(6);
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [
+        // User has nullable relationships that are not shown here
+        {
+          PK: "User#email@email.com",
+          SK: "User",
+          Id: "email@email.com",
+          Type: "User",
+          Name: "Some Name",
+          CreatedAt: "2021-10-15T08:31:15.148Z",
+          UpdatedAt: "2022-10-15T08:31:15.148Z"
+        },
+        {
+          PK: "User#email@email.com",
+          SK: "Website#456",
+          Id: "001",
+          Type: "BelongsToLink",
+          ForeignEntityType: "Website",
+          ForeignKey: "456",
+          CreatedAt: "2024-02-27T03:19:52.667Z",
+          UpdatedAt: "2024-02-27T03:19:52.667Z"
+        }
+      ]
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+    const res = await User.delete("email@email.com");
+
+    expect(res).toEqual(undefined);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          ExpressionAttributeValues: { ":PK1": "User#email@email.com" },
+          ExpressionAttributeNames: { "#PK": "PK" },
+          KeyConditionExpression: "#PK = :PK1",
+          TableName: "mock-table"
+        }
+      ]
+    ]);
+    expect(mockTransact.mock.calls).toEqual([[]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Delete: {
+                Key: { PK: "User#email@email.com", SK: "User" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Delete: {
+                Key: { PK: "User#email@email.com", SK: "Website#456" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Delete: {
+                Key: { PK: "Website#456", SK: "User#email@email.com" },
+                TableName: "mock-table"
               }
             }
           ]

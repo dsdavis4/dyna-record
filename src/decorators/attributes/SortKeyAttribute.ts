@@ -14,7 +14,7 @@ import type { NonNullAttributeOptions } from "../types";
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @SortKeyAttribute()
  *   public sk: SortKey;
  * }
@@ -30,10 +30,8 @@ function SortKeyAttribute<T extends DynaRecord, K extends SortKey>(
     context: ClassFieldDecoratorContext<T, K>
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addSortKeyAttribute(entity, {
+      context.addInitializer(function (this: T) {
+        Metadata.addSortKeyAttribute(this, {
           attributeName: context.name.toString(),
           type: z.string(),
           ...props

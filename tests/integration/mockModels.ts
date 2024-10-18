@@ -13,7 +13,8 @@ import {
   HasAndBelongsToMany,
   BooleanAttribute,
   NumberAttribute,
-  EnumAttribute
+  EnumAttribute,
+  IdAttribute
 } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
@@ -279,6 +280,69 @@ class MyClassWithAllAttributeTypes extends MockTable {
   public nullableEnumAttribute?: "val-1" | "val-2";
 }
 
+@Entity
+class User extends MockTable {
+  @IdAttribute
+  @StringAttribute({ alias: "Email" })
+  public readonly email: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @BelongsTo(() => Organization, { foreignKey: "orgId" })
+  public readonly org: Organization;
+
+  @ForeignKeyAttribute({ alias: "OrgId", nullable: true })
+  public readonly orgId?: NullableForeignKey;
+
+  @BelongsTo(() => Desk, { foreignKey: "deskId" })
+  public readonly desk: Desk;
+
+  @ForeignKeyAttribute({ alias: "DeskId", nullable: true })
+  public readonly deskId?: NullableForeignKey;
+
+  @HasAndBelongsToMany(() => Website, {
+    targetKey: "users",
+    through: () => ({ joinTable: UserWebsite, foreignKey: "userId" })
+  })
+  public readonly websites: Website[];
+}
+
+@Entity
+class Organization extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasMany(() => User, { foreignKey: "orgId" })
+  public readonly users: User[];
+}
+
+@Entity
+class Desk extends MockTable {
+  @NumberAttribute({ alias: "DeskNum" })
+  public readonly num: number;
+
+  @HasOne(() => User, { foreignKey: "deskId" })
+  public readonly user?: User;
+}
+
+@Entity
+class Website extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => User, {
+    targetKey: "websites",
+    through: () => ({ joinTable: UserWebsite, foreignKey: "websiteId" })
+  })
+  public readonly users: User[];
+}
+
+class UserWebsite extends JoinTable<User, Website> {
+  public readonly userId: ForeignKey;
+  public readonly websiteId: ForeignKey;
+}
+
 @Table({ name: "other-table", delimiter: "|" })
 abstract class OtherTable extends DynaRecord {
   @PartitionKeyAttribute()
@@ -406,6 +470,10 @@ export {
   Book,
   AuthorBook,
   MyClassWithAllAttributeTypes,
+  User,
+  Organization,
+  Website,
+  UserWebsite,
   // OtherTable exports
   OtherTable,
   Teacher,

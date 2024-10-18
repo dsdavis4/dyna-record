@@ -6,4 +6,5 @@ export { default as StringAttribute } from "./StringAttribute";
 export { default as BooleanAttribute } from "./BooleanAttribute";
 export { default as NumberAttribute } from "./NumberAttribute";
 export { default as EnumAttribute } from "./EnumAttribute";
+export { default as IdAttribute } from "./IdAttribute";
 export * from "./serializers";

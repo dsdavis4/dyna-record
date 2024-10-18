@@ -18,12 +18,12 @@ interface HasOneProps<T extends DynaRecord> {
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @HasOne(() => Profile, { foreignKey: 'userId' })
  *   public profile?: Profile;
  * }
  *
- * class Profile extends BaseEntity {
+ * class Profile extends TableClass {
  *   @ForeignKeyProperty()
  *   public readonly userId: ForeignKey;
  *
@@ -42,10 +42,8 @@ function HasOne<T extends DynaRecord, K extends DynaRecord>(
     context: ClassFieldDecoratorContext<K, Optional<T>>
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityRelationship(entity.constructor.name, {
+      context.addInitializer(function (this: K) {
+        Metadata.addEntityRelationship(this.constructor.name, {
           type: "HasOne",
           propertyName: context.name as keyof DynaRecord,
           target: getTarget(),

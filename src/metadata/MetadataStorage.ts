@@ -183,6 +183,16 @@ class MetadataStorage {
   }
 
   /**
+   * Store the entities optional id field attribute. Used with @IdAttribute
+   * @param entityName
+   * @param fieldName
+   */
+  public addEntityIdField(entityName: string, fieldName: string): void {
+    const entityMetadata = this.#entities[entityName];
+    entityMetadata.idField = fieldName;
+  }
+
+  /**
    * Adds the partition key attribute to Table metadata storage
    * @param entityClass
    * @param options

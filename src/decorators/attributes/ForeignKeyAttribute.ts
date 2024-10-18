@@ -17,7 +17,7 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types";
  *
  * Usage example:
  * ```typescript
- * class Order extends BaseEntity {
+ * class Order extends TableClass {
  *   @ForeignKeyAttribute({ alias: 'UserID' })
  *   public userId: ForeignKey; // Foreign key to the User entity. Cannot be optional.
  *
@@ -46,10 +46,8 @@ function ForeignKeyAttribute<T extends DynaRecord, P extends AttributeOptions>(
     >
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function () {
-        const entity: DynaRecord = Object.getPrototypeOf(this);
-
-        Metadata.addEntityAttribute(entity.constructor.name, {
+      context.addInitializer(function (this: T) {
+        Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: z.string(),

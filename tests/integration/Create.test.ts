@@ -7,7 +7,10 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethodProvider
+  PaymentMethodProvider,
+  Person,
+  Teacher,
+  User
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -116,6 +119,54 @@ describe("Create", () => {
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
                 }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will create an entity that has a custom id field", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    const user = await User.create({
+      name: "test-name",
+      email: "email@email.com"
+    });
+
+    expect(user).toEqual({
+      pk: "User#email@email.com",
+      sk: "User",
+      type: "User",
+      id: "email@email.com",
+      email: "email@email.com",
+      name: "test-name",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(user).toBeInstanceOf(User);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "User",
+                  Type: "User",
+                  Id: "email@email.com",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
               }
             }
           ]
@@ -540,6 +591,81 @@ describe("Create", () => {
     ]);
   });
 
+  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const user = await User.create({
+      name: "test-name",
+      email: "email@email.com",
+      orgId: "123"
+    });
+
+    expect(user).toEqual({
+      pk: "User#email@email.com",
+      sk: "User",
+      type: "User",
+      id: "email@email.com",
+      email: "email@email.com",
+      name: "test-name",
+      orgId: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(user).toBeInstanceOf(User);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "User",
+                  Type: "User",
+                  Id: "email@email.com",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  OrgId: "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
+              }
+            },
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Organization#123", SK: "Organization" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Organization#123",
+                  SK: "User#email@email.com",
+                  Type: "BelongsToLink",
+                  Id: "uuid1",
+                  ForeignEntityType: "User",
+                  ForeignKey: "email@email.com",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   describe("entity BelongsTo an entity who HasOne of it", () => {
     it("will create the entity if the parent is not already associated to an entity of this type", async () => {
       expect.assertions(4);
@@ -605,6 +731,81 @@ describe("Create", () => {
                     ForeignKey: "uuid1",
                     ForeignEntityType: "PaymentMethodProvider",
                     Type: "BelongsToLink",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("with custom id field - will create the entity if the parent is not already associated to an entity of this type", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const user = await User.create({
+        email: "email@email.com",
+        name: "user-1",
+        deskId: "123"
+      });
+
+      expect(user).toEqual({
+        pk: "User#email@email.com",
+        sk: "User",
+        type: "User",
+        id: "email@email.com",
+        email: "email@email.com",
+        name: "user-1",
+        deskId: "123",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(user).toBeInstanceOf(User);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "User",
+                    Type: "User",
+                    Id: "email@email.com",
+                    Email: "email@email.com",
+                    Name: "user-1",
+                    DeskId: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Desk#123", SK: "Desk" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Desk#123",
+                    SK: "User",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid1",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
                   },
@@ -753,6 +954,107 @@ describe("Create", () => {
       ]);
     });
 
+    it("with a custom id field - will create the entity and de-normalize the BelongsToLinks", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      const user = await User.create({
+        name: "test-name",
+        email: "email@email.com",
+        orgId: "123",
+        deskId: "456"
+      });
+
+      expect(user).toEqual({
+        pk: "User#email@email.com",
+        sk: "User",
+        type: "User",
+        id: "email@email.com",
+        email: "email@email.com",
+        name: "test-name",
+        orgId: "123",
+        deskId: "456",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(user).toBeInstanceOf(User);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "User",
+                    Type: "User",
+                    Id: "email@email.com",
+                    Email: "email@email.com",
+                    Name: "test-name",
+                    OrgId: "123",
+                    DeskId: "456",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Organization#123", SK: "Organization" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Organization#123",
+                    SK: "User#email@email.com",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid1",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Desk#456", SK: "Desk" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Desk#456",
+                    SK: "User",
+                    Type: "BelongsToLink",
+                    ForeignEntityType: "User",
+                    ForeignKey: "email@email.com",
+                    Id: "uuid2",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("will throw an error if the request fails because the conditions fail (Assignment already has grade associated with it or parent entities don't exist)", async () => {
       expect.assertions(2);
 
@@ -797,6 +1099,86 @@ describe("Create", () => {
   });
 
   describe("error handling", () => {
+    describe("will return an error if an entity with that id already exists", () => {
+      it("when there is a id attribute alias", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await Person.create({ name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Person with id: uuid1 already exists"
+            )
+          ]);
+        }
+      });
+
+      it("alternate table style - when there is not an id attribute alias", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await Teacher.create({ name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Teacher with id: uuid1 already exists"
+            )
+          ]);
+        }
+      });
+
+      it("when there is a a custom id field", async () => {
+        expect.assertions(2);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        mockSend.mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [{ Code: "ConditionalCheckFailed" }],
+            $metadata: {}
+          });
+        });
+
+        try {
+          await User.create({ email: "email@email.com", name: "some person" });
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: User with id: email@email.com already exists"
+            )
+          ]);
+        }
+      });
+    });
+
     it("will return an AggregateError for a failed conditional check", async () => {
       expect.assertions(2);
 
@@ -873,45 +1255,6 @@ describe("Create", () => {
           ),
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: PaymentMethod with ID '456' does not exist"
-          )
-        ]);
-      }
-    });
-
-    it("will use the default error message is a conditional check does not have a custom error message", async () => {
-      expect.assertions(2);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
-
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "ConditionalCheckFailed", Message: "something happened" },
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
-      });
-
-      try {
-        await Order.create({
-          customerId: "123",
-          paymentMethodId: "456",
-          orderDate: new Date("2024-01-01")
-        });
-      } catch (e: any) {
-        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-        expect(e.errors).toEqual([
-          new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: something happened"
           )
         ]);
       }

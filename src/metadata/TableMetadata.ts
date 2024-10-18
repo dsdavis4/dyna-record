@@ -79,14 +79,12 @@ class TableMetadata {
       name: "",
       alias: defaultTableKeys.partitionKey,
       nullable: false,
-      serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" },
       type: z.string()
     };
     this.sortKeyAttribute = {
       name: "",
       alias: defaultTableKeys.sortKey,
       nullable: false,
-      serializers: { toEntityAttribute: () => "", toTableAttribute: () => "" },
       type: z.string()
     };
 
@@ -124,7 +122,7 @@ class TableMetadata {
           alias,
           nullable: false,
           serializers: isDateField ? dateSerializer : undefined,
-          type: isDateField ? z.date() : z.unknown()
+          type: isDateField ? z.date() : z.string()
         };
         acc.entityDefaults[entityKey] = meta;
         acc.tableDefaults[alias] = meta;
