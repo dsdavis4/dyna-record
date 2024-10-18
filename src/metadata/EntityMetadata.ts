@@ -44,7 +44,9 @@ class EntityMetadata {
 
   public readonly EntityClass: EntityClass;
 
-  // TODO typedoc
+  /**
+   * Optional attribute of an entity, used with @IdAttribute decorator when an entity has a custom id field
+   */
   public idField: string;
 
   /**

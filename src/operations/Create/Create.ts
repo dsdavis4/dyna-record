@@ -62,7 +62,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   ): EntityAttributes<DynaRecord> {
     const { idField } = this.entityMetadata;
 
-    // TODO document this on readme...
     // If the entity has has a custom id field use that, otherwise generate a uuid
     const id =
       idField === undefined

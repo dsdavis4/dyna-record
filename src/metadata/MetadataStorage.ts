@@ -182,7 +182,11 @@ class MetadataStorage {
     entityMetadata.addAttribute(meta);
   }
 
-  // TODO typedoc
+  /**
+   * Store the entities optional id field attribute. Used with @IdAttribute
+   * @param entityName
+   * @param fieldName
+   */
   public addEntityIdField(entityName: string, fieldName: string): void {
     const entityMetadata = this.#entities[entityName];
     entityMetadata.idField = fieldName;
