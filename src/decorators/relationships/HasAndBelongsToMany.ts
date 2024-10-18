@@ -56,7 +56,7 @@ interface HasAndBelongsToManyProps<
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @HasAndBelongsToMany(() => Group, {
  *     targetKey: 'users',
  *     through: () => ({
@@ -67,7 +67,7 @@ interface HasAndBelongsToManyProps<
  *   public groups: Group[];
  * }
  *
- * class Group extends BaseEntity {
+ * class Group extends TableClass {
  *   @HasAndBelongsToMany(() => User, {
  *     targetKey: 'groups',
  *     through: () => ({

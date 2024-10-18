@@ -18,12 +18,12 @@ interface HasOneProps<T extends DynaRecord> {
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @HasOne(() => Profile, { foreignKey: 'userId' })
  *   public profile?: Profile;
  * }
  *
- * class Profile extends BaseEntity {
+ * class Profile extends TableClass {
  *   @ForeignKeyProperty()
  *   public readonly userId: ForeignKey;
  *

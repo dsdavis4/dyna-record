@@ -14,7 +14,7 @@ import type { NonNullAttributeOptions } from "../types";
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @SortKeyAttribute()
  *   public sk: SortKey;
  * }

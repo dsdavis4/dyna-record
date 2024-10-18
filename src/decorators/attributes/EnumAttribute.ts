@@ -24,7 +24,7 @@ export interface EnumAttributeOptions extends AttributeOptions {
  *
  * Usage example:
  * ```typescript
- * class Product extends BaseEntity {
+ * class Product extends TableClass {
  *   @EnumAttribute({ alias: 'SomeField', values: ["val-1", "val-2"] })
  *   public someField: "val-1" | "val-2"; // Attribute representing the union/enum types specified in `values`. In this case the only allowed values are "val-1" and "val-2"
  *

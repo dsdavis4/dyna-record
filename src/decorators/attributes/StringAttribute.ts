@@ -19,7 +19,7 @@ import type {
  *
  * Usage example:
  * ```typescript
- * class Product extends BaseEntity {
+ * class Product extends TableClass {
  *   @StringAttribute({ alias: 'SKU' })
  *   public stockKeepingUnit: string; // Simple string attribute representing the product's SKU
  *

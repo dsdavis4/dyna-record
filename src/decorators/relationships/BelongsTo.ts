@@ -21,7 +21,7 @@ import type { BelongsToField, BelongsToProps } from "./types";
  *
  * Usage example:
  * ```typescript
- * class Order extends BaseEntity {
+ * class Order extends TableClass {
  *   @ForeignKeyProperty({ alias: "UserId" })
  *   public readonly userId: ForeignKey;
  *

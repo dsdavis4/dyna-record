@@ -18,12 +18,12 @@ interface HasManyProps<T extends DynaRecord> {
  *
  * Usage example:
  * ```typescript
- * class User extends BaseEntity {
+ * class User extends TableClass {
  *   @HasMany(() => Post, { foreignKey: 'userId' })
  *   public posts: Post[];
  * }
  *
- * class Post extends BaseEntity {
+ * class Post extends TableClass {
  *   @ForeignKeyProperty()
  *   public readonly userId: ForeignKey;
  *

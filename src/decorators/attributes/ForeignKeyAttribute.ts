@@ -17,7 +17,7 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types";
  *
  * Usage example:
  * ```typescript
- * class Order extends BaseEntity {
+ * class Order extends TableClass {
  *   @ForeignKeyAttribute({ alias: 'UserID' })
  *   public userId: ForeignKey; // Foreign key to the User entity. Cannot be optional.
  *
