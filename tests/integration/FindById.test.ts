@@ -1799,11 +1799,9 @@ describe("FindById", () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
       mockTransactGetItems.mockResolvedValueOnce({});
 
+      // @ts-expect-error: Cannot include association using a key not defined on the model
       await PaymentMethod.findById("789", {
-        include: [
-          // @ts-expect-error: Cannot include association using a key not defined on the model
-          { association: "nonExistent" }
-        ]
+        include: [{ association: "nonExistent" }]
       });
     });
 

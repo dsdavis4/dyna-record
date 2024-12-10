@@ -3,6 +3,8 @@ import type DynaRecord from "../DynaRecord";
 import type { ForeignKey } from "../types";
 import type { EntityAttributes } from "../operations";
 
+// TODO is this class needed anymore?
+
 /**
  * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
  */

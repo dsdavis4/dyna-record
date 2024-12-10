@@ -17,9 +17,10 @@ import {
 import { BelongsToLink } from "../../relationships";
 import type { EntityClass, Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
+import { type EntityAttributes } from "../types";
 import { extractForeignKeyFromEntity } from "./utils";
 
-type EntityData<T extends DynaRecord> = Pick<T, "id"> & Partial<T>;
+// TODO if the callback params dont need to be optional... does anything in here need to be async?
 
 interface RelationshipTransactionsProps<T extends DynaRecord> {
   /**
@@ -74,8 +75,9 @@ class RelationshipTransactions<T extends DynaRecord> {
     this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
-  public async build<T extends DynaRecord>(
-    entityData: EntityData<T>
+  // TODO check that this will not allow partials... I think...
+  public async build<T extends EntityAttributes<DynaRecord>>(
+    entityData: T
   ): Promise<void> {
     const { relationships } = this.#entityMetadata;
 
@@ -83,10 +85,7 @@ class RelationshipTransactions<T extends DynaRecord> {
       const isBelongsTo = isBelongsToRelationship(rel);
 
       if (isBelongsTo) {
-        const relationshipId = extractForeignKeyFromEntity(
-          rel,
-          entityData as T
-        );
+        const relationshipId = extractForeignKeyFromEntity(rel, entityData);
 
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
@@ -170,6 +169,7 @@ class RelationshipTransactions<T extends DynaRecord> {
         ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
       };
 
+      // TODO need to add full object
       this.#props.transactionBuilder.addPut(
         putExpression,
         `${rel.target.name} with id: ${relationshipId} already has an associated ${this.#props.Entity.name}`
@@ -210,6 +210,7 @@ class RelationshipTransactions<T extends DynaRecord> {
         ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
       };
 
+      // TODO need to add full object
       this.#props.transactionBuilder.addPut(
         putExpression,
         `${this.#props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`

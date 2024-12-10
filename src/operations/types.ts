@@ -65,6 +65,14 @@ export type RelationshipAttributeNames<T> = {
 /**
  * Entity attributes excluding relationship attributes
  */
+export type EntityAttributesOnly<T extends DynaRecord> = Omit<
+  T,
+  RelationshipAttributeNames<T>
+>;
+
+/**
+ * Entity attributes excluding relationship attributes
+ */
 export type EntityAttributes<T extends DynaRecord> = Omit<
   T,
   RelationshipAttributeNames<T> | FunctionFields<T>

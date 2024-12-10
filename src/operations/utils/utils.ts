@@ -6,6 +6,7 @@ import {
 } from "../../metadata/utils";
 import type { ForeignKey, Optional, RelationshipMetaObj } from "../../types";
 import { isKeyOfObject } from "../../utils";
+import { EntityAttributes } from "../types";
 
 /**
  * Creates an object including
@@ -37,7 +38,9 @@ export const buildEntityRelationshipMetaObj = (
  * @param entity - instance of DynaRecord
  * @returns
  */
-export const extractForeignKeyFromEntity = <T extends DynaRecord>(
+export const extractForeignKeyFromEntity = <
+  T extends EntityAttributes<DynaRecord>
+>(
   relMeta: RelationshipMetadata,
   entity?: T
 ): Optional<ForeignKey> => {

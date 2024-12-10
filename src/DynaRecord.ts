@@ -14,7 +14,8 @@ import {
   Update,
   type UpdateOptions,
   Delete,
-  type EntityAttributes
+  type EntityAttributes,
+  EntityAttributesOnly
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -74,22 +75,68 @@ abstract class DynaRecord implements DynaRecordBase {
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public readonly updatedAt: Date;
 
+  // /**
+  //  * Find an entity by Id and optionally include associations
+  //  * @param {string} id - Entity Id
+  //  * @param {Object} options - FindByIdOptions
+  //  * @returns An entity with included associations serialized
+  //  *
+  //  * @example Without included relationships
+  //  * ```typescript
+  //  * const user = await User.findById("userId");
+  //  * ```
+  //  *
+  //  * @example With included relationships
+  //  * ```typescript
+  //  * const user = await User.findById("userId", { include: [{ association: "profile" }] });
+  //  * ```
+  //  */
+  // public static async findById<
+  //   T extends DynaRecord,
+  //   Opts extends FindByIdOptions<T>
+  // >(
+  //   this: EntityClass<T>,
+  //   id: string,
+  //   options?: Opts
+  // ): Promise<Optional<T | FindByIdIncludesRes<T, Opts>>> {
+  //   const op = new FindById<T>(this);
+  //   return await op.run(id, options);
+  // }
+
+  // TODO add type tests for all variations of having and not having included options
+  // dont forget to test that its optional...
+  // and test that it has functions..
+  // TODO check how this comment looks on published docs
   /**
-   * Find an entity by Id and optionally include associations
-   * @param {string} id - Entity Id
-   * @param {Object} options - FindByIdOptions
-   * @returns An entity with included associations serialized
+   * Find an entity by Id and optionally include associations.
+   *
+   * @param {string} id - Entity Id.
+   * @param {undefined} [options] - No options provided, returns the entity without included associations.
+   * @returns {Optional<T>} An entity without included associations serialized.
    *
    * @example Without included relationships
    * ```typescript
    * const user = await User.findById("userId");
    * ```
    *
+   * ---
+   *
+   * @param {string} id - Entity Id.
+   * @param {FindByIdOptions<T>} options - FindByIdOptions specifying associations to include.
+   * @returns {FindByIdIncludesRes<T, FindByIdOptions<T>>} An entity with included associations serialized.
+   *
    * @example With included relationships
    * ```typescript
    * const user = await User.findById("userId", { include: [{ association: "profile" }] });
    * ```
    */
+  public static async findById<T extends DynaRecord>(
+    this: EntityClass<T>,
+    id: string,
+    options?: undefined
+  ): Promise<Optional<EntityAttributesOnly<T>>>;
+
+  // TODO typeguard test that result can be undefined
   public static async findById<
     T extends DynaRecord,
     Opts extends FindByIdOptions<T>
@@ -97,7 +144,16 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<Optional<T | FindByIdIncludesRes<T, Opts>>> {
+  ): Promise<Optional<FindByIdIncludesRes<T, Opts>>>;
+
+  public static async findById<
+    T extends DynaRecord,
+    Opts extends FindByIdOptions<T>
+  >(
+    this: EntityClass<T>,
+    id: string,
+    options?: Opts
+  ): Promise<Optional<EntityAttributesOnly<T> | FindByIdIncludesRes<T, Opts>>> {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }

@@ -15,6 +15,8 @@ import OperationBase from "../OperationBase";
 import type { UpdatedAttributes, UpdateOptions } from "./types";
 import type { EntityClass } from "../../types";
 import Metadata from "../../metadata";
+import { NotFoundError } from "../../errors";
+import { type EntityAttributes } from "../types";
 
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
@@ -28,6 +30,7 @@ import Metadata from "../../metadata";
 class Update<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
+  // TODO I dont think this will be needed
   #entity?: T;
 
   constructor(Entity: EntityClass<T>) {
@@ -42,15 +45,24 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   public async run(
     id: string,
-    attributes: UpdateOptions<T>
+    attributes: UpdateOptions<DynaRecord>
   ): Promise<UpdatedAttributes<T>> {
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
+    // TODO ensure that this is a strong read...
+    const entity = await this.EntityClass.findById<DynaRecord>(id);
+
+    // TODO unit test
+    // TODO is this the correct error?
+    if (entity === undefined) {
+      throw new NotFoundError(`Item does not exist: ${id}`);
+    }
+
     const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
 
-    await this.buildRelationshipTransactions(id, entityAttrs);
+    await this.buildRelationshipTransactions(entity);
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;
@@ -88,6 +100,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       {
         TableName: tableName,
         Key: tableKeys,
+        // TODO for ACID-like, make sure that the updatedAt of the item being updated is before the new updatedAt
+        //       - I of course will need to have the full object with a strong read
         ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
         ...expression
       },
@@ -105,15 +119,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes Attributes on the model to update.
    */
   private async buildRelationshipTransactions(
-    id: string,
-    attributes: Partial<DynaRecord>
+    entity: EntityAttributes<DynaRecord>
   ): Promise<void> {
-    const entityData = { id, ...attributes };
-
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
       belongsToHasManyCb: async (rel, entityId) => {
+        // TODO I should update this to pass the full entity, I dont think I need to fetch ut here since it will be passed in
+        // TODO If so... can the the callback param be made sync?
         const entity = await this.getEntity(entityId);
         this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
       },
@@ -123,7 +136,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       }
     });
 
-    await relationshipTransactions.build(entityData);
+    // TODO get this full item and pass it in...
+    await relationshipTransactions.build(entity);
   }
 
   /**
