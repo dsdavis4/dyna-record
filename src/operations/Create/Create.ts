@@ -1,7 +1,7 @@
 import type DynaRecord from "../../DynaRecord";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, EntityClass } from "../../types";
-import { TransactWriteBuilder } from "../../dynamo-utils";
+import { Put, TransactWriteBuilder } from "../../dynamo-utils";
 import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { RelationshipTransactions } from "../utils";
@@ -45,7 +45,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
-    await this.buildRelationshipTransactions(entityData);
+    this.buildRelationshipTransactions(entityData);
 
     await this.#transactionBuilder.executeTransaction();
 
@@ -113,15 +113,30 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * Build transaction items for associations
    * @param entityData
    */
-  private async buildRelationshipTransactions(
+  private buildRelationshipTransactions(
     entityData: EntityAttributes<DynaRecord>
-  ): Promise<void> {
+  ): void {
+    const tableName = this.tableMetadata.name;
+    const partitionKeyAlias = this.tableMetadata.partitionKeyAttribute.alias;
+
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
-      transactionBuilder: this.#transactionBuilder
+      transactionBuilder: this.#transactionBuilder,
+      linkRecordAddPutOptions: ({ tableItem, relMeta, relationshipId }) => {
+        const putExpression: Put = {
+          TableName: tableName,
+          Item: tableItem,
+          ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
+        };
+
+        return [
+          putExpression,
+          `${relMeta.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+        ];
+      }
     });
 
-    await relationshipTransactions.build(entityData);
+    relationshipTransactions.build(entityData);
   }
 }
 

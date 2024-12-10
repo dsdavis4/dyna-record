@@ -42,10 +42,9 @@ export const extractForeignKeyFromEntity = <
   T extends EntityAttributes<DynaRecord>
 >(
   relMeta: RelationshipMetadata,
-  entity?: T
+  entity: T
 ): Optional<ForeignKey> => {
-  return entity !== undefined &&
-    isRelationshipMetadataWithForeignKey(relMeta) &&
+  return isRelationshipMetadataWithForeignKey(relMeta) &&
     isKeyOfObject(entity, relMeta.foreignKey)
     ? entity[relMeta.foreignKey]
     : undefined;

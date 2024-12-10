@@ -14,13 +14,16 @@ import {
   doesEntityBelongToRelAsHasOne,
   isBelongsToRelationship
 } from "../../metadata/utils";
-import { BelongsToLink } from "../../relationships";
-import type { EntityClass, Nullable } from "../../types";
+import type { DynamoTableItem, EntityClass, Nullable } from "../../types";
 import { entityToTableItem } from "../../utils";
 import { type EntityAttributes } from "../types";
 import { extractForeignKeyFromEntity } from "./utils";
 
-// TODO if the callback params dont need to be optional... does anything in here need to be async?
+interface LinkRecordAddPutOptionsParams {
+  tableItem: DynamoTableItem;
+  relMeta: BelongsToRelationship;
+  relationshipId: string;
+}
 
 interface RelationshipTransactionsProps<T extends DynaRecord> {
   /**
@@ -31,26 +34,32 @@ interface RelationshipTransactionsProps<T extends DynaRecord> {
    * TransactionBuilder instance to add relationship transactions to
    */
   readonly transactionBuilder: TransactWriteBuilder;
+  // TODO remove
+  // /**
+  //  * Put expression to use when creating a link record
+  //  * @returns
+  //  */
+  linkRecordAddPutOptions: (
+    props: LinkRecordAddPutOptionsParams
+  ) => Parameters<typeof TransactWriteBuilder.prototype.addPut>;
   /**
-   * Optional callback to add logic to persisting BelongsTo HasMany relationships
+   * Optional callback to add logic when  persisting BelongsTo HasMany relationships
    * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasMany of
-   * @param entityId The ID of the entity
    * @returns
    */
   belongsToHasManyCb?: (
     rel: BelongsToRelationship,
-    entityId: string
-  ) => Promise<void>;
+    entityAttributes: EntityAttributes<DynaRecord>
+  ) => void;
   /**
-   * Optional callback to add logic to persisting BelongsTo HasOne relationships
+   * Optional callback to add logic when persisting BelongsTo HasOne relationships
    * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasOne of
-   * @param entityId The ID of the entity
    * @returns
    */
   belongsToHasOneCb?: (
     rel: BelongsToRelationship,
-    entityId: string
-  ) => Promise<void>;
+    entityAttributes: EntityAttributes<DynaRecord>
+  ) => void;
 }
 
 /**
@@ -76,9 +85,7 @@ class RelationshipTransactions<T extends DynaRecord> {
   }
 
   // TODO check that this will not allow partials... I think...
-  public async build<T extends EntityAttributes<DynaRecord>>(
-    entityData: T
-  ): Promise<void> {
+  public build<T extends EntityAttributes<DynaRecord>>(entityData: T): void {
     const { relationships } = this.#entityMetadata;
 
     for (const rel of Object.values(relationships)) {
@@ -97,14 +104,14 @@ class RelationshipTransactions<T extends DynaRecord> {
             );
           }
 
-          const callbackParams = [rel, entityData.id, relationshipId] as const;
+          const callbackParams = [rel, entityData, relationshipId] as const;
 
           if (doesEntityBelongToRelAsHasMany(this.#props.Entity, rel)) {
-            await this.buildBelongsToHasMany(...callbackParams);
+            this.buildBelongsToHasMany(...callbackParams);
           }
 
           if (doesEntityBelongToRelAsHasOne(this.#props.Entity, rel)) {
-            await this.buildBelongsToHasOne(...callbackParams);
+            this.buildBelongsToHasOne(...callbackParams);
           }
         }
       }
@@ -140,82 +147,76 @@ class RelationshipTransactions<T extends DynaRecord> {
   /**
    * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasOne association
    * Adds conditional check to ensure the parent doesn't already have one of the entity being associated
-   * @param entityId Id of the entity being persisted
    * @param rel BelongsTo relationship metadata for which the entity being persisted is a BelongsTo HasOne
+   * @param entityData Entity attributes to persist
    * @param relationshipId Id of the parent entity of which the entity being persisted BelongsTo
    */
-  private async buildBelongsToHasOne(
-    rel: BelongsToRelationship,
-    entityId: string,
+  private buildBelongsToHasOne(
+    relMeta: BelongsToRelationship,
+    entityData: EntityAttributes<DynaRecord>,
     relationshipId: Nullable<string>
-  ): Promise<void> {
-    const { name: tableName } = this.#tableMetadata;
-
+  ): void {
     if (this.#props.belongsToHasOneCb !== undefined) {
-      await this.#props.belongsToHasOneCb(rel, entityId);
+      this.#props.belongsToHasOneCb(relMeta, entityData);
     }
 
     if (relationshipId !== null) {
-      const link = BelongsToLink.build(this.#props.Entity.name, entityId);
-
       const keys = {
-        [this.#partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
+        [this.#partitionKeyAlias]:
+          relMeta.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: this.#props.Entity.name
       };
 
-      const putExpression: Put = {
-        TableName: tableName,
-        Item: { ...keys, ...entityToTableItem(rel.target, link) },
-        ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
-      };
-
-      // TODO need to add full object
-      this.#props.transactionBuilder.addPut(
-        putExpression,
-        `${rel.target.name} with id: ${relationshipId} already has an associated ${this.#props.Entity.name}`
-      );
+      this.putLinkRecord(relMeta, entityData, keys, relationshipId);
     }
   }
 
   /**
    * Creates a BelongsToLink transaction item in the parents partition if the entity BelongsTo a HasMany association
    * @param rel BelongsTo relationship metadata for which the entity being persisted is a BelongsTo HasMany
-   * @param entityId Id of the entity being persisted
+   * @param entityData Entity attributes to persist
    * @param relationshipId Id of the parent entity of which the entity being persisted BelongsTo
    */
-  private async buildBelongsToHasMany(
-    rel: BelongsToRelationship,
-    entityId: string,
+  private buildBelongsToHasMany(
+    relMeta: BelongsToRelationship,
+    entityData: EntityAttributes<DynaRecord>,
     relationshipId: Nullable<string>
-  ): Promise<void> {
-    const { name: tableName } = this.#tableMetadata;
-
+  ): void {
     if (this.#props.belongsToHasManyCb !== undefined) {
-      await this.#props.belongsToHasManyCb(rel, entityId);
+      this.#props.belongsToHasManyCb(relMeta, entityData);
     }
 
     if (relationshipId !== null) {
-      const link = BelongsToLink.build(this.#props.Entity.name, entityId);
-
       const keys = {
-        [this.#partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
+        [this.#partitionKeyAlias]:
+          relMeta.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: this.#props.Entity.partitionKeyValue(
-          link.foreignKey
+          entityData.id
         )
       };
 
-      const putExpression: Put = {
-        TableName: tableName,
-        Item: { ...keys, ...entityToTableItem(rel.target, link) },
-        ConditionExpression: `attribute_not_exists(${this.#partitionKeyAlias})` // Ensure item doesn't already exist
-      };
-
-      // TODO need to add full object
-      this.#props.transactionBuilder.addPut(
-        putExpression,
-        `${this.#props.Entity.name} with ID '${entityId}' already belongs to ${rel.target.name} with Id '${relationshipId}'`
-      );
+      this.putLinkRecord(relMeta, entityData, keys, relationshipId);
     }
+  }
+
+  private putLinkRecord(
+    relMeta: BelongsToRelationship,
+    entityData: EntityAttributes<DynaRecord>,
+    keys: Record<string, string>,
+    relationshipId: string
+  ): void {
+    const tableItem: DynamoTableItem = {
+      ...entityToTableItem(this.#props.Entity, entityData),
+      ...keys
+    };
+
+    this.#props.transactionBuilder.addPut(
+      ...this.#props.linkRecordAddPutOptions({
+        tableItem,
+        relMeta,
+        relationshipId
+      })
+    );
   }
 
   private isNullableString(val: unknown): val is Nullable<string> {

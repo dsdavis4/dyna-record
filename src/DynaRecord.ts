@@ -15,7 +15,7 @@ import {
   type UpdateOptions,
   Delete,
   type EntityAttributes,
-  EntityAttributesOnly
+  type EntityAttributesOnly
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";

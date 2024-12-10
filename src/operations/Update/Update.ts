@@ -1,5 +1,5 @@
 import type DynaRecord from "../../DynaRecord";
-import { TransactWriteBuilder } from "../../dynamo-utils";
+import { Put, TransactWriteBuilder } from "../../dynamo-utils";
 import type {
   RelationshipMetadata,
   HasOneRelationship,
@@ -17,6 +17,9 @@ import type { EntityClass } from "../../types";
 import Metadata from "../../metadata";
 import { NotFoundError } from "../../errors";
 import { type EntityAttributes } from "../types";
+import { table } from "console";
+
+type Entity = Awaited<ReturnType<typeof DynaRecord.findById<DynaRecord>>>;
 
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
@@ -30,12 +33,21 @@ import { type EntityAttributes } from "../types";
 class Update<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
-  // TODO I dont think this will be needed
-  #entity?: T;
+  #entity: Entity;
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
+  }
+
+  private getEntity(): NonNullable<Entity> {
+    // TODO unit test
+    // TODO is this the correct error?
+    if (this.#entity === undefined) {
+      throw new NotFoundError("Entity not set");
+    }
+
+    return this.#entity;
   }
 
   /**
@@ -52,17 +64,21 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
     // TODO ensure that this is a strong read...
-    const entity = await this.EntityClass.findById<DynaRecord>(id);
-
-    // TODO unit test
-    // TODO is this the correct error?
-    if (entity === undefined) {
-      throw new NotFoundError(`Item does not exist: ${id}`);
-    }
+    // TODO dont fetch if the entity has no relationships meta data
+    //     this is because I HAVE to get it and denormalize to all locations to ensure associated links are updated
+    //    AND unit test for that case
+    this.#entity = await this.EntityClass.findById<DynaRecord>(id);
 
     const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
 
-    await this.buildRelationshipTransactions(entity);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    const updatedEntity = {
+      ...this.#entity,
+      ...updatedAttrs
+    } as EntityAttributes<DynaRecord>;
+
+    this.buildRelationshipTransactions(updatedEntity);
+    debugger;
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;
@@ -118,26 +134,39 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param id The id of the entity being updated
    * @param attributes Attributes on the model to update.
    */
-  private async buildRelationshipTransactions(
+  private buildRelationshipTransactions(
     entity: EntityAttributes<DynaRecord>
-  ): Promise<void> {
+  ): void {
+    const tableName = this.tableMetadata.name;
+
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
-      belongsToHasManyCb: async (rel, entityId) => {
-        // TODO I should update this to pass the full entity, I dont think I need to fetch ut here since it will be passed in
-        // TODO If so... can the the callback param be made sync?
-        const entity = await this.getEntity(entityId);
-        this.buildDeleteOldBelongsToLinkTransaction(rel, "HasMany", entity);
+      linkRecordAddPutOptions: ({ tableItem }) => {
+        const putExpression: Put = {
+          TableName: tableName,
+          Item: tableItem
+        };
+
+        return [putExpression];
       },
-      belongsToHasOneCb: async (rel, entityId) => {
-        const entity = await this.getEntity(entityId);
-        this.buildDeleteOldBelongsToLinkTransaction(rel, "HasOne", entity);
+      belongsToHasManyCb: (rel, updatedEntity) => {
+        this.buildDeleteOldBelongsToLinkTransaction(
+          rel,
+          "HasMany",
+          updatedEntity
+        );
+      },
+      belongsToHasOneCb: (rel, updatedEntity) => {
+        this.buildDeleteOldBelongsToLinkTransaction(
+          rel,
+          "HasOne",
+          updatedEntity
+        );
       }
     });
 
-    // TODO get this full item and pass it in...
-    await relationshipTransactions.build(entity);
+    relationshipTransactions.build(entity);
   }
 
   /**
@@ -149,18 +178,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   private buildDeleteOldBelongsToLinkTransaction(
     rel: RelationshipMetadata,
     relType: HasOneRelationship["type"] | HasManyRelationship["type"],
-    entity?: T
+    updatedEntity: EntityAttributes<DynaRecord>
   ): void {
     const { name: tableName } = this.tableMetadata;
 
-    const currentId = extractForeignKeyFromEntity(rel, entity);
+    const currentId = extractForeignKeyFromEntity(rel, this.getEntity());
+    const newId = extractForeignKeyFromEntity(rel, updatedEntity);
 
-    if (entity !== undefined && currentId !== undefined) {
+    if (currentId !== undefined && currentId !== newId) {
       const oldLinkKeys = {
         [this.partitionKeyAlias]: rel.target.partitionKeyValue(currentId),
         [this.sortKeyAlias]:
           relType === "HasMany"
-            ? this.EntityClass.partitionKeyValue(entity.id)
+            ? this.EntityClass.partitionKeyValue(updatedEntity.id)
             : this.EntityClass.name
       };
 
@@ -169,17 +199,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         Key: oldLinkKeys
       });
     }
-  }
-
-  /**
-   * If updating a ForeignKey, look up the current state of the item to build transactions
-   */
-  private async getEntity(id: string): Promise<T | undefined> {
-    // Only get the item once per transaction
-    if (this.#entity !== undefined) return this.#entity;
-    const res: T = (await this.EntityClass.findById(id)) as T;
-    this.#entity = res ?? undefined;
-    return this.#entity;
   }
 }
 
