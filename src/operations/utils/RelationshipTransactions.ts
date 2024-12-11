@@ -7,7 +7,10 @@ import type {
 import Metadata, {
   type TableMetadata,
   type BelongsToRelationship,
-  type EntityMetadata
+  type EntityMetadata,
+  HasOneRelationship,
+  HasManyRelationship,
+  HasAndBelongsToManyRelationship
 } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
@@ -24,6 +27,11 @@ interface LinkRecordAddPutOptionsParams {
   relMeta: BelongsToRelationship;
   relationshipId: string;
 }
+
+type HasRelationship =
+  | HasOneRelationship
+  | HasManyRelationship
+  | HasAndBelongsToManyRelationship;
 
 interface RelationshipTransactionsProps<T extends DynaRecord> {
   /**
@@ -114,6 +122,8 @@ class RelationshipTransactions<T extends DynaRecord> {
             this.buildBelongsToHasOne(...callbackParams);
           }
         }
+      } else {
+        // TODO
       }
     }
   }

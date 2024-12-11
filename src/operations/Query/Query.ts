@@ -1,4 +1,6 @@
 import type DynaRecord from "../../DynaRecord";
+import Metadata from "../../metadata";
+
 import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
@@ -7,11 +9,23 @@ import DynamoClient from "../../dynamo-utils/DynamoClient";
 import type { DynamoTableItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
+  isString,
   tableItemToBelongsToLink,
   tableItemToEntity
 } from "../../utils";
 import OperationBase from "../OperationBase";
-import type { EntityKeyConditions, QueryOptions, QueryResults } from "./types";
+import type {
+  EntityKeyConditions,
+  QueryOptions,
+  QueryResult,
+  QueryResults
+} from "./types";
+import Logger from "../../Logger";
+
+// TODO update that this does nto return belongs to links and returns ... dyna record instances?
+
+// TODO I think its setting everything to the class of the calling class, it instead should return the correct class
+//      I think I already have a type that could help with this, by extracting relationships...
 
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
@@ -101,11 +115,28 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
   private resolveQueryResults(
     queryResults: DynamoTableItem[]
   ): QueryResults<T> {
+    const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+
     return queryResults.map(res =>
-      isBelongsToLinkDynamoItem(res, this.tableMetadata)
-        ? tableItemToBelongsToLink(this.tableMetadata, res)
-        : tableItemToEntity<T>(this.EntityClass, res)
+      res[typeAlias] === this.EntityClass.name
+        ? tableItemToEntity<T>(this.EntityClass, res)
+        : this.tableItemToLinkedEntity(res)
     );
+  }
+
+  private tableItemToLinkedEntity(tableItem: DynamoTableItem): QueryResult<T> {
+    const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+    const entityName = tableItem[typeAlias];
+
+    if (isString(entityName)) {
+      const entityMeta = Metadata.getEntity(entityName);
+      return tableItemToEntity(
+        entityMeta.EntityClass,
+        tableItem
+      ) as QueryResult<T>;
+    } else {
+      throw new Error("Malformed data. Unable to infer entity type");
+    }
   }
 }
 

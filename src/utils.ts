@@ -90,6 +90,7 @@ export const createInstance = <T extends DynaRecord>(
   return entity;
 };
 
+// TODO can this be deleted?
 /**
  * Serialize a dynamo table item response to a BelongsToLink
  * @param tableMeta - Table metadata
@@ -151,6 +152,7 @@ export const isKeyOfObject = <T>(
   return key in entity;
 };
 
+// TODO can this be deleted?
 /**
  * Type guard to check if the DynamoTableItem is a BelongsToLink
  * @param res DynamoTableItem

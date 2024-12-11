@@ -1,5 +1,5 @@
-import type DynaRecord from "../../DynaRecord";
-import { Put, TransactWriteBuilder } from "../../dynamo-utils";
+import DynaRecord from "../../DynaRecord";
+import { type Put, TransactWriteBuilder } from "../../dynamo-utils";
 import type {
   RelationshipMetadata,
   HasOneRelationship,
@@ -17,12 +17,23 @@ import type { EntityClass } from "../../types";
 import Metadata from "../../metadata";
 import { NotFoundError } from "../../errors";
 import { type EntityAttributes } from "../types";
-import { table } from "console";
+import {
+  isBelongsToRelationship,
+  isHasAndBelongsToManyRelationship,
+  isHasManyRelationship,
+  isHasOneRelationship
+} from "../../metadata/utils";
 
 // TODO if I have to add extra denormalization on create then I will need to update the deletes as well. Making sure to update the new records
 // TODO and what about HasAndBelongsToMany when updated?
 
-type Entity = Awaited<ReturnType<typeof DynaRecord.findById<DynaRecord>>>;
+interface SortedQueryResults {
+  entity: EntityAttributes<DynaRecord>;
+  relatedEntities: EntityAttributes<DynaRecord>[];
+}
+
+// TODO is this needed? or used?
+type Entity = EntityAttributes<DynaRecord>;
 
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
@@ -36,6 +47,10 @@ type Entity = Awaited<ReturnType<typeof DynaRecord.findById<DynaRecord>>>;
 class Update<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
+  // TODO should this be renamed to match the comment?
+  /**
+   * The entity object before being updated
+   */
   #entity: Entity;
 
   constructor(Entity: EntityClass<T>) {
@@ -43,6 +58,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder = new TransactWriteBuilder();
   }
 
+  /**
+   * Gets the entity class member or throws if its not set
+   * @returns
+   */
   private getEntity(): NonNullable<Entity> {
     // TODO unit test
     // TODO is this the correct error?
@@ -66,14 +85,61 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
+    const relMetas = this.entityMetadata.relationships;
+
+    const hasRelMetas = Object.values(relMetas).filter(
+      relMeta =>
+        isHasOneRelationship(relMeta) ||
+        isHasManyRelationship(relMeta) ||
+        // TODO is this what I want?
+        isHasAndBelongsToManyRelationship(relMeta)
+    );
+
+    debugger;
+
+    // TODO should this be a raq query
     // TODO ensure that this is a strong read...
     // TODO dont fetch if the entity has no relationships meta data
     //     this is because I HAVE to get it and denormalize to all locations to ensure associated links are updated
     //    AND unit test for that case
-    this.#entity = await this.EntityClass.findById<DynaRecord>(id);
+    const selfAndLinkedEntities = await this.EntityClass.query<DynaRecord>(id, {
+      filter: {
+        type: [
+          this.EntityClass.name,
+          ...hasRelMetas.map(meta => meta.target.name)
+        ]
+      }
+    });
+
+    const linkedEntities = selfAndLinkedEntities.filter(entity => {
+      if (entity.id === id) {
+        this.#entity = entity;
+        return false; // Exclude the matching record
+      }
+      return true;
+    });
+
+    debugger;
+
+    if (linkedEntities[0] instanceof DynaRecord) {
+      const bla = linkedEntities[0].partitionKeyValue();
+      debugger;
+    }
 
     const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
 
+    const { name: tableName } = this.tableMetadata;
+
+    // linkedEntities.forEach(entity => {
+    //   this.#transactionBuilder.addUpdate({
+    //     TableName: tableName,
+    //     Key: {
+    //       [this.partitionKeyAlias]:
+    //     }
+    //   })
+    // });
+
+    // TODO is this type assertion needed?
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const updatedEntity = {
       ...this.#entity,
@@ -150,9 +216,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           Item: tableItem
         };
 
+        // TODO should this be an update?
+
+        debugger;
+
         return [putExpression];
       },
       belongsToHasManyCb: (rel, updatedEntity) => {
+        debugger;
         this.buildDeleteOldBelongsToLinkTransaction(
           rel,
           "HasMany",
@@ -160,6 +231,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         );
       },
       belongsToHasOneCb: (rel, updatedEntity) => {
+        debugger;
         this.buildDeleteOldBelongsToLinkTransaction(
           rel,
           "HasOne",

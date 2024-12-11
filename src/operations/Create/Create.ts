@@ -58,6 +58,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     // TODO ensure strong read... and unit test for it
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
 
+    // TODO shoud this be moved to a callback within relationship transactions so its all together?
     // TODO test when this is not called . - Creating item with no belongs to might already exist
     if (belongsToTableItems.length > 0) {
       this.buildAddBelongsToLinkToSelfTransactions(

@@ -18,7 +18,7 @@ import {
   type EntityAttributesOnly
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
-import { createInstance } from "./utils";
+import { createInstance, isKeyOfEntity, isString } from "./utils";
 
 interface DynaRecordBase {
   id: string;
@@ -186,23 +186,23 @@ abstract class DynaRecord implements DynaRecordBase {
    *  },
    *  {
    *    filter: {
-   *    type: ["BelongsToLink", "Profile"],
-   *    createdAt: { $beginsWith: "202" },
-   *    $or: [
-   *      {
-   *        foreignKey: "111",
-   *        updatedAt: { $beginsWith: "2023-02-15" }
-   *      },
-   *      {
-   *        foreignKey: ["222", "333"],
-   *        createdAt: { $beginsWith: "2021-09-15T" },
-   *        foreignEntityType: "Order"
-   *      },
-   *      {
-   *        id: "123"
-   *      }
-   *    ]
-   *  }
+   *      type: ["BelongsToLink", "Profile"],
+   *      createdAt: { $beginsWith: "202" },
+   *      $or: [
+   *        {
+   *         foreignKey: "111",
+   *         updatedAt: { $beginsWith: "2023-02-15" }
+   *        },
+   *        {
+   *          foreignKey: ["222", "333"],
+   *          createdAt: { $beginsWith: "2021-09-15T" },
+   *          foreignEntityType: "Order"
+   *        },
+   *       {
+   *         id: "123"
+   *       }
+   *      ]
+   *    }
    * }
    *);
    * ```
@@ -382,6 +382,16 @@ abstract class DynaRecord implements DynaRecordBase {
   public static partitionKeyValue(id: string): string {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
+  }
+
+  public partitionKeyValue(): string {
+    const tableMeta = Metadata.getEntityTable(this.constructor.name);
+    const pkAttribute = tableMeta.partitionKeyAttribute.name;
+    if (isKeyOfEntity(this, pkAttribute) && isString(this[pkAttribute])) {
+      return this[pkAttribute] as string;
+    }
+
+    throw new Error("Missing partition key on object");
   }
 }
 
