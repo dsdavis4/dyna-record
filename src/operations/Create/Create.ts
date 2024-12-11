@@ -1,16 +1,25 @@
 import type DynaRecord from "../../DynaRecord";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, EntityClass } from "../../types";
-import { Put, TransactWriteBuilder } from "../../dynamo-utils";
-import { entityToTableItem, tableItemToEntity } from "../../utils";
+import {
+  type Put,
+  TransactGetBuilder,
+  TransactWriteBuilder
+} from "../../dynamo-utils";
+import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
-import { RelationshipTransactions } from "../utils";
+import {
+  extractForeignKeyFromEntity,
+  RelationshipTransactions
+} from "../utils";
 import type { CreateOptions } from "./types";
 import {
   type EntityDefinedAttributes,
   type EntityAttributeDefaultFields,
   type EntityAttributes
 } from "../types";
+import { isBelongsToRelationship } from "../../metadata/utils";
+import Logger from "../../Logger";
 
 /**
  * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
@@ -29,7 +38,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder = new TransactWriteBuilder();
   }
 
-  // TODO I need to handle the error where this throws because an item already exists and throw a better error...
   /**
    * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
    * @param attributes
@@ -46,6 +54,17 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildRelationshipTransactions(entityData);
+
+    // TODO ensure strong read... and unit test for it
+    const belongsToTableItems = await this.getBelongsToTableItems(entityData);
+
+    // TODO test when this is not called . - Creating item with no belongs to might already exist
+    if (belongsToTableItems.length > 0) {
+      this.buildAddBelongsToLinkToSelfTransactions(
+        reservedAttrs.id,
+        belongsToTableItems
+      );
+    }
 
     await this.#transactionBuilder.executeTransaction();
 
@@ -137,6 +156,89 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     });
 
     relationshipTransactions.build(entityData);
+  }
+
+  // TODO unrelated to this method... I should make a shared type since I am using EntityAttributes<DynaRecord> everywhere
+  /**
+   * Retrieves the associated DynamoDB records for all entities that the given entity
+   * is related to via "belongsTo" relationships.
+   *
+   *
+   * If there are no "belongsTo" relationships or no foreign keys are present, it returns an empty array.
+   *
+   * @param entityData - The attributes of the entity instance for which associated items need to be retrieved.
+   * @returns A promise that resolves to an array of the associated DynamoDB table items.
+   */
+  private async getBelongsToTableItems(
+    entityData: EntityAttributes<DynaRecord>
+  ): Promise<DynamoTableItem[]> {
+    const { name: tableName } = this.tableMetadata;
+    const transactionBuilder = new TransactGetBuilder();
+    const relMetas = this.entityMetadata.relationships;
+
+    const belongsToRelMetas = Object.values(relMetas).filter(relMeta =>
+      isBelongsToRelationship(relMeta)
+    );
+
+    belongsToRelMetas.forEach(relMeta => {
+      const fk = extractForeignKeyFromEntity(relMeta, entityData);
+
+      if (fk !== undefined) {
+        transactionBuilder.addGet({
+          TableName: tableName,
+          Key: {
+            [this.partitionKeyAlias]: relMeta.target.partitionKeyValue(fk),
+            [this.sortKeyAlias]: relMeta.target.name
+          }
+        });
+      }
+    });
+
+    // TODO make sure there is a test when this has no transactions to fetch
+    if (transactionBuilder.hasTransactions()) {
+      const results = await transactionBuilder.executeTransaction();
+
+      const tableItems = results.reduce<DynamoTableItem[]>((acc, res) => {
+        if (res.Item !== undefined) acc.push(res.Item);
+        return acc;
+      }, []);
+
+      return tableItems;
+    }
+
+    return [];
+  }
+
+  // TODO typedoc - include that entity id is the main entity being updated
+  private buildAddBelongsToLinkToSelfTransactions(
+    entityId: string,
+    belongsToTableItems: DynamoTableItem[]
+  ): void {
+    const pk = this.EntityClass.partitionKeyValue(entityId);
+    const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+
+    belongsToTableItems.forEach(tableItem => {
+      const relationshipType = tableItem[typeAlias];
+
+      if (isString(relationshipType)) {
+        const key = {
+          [this.partitionKeyAlias]: pk,
+          [this.sortKeyAlias]: relationshipType
+        };
+
+        this.#transactionBuilder.addPut(
+          {
+            TableName: this.tableMetadata.name,
+            Item: { ...tableItem, ...key },
+            ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
+          },
+          // TODO test for error condition. Its the opposite of the one elsewhere in here
+          `${this.EntityClass.name} already has an associated ${relationshipType}`
+        );
+      } else {
+        Logger.warn("Found malformed data on object.", tableItem);
+      }
+    });
   }
 }
 

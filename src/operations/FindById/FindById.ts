@@ -115,6 +115,8 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
       ConsistentRead: true
     });
 
+    debugger;
+
     if (queryResults.length === 0) {
       return undefined;
     }

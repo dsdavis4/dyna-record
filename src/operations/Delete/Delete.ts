@@ -18,6 +18,9 @@ import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
 
+// TODO if I have to add extra denormalization on create then I will need to update the deletes as well
+//       - I do need this because I am denormalizing extra records
+
 /**
  * Implements the operation for deleting an entity and its related data from the database within the ORM framework.
  *

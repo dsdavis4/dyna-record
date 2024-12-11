@@ -19,6 +19,9 @@ import { NotFoundError } from "../../errors";
 import { type EntityAttributes } from "../types";
 import { table } from "console";
 
+// TODO if I have to add extra denormalization on create then I will need to update the deletes as well. Making sure to update the new records
+// TODO and what about HasAndBelongsToMany when updated?
+
 type Entity = Awaited<ReturnType<typeof DynaRecord.findById<DynaRecord>>>;
 
 /**
@@ -78,7 +81,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     } as EntityAttributes<DynaRecord>;
 
     this.buildRelationshipTransactions(updatedEntity);
-    debugger;
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;
