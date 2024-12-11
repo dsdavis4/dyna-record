@@ -385,13 +385,7 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   public partitionKeyValue(): string {
-    const tableMeta = Metadata.getEntityTable(this.constructor.name);
-    const pkAttribute = tableMeta.partitionKeyAttribute.name;
-    if (isKeyOfEntity(this, pkAttribute) && isString(this[pkAttribute])) {
-      return this[pkAttribute] as string;
-    }
-
-    throw new Error("Missing partition key on object");
+    return (this.constructor as typeof DynaRecord).partitionKeyValue(this.id);
   }
 }
 

@@ -91,7 +91,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       relMeta =>
         isHasOneRelationship(relMeta) ||
         isHasManyRelationship(relMeta) ||
-        // TODO is this what I want?
+        // TODO Should this be here?
         isHasAndBelongsToManyRelationship(relMeta)
     );
 
