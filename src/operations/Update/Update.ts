@@ -26,11 +26,10 @@ interface UpdateMetadata<T extends DynaRecord> {
   expression: UpdateExpression;
 }
 
-// TODO check this typedoc
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
  *
- * The `Update` operation supports updating entity attributes and ensures consistency in relationships, especially for "BelongsTo" relationships. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
+ * The `Update` operation supports updating entity attributes and ensures consistency in relationships linked records. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
  *
  * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
  *
@@ -45,7 +44,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Update entity transactions, including transactions to create/update BelongsToLinks
+   * Update entity transactions, including transactions to create/update denormalized records
    * @param id The id of the entity being updated
    * @param attributes Attributes on the model to update.
    */
@@ -71,6 +70,42 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     return updatedAttrs;
   }
 
+  // TODO ensure that this is a strong read... unit test for it
+  /**
+   * Queries for the entity being updated and any relationship related via a "has" relationship (EX: "HasMany")
+   */
+  private async preFetch(id: string): Promise<SelfAndLinkEntities> {
+    const hasRelMetas = this.entityMetadata.hasRelationships;
+
+    const selfAndLinkedEntities = await this.EntityClass.query<DynaRecord>(id, {
+      filter: {
+        type: [
+          this.EntityClass.name,
+          ...hasRelMetas.map(meta => meta.target.name)
+        ]
+      }
+    });
+
+    let entity: Entity | undefined;
+    const relatedEntities: Entity[] = [];
+
+    selfAndLinkedEntities.forEach(queryRes => {
+      if (id === queryRes.id) entity = queryRes;
+      else relatedEntities.push(queryRes);
+    });
+
+    if (entity === undefined) {
+      throw new Error("Failed to find entity");
+    }
+
+    return { entityPreUpdate: entity, relatedEntities };
+  }
+
+  /**
+   * Creates the updated entity and update expression used for processing
+   * @param attributes - Attributes being updated
+   * @returns
+   */
   private buildUpdateMetadata(attributes: UpdateOptions<T>): UpdateMetadata<T> {
     const updatedAttrs: UpdatedAttributes<T> = {
       ...attributes,
@@ -86,7 +121,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   /**
    * Build the transaction to update the entity
    * @param id The id of the entity being updated
-   * @param attributes Attributes on the model to update.
+   * @param updateExpression Dynamo expression for Update
    */
   private buildUpdateItemTransaction(
     id: string,
@@ -113,13 +148,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
-  // TODO update typedoc
   /**
-   * Builds the transactions to persist relationships
-   *   - Creates BelongsToLinks when a foreign key changes
-   *   - Removes outdated BelongsToLinks if the entity previously was associated with a different entity
+   * Builds the transactions to persist BelongsTo relationships
+   *   - Denormalizes link data related entities partitions
+   *   - When a foreign key is updated it will remove the denormalized records from the old association
    * @param id The id of the entity being updated
-   * @param attributes Attributes on the model to update.
+   * @param updateExpression Dynamo expression for Update
    */
   private buildBelongsToTransactions(
     entityPreUpdate: EntityAttributes<DynaRecord>,
@@ -152,7 +186,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     }
   }
 
-  // TODO typedoc - Denormalizes data to the linked records on BelongsToLinks
+  /**
+   * Denormalizes data to the linked records on for belongs to relationships
+   * @param entityId
+   * @param relMeta
+   * @param foreignKey
+   * @param updateExpression
+   */
   private buildUpdateBelongsToLinkedRecords(
     entityId: string,
     relMeta: BelongsToRelationship,
@@ -177,12 +217,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     });
   }
 
-  // TODO update this, params are certainl off
   /**
    * When updating the foreign key of an entity, delete the BelongsToLink in the previous relationships partition
-   * @param rel
-   * @param relType
-   * @param entity
+   * @param entityId
+   * @param relMeta
+   * @param oldForeignKey
    */
   private buildDeleteOldBelongsToLinkTransaction(
     entityId: string,
@@ -202,37 +241,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       TableName: tableName,
       Key: oldLinkKeys
     });
-  }
-
-  // TODO ensure that this is a strong read...
-  /**
-   * Queries for the entity being updated and any relationship related via a "has" relationship (EX: "HasMany")
-   */
-  private async preFetch(id: string): Promise<SelfAndLinkEntities> {
-    const hasRelMetas = this.entityMetadata.hasRelationships;
-
-    const selfAndLinkedEntities = await this.EntityClass.query<DynaRecord>(id, {
-      filter: {
-        type: [
-          this.EntityClass.name,
-          ...hasRelMetas.map(meta => meta.target.name)
-        ]
-      }
-    });
-
-    let entity: Entity | undefined;
-    const relatedEntities: Entity[] = [];
-
-    selfAndLinkedEntities.forEach(queryRes => {
-      if (id === queryRes.id) entity = queryRes;
-      else relatedEntities.push(queryRes);
-    });
-
-    if (entity === undefined) {
-      throw new Error("Failed to find entity");
-    }
-
-    return { entityPreUpdate: entity, relatedEntities };
   }
 
   /**
