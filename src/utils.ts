@@ -2,21 +2,12 @@ import type DynaRecord from "./DynaRecord";
 import type {
   DynamoTableItem,
   BelongsToLinkDynamoItem,
-  Nullable,
-  EntityClass
+  Nullable
 } from "./types";
-import Metadata, {
-  BelongsToRelationship,
-  type AttributeMetadata,
-  type TableMetadata
-} from "./metadata";
+import Metadata, { type TableMetadata } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type EntityAttributes } from "./operations";
-import {
-  doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne
-} from "./metadata/utils";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
@@ -98,45 +89,6 @@ export const createInstance = <T extends DynaRecord>(
   });
 
   return entity;
-};
-
-// TODO can this be deleted?
-/**
- * Serialize a dynamo table item response to a BelongsToLink
- * @param tableMeta - Table metadata
- * @param tableItem - Table item from dynamo response
- * @returns - { @link BelongsToLink }
- */
-export const tableItemToBelongsToLink = (
-  tableMeta: TableMetadata,
-  tableItem: BelongsToLinkDynamoItem
-): BelongsToLink => {
-  const link = new BelongsToLink();
-
-  const belongsToLinkAttrs: Record<string, AttributeMetadata> = {
-    ...{
-      [tableMeta.partitionKeyAttribute.alias]: tableMeta.partitionKeyAttribute
-    },
-    ...{ [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute },
-    ...tableMeta.defaultTableAttributes
-  };
-
-  Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = belongsToLinkAttrs[attrName];
-
-    if (attrMeta !== undefined) {
-      const { name: entityKey, serializers } = attrMeta;
-      const rawVal = tableItem[attrName];
-      const val =
-        serializers?.toEntityAttribute === undefined
-          ? rawVal
-          : serializers?.toEntityAttribute(rawVal);
-
-      safeAssign(link, entityKey as keyof BelongsToLink, val);
-    }
-  });
-
-  return link;
 };
 
 /**

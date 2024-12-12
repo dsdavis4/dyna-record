@@ -10,7 +10,6 @@ import type { DynamoTableItem } from "../../types";
 import {
   isBelongsToLinkDynamoItem,
   isString,
-  tableItemToBelongsToLink,
   tableItemToEntity
 } from "../../utils";
 import OperationBase from "../OperationBase";
