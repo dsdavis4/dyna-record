@@ -60,11 +60,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const { entityPreUpdate, relatedEntities } = await this.preFetch(id);
 
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const updatedEntity = {
-      ...entityPreUpdate,
-      ...updatedAttrs
-    } as EntityAttributes<DynaRecord>; // TODO can I get rid of this with using partial?
+    const updatedEntity = { ...entityPreUpdate, ...updatedAttrs };
 
     this.buildUpdateItemTransaction(id, expression);
     this.buildUpdateRelatedEntityLinks(relatedEntities, expression);
@@ -127,7 +123,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildBelongsToTransactions(
     entityPreUpdate: EntityAttributes<DynaRecord>,
-    updatedEntity: EntityAttributes<DynaRecord>,
+    updatedEntity: Partial<EntityAttributes<DynaRecord>>,
     updateExpression: UpdateExpression
   ): void {
     const entityId = entityPreUpdate.id;
@@ -145,8 +141,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           updateExpression
         );
 
+        // The foreignKey value before update
+        const oldFk = extractForeignKeyFromEntity(relMeta, entityPreUpdate);
+
         // If the record being updated is changing a foreign key then delete the old record
-        const oldFk = extractForeignKeyFromEntity(relMeta, entityPreUpdate); // The foreignKey value before update
         if (oldFk !== undefined && oldFk !== foreignKey) {
           this.buildDeleteOldBelongsToLinkTransaction(entityId, relMeta, oldFk);
         }

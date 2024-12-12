@@ -51,7 +51,7 @@ export const buildEntityRelationshipMetaObj = (
  * @returns
  */
 export const extractForeignKeyFromEntity = <
-  T extends EntityAttributes<DynaRecord>
+  T extends Partial<EntityAttributes<DynaRecord>>
 >(
   relMeta: RelationshipMetadata,
   entity: T
