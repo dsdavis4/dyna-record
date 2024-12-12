@@ -62,6 +62,8 @@ export type RelationshipAttributeNames<T> = {
     : never;
 }[keyof T];
 
+// TODO rename this. Its representing an instance of a class with the functions, just not the relationships
+// TODO typedoc should reflect the name change
 /**
  * Entity class with attributes excluding relationship attributes
  */

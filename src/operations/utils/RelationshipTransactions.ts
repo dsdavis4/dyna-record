@@ -105,6 +105,7 @@ class RelationshipTransactions<T extends DynaRecord> {
         const isUpdatingRelationshipId = relationshipId !== undefined;
 
         if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {
+          // TODO I think this only needed for create...
           if (relationshipId !== null) {
             this.buildRelationshipExistsConditionTransaction(
               rel,

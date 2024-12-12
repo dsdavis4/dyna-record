@@ -130,6 +130,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
 
     if (isString(entityName)) {
       const entityMeta = Metadata.getEntity(entityName);
+      // TODO I should make a type guard and remove the type cast
       return tableItemToEntity(
         entityMeta.EntityClass,
         tableItem

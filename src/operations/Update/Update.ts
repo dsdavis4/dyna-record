@@ -85,6 +85,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
+    // TODO move new stuff to its own function
     const relMetas = this.entityMetadata.relationships;
 
     const hasRelMetas = Object.values(relMetas).filter(
@@ -121,23 +122,32 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     debugger;
 
-    if (linkedEntities[0] instanceof DynaRecord) {
-      const bla = linkedEntities[0].partitionKeyValue();
-      debugger;
-    }
-
     const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
 
     const { name: tableName } = this.tableMetadata;
 
-    // linkedEntities.forEach(entity => {
-    //   this.#transactionBuilder.addUpdate({
-    //     TableName: tableName,
-    //     Key: {
-    //       [this.partitionKeyAlias]:
-    //     }
-    //   })
-    // });
+    // TODO start here - I had to fix how Query returns objects in order to be able to get this method
+    // I ended the day getting to this.
+    // I should be able to work on the update now
+    // Make sure to do clean up here...
+    // And dont forget that I had to comment a lot of stuff in delete out
+    // So what I ended with enables me to call entity.partitionKeyValue
+
+    // TODO below does not need to happen in loop and is duplicate from buildUpdateItemTransaction code
+    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
+    const expression = expressionBuilder(tableAttrs);
+
+    linkedEntities.forEach(entity => {
+      this.#transactionBuilder.addUpdate({
+        TableName: tableName,
+        Key: {
+          [this.partitionKeyAlias]: entity.partitionKeyValue(),
+          [this.sortKeyAlias]: this.EntityClass.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+        ...expression
+      });
+    });
 
     // TODO is this type assertion needed?
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -216,7 +226,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           Item: tableItem
         };
 
-        // TODO should this be an update?
+        // TODO should this be an update? -- yes
 
         debugger;
 

@@ -221,24 +221,23 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     belongsToTableItems.forEach(tableItem => {
       const relationshipType = tableItem[typeAlias];
 
-      if (isString(relationshipType)) {
-        const key = {
-          [this.partitionKeyAlias]: pk,
-          [this.sortKeyAlias]: relationshipType
-        };
+      const key = {
+        [this.partitionKeyAlias]: pk,
+        [this.sortKeyAlias]: relationshipType
+        // TODO should I store this way?
+        // [this.sortKeyAlias]: tableItem[this.partitionKeyAlias]
+      };
 
-        this.#transactionBuilder.addPut(
-          {
-            TableName: this.tableMetadata.name,
-            Item: { ...tableItem, ...key },
-            ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
-          },
-          // TODO test for error condition. Its the opposite of the one elsewhere in here
-          `${this.EntityClass.name} already has an associated ${relationshipType}`
-        );
-      } else {
-        Logger.warn("Found malformed data on object.", tableItem);
-      }
+      this.#transactionBuilder.addPut(
+        {
+          TableName: this.tableMetadata.name,
+          Item: { ...tableItem, ...key },
+          ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
+        },
+        // TODO test for error condition. Its the opposite of the one elsewhere in here
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        `${this.EntityClass.name} already has an associated ${relationshipType}`
+      );
     });
   }
 }
