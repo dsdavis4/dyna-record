@@ -2,16 +2,13 @@ import type DynaRecord from "../../DynaRecord";
 import { v4 as uuidv4 } from "uuid";
 import type { DynamoTableItem, EntityClass } from "../../types";
 import {
-  type Put,
+  type ConditionCheck,
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils";
-import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
+import { entityToTableItem, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
-import {
-  extractForeignKeyFromEntity,
-  BelongsToTransactionBuilder
-} from "../utils";
+import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils";
 import type { CreateOptions } from "./types";
 import {
   type EntityDefinedAttributes,
@@ -19,7 +16,7 @@ import {
   type EntityAttributes
 } from "../types";
 import { isBelongsToRelationship } from "../../metadata/utils";
-import Logger from "../../Logger";
+import { type BelongsToRelationship } from "../../metadata";
 
 /**
  * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
@@ -58,7 +55,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     // TODO ensure strong read... and unit test for it
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
 
-    // TODO shoud this be moved to a callback within relationship transactions so its all together?
     // TODO test when this is not called . - Creating item with no belongs to might already exist
     if (belongsToTableItems.length > 0) {
       this.buildAddBelongsToLinkToSelfTransactions(
@@ -129,6 +125,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
+  // TODO update typedoc
   /**
    * Build transaction items for belongs to associations associations
    * @param entityData
@@ -138,24 +135,32 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     tableItem: DynamoTableItem
   ): void {
     const tableName = this.tableMetadata.name;
-    const partitionKeyAlias = this.tableMetadata.partitionKeyAttribute.alias;
 
-    const relationshipTransactions = new BelongsToTransactionBuilder({
-      Entity: this.EntityClass,
-      transactionBuilder: this.#transactionBuilder,
-      persistLinkCb: ({ key, relMeta, relationshipId }) => {
+    for (const relMeta of this.entityMetadata.belongsToRelationships) {
+      const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);
+
+      const isCreatingForeignKey = foreignKey !== undefined;
+
+      if (isCreatingForeignKey) {
+        this.buildRelationshipExistsConditionTransaction(relMeta, foreignKey);
+
+        const key = buildBelongsToLinkKey(
+          this.EntityClass,
+          entityData.id,
+          relMeta,
+          foreignKey
+        );
+
         this.#transactionBuilder.addPut(
           {
             TableName: tableName,
             Item: { ...tableItem, ...key },
-            ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
+            ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
           },
-          `${relMeta.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
+          `${relMeta.target.name} with id: ${foreignKey} already has an associated ${this.EntityClass.name}`
         );
       }
-    });
-
-    relationshipTransactions.build(entityData);
+    }
   }
 
   // TODO unrelated to this method... I should make a shared type since I am using EntityAttributes<DynaRecord> everywhere
@@ -207,6 +212,32 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     }
 
     return [];
+  }
+
+  /**
+   * Builds a ConditionCheck transaction that ensures the associated relationship exists
+   * @param rel
+   * @param relationshipId
+   * @returns
+   */
+  private buildRelationshipExistsConditionTransaction(
+    rel: BelongsToRelationship,
+    relationshipId: string
+  ): void {
+    const { name: tableName } = this.tableMetadata;
+
+    const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
+
+    const conditionCheck: ConditionCheck = {
+      TableName: tableName,
+      Key: {
+        [this.partitionKeyAlias]: rel.target.partitionKeyValue(relationshipId),
+        [this.sortKeyAlias]: rel.target.name
+      },
+      ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+    };
+
+    this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
   // TODO typedoc - include that entity id is the main entity being updated
