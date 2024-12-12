@@ -1,12 +1,22 @@
 import type DynaRecord from "./DynaRecord";
-import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
+import type {
+  DynamoTableItem,
+  BelongsToLinkDynamoItem,
+  Nullable,
+  EntityClass
+} from "./types";
 import Metadata, {
+  BelongsToRelationship,
   type AttributeMetadata,
   type TableMetadata
 } from "./metadata";
 import { BelongsToLink } from "./relationships";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type EntityAttributes } from "./operations";
+import {
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne
+} from "./metadata/utils";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
@@ -235,4 +245,9 @@ export const safeAssign = <
   value: TValue
 ): void => {
   object[key] = value as TObject[TKey];
+};
+
+// TODO typedoc
+export const isNullableString = (val: unknown): val is Nullable<string> => {
+  return typeof val === "string" || val === null;
 };

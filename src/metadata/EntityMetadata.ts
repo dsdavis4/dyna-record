@@ -1,5 +1,10 @@
 import { z, ZodError, type ZodSchema, type ZodType } from "zod";
 import {
+  BelongsToRelationship,
+  HasAndBelongsToManyRelationship,
+  HasManyRelationship,
+  HasOneRelationship,
+  HasRelationships,
   type AttributeMetadata,
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage
@@ -8,6 +13,12 @@ import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
 import { type EntityDefinedAttributes } from "../operations";
 import Metadata from ".";
+import {
+  isBelongsToRelationship,
+  isHasAndBelongsToManyRelationship,
+  isHasManyRelationship,
+  isHasOneRelationship
+} from "./utils";
 
 type EntityClass = new (...args: any) => DynaRecord;
 
@@ -138,6 +149,27 @@ class EntityMetadata {
     const errorOptions =
       error instanceof ZodError ? { cause: error.issues } : undefined;
     return new ValidationError("Validation errors", errorOptions);
+  }
+
+  /**
+   * Returns the BelongsToRelationship metadata for the entity
+   */
+  public get belongsToRelationships(): BelongsToRelationship[] {
+    return Object.values(this.relationships).filter(rel =>
+      isBelongsToRelationship(rel)
+    );
+  }
+
+  /**
+   * Returns the "Has" relationship metadata for the entity (EX: "HasMany")
+   */
+  public get hasRelationships(): HasRelationships {
+    return Object.values(this.relationships).filter(
+      relMeta =>
+        isHasOneRelationship(relMeta) ||
+        isHasManyRelationship(relMeta) ||
+        isHasAndBelongsToManyRelationship(relMeta)
+    );
   }
 }
 

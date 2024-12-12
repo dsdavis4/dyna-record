@@ -10,7 +10,7 @@ import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import {
   extractForeignKeyFromEntity,
-  RelationshipTransactions
+  BelongsToTransactionBuilder
 } from "../utils";
 import type { CreateOptions } from "./types";
 import {
@@ -53,7 +53,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
-    this.buildRelationshipTransactions(entityData, tableItem);
+    this.buildBelongsToTransactions(entityData, tableItem);
 
     // TODO ensure strong read... and unit test for it
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
@@ -130,20 +130,19 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Build transaction items for associations
+   * Build transaction items for belongs to associations associations
    * @param entityData
    */
-  private buildRelationshipTransactions(
+  private buildBelongsToTransactions(
     entityData: EntityAttributes<DynaRecord>,
     tableItem: DynamoTableItem
   ): void {
     const tableName = this.tableMetadata.name;
     const partitionKeyAlias = this.tableMetadata.partitionKeyAttribute.alias;
 
-    const relationshipTransactions = new RelationshipTransactions({
+    const relationshipTransactions = new BelongsToTransactionBuilder({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
-      // TODO remove this, then implement the new callback
       persistLinkCb: ({ key, relMeta, relationshipId }) => {
         this.#transactionBuilder.addPut(
           {

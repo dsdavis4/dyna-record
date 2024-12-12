@@ -1,14 +1,10 @@
-import DynaRecord from "../../DynaRecord";
-import { type Put, TransactWriteBuilder } from "../../dynamo-utils";
-import type {
-  RelationshipMetadata,
-  HasOneRelationship,
-  HasManyRelationship
-} from "../../metadata";
-import { entityToTableItem } from "../../utils";
+import type DynaRecord from "../../DynaRecord";
+import { TransactWriteBuilder } from "../../dynamo-utils";
+import type { BelongsToRelationship } from "../../metadata";
+import { entityToTableItem, isNullableString } from "../../utils";
 import {
-  RelationshipTransactions,
-  UpdateExpression,
+  type UpdateExpression,
+  buildBelongsToLinkKey,
   expressionBuilder,
   extractForeignKeyFromEntity
 } from "../utils";
@@ -16,26 +12,21 @@ import OperationBase from "../OperationBase";
 import type { UpdatedAttributes, UpdateOptions } from "./types";
 import type { EntityClass } from "../../types";
 import Metadata from "../../metadata";
-import { NotFoundError } from "../../errors";
-import { type EntityAttributes } from "../types";
-import {
-  isBelongsToRelationship,
-  isHasAndBelongsToManyRelationship,
-  isHasManyRelationship,
-  isHasOneRelationship
-} from "../../metadata/utils";
+import { type EntityAttributesOnly, type EntityAttributes } from "../types";
 
-// TODO if I have to add extra denormalization on create then I will need to update the deletes as well. Making sure to update the new records
-// TODO and what about HasAndBelongsToMany when updated?
+type Entity = EntityAttributesOnly<DynaRecord>;
 
-interface SortedQueryResults {
-  entity: EntityAttributes<DynaRecord>;
-  relatedEntities: EntityAttributes<DynaRecord>[];
+interface SelfAndLinkEntities {
+  entityPreUpdate: Entity;
+  relatedEntities: Entity[];
 }
 
-// TODO is this needed? or used?
-type Entity = EntityAttributes<DynaRecord>;
+interface UpdateMetadata<T extends DynaRecord> {
+  updatedAttrs: UpdatedAttributes<T>;
+  expression: UpdateExpression;
+}
 
+// TODO check this typedoc
 /**
  * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
  *
@@ -48,29 +39,9 @@ type Entity = EntityAttributes<DynaRecord>;
 class Update<T extends DynaRecord> extends OperationBase<T> {
   readonly #transactionBuilder: TransactWriteBuilder;
 
-  // TODO should this be renamed to match the comment?
-  /**
-   * The entity object before being updated
-   */
-  #entity: Entity;
-
   constructor(Entity: EntityClass<T>) {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder();
-  }
-
-  /**
-   * Gets the entity class member or throws if its not set
-   * @returns
-   */
-  private getEntity(): NonNullable<Entity> {
-    // TODO unit test
-    // TODO is this the correct error?
-    if (this.#entity === undefined) {
-      throw new NotFoundError("Entity not set");
-    }
-
-    return this.#entity;
   }
 
   /**
@@ -86,81 +57,34 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    // TODO move new stuff to its own function
-    const relMetas = this.entityMetadata.relationships;
+    const { entityPreUpdate, relatedEntities } = await this.preFetch(id);
 
-    const hasRelMetas = Object.values(relMetas).filter(
-      relMeta =>
-        isHasOneRelationship(relMeta) ||
-        isHasManyRelationship(relMeta) ||
-        // TODO Should this be here?
-        isHasAndBelongsToManyRelationship(relMeta)
-    );
-
-    debugger;
-
-    // TODO should this be a raq query
-    // TODO ensure that this is a strong read...
-    // TODO dont fetch if the entity has no relationships meta data
-    //     this is because I HAVE to get it and denormalize to all locations to ensure associated links are updated
-    //    AND unit test for that case
-    const selfAndLinkedEntities = await this.EntityClass.query<DynaRecord>(id, {
-      filter: {
-        type: [
-          this.EntityClass.name,
-          ...hasRelMetas.map(meta => meta.target.name)
-        ]
-      }
-    });
-
-    const linkedEntities = selfAndLinkedEntities.filter(entity => {
-      if (entity.id === id) {
-        this.#entity = entity;
-        return false; // Exclude the matching record
-      }
-      return true;
-    });
-
-    debugger;
-
-    const updatedAttrs = this.buildUpdateItemTransaction(id, entityAttrs);
-
-    const { name: tableName } = this.tableMetadata;
-
-    // TODO start here - I had to fix how Query returns objects in order to be able to get this method
-    // I ended the day getting to this.
-    // I should be able to work on the update now
-    // Make sure to do clean up here...
-    // And dont forget that I had to comment a lot of stuff in delete out
-    // So what I ended with enables me to call entity.partitionKeyValue
-
-    // TODO below does not need to happen in loop and is duplicate from buildUpdateItemTransaction code
-    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
-    const expression = expressionBuilder(tableAttrs);
-
-    linkedEntities.forEach(entity => {
-      this.#transactionBuilder.addUpdate({
-        TableName: tableName,
-        Key: {
-          [this.partitionKeyAlias]: entity.partitionKeyValue(),
-          [this.sortKeyAlias]: this.EntityClass.name
-        },
-        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
-        ...expression
-      });
-    });
-
-    // TODO is this type assertion needed?
+    const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const updatedEntity = {
-      ...this.#entity,
+      ...entityPreUpdate,
       ...updatedAttrs
-    } as EntityAttributes<DynaRecord>;
+    } as EntityAttributes<DynaRecord>; // TODO can I get rid of this with using partial?
 
-    this.buildRelationshipTransactions(updatedEntity, expression);
+    this.buildUpdateItemTransaction(id, expression);
+    this.buildUpdateRelatedEntityLinks(relatedEntities, expression);
+    this.buildBelongsToTransactions(entityPreUpdate, updatedEntity, expression);
+
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;
+  }
+
+  private buildUpdateMetadata(attributes: UpdateOptions<T>): UpdateMetadata<T> {
+    const updatedAttrs: UpdatedAttributes<T> = {
+      ...attributes,
+      updatedAt: new Date()
+    };
+
+    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
+    const expression = expressionBuilder(tableAttrs);
+
+    return { updatedAttrs, expression };
   }
 
   /**
@@ -170,10 +94,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildUpdateItemTransaction(
     id: string,
-    attributes: UpdateOptions<T>
-  ): UpdatedAttributes<T> {
+    updateExpression: UpdateExpression
+  ): void {
     const { name: tableName } = this.tableMetadata;
-
     const pk = this.tableMetadata.partitionKeyAttribute.name;
     const sk = this.tableMetadata.sortKeyAttribute.name;
 
@@ -181,29 +104,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       [pk]: this.EntityClass.partitionKeyValue(id),
       [sk]: this.EntityClass.name
     };
-
-    const updatedAttrs: UpdatedAttributes<T> = {
-      ...attributes,
-      updatedAt: new Date()
-    };
     const tableKeys = entityToTableItem(this.EntityClass, keys);
-    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
-
-    const expression = expressionBuilder(tableAttrs);
 
     this.#transactionBuilder.addUpdate(
       {
         TableName: tableName,
         Key: tableKeys,
-        // TODO for ACID-like, make sure that the updatedAt of the item being updated is before the new updatedAt
-        //       - I of course will need to have the full object with a strong read
         ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
-        ...expression
+        ...updateExpression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
     );
-
-    return updatedAttrs;
   }
 
   // TODO update typedoc
@@ -214,45 +125,61 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param id The id of the entity being updated
    * @param attributes Attributes on the model to update.
    */
-  private buildRelationshipTransactions(
-    entity: EntityAttributes<DynaRecord>,
+  private buildBelongsToTransactions(
+    entityPreUpdate: EntityAttributes<DynaRecord>,
+    updatedEntity: EntityAttributes<DynaRecord>,
     updateExpression: UpdateExpression
   ): void {
-    const tableName = this.tableMetadata.name;
+    const entityId = entityPreUpdate.id;
 
-    const relationshipTransactions = new RelationshipTransactions({
-      Entity: this.EntityClass,
-      transactionBuilder: this.#transactionBuilder,
-      persistLinkCb: ({ key }) => {
-        this.#transactionBuilder.addUpdate({
-          TableName: tableName,
-          Key: key,
-          // TODO test this error condition in unit tests and real
-          ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
-          ...updateExpression
-        });
-      },
-      belongsToHasManyCb: (rel, updatedEntity) => {
-        debugger;
-        this.buildDeleteOldBelongsToLinkTransaction(
-          rel,
-          "HasMany",
-          updatedEntity
+    for (const relMeta of this.entityMetadata.belongsToRelationships) {
+      const foreignKey = extractForeignKeyFromEntity(relMeta, updatedEntity);
+
+      const isUpdatingRelationshipId = foreignKey !== undefined;
+
+      if (isUpdatingRelationshipId && isNullableString(foreignKey)) {
+        this.buildUpdateBelongsToLinkedRecords(
+          entityId,
+          relMeta,
+          foreignKey,
+          updateExpression
         );
-      },
-      belongsToHasOneCb: (rel, updatedEntity) => {
-        debugger;
-        this.buildDeleteOldBelongsToLinkTransaction(
-          rel,
-          "HasOne",
-          updatedEntity
-        );
+
+        // If the record being updated is changing a foreign key then delete the old record
+        const oldFk = extractForeignKeyFromEntity(relMeta, entityPreUpdate); // The foreignKey value before update
+        if (oldFk !== undefined && oldFk !== foreignKey) {
+          this.buildDeleteOldBelongsToLinkTransaction(entityId, relMeta, oldFk);
+        }
       }
-    });
-
-    relationshipTransactions.build(entity);
+    }
   }
 
+  // TODO typedoc - Denormalizes data to the linked records on BelongsToLinks
+  private buildUpdateBelongsToLinkedRecords(
+    entityId: string,
+    relMeta: BelongsToRelationship,
+    foreignKey: string,
+    updateExpression: UpdateExpression
+  ): void {
+    const { name: tableName } = this.tableMetadata;
+
+    const newKey = buildBelongsToLinkKey(
+      this.EntityClass,
+      entityId,
+      relMeta,
+      foreignKey
+    );
+
+    this.#transactionBuilder.addUpdate({
+      TableName: tableName,
+      Key: newKey,
+      // TODO test this error condition in unit tests and real
+      ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+      ...updateExpression
+    });
+  }
+
+  // TODO update this, params are certainl off
   /**
    * When updating the foreign key of an entity, delete the BelongsToLink in the previous relationships partition
    * @param rel
@@ -260,29 +187,76 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param entity
    */
   private buildDeleteOldBelongsToLinkTransaction(
-    rel: RelationshipMetadata,
-    relType: HasOneRelationship["type"] | HasManyRelationship["type"],
-    updatedEntity: EntityAttributes<DynaRecord>
+    entityId: string,
+    relMeta: BelongsToRelationship,
+    oldForeignKey: string
   ): void {
     const { name: tableName } = this.tableMetadata;
 
-    const currentId = extractForeignKeyFromEntity(rel, this.getEntity());
-    const newId = extractForeignKeyFromEntity(rel, updatedEntity);
+    const oldLinkKeys = buildBelongsToLinkKey(
+      this.EntityClass,
+      entityId,
+      relMeta,
+      oldForeignKey
+    );
 
-    if (currentId !== undefined && currentId !== newId) {
-      const oldLinkKeys = {
-        [this.partitionKeyAlias]: rel.target.partitionKeyValue(currentId),
-        [this.sortKeyAlias]:
-          relType === "HasMany"
-            ? this.EntityClass.partitionKeyValue(updatedEntity.id)
-            : this.EntityClass.name
-      };
+    this.#transactionBuilder.addDelete({
+      TableName: tableName,
+      Key: oldLinkKeys
+    });
+  }
 
-      this.#transactionBuilder.addDelete({
-        TableName: tableName,
-        Key: oldLinkKeys
-      });
+  // TODO ensure that this is a strong read...
+  /**
+   * Queries for the entity being updated and any relationship related via a "has" relationship (EX: "HasMany")
+   */
+  private async preFetch(id: string): Promise<SelfAndLinkEntities> {
+    const hasRelMetas = this.entityMetadata.hasRelationships;
+
+    const selfAndLinkedEntities = await this.EntityClass.query<DynaRecord>(id, {
+      filter: {
+        type: [
+          this.EntityClass.name,
+          ...hasRelMetas.map(meta => meta.target.name)
+        ]
+      }
+    });
+
+    let entity: Entity | undefined;
+    const relatedEntities: Entity[] = [];
+
+    selfAndLinkedEntities.forEach(queryRes => {
+      if (id === queryRes.id) entity = queryRes;
+      else relatedEntities.push(queryRes);
+    });
+
+    if (entity === undefined) {
+      throw new Error("Failed to find entity");
     }
+
+    return { entityPreUpdate: entity, relatedEntities };
+  }
+
+  /**
+   * Builds the transactions to update the linked entities on foreign associations (EX: from "HasMany")
+   * @param relatedEntities - Entity links from the entity being updated's partition. Used to build update link items in other partitions
+   * @param expression - The update expression to apply
+   */
+  private buildUpdateRelatedEntityLinks(
+    relatedEntities: Entity[],
+    expression: UpdateExpression
+  ): void {
+    relatedEntities.forEach(entity => {
+      this.#transactionBuilder.addUpdate({
+        TableName: this.tableMetadata.name,
+        Key: {
+          [this.partitionKeyAlias]: entity.partitionKeyValue(),
+          [this.sortKeyAlias]: this.EntityClass.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+        ...expression
+      });
+    });
   }
 }
 

@@ -18,3 +18,10 @@ export type RelationshipMetadata =
   | HasManyRelationship
   | HasOneRelationship
   | HasAndBelongsToManyRelationship;
+
+/**
+ * An array of "Has" relationships (EX: "HasMany")
+ */
+export type HasRelationships = Array<
+  HasManyRelationship | HasOneRelationship | HasAndBelongsToManyRelationship
+>;

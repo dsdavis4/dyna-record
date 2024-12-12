@@ -1,42 +1,29 @@
-import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type DynaRecord from "../../DynaRecord";
-import type {
-  ConditionCheck,
-  Put,
-  TransactWriteBuilder
-} from "../../dynamo-utils";
+import type { ConditionCheck, TransactWriteBuilder } from "../../dynamo-utils";
 import Metadata, {
   type TableMetadata,
   type BelongsToRelationship,
   type EntityMetadata,
-  HasOneRelationship,
-  HasManyRelationship,
-  HasAndBelongsToManyRelationship
+  type HasOneRelationship,
+  type HasManyRelationship,
+  type HasAndBelongsToManyRelationship
 } from "../../metadata";
 import {
   doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne,
-  isBelongsToRelationship
+  doesEntityBelongToRelAsHasOne
 } from "../../metadata/utils";
 import type { DynamoTableItem, EntityClass, Nullable } from "../../types";
-import { entityToTableItem } from "../../utils";
 import { type EntityAttributes } from "../types";
 import { extractForeignKeyFromEntity } from "./utils";
 
 // TODO typedoc
-// TODO are all needed?
 interface PersistLinkCallbackProps {
   key: DynamoTableItem;
   relMeta: BelongsToRelationship;
   relationshipId: string;
 }
 
-type HasRelationship =
-  | HasOneRelationship
-  | HasManyRelationship
-  | HasAndBelongsToManyRelationship;
-
-interface RelationshipTransactionsProps<T extends DynaRecord> {
+interface BelongsToTransactionBuilderProps<T extends DynaRecord> {
   /**
    * Entity for which relationships are being persisted
    */
@@ -70,18 +57,18 @@ interface RelationshipTransactionsProps<T extends DynaRecord> {
 
 // TODO update this
 /**
- * Builds transactions for persisting create/update relationships to linked dependency partitions
+ * Evaluates BelongsToRelationship meta data for an entity to build the transactions required to denormalize data
  *   - Sets/removes ForeignKeys
- *   - Adds/removes BelongsToLinks
+ *   - Provides call backs to provide custom functionality for denormalization strategy (Create or Update)
  */
-class RelationshipTransactions<T extends DynaRecord> {
-  readonly #props: RelationshipTransactionsProps<T>;
+class BelongsToTransactionBuilder<T extends DynaRecord> {
+  readonly #props: BelongsToTransactionBuilderProps<T>;
   readonly #entityMetadata: EntityMetadata;
   readonly #tableMetadata: TableMetadata;
   readonly #partitionKeyAlias: string;
   readonly #sortKeyAlias: string;
 
-  constructor(props: RelationshipTransactionsProps<T>) {
+  constructor(props: BelongsToTransactionBuilderProps<T>) {
     this.#props = props;
     this.#entityMetadata = Metadata.getEntity(props.Entity.name);
     this.#tableMetadata = Metadata.getTable(
@@ -91,36 +78,26 @@ class RelationshipTransactions<T extends DynaRecord> {
     this.#sortKeyAlias = this.#tableMetadata.sortKeyAttribute.alias;
   }
 
-  // TODO check that this will not allow partials... I think...
   public build<T extends EntityAttributes<DynaRecord>>(entityData: T): void {
-    const { relationships } = this.#entityMetadata;
+    for (const rel of this.#entityMetadata.belongsToRelationships) {
+      const relationshipId = extractForeignKeyFromEntity(rel, entityData);
 
-    for (const rel of Object.values(relationships)) {
-      const isBelongsTo = isBelongsToRelationship(rel);
+      const isUpdatingRelationshipId = relationshipId !== undefined;
 
-      if (isBelongsTo) {
-        const relationshipId = extractForeignKeyFromEntity(rel, entityData);
+      if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {
+        // TODO I think this only needed for create...
+        if (relationshipId !== null) {
+          this.buildRelationshipExistsConditionTransaction(rel, relationshipId);
+        }
 
-        const isUpdatingRelationshipId = relationshipId !== undefined;
+        const callbackParams = [rel, entityData, relationshipId] as const;
 
-        if (isUpdatingRelationshipId && this.isNullableString(relationshipId)) {
-          // TODO I think this only needed for create...
-          if (relationshipId !== null) {
-            this.buildRelationshipExistsConditionTransaction(
-              rel,
-              relationshipId
-            );
-          }
+        if (doesEntityBelongToRelAsHasMany(this.#props.Entity, rel)) {
+          this.buildBelongsToHasMany(...callbackParams);
+        }
 
-          const callbackParams = [rel, entityData, relationshipId] as const;
-
-          if (doesEntityBelongToRelAsHasMany(this.#props.Entity, rel)) {
-            this.buildBelongsToHasMany(...callbackParams);
-          }
-
-          if (doesEntityBelongToRelAsHasOne(this.#props.Entity, rel)) {
-            this.buildBelongsToHasOne(...callbackParams);
-          }
+        if (doesEntityBelongToRelAsHasOne(this.#props.Entity, rel)) {
+          this.buildBelongsToHasOne(...callbackParams);
         }
       }
     }
@@ -212,4 +189,4 @@ class RelationshipTransactions<T extends DynaRecord> {
   }
 }
 
-export default RelationshipTransactions;
+export default BelongsToTransactionBuilder;
