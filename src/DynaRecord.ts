@@ -75,34 +75,6 @@ abstract class DynaRecord implements DynaRecordBase {
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public readonly updatedAt: Date;
 
-  // /**
-  //  * Find an entity by Id and optionally include associations
-  //  * @param {string} id - Entity Id
-  //  * @param {Object} options - FindByIdOptions
-  //  * @returns An entity with included associations serialized
-  //  *
-  //  * @example Without included relationships
-  //  * ```typescript
-  //  * const user = await User.findById("userId");
-  //  * ```
-  //  *
-  //  * @example With included relationships
-  //  * ```typescript
-  //  * const user = await User.findById("userId", { include: [{ association: "profile" }] });
-  //  * ```
-  //  */
-  // public static async findById<
-  //   T extends DynaRecord,
-  //   Opts extends FindByIdOptions<T>
-  // >(
-  //   this: EntityClass<T>,
-  //   id: string,
-  //   options?: Opts
-  // ): Promise<Optional<T | FindByIdIncludesRes<T, Opts>>> {
-  //   const op = new FindById<T>(this);
-  //   return await op.run(id, options);
-  // }
-
   // TODO add type tests for all variations of having and not having included options
   // dont forget to test that its optional...
   // and test that it has functions..
@@ -271,7 +243,7 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Create an entity. If foreign keys are included in the attributes then BelongsToLinks will be demoralized accordingly
+   * Create an entity. If foreign keys are included in the attributes then links will be demoralized accordingly
    * @param attributes - Attributes of the model to create
    * @returns The new Entity
    *
@@ -289,7 +261,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
   /**
    * Update an entity. If foreign keys are included in the attribute then:
-   *   - BelongsToLinks will be created accordingly
+   *   - Manages associated relationship links as needed
    *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
    *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable

@@ -27,11 +27,20 @@ interface UpdateMetadata<T extends DynaRecord> {
 }
 
 /**
- * Facilitates the operation of updating an existing entity in the database, including handling updates to its attributes and managing changes to its relationships. It will de-normalize data to support relationship links
+ * Represents an update operation for a DynaRecord-backed entity, handling both attribute updates and relationship consistency via denormalization.
  *
- * The `Update` operation supports updating entity attributes and ensures consistency in relationships linked records. It handles the complexity of managing foreign keys and associated "BelongsToLink" records, including creating new links for updated relationships and removing outdated links when necessary.
+ * This class supports updating an existing entity and managing its relational links, specifically:
+ * - Updating entity attributes while preserving schema constraints.
+ * - Managing "BelongsTo" relationship links by creating or removing associated denormalized records.
+ * - Ensuring that if a foreign key changes, the old link record is removed, preventing stale references.
  *
- * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
+ * Only attributes defined on the model can be updated. Both compile-time and runtime checks help ensure that updated values are valid.
+ *
+ * **Example**
+ * ```typescript
+ * const updateOp = new Update(MyEntityClass);
+ * await updateOp.run("entityId", { name: "NewName", status: "active" });
+ * ```
  *
  * @template T - The type of the entity being updated, extending `DynaRecord`.
  */
@@ -44,9 +53,18 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Update entity transactions, including transactions to create/update denormalized records
-   * @param id The id of the entity being updated
-   * @param attributes Attributes on the model to update.
+   * Executes the update operation against DynamoDB.
+   *
+   * **What it does:**
+   * - Fetches the current state of the entity and any related "Has" relationship entities.
+   * - Constructs an update expression for the main entity's attributes.
+   * - Applies the same update expression to related entities and "BelongsTo" link records to maintain denormalized consistency.
+   * - Manages foreign key changes by creating new link items and removing old link items.
+   *
+   * @param id - The unique identifier of the entity being updated.
+   * @param attributes - Partial set of entity attributes to update. Must be defined on the entity's model.
+   * @returns A promise that resolves to the set of updated attributes as applied to the entity.
+   * @throws If the entity does not exist, an error is thrown.
    */
   public async run(
     id: string,
@@ -70,9 +88,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     return updatedAttrs;
   }
 
-  // TODO ensure that this is a strong read... unit test for it
   /**
-   * Queries for the entity being updated and any relationship related via a "has" relationship (EX: "HasMany")
+   * Pre-fetches the target entity and any related entities from the database. This is done using a strong read operation to ensure consistency.
+   *
+   * **What it does:**
+   * - Retrieves the main entity and all linked entities in the entity's partition.
+   * - Filters these entities to separate the main entity and its related link records.
+   *
+   * @param id - The unique identifier of the entity being fetched.
+   * @returns A promise that resolves to an object containing:
+   *   - `entityPreUpdate`: The current state of the entity before updates.
+   *   - `relatedEntities`: An array of related link entities.
+   * @throws If the entity does not exist, it throws an error.
+   * @private
    */
   private async preFetch(id: string): Promise<SelfAndLinkEntities> {
     const hasRelMetas = this.entityMetadata.hasRelationships;
@@ -102,9 +130,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Creates the updated entity and update expression used for processing
-   * @param attributes - Attributes being updated
-   * @returns
+   * Constructs updated attributes and the corresponding DynamoDB update expression.
+   *
+   * **What it does:**
+   * - Merges the provided attributes with `updatedAt` (automatically set to the current time).
+   * - Converts the updated attributes into a DynamoDB update expression.
+   *
+   * @param attributes - The partial attributes to be updated on the entity.
+   * @returns An object containing:
+   *   - `updatedAttrs`: The final updated attribute set.
+   *   - `expression`: A DynamoDB update expression to apply these changes.
+   * @private
    */
   private buildUpdateMetadata(attributes: UpdateOptions<T>): UpdateMetadata<T> {
     const updatedAttrs: UpdatedAttributes<T> = {
@@ -119,9 +155,15 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Build the transaction to update the entity
-   * @param id The id of the entity being updated
-   * @param updateExpression Dynamo expression for Update
+   * Adds a transaction operation to update the main entity's record.
+   *
+   * **What it does:**
+   * - Builds a DynamoDB Update transaction using the provided update expression.
+   * - Adds a condition to ensure the entity exists before updating.
+   *
+   * @param id - The unique identifier of the entity being updated.
+   * @param updateExpression - The DynamoDB update expression describing the changes.
+   * @private
    */
   private buildUpdateItemTransaction(
     id: string,
@@ -141,7 +183,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       {
         TableName: tableName,
         Key: tableKeys,
-        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
         ...updateExpression
       },
       `${this.EntityClass.name} with ID '${id}' does not exist`
@@ -149,11 +191,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Builds the transactions to persist BelongsTo relationships
-   *   - Denormalizes link data related entities partitions
-   *   - When a foreign key is updated it will remove the denormalized records from the old association
-   * @param id The id of the entity being updated
-   * @param updateExpression Dynamo expression for Update
+   * Builds all necessary transactions to handle "BelongsTo" relationships when updating the entity.
+   *
+   * **What it does:**
+   * - Checks if any foreign keys for "BelongsTo" relationships have changed.
+   * - If so, updates or creates new denormalized link records in the related partitions.
+   * - Removes old link records that are no longer valid due to foreign key changes.
+   *
+   * @param entityPreUpdate - The state of the entity before the update.
+   * @param updatedEntity - The entity state after proposed updates (partial attributes).
+   * @param updateExpression - The DynamoDB update expression representing the attribute updates.
+   * @private
    */
   private buildBelongsToTransactions(
     entityPreUpdate: EntityAttributes<DynaRecord>,
@@ -175,10 +223,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           updateExpression
         );
 
-        // The foreignKey value before update
+        // Handle removal of old link if the foreign key changed.
         const oldFk = extractForeignKeyFromEntity(relMeta, entityPreUpdate);
-
-        // If the record being updated is changing a foreign key then delete the old record
         if (oldFk !== undefined && oldFk !== foreignKey) {
           this.buildDeleteOldBelongsToLinkTransaction(entityId, relMeta, oldFk);
         }
@@ -187,11 +233,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Denormalizes data to the linked records on for belongs to relationships
-   * @param entityId
-   * @param relMeta
-   * @param foreignKey
-   * @param updateExpression
+   * Creates or updates the denormalized link record for a "BelongsTo" relationship to the related entity's partition.
+   *
+   * **What it does:**
+   * - Builds a DynamoDB Update transaction for the linked record identified by the relationship and foreign key.
+   * - Ensures the linked record exists before updating (if not, it will fail).
+   *
+   * @param entityId - The identifier of the main entity being updated.
+   * @param relMeta - Metadata describing the "BelongsTo" relationship.
+   * @param foreignKey - The new foreign key value after updates.
+   * @param updateExpression - The DynamoDB update expression for the attribute changes.
+   * @private
    */
   private buildUpdateBelongsToLinkedRecords(
     entityId: string,
@@ -211,17 +263,21 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addUpdate({
       TableName: tableName,
       Key: newKey,
-      // TODO test this error condition in unit tests and real
-      ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+      ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
       ...updateExpression
     });
   }
 
   /**
-   * When updating the foreign key of an entity, delete the BelongsToLink in the previous relationships partition
-   * @param entityId
-   * @param relMeta
-   * @param oldForeignKey
+   * Removes the old link record associated with a previous "BelongsTo" foreign key when the foreign key changes.
+   *
+   * **What it does:**
+   * - Builds a DynamoDB Delete transaction to remove the stale link record from the old relationship partition.
+   *
+   * @param entityId - The identifier of the entity whose foreign key was changed.
+   * @param relMeta - Metadata describing the "BelongsTo" relationship.
+   * @param oldForeignKey - The old foreign key value that should no longer link to the entity.
+   * @private
    */
   private buildDeleteOldBelongsToLinkTransaction(
     entityId: string,
@@ -244,9 +300,15 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Builds the transactions to update the linked entities on foreign associations (EX: from "HasMany")
-   * @param relatedEntities - Entity links from the entity being updated's partition. Used to build update link items in other partitions
-   * @param expression - The update expression to apply
+   * Builds transactions to update all related entities that exist in the main entity's partition, applying the same attribute updates.
+   *
+   * **What it does:**
+   * - For each linked entity found in `preFetch`, attempts to apply the same update expression.
+   * - Ensures each related entity exists before attempting to update.
+   *
+   * @param relatedEntities - An array of entities that are related to the primary entity and need synchronized attribute updates.
+   * @param expression - The DynamoDB update expression to apply to related entities.
+   * @private
    */
   private buildUpdateRelatedEntityLinks(
     relatedEntities: Entity[],
@@ -259,7 +321,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           [this.partitionKeyAlias]: entity.partitionKeyValue(),
           [this.sortKeyAlias]: this.EntityClass.name
         },
-        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
         ...expression
       });
     });

@@ -19,11 +19,20 @@ import { isBelongsToRelationship } from "../../metadata/utils";
 import { type BelongsToRelationship } from "../../metadata";
 
 /**
- * Represents the operation for creating a new entity in the database, including handling its attributes and any related entities' associations. It will handle de-normalizing data to support relationships
+ * Represents an operation to create a new entity record in DynamoDB, including all necessary
+ * denormalized relationship records. This ensures that "BelongsTo" and "HasMany" relationships
+ * are properly maintained at the time of entity creation.
  *
- * It encapsulates the logic required to translate entity attributes to a format suitable for DynamoDB, execute the creation transaction, and manage any relationships defined by the entity, such as "BelongsTo" or "HasMany" links.
+ * **What it does:**
+ * - Converts the given attributes into a DynamoDB-compatible format.
+ * - Inserts a new entity record, ensuring no duplicate primary key conflicts.
+ * - For each "BelongsTo" relationship that includes a foreign key:
+ *   - Verifies the referenced entity exists.
+ *   - Creates a denormalized link record in the related entity's partition.
+ * - If the entity's relationships imply additional denormalized records in its own partition,
+ *   those are also created after verifying the related entities exist.
  *
- * Only attributes defined on the model can be configured, and will be enforced via types and runtime schema validation.
+ * Only attributes defined on the entity model can be set, validated both at compile-time and runtime.
  *
  * @template T - The type of the entity being created, extending `DynaRecord`.
  */
@@ -36,9 +45,21 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Create an entity transaction, including relationship transactions (EX: Creating BelongsToLinks for HasMany, checking existence of relationships, etc)
-   * @param attributes
-   * @returns
+   * Executes the create operation.
+   *
+   * **What it does:**
+   * - Parses and validates the provided attributes against the entity schema.
+   * - Generates any required reserved attributes (like `id`, `createdAt`, and `updatedAt`).
+   * - Inserts the new entity record into DynamoDB, ensuring it doesn't already exist.
+   * - For each defined "BelongsTo" relationship, ensures the related entity exists and creates
+   *   a corresponding denormalized "link" record.
+   * - If the entity's creation implies that related records must also be denormalized into its own
+   *   partition (due to "BelongsTo" links), retrieves and inserts those link records.
+   *
+   * @param attributes - Attributes to initialize the new entity. Must be defined on the model and valid per schema constraints.
+   * @returns A promise that resolves to the newly created entity with all attributes, including automatically set fields.
+   * @throws If the entity already exists, a uniqueness violation error is raised.
+   * @throws If a required foreign key does not correspond to an existing entity, an error is raised.
    */
   public async run(attributes: CreateOptions<T>): Promise<EntityAttributes<T>> {
     const entityAttrs =
@@ -52,10 +73,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(entityData, tableItem);
 
-    // TODO ensure strong read... and unit test for it
+    // Attempt to fetch all belongs-to entities to properly create reverse denormalization links
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
 
-    // TODO test when this is not called . - Creating item with no belongs to might already exist
+    // If there are any belongs-to relationships, add the inverse link records into the new entity's partition
     if (belongsToTableItems.length > 0) {
       this.buildAddBelongsToLinkToSelfTransactions(
         reservedAttrs.id,
@@ -69,16 +90,22 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Builds the entity attributes
-   * @param attributes
-   * @returns
+   * Builds and returns entity attributes that must be reserved for system usage.
+   *
+   * **What it does:**
+   * - Generates a unique entity ID if the entity's schema does not specify an `id` field.
+   * - Sets `createdAt` and `updatedAt` to the current time.
+   * - Builds the partition and sort key values based on the entity's class and generated ID.
+   *
+   * @param entityAttrs - The user-provided entity attributes.
+   * @returns The combined attributes including all reserved fields.
+   * @private
    */
   private buildReservedAttributes(
     entityAttrs: EntityDefinedAttributes<DynaRecord>
   ): EntityAttributes<DynaRecord> {
     const { idField } = this.entityMetadata;
 
-    // If the entity has has a custom id field use that, otherwise generate a uuid
     const id =
       idField === undefined
         ? uuidv4()
@@ -105,8 +132,14 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Build the transaction for the parent entity Create item request
-   * @param tableItem
+   * Adds a "PutItem" transaction for the new entity record.
+   *
+   * **What it does:**
+   * - Ensures the primary key does not already exist, preventing duplication.
+   *
+   * @param tableItem - The DynamoDB table item for the entity to put.
+   * @param id - The unique identifier of the new entity.
+   * @private
    */
   private buildPutItemTransaction(
     tableItem: DynamoTableItem,
@@ -117,7 +150,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const putExpression = {
       TableName: tableName,
       Item: tableItem,
-      ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
+      ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})`
     };
     this.#transactionBuilder.addPut(
       putExpression,
@@ -125,10 +158,16 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
-  // TODO update typedoc
   /**
-   * Build transaction items for belongs to associations associations
-   * @param entityData
+   * Adds "PutItem" transactions to create denormalized "BelongsTo" link records in the related entity's partitions.
+   *
+   * **What it does:**
+   * - For each "BelongsTo" relationship with a defined foreign key, checks that the related entity exists.
+   * - Inserts a "link" item into the related entity's partition to maintain denormalized relationships.
+   *
+   * @param entityData - The complete set of entity attributes for the new entity.
+   * @param tableItem - The main entity's DynamoDB table item.
+   * @private
    */
   private buildBelongsToTransactions(
     entityData: EntityAttributes<DynaRecord>,
@@ -139,9 +178,8 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     for (const relMeta of this.entityMetadata.belongsToRelationships) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);
 
-      const isCreatingForeignKey = foreignKey !== undefined;
-
-      if (isCreatingForeignKey) {
+      if (foreignKey !== undefined) {
+        // Ensure referenced entity exists before linking
         this.buildRelationshipExistsConditionTransaction(relMeta, foreignKey);
 
         const key = buildBelongsToLinkKey(
@@ -155,7 +193,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
           {
             TableName: tableName,
             Item: { ...tableItem, ...key },
-            ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
+            ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})`
           },
           `${relMeta.target.name} with id: ${foreignKey} already has an associated ${this.EntityClass.name}`
         );
@@ -163,16 +201,17 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     }
   }
 
-  // TODO unrelated to this method... I should make a shared type since I am using EntityAttributes<DynaRecord> everywhere
   /**
-   * Retrieves the associated DynamoDB records for all entities that the given entity
-   * is related to via "belongsTo" relationships.
+   * Retrieves the DynamoDB items for all entities that the new entity references via "BelongsTo" relationships.
    *
+   * **What it does:**
+   * - For each "BelongsTo" relationship, queries DynamoDB for the related entity record.
+   * - Returns all found related items as an array.
+   * - If no relationships or no foreign keys are present, returns an empty array.
    *
-   * If there are no "belongsTo" relationships or no foreign keys are present, it returns an empty array.
-   *
-   * @param entityData - The attributes of the entity instance for which associated items need to be retrieved.
-   * @returns A promise that resolves to an array of the associated DynamoDB table items.
+   * @param entityData - The attributes of the entity being created.
+   * @returns A promise that resolves to an array of related DynamoDB items.
+   * @private
    */
   private async getBelongsToTableItems(
     entityData: EntityAttributes<DynaRecord>
@@ -187,7 +226,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     belongsToRelMetas.forEach(relMeta => {
       const fk = extractForeignKeyFromEntity(relMeta, entityData);
-
       if (fk !== undefined) {
         transactionBuilder.addGet({
           TableName: tableName,
@@ -199,33 +237,33 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       }
     });
 
-    // TODO make sure there is a test when this has no transactions to fetch
     if (transactionBuilder.hasTransactions()) {
       const results = await transactionBuilder.executeTransaction();
-
-      const tableItems = results.reduce<DynamoTableItem[]>((acc, res) => {
+      return results.reduce<DynamoTableItem[]>((acc, res) => {
         if (res.Item !== undefined) acc.push(res.Item);
         return acc;
       }, []);
-
-      return tableItems;
     }
 
     return [];
   }
 
   /**
-   * Builds a ConditionCheck transaction that ensures the associated relationship exists
-   * @param rel
-   * @param relationshipId
-   * @returns
+   * Adds a condition check transaction to ensure that the entity referenced by a "BelongsTo" foreign key exists.
+   *
+   * **What it does:**
+   * - Checks the existence of the related entity before creating the link item.
+   * - If the related entity does not exist, the transaction will fail, preventing creation of dangling references.
+   *
+   * @param rel - The "BelongsTo" relationship metadata.
+   * @param relationshipId - The foreign key value referencing the related entity.
+   * @private
    */
   private buildRelationshipExistsConditionTransaction(
     rel: BelongsToRelationship,
     relationshipId: string
   ): void {
     const { name: tableName } = this.tableMetadata;
-
     const errMsg = `${rel.target.name} with ID '${relationshipId}' does not exist`;
 
     const conditionCheck: ConditionCheck = {
@@ -240,7 +278,18 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
-  // TODO typedoc - include that entity id is the main entity being updated
+  /**
+   * For each related entity referenced by a "BelongsTo" relationship, insert a denormalized copy of that entity
+   * into the new entity's partition. This maintains a consistent, denormalized view of relationships.
+   *
+   * **What it does:**
+   * - Adds "PutItem" operations to create link records in the newly created entity's partition.
+   * - Ensures these link records don't already exist.
+   *
+   * @param entityId - The newly created entity's ID.
+   * @param belongsToTableItems - The table items representing each related "BelongsTo" entity.
+   * @private
+   */
   private buildAddBelongsToLinkToSelfTransactions(
     entityId: string,
     belongsToTableItems: DynamoTableItem[]
@@ -254,17 +303,14 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       const key = {
         [this.partitionKeyAlias]: pk,
         [this.sortKeyAlias]: relationshipType
-        // TODO should I store this way?
-        // [this.sortKeyAlias]: tableItem[this.partitionKeyAlias]
       };
 
       this.#transactionBuilder.addPut(
         {
           TableName: this.tableMetadata.name,
           Item: { ...tableItem, ...key },
-          ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})` // Ensure item doesn't already exist
+          ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})`
         },
-        // TODO test for error condition. Its the opposite of the one elsewhere in here
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `${this.EntityClass.name} already has an associated ${relationshipType}`
       );
