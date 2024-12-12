@@ -53,7 +53,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
-    this.buildRelationshipTransactions(entityData);
+    this.buildRelationshipTransactions(entityData, tableItem);
 
     // TODO ensure strong read... and unit test for it
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
@@ -134,7 +134,8 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @param entityData
    */
   private buildRelationshipTransactions(
-    entityData: EntityAttributes<DynaRecord>
+    entityData: EntityAttributes<DynaRecord>,
+    tableItem: DynamoTableItem
   ): void {
     const tableName = this.tableMetadata.name;
     const partitionKeyAlias = this.tableMetadata.partitionKeyAttribute.alias;
@@ -142,17 +143,16 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
-      linkRecordAddPutOptions: ({ tableItem, relMeta, relationshipId }) => {
-        const putExpression: Put = {
-          TableName: tableName,
-          Item: tableItem,
-          ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
-        };
-
-        return [
-          putExpression,
+      // TODO remove this, then implement the new callback
+      persistLinkCb: ({ key, relMeta, relationshipId }) => {
+        this.#transactionBuilder.addPut(
+          {
+            TableName: tableName,
+            Item: { ...tableItem, ...key },
+            ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
+          },
           `${relMeta.target.name} with id: ${relationshipId} already has an associated ${this.EntityClass.name}`
-        ];
+        );
       }
     });
 

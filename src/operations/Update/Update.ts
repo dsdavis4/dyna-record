@@ -8,6 +8,7 @@ import type {
 import { entityToTableItem } from "../../utils";
 import {
   RelationshipTransactions,
+  UpdateExpression,
   expressionBuilder,
   extractForeignKeyFromEntity
 } from "../utils";
@@ -156,7 +157,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       ...updatedAttrs
     } as EntityAttributes<DynaRecord>;
 
-    this.buildRelationshipTransactions(updatedEntity);
+    this.buildRelationshipTransactions(updatedEntity, expression);
     await this.#transactionBuilder.executeTransaction();
 
     return updatedAttrs;
@@ -205,6 +206,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     return updatedAttrs;
   }
 
+  // TODO update typedoc
   /**
    * Builds the transactions to persist relationships
    *   - Creates BelongsToLinks when a foreign key changes
@@ -213,24 +215,22 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param attributes Attributes on the model to update.
    */
   private buildRelationshipTransactions(
-    entity: EntityAttributes<DynaRecord>
+    entity: EntityAttributes<DynaRecord>,
+    updateExpression: UpdateExpression
   ): void {
     const tableName = this.tableMetadata.name;
 
     const relationshipTransactions = new RelationshipTransactions({
       Entity: this.EntityClass,
       transactionBuilder: this.#transactionBuilder,
-      linkRecordAddPutOptions: ({ tableItem }) => {
-        const putExpression: Put = {
+      persistLinkCb: ({ key }) => {
+        this.#transactionBuilder.addUpdate({
           TableName: tableName,
-          Item: tableItem
-        };
-
-        // TODO should this be an update? -- yes
-
-        debugger;
-
-        return [putExpression];
+          Key: key,
+          // TODO test this error condition in unit tests and real
+          ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`, // Only update the item if it exists
+          ...updateExpression
+        });
       },
       belongsToHasManyCb: (rel, updatedEntity) => {
         debugger;

@@ -1,3 +1,4 @@
+import { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type DynaRecord from "../../DynaRecord";
 import type {
   ConditionCheck,
@@ -22,8 +23,10 @@ import { entityToTableItem } from "../../utils";
 import { type EntityAttributes } from "../types";
 import { extractForeignKeyFromEntity } from "./utils";
 
-interface LinkRecordAddPutOptionsParams {
-  tableItem: DynamoTableItem;
+// TODO typedoc
+// TODO are all needed?
+interface PersistLinkCallbackProps {
+  key: DynamoTableItem;
   relMeta: BelongsToRelationship;
   relationshipId: string;
 }
@@ -42,14 +45,9 @@ interface RelationshipTransactionsProps<T extends DynaRecord> {
    * TransactionBuilder instance to add relationship transactions to
    */
   readonly transactionBuilder: TransactWriteBuilder;
-  // TODO remove
-  // /**
-  //  * Put expression to use when creating a link record
-  //  * @returns
-  //  */
-  linkRecordAddPutOptions: (
-    props: LinkRecordAddPutOptionsParams
-  ) => Parameters<typeof TransactWriteBuilder.prototype.addPut>;
+
+  // TODO typedoc
+  persistLinkCb: (props: PersistLinkCallbackProps) => void;
   /**
    * Optional callback to add logic when  persisting BelongsTo HasMany relationships
    * @param rel The BelongsToRelationship metadata of which the Entity BelongsTo HasMany of
@@ -70,8 +68,9 @@ interface RelationshipTransactionsProps<T extends DynaRecord> {
   ) => void;
 }
 
+// TODO update this
 /**
- * Builds transactions for persisting create/update relationships
+ * Builds transactions for persisting create/update relationships to linked dependency partitions
  *   - Sets/removes ForeignKeys
  *   - Adds/removes BelongsToLinks
  */
@@ -123,8 +122,6 @@ class RelationshipTransactions<T extends DynaRecord> {
             this.buildBelongsToHasOne(...callbackParams);
           }
         }
-      } else {
-        // TODO
       }
     }
   }
@@ -172,13 +169,13 @@ class RelationshipTransactions<T extends DynaRecord> {
     }
 
     if (relationshipId !== null) {
-      const keys = {
+      const key = {
         [this.#partitionKeyAlias]:
           relMeta.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: this.#props.Entity.name
       };
 
-      this.putLinkRecord(relMeta, entityData, keys, relationshipId);
+      this.#props.persistLinkCb({ key, relMeta, relationshipId });
     }
   }
 
@@ -198,7 +195,7 @@ class RelationshipTransactions<T extends DynaRecord> {
     }
 
     if (relationshipId !== null) {
-      const keys = {
+      const key = {
         [this.#partitionKeyAlias]:
           relMeta.target.partitionKeyValue(relationshipId),
         [this.#sortKeyAlias]: this.#props.Entity.partitionKeyValue(
@@ -206,28 +203,8 @@ class RelationshipTransactions<T extends DynaRecord> {
         )
       };
 
-      this.putLinkRecord(relMeta, entityData, keys, relationshipId);
+      this.#props.persistLinkCb({ key, relMeta, relationshipId });
     }
-  }
-
-  private putLinkRecord(
-    relMeta: BelongsToRelationship,
-    entityData: EntityAttributes<DynaRecord>,
-    keys: Record<string, string>,
-    relationshipId: string
-  ): void {
-    const tableItem: DynamoTableItem = {
-      ...entityToTableItem(this.#props.Entity, entityData),
-      ...keys
-    };
-
-    this.#props.transactionBuilder.addPut(
-      ...this.#props.linkRecordAddPutOptions({
-        tableItem,
-        relMeta,
-        relationshipId
-      })
-    );
   }
 
   private isNullableString(val: unknown): val is Nullable<string> {
