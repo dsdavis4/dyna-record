@@ -1,17 +1,12 @@
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
-
 import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils";
 import DynamoClient from "../../dynamo-utils/DynamoClient";
 import type { DynamoTableItem } from "../../types";
-import {
-  isBelongsToLinkDynamoItem,
-  isString,
-  tableItemToEntity
-} from "../../utils";
+import { isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import type {
   EntityKeyConditions,
@@ -19,12 +14,6 @@ import type {
   QueryResult,
   QueryResults
 } from "./types";
-import Logger from "../../Logger";
-
-// TODO update that this does nto return belongs to links and returns ... dyna record instances?
-
-// TODO I think its setting everything to the class of the calling class, it instead should return the correct class
-//      I think I already have a type that could help with this, by extracting relationships...
 
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
