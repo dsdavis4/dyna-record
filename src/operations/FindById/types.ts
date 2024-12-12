@@ -6,6 +6,7 @@ import type {
   RelationshipAttributeNames
 } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
+import { QueryResult, QueryResults } from "../Query";
 
 /**
  * Defines options for the `FindById` operation, allowing specification of additional associations to include in the query result.
@@ -34,8 +35,8 @@ export type IncludedAssociations<T extends DynaRecord> = NonNullable<
  * @property {BelongsToLinkDynamoItem[]} belongsToLinks - An array of `BelongsToLinkDynamoItem` instances associated with the main entity item.
  */
 export interface SortedQueryResults {
-  item: QueryItems[number];
-  belongsToLinks: BelongsToLinkDynamoItem[];
+  entity?: QueryResult<DynaRecord>;
+  relatedEntities: QueryResults<DynaRecord>;
 }
 
 /**

@@ -15,6 +15,8 @@ import type {
   QueryResults
 } from "./types";
 
+// TODO results in here should return the PK of their parent entity instead of the linked record
+
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
  *
