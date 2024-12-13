@@ -18,12 +18,6 @@ import OperationBase from "../OperationBase";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
 
-// TODO start here... work on delete
-
-// TODO reimplement this, I commented out for testing because this was getting type errors
-// TODO if I have to add extra denormalization on create then I will need to update the deletes as well
-//       - I do need this because I am denormalizing extra records
-
 /**
  * Implements the operation for deleting an entity and its related data from the database within the ORM framework.
  *
@@ -69,230 +63,230 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    // const items = await this.EntityClass.query<DynaRecord>(id);
-    // if (items.length === 0) {
-    //   throw new NotFoundError(`Item does not exist: ${id}`);
-    // }
-    // for (const item of items) {
-    //   if (item.id === id && this.isEntityClass(item)) {
-    //     this.buildDeleteItemTransaction(item, {
-    //       errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
-    //     });
-    //     this.buildDeleteAssociatedBelongsTransaction(id, item);
-    //   }
-    //   if (item instanceof BelongsToLink) {
-    //     this.buildDeleteItemTransaction(item, {
-    //       errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-    //         {
-    //           [this.#partitionKeyField]:
-    //             item[this.#partitionKeyField as keyof BelongsToLink],
-    //           [this.#sortKeyField]:
-    //             item[this.#sortKeyField as keyof BelongsToLink]
-    //         }
-    //       )}`
-    //     });
-    //     this.buildNullifyForeignKeyTransaction(item);
-    //     this.buildDeleteJoinTableLinkTransaction(item);
-    //   }
-    // }
-    // if (this.#validationErrors.length === 0) {
-    //   await this.#transactionBuilder.executeTransaction();
-    // } else {
-    //   throw new TransactionWriteFailedError(
-    //     this.#validationErrors,
-    //     "Failed Validations"
-    //   );
-    // }
+    const items = await this.EntityClass.query<DynaRecord>(id);
+    if (items.length === 0) {
+      throw new NotFoundError(`Item does not exist: ${id}`);
+    }
+    for (const item of items) {
+      if (item.id === id && this.isEntityClass(item)) {
+        this.buildDeleteItemTransaction(item, {
+          errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
+        });
+        this.buildDeleteAssociatedBelongsTransaction(id, item);
+      }
+      if (item instanceof BelongsToLink) {
+        this.buildDeleteItemTransaction(item, {
+          errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+            {
+              [this.#partitionKeyField]:
+                item[this.#partitionKeyField as keyof BelongsToLink],
+              [this.#sortKeyField]:
+                item[this.#sortKeyField as keyof BelongsToLink]
+            }
+          )}`
+        });
+        this.buildNullifyForeignKeyTransaction(item);
+        this.buildDeleteJoinTableLinkTransaction(item);
+      }
+    }
+    if (this.#validationErrors.length === 0) {
+      await this.#transactionBuilder.executeTransaction();
+    } else {
+      throw new TransactionWriteFailedError(
+        this.#validationErrors,
+        "Failed Validations"
+      );
+    }
   }
 
-  // /**
-  //  * Deletes an item
-  //  * @param item
-  //  */
-  // private buildDeleteItemTransaction(
-  //   item: BelongsToLink | ItemKeys<T>,
-  //   options: DeleteOptions
-  // ): void {
-  //   const pkField = this.#partitionKeyField as keyof typeof item;
-  //   const skField = this.#sortKeyField as keyof typeof item;
+  /**
+   * Deletes an item
+   * @param item
+   */
+  private buildDeleteItemTransaction(
+    item: BelongsToLink | ItemKeys<T>,
+    options: DeleteOptions
+  ): void {
+    const pkField = this.#partitionKeyField as keyof typeof item;
+    const skField = this.#sortKeyField as keyof typeof item;
 
-  //   this.#transactionBuilder.addDelete(
-  //     {
-  //       TableName: this.#tableName,
-  //       Key: {
-  //         [this.partitionKeyAlias]: item[pkField],
-  //         [this.sortKeyAlias]: item[skField]
-  //       }
-  //     },
-  //     options.errorMessage
-  //   );
-  // }
+    this.#transactionBuilder.addDelete(
+      {
+        TableName: this.#tableName,
+        Key: {
+          [this.partitionKeyAlias]: item[pkField],
+          [this.sortKeyAlias]: item[skField]
+        }
+      },
+      options.errorMessage
+    );
+  }
 
-  // /**
-  //  * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
-  //  * @param item - BelongsToLink from HasAndBelongsToMany relationship
-  //  */
-  // private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
-  //   const relMeta = this.#relationsLookup[item.foreignEntityType];
+  /**
+   * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
+   * @param item - BelongsToLink from HasAndBelongsToMany relationship
+   */
+  private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
+    const relMeta = this.#relationsLookup[item.foreignEntityType];
 
-  //   if (isHasAndBelongsToManyRelationship(relMeta)) {
-  //     // Inverse the keys to delete the other JoinTable entry
-  //     const belongsToLinksKeys: ItemKeys<T> = {
-  //       // const belongsToLinksKeys: ItemKeys<T> = {
-  //       [this.#partitionKeyField]:
-  //         item[this.#sortKeyField as keyof BelongsToLink],
-  //       [this.#sortKeyField]:
-  //         item[this.#partitionKeyField as keyof BelongsToLink]
-  //     };
+    if (isHasAndBelongsToManyRelationship(relMeta)) {
+      // Inverse the keys to delete the other JoinTable entry
+      const belongsToLinksKeys: ItemKeys<T> = {
+        // const belongsToLinksKeys: ItemKeys<T> = {
+        [this.#partitionKeyField]:
+          item[this.#sortKeyField as keyof BelongsToLink],
+        [this.#sortKeyField]:
+          item[this.#partitionKeyField as keyof BelongsToLink]
+      };
 
-  //     this.buildDeleteItemTransaction(belongsToLinksKeys, {
-  //       errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-  //         belongsToLinksKeys
-  //       )}`
-  //     });
-  //   }
-  // }
+      this.buildDeleteItemTransaction(belongsToLinksKeys, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          belongsToLinksKeys
+        )}`
+      });
+    }
+  }
 
-  // /**
-  //  * If the item being deleted has a foreign key reference, nullify the associated relationship's ForeignKey attribute
-  //  * If the ForeignKey is non nullable than it throws a NullConstraintViolationError
-  //  * @param item
-  //  */
-  // private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
-  //   const relMeta = this.#relationsLookup[item.foreignEntityType];
+  /**
+   * If the item being deleted has a foreign key reference, nullify the associated relationship's ForeignKey attribute
+   * If the ForeignKey is non nullable than it throws a NullConstraintViolationError
+   * @param item
+   */
+  private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
+    const relMeta = this.#relationsLookup[item.foreignEntityType];
 
-  //   if (isRelationshipMetadataWithForeignKey(relMeta)) {
-  //     const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
+    if (isRelationshipMetadataWithForeignKey(relMeta)) {
+      const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
 
-  //     const attrMeta = Object.values(entityAttrs).find(
-  //       attr => attr.name === relMeta.foreignKey
-  //     );
+      const attrMeta = Object.values(entityAttrs).find(
+        attr => attr.name === relMeta.foreignKey
+      );
 
-  //     if (attrMeta?.nullable === false) {
-  //       this.trackValidationError(
-  //         new NullConstraintViolationError(
-  //           `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
-  //         )
-  //       );
-  //     }
+      if (attrMeta?.nullable === false) {
+        this.trackValidationError(
+          new NullConstraintViolationError(
+            `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
+          )
+        );
+      }
 
-  //     const tableKeys = entityToTableItem(this.EntityClass, {
-  //       [this.#partitionKeyField]: relMeta.target.partitionKeyValue(
-  //         item.foreignKey
-  //       ),
-  //       [this.#sortKeyField]: relMeta.target.name
-  //     });
-  //     const tableAttrs = entityToTableItem(relMeta.target, {
-  //       [relMeta.foreignKey]: null
-  //     });
+      const tableKeys = entityToTableItem(this.EntityClass, {
+        [this.#partitionKeyField]: relMeta.target.partitionKeyValue(
+          item.foreignKey
+        ),
+        [this.#sortKeyField]: relMeta.target.name
+      });
+      const tableAttrs = entityToTableItem(relMeta.target, {
+        [relMeta.foreignKey]: null
+      });
 
-  //     const expression = expressionBuilder(tableAttrs);
+      const expression = expressionBuilder(tableAttrs);
 
-  //     this.#transactionBuilder.addUpdate(
-  //       {
-  //         TableName: this.#tableName,
-  //         Key: tableKeys,
-  //         UpdateExpression: expression.UpdateExpression,
-  //         ExpressionAttributeNames: expression.ExpressionAttributeNames
-  //       },
-  //       `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
-  //     );
-  //   }
-  // }
+      this.#transactionBuilder.addUpdate(
+        {
+          TableName: this.#tableName,
+          Key: tableKeys,
+          UpdateExpression: expression.UpdateExpression,
+          ExpressionAttributeNames: expression.ExpressionAttributeNames
+        },
+        `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
+      );
+    }
+  }
 
-  // /**
-  //  * Deletes associated BelongsTo relationships for each ForeignKey of the item being deleted
-  //  * @param entityId
-  //  * @param item
-  //  */
-  // private buildDeleteAssociatedBelongsTransaction(
-  //   entityId: string,
-  //   item: T
-  // ): void {
-  //   this.#belongsToRelationships.forEach(relMeta => {
-  //     if (
-  //       isKeyOfObject(item, relMeta.foreignKey) &&
-  //       item[relMeta.foreignKey] !== undefined
-  //     ) {
-  //       const foreignKeyValue = item[relMeta.foreignKey];
+  /**
+   * Deletes associated BelongsTo relationships for each ForeignKey of the item being deleted
+   * @param entityId
+   * @param item
+   */
+  private buildDeleteAssociatedBelongsTransaction(
+    entityId: string,
+    item: T
+  ): void {
+    this.#belongsToRelationships.forEach(relMeta => {
+      if (
+        isKeyOfObject(item, relMeta.foreignKey) &&
+        item[relMeta.foreignKey] !== undefined
+      ) {
+        const foreignKeyValue = item[relMeta.foreignKey];
 
-  //       if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
-  //         this.buildDeleteBelongsToHasManyTransaction(
-  //           relMeta,
-  //           entityId,
-  //           foreignKeyValue
-  //         );
-  //       }
+        if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
+          this.buildDeleteBelongsToHasManyTransaction(
+            relMeta,
+            entityId,
+            foreignKeyValue
+          );
+        }
 
-  //       if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
-  //         this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
-  //       }
-  //     }
-  //   });
-  // }
+        if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
+          this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
+        }
+      }
+    });
+  }
 
-  // /**
-  //  * Deletes associated BelongsToLink for a BelongsTo HasMany relationship
-  //  * @param relMeta
-  //  * @param entityId
-  //  * @param foreignKeyValue
-  //  */
-  // private buildDeleteBelongsToHasManyTransaction(
-  //   relMeta: BelongsToRelationship,
-  //   entityId: string,
-  //   foreignKeyValue: string
-  // ): void {
-  //   const belongsToLinksKeys: ItemKeys<T> = {
-  //     [this.#partitionKeyField]:
-  //       relMeta.target.partitionKeyValue(foreignKeyValue),
-  //     [this.#sortKeyField]: this.EntityClass.partitionKeyValue(entityId)
-  //   };
+  /**
+   * Deletes associated BelongsToLink for a BelongsTo HasMany relationship
+   * @param relMeta
+   * @param entityId
+   * @param foreignKeyValue
+   */
+  private buildDeleteBelongsToHasManyTransaction(
+    relMeta: BelongsToRelationship,
+    entityId: string,
+    foreignKeyValue: string
+  ): void {
+    const belongsToLinksKeys: ItemKeys<T> = {
+      [this.#partitionKeyField]:
+        relMeta.target.partitionKeyValue(foreignKeyValue),
+      [this.#sortKeyField]: this.EntityClass.partitionKeyValue(entityId)
+    };
 
-  //   this.buildDeleteItemTransaction(belongsToLinksKeys, {
-  //     errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-  //       belongsToLinksKeys
-  //     )}`
-  //   });
-  // }
+    this.buildDeleteItemTransaction(belongsToLinksKeys, {
+      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        belongsToLinksKeys
+      )}`
+    });
+  }
 
-  // /**
-  //  * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
-  //  * @param relMeta
-  //  * @param foreignKeyValue
-  //  */
-  // private buildDeleteBelongsToHasOneTransaction(
-  //   relMeta: BelongsToRelationship,
-  //   foreignKeyValue: string
-  // ): void {
-  //   const belongsToLinksKeys: ItemKeys<T> = {
-  //     [this.#partitionKeyField]:
-  //       relMeta.target.partitionKeyValue(foreignKeyValue),
-  //     [this.#sortKeyField]: this.EntityClass.name
-  //   };
+  /**
+   * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
+   * @param relMeta
+   * @param foreignKeyValue
+   */
+  private buildDeleteBelongsToHasOneTransaction(
+    relMeta: BelongsToRelationship,
+    foreignKeyValue: string
+  ): void {
+    const belongsToLinksKeys: ItemKeys<T> = {
+      [this.#partitionKeyField]:
+        relMeta.target.partitionKeyValue(foreignKeyValue),
+      [this.#sortKeyField]: this.EntityClass.name
+    };
 
-  //   this.buildDeleteItemTransaction(belongsToLinksKeys, {
-  //     errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-  //       belongsToLinksKeys
-  //     )}`
-  //   });
-  // }
+    this.buildDeleteItemTransaction(belongsToLinksKeys, {
+      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        belongsToLinksKeys
+      )}`
+    });
+  }
 
-  // /**
-  //  * Type guard to check if the item being evaluated is the currentClass
-  //  * @param item
-  //  * @returns
-  //  */
-  // private isEntityClass(item: any): item is T {
-  //   return item instanceof DynaRecord;
-  // }
+  /**
+   * Type guard to check if the item being evaluated is the currentClass
+   * @param item
+   * @returns
+   */
+  private isEntityClass(item: any): item is T {
+    return item instanceof DynaRecord;
+  }
 
-  // /**
-  //  * Track validation errors and throw AggregateError after all validations have been run
-  //  * @param err
-  //  */
-  // private trackValidationError(err: Error): void {
-  //   this.#validationErrors.push(err);
-  // }
+  /**
+   * Track validation errors and throw AggregateError after all validations have been run
+   * @param err
+   */
+  private trackValidationError(err: Error): void {
+    this.#validationErrors.push(err);
+  }
 }
 
 export default Delete;
