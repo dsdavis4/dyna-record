@@ -105,7 +105,6 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     await transactionBuilder.executeTransaction();
   }
 
-  // TODO does this need to be updated?
   /**
    * Delete a JoinTable entry
    * Deletes BelongsToLink from each associated Entity's partition
