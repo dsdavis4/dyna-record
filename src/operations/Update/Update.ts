@@ -1,6 +1,6 @@
 import type DynaRecord from "../../DynaRecord";
 import {
-  ConditionCheck,
+  type ConditionCheck,
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils";
@@ -19,16 +19,10 @@ import {
 } from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdatedAttributes, UpdateOptions } from "./types";
-import type {
-  DynamoTableItem,
-  EntityClass,
-  ForeignKey,
-  WithRequired
-} from "../../types";
+import type { EntityClass, WithRequired } from "../../types";
 import Metadata from "../../metadata";
 import { type EntityAttributesOnly, type EntityAttributes } from "../types";
 import { NotFoundError } from "../../errors";
-import { isRelationshipMetadataWithForeignKey } from "../../metadata/utils";
 
 type Entity = EntityAttributesOnly<DynaRecord>;
 
@@ -136,9 +130,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       expression,
       preFetch.newBelongsToEntityLookup
     );
-
-    // TODO I need to add a condition (or make sure its there). That when a foreign key is being updated to something new, that a condition expression is created
-    //     it should happen on any linked put
 
     await this.#transactionBuilder.executeTransaction();
 
@@ -364,7 +355,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           isUpdatingForeignKey && foreignKey === null;
 
         if (isAddingForeignKey) {
-          // TODO add condition
           this.buildPutBelongsToLinkedRecords(
             updatedEntity,
             relMeta,
@@ -374,31 +364,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             `${this.EntityClass.name} already has an associated ${relMeta.target.name}`
           );
         } else if (isRemovingForeignKey) {
-          this.buildDeleteOldBelongsToLinksTransaction(
-            entityId,
-            relMeta,
-            oldFk
-          );
+          this.removeForeignKeysTransactions(entityId, relMeta, oldFk);
         } else if (isUpdatingForeignKey) {
-          // Keys to delete the linked record from the foreign entities partition
-          const oldKeysToForeignEntity = buildBelongsToLinkKey(
-            this.EntityClass,
-            entityId,
-            relMeta,
-            oldFk
-          );
-
-          this.#transactionBuilder.addDelete({
-            TableName: this.tableMetadata.name,
-            Key: oldKeysToForeignEntity
-          });
-
-          this.buildPutBelongsToLinkedRecords(
+          this.updateForeignKeyTransactions(
             updatedEntity,
             relMeta,
             foreignKey,
-            newBelongsToEntityLookup,
-            "attribute_exists"
+            oldFk,
+            newBelongsToEntityLookup
           );
         } else {
           this.buildUpdateBelongsToLinkedRecords(
@@ -448,8 +421,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     });
   }
 
-  // TODO unit test this
-  // TODO typedoc - creates a new
+  /**
+   * Builds transactions to persist an updated/new belongs to record
+   * Denormalizes data to the entity being updates's partition and a link to the foreign entities partition
+   * Ensures that the new entity foreign key exists
+   * @param updatedEntity
+   * @param relMeta
+   * @param foreignKey
+   * @param newBelongsToEntityLookup
+   * @param persistToSelfCondition
+   * @param persistToSelfConditionErrMessage
+   */
   private buildPutBelongsToLinkedRecords(
     updatedEntity: PartialEntityWithId,
     relMeta: BelongsToRelationship,
@@ -459,7 +441,35 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     persistToSelfConditionErrMessage?: string
   ): void {
     // Ensure that the new foreign key is valid and exists
+    this.buildEntityExistsCondition(relMeta, foreignKey);
 
+    // Denormalize entity being updated to foreign partition
+    this.buildLinkToForeignEntityTransaction(
+      updatedEntity,
+      relMeta,
+      foreignKey
+    );
+
+    // Add denormalized record for new entity to self
+    this.buildAddForeignEntityToSelfTransaction(
+      updatedEntity,
+      relMeta,
+      foreignKey,
+      newBelongsToEntityLookup,
+      persistToSelfCondition,
+      persistToSelfConditionErrMessage
+    );
+  }
+
+  /**
+   * Builds a condition expression that an entity exists
+   * @param relMeta
+   * @param foreignKey
+   */
+  private buildEntityExistsCondition(
+    relMeta: BelongsToRelationship,
+    foreignKey: string
+  ): void {
     const errMsg = `${relMeta.target.name} with ID '${foreignKey}' does not exist`;
 
     const conditionCheck: ConditionCheck = {
@@ -472,7 +482,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     };
 
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
-    // Denormalize entity being updated to foreign partition
+  }
+
+  /**
+   * Denormalizes a link for the entity being updated to the new entities partition
+   * @param updatedEntity
+   * @param relMeta
+   * @param foreignKey
+   */
+  private buildLinkToForeignEntityTransaction(
+    updatedEntity: PartialEntityWithId,
+    relMeta: BelongsToRelationship,
+    foreignKey: string
+  ): void {
     const key = buildBelongsToLinkKey(
       this.EntityClass,
       updatedEntity.id,
@@ -488,9 +510,25 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       },
       `${relMeta.target.name} with id: ${foreignKey} already has an associated ${this.EntityClass.name}`
     );
+  }
 
-    // Add denormalized record for new entity to self
-
+  /**
+   * Builds the transaction to add or replace the linked record for the foreign entity in the entity being updates partition
+   * @param updatedEntity
+   * @param relMeta
+   * @param foreignKey
+   * @param newBelongsToEntityLookup
+   * @param persistToSelfCondition
+   * @param persistToSelfConditionErrMessage
+   */
+  private buildAddForeignEntityToSelfTransaction(
+    updatedEntity: PartialEntityWithId,
+    relMeta: BelongsToRelationship,
+    foreignKey: string,
+    newBelongsToEntityLookup: BelongsToEntityLookup,
+    persistToSelfCondition: "attribute_not_exists" | "attribute_exists",
+    persistToSelfConditionErrMessage?: string
+  ): void {
     const linkedEntity = newBelongsToEntityLookup[foreignKey];
     const keyForSelf = {
       [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(
@@ -513,8 +551,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
-  // TODO need to delete the other foreign key
-  // unit test this second delete
+  // TODO unit test this second delete
   /**
    * Removes the old link record associated with a previous "BelongsTo" foreign key when the foreign key changes.
    *
@@ -526,8 +563,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param oldForeignKey - The old foreign key value that should no longer link to the entity.
    * @private
    */
-  // TODO rename to handle removeForeignKey
-  private buildDeleteOldBelongsToLinksTransaction(
+  private removeForeignKeysTransactions(
     entityId: string,
     relMeta: BelongsToRelationship,
     oldForeignKey: string
@@ -555,6 +591,43 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       TableName: this.tableMetadata.name,
       Key: oldKeysToForeignEntity
     });
+  }
+
+  /**
+   * Builds the transactions for updating the foreign key of an entity from one key to another
+   * @param updatedEntity
+   * @param relMeta
+   * @param newForeignKey
+   * @param oldForeignKey
+   * @param newBelongsToEntityLookup
+   */
+  private updateForeignKeyTransactions(
+    updatedEntity: PartialEntityWithId,
+    relMeta: BelongsToRelationship,
+    newForeignKey: string,
+    oldForeignKey: string,
+    newBelongsToEntityLookup: BelongsToEntityLookup
+  ): void {
+    // Keys to delete the linked record from the foreign entities partition
+    const oldKeysToForeignEntity = buildBelongsToLinkKey(
+      this.EntityClass,
+      updatedEntity.id,
+      relMeta,
+      oldForeignKey
+    );
+
+    this.#transactionBuilder.addDelete({
+      TableName: this.tableMetadata.name,
+      Key: oldKeysToForeignEntity
+    });
+
+    this.buildPutBelongsToLinkedRecords(
+      updatedEntity,
+      relMeta,
+      newForeignKey,
+      newBelongsToEntityLookup,
+      "attribute_exists"
+    );
   }
 
   /**
