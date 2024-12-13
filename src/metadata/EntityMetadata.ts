@@ -5,6 +5,7 @@ import {
   HasManyRelationship,
   HasOneRelationship,
   HasRelationships,
+  RelationshipMetadata,
   type AttributeMetadata,
   type AttributeMetadataStorage,
   type RelationshipMetadataStorage

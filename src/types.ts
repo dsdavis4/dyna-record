@@ -84,3 +84,10 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
  * Represents an instance of a class decorated with the `Entity` decorator in DynaRecord, encapsulating entity logic.
  */
 export type EntityClass<T> = (new () => T) & typeof DynaRecord;
+
+/**
+ * Make a single property of an object required
+ */
+export type WithRequired<T, K extends keyof T> = Omit<T, K> & {
+  [P in K]-?: T[P];
+};

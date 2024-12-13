@@ -12,11 +12,18 @@ import {
   isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import { BelongsToLink } from "../../relationships";
-import type { EntityClass, RelationshipLookup } from "../../types";
+import type {
+  DynamoTableItem,
+  EntityClass,
+  RelationshipLookup
+} from "../../types";
 import { entityToTableItem, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
+import { Query, QueryResult } from "../Query";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
 import type { DeleteOptions, ItemKeys } from "./types";
+
+type Entity = QueryResult<DynaRecord>;
 
 /**
  * Implements the operation for deleting an entity and its related data from the database within the ORM framework.
@@ -68,20 +75,20 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       throw new NotFoundError(`Item does not exist: ${id}`);
     }
     for (const item of items) {
-      if (item.id === id && this.isEntityClass(item)) {
+      if (item.id === id && item instanceof this.EntityClass) {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${id}`
         });
         this.buildDeleteAssociatedBelongsTransaction(id, item);
-      }
-      if (item instanceof BelongsToLink) {
+      } else {
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
             {
+              // TODO try up getting these keys. What about using the helper?
               [this.#partitionKeyField]:
-                item[this.#partitionKeyField as keyof BelongsToLink],
+                item[this.#partitionKeyField as keyof typeof item],
               [this.#sortKeyField]:
-                item[this.#sortKeyField as keyof BelongsToLink]
+                item[this.#sortKeyField as keyof typeof item]
             }
           )}`
         });
@@ -104,11 +111,14 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param item
    */
   private buildDeleteItemTransaction(
-    item: BelongsToLink | ItemKeys<T>,
+    item: Partial<Entity>,
     options: DeleteOptions
   ): void {
     const pkField = this.#partitionKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
+
+    // TODO is there a better way to get these values?
+    debugger;
 
     this.#transactionBuilder.addDelete(
       {
@@ -126,17 +136,17 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
    * @param item - BelongsToLink from HasAndBelongsToMany relationship
    */
-  private buildDeleteJoinTableLinkTransaction(item: BelongsToLink): void {
-    const relMeta = this.#relationsLookup[item.foreignEntityType];
+  private buildDeleteJoinTableLinkTransaction(item: Entity): void {
+    // TODO I put bogus in, see what I find here
+    const relMeta = this.#relationsLookup[item.id as any];
 
     if (isHasAndBelongsToManyRelationship(relMeta)) {
       // Inverse the keys to delete the other JoinTable entry
-      const belongsToLinksKeys: ItemKeys<T> = {
-        // const belongsToLinksKeys: ItemKeys<T> = {
+      const belongsToLinksKeys = {
+        // TODO dry up or use helper
         [this.#partitionKeyField]:
-          item[this.#sortKeyField as keyof BelongsToLink],
-        [this.#sortKeyField]:
-          item[this.#partitionKeyField as keyof BelongsToLink]
+          item[this.#sortKeyField as keyof typeof item],
+        [this.#sortKeyField]: item[this.#partitionKeyField as keyof typeof item]
       };
 
       this.buildDeleteItemTransaction(belongsToLinksKeys, {
@@ -152,8 +162,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * If the ForeignKey is non nullable than it throws a NullConstraintViolationError
    * @param item
    */
-  private buildNullifyForeignKeyTransaction(item: BelongsToLink): void {
-    const relMeta = this.#relationsLookup[item.foreignEntityType];
+  private buildNullifyForeignKeyTransaction(item: Entity): void {
+    // TODO was type right here?
+    const relMeta = this.#relationsLookup[item.type];
 
     if (isRelationshipMetadataWithForeignKey(relMeta)) {
       const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
@@ -170,10 +181,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         );
       }
 
+      // TODO is item. id right ?ere
       const tableKeys = entityToTableItem(this.EntityClass, {
-        [this.#partitionKeyField]: relMeta.target.partitionKeyValue(
-          item.foreignKey
-        ),
+        [this.#partitionKeyField]: relMeta.target.partitionKeyValue(item.id),
         [this.#sortKeyField]: relMeta.target.name
       });
       const tableAttrs = entityToTableItem(relMeta.target, {
@@ -189,7 +199,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
           UpdateExpression: expression.UpdateExpression,
           ExpressionAttributeNames: expression.ExpressionAttributeNames
         },
-        `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.foreignKey}`
+        `Failed to remove foreign key attribute from ${relMeta.target.name} with Id: ${item.id}`
       );
     }
   }
@@ -201,7 +211,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildDeleteAssociatedBelongsTransaction(
     entityId: string,
-    item: T
+    item: Entity
   ): void {
     this.#belongsToRelationships.forEach(relMeta => {
       if (
@@ -236,7 +246,8 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     entityId: string,
     foreignKeyValue: string
   ): void {
-    const belongsToLinksKeys: ItemKeys<T> = {
+    // TODO use the helper here...
+    const belongsToLinksKeys = {
       [this.#partitionKeyField]:
         relMeta.target.partitionKeyValue(foreignKeyValue),
       [this.#sortKeyField]: this.EntityClass.partitionKeyValue(entityId)
@@ -258,7 +269,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     relMeta: BelongsToRelationship,
     foreignKeyValue: string
   ): void {
-    const belongsToLinksKeys: ItemKeys<T> = {
+    const belongsToLinksKeys = {
       [this.#partitionKeyField]:
         relMeta.target.partitionKeyValue(foreignKeyValue),
       [this.#sortKeyField]: this.EntityClass.name
@@ -269,15 +280,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         belongsToLinksKeys
       )}`
     });
-  }
-
-  /**
-   * Type guard to check if the item being evaluated is the currentClass
-   * @param item
-   * @returns
-   */
-  private isEntityClass(item: any): item is T {
-    return item instanceof DynaRecord;
   }
 
   /**
