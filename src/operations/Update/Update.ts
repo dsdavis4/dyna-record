@@ -177,27 +177,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const { name: tableName } = this.tableMetadata;
     const transactionBuilder = new TransactGetBuilder();
 
-    // Get the entity being updated
-    transactionBuilder.addGet({
-      TableName: tableName,
-      Key: {
-        [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
-        [this.sortKeyAlias]: this.EntityClass.name
-      }
-    });
-
-    // Get related entities from the partition of the entity being updated
-    hasRelMetas.forEach(relMeta => {
-      transactionBuilder.addGet({
-        TableName: tableName,
-        Key: {
-          [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
-          [this.sortKeyAlias]: relMeta.target.name
-        }
-      });
-    });
-
-    // Get the new BelongsTo relationships that are being updated
+    // Get the new BelongsTo relationship entities that are being updated
 
     belongsToRelFkAndMetas.forEach(({ meta, foreignKeyVal }) => {
       transactionBuilder.addGet({
@@ -212,8 +192,21 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
 
-    const results = await transactionBuilder.executeTransaction();
-    return results.reduce<Entity[]>((acc, res) => {
+    // Get linked items from entity being updates partition as well as new foreign entities if adding or updating an FK
+    const [transactionResults, selfAndLinkedEntities] = await Promise.all([
+      transactionBuilder.executeTransaction(),
+      this.EntityClass.query<DynaRecord>(id, {
+        filter: {
+          type: [
+            this.EntityClass.name,
+            ...hasRelMetas.map(meta => meta.target.name)
+          ]
+        }
+      })
+    ]);
+
+    // Serialize table items to entities
+    const foreignEntities = transactionResults.reduce<Entity[]>((acc, res) => {
       if (res.Item !== undefined && isString(res.Item[typeAlias])) {
         const entityMeta = Metadata.getEntity(res.Item[typeAlias]);
         const entity = tableItemToEntity(entityMeta.EntityClass, res.Item);
@@ -221,6 +214,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       }
       return acc;
     }, []);
+
+    return [...selfAndLinkedEntities, ...foreignEntities];
   }
 
   /**
