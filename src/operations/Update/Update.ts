@@ -4,7 +4,10 @@ import {
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils";
-import type { BelongsToRelationship } from "../../metadata";
+import type {
+  BelongsToRelationship,
+  HasAndBelongsToManyRelationship
+} from "../../metadata";
 import {
   entityToTableItem,
   isNullableString,
@@ -19,7 +22,7 @@ import {
 } from "../utils";
 import OperationBase from "../OperationBase";
 import type { UpdatedAttributes, UpdateOptions } from "./types";
-import type { EntityClass, WithRequired } from "../../types";
+import type { DynamoTableItem, EntityClass, WithRequired } from "../../types";
 import Metadata from "../../metadata";
 import { type EntityAttributesOnly, type EntityAttributes } from "../types";
 import { NotFoundError } from "../../errors";
@@ -36,7 +39,18 @@ interface BelongsToRelMetaAndKey {
   foreignKeyVal: string;
 }
 
+/**
+ * Lookup item to look up a belongs to entity by id
+ */
 type BelongsToEntityLookup = Record<string, Entity>;
+
+/**
+ * Lookup item to lookup a HasAndBelongsToManyRelationship by entity type
+ */
+type HasAndBelongsToManyRelLookup = Record<
+  string,
+  HasAndBelongsToManyRelationship
+>;
 
 /**
  * Sorted pre-fetched data for processing
@@ -123,7 +137,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const updatedEntity = { ...preFetch.entityPreUpdate, ...updatedAttrs, id };
 
     this.buildUpdateItemTransaction(id, expression);
-    this.buildUpdateRelatedEntityLinks(preFetch.relatedEntities, expression);
+    this.buildUpdateRelatedEntityLinks(
+      id,
+      preFetch.relatedEntities,
+      expression
+    );
     this.buildBelongsToTransactions(
       preFetch.entityPreUpdate,
       updatedEntity,
@@ -637,20 +655,62 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private buildUpdateRelatedEntityLinks(
+    entityId: string,
     relatedEntities: Entity[],
     expression: UpdateExpression
   ): void {
+    const hasAndBelongsToManyLookup = this.buildHasAndBelongsToManyRelLookup();
+
     relatedEntities.forEach(entity => {
       this.#transactionBuilder.addUpdate({
         TableName: this.tableMetadata.name,
-        Key: {
-          [this.partitionKeyAlias]: entity.partitionKeyValue(),
-          [this.sortKeyAlias]: this.EntityClass.name
-        },
+        Key: this.buildUpdatedRelatedEntityLinkKey(
+          entityId,
+          entity,
+          hasAndBelongsToManyLookup
+        ),
         ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
         ...expression
       });
     });
+  }
+
+  /**
+   * Builds the table key for a related entity that needs to be updated
+   * @param id - The id of the entity being updated
+   * @param entity
+   * @param relLookup
+   * @returns
+   */
+  private buildUpdatedRelatedEntityLinkKey(
+    id: string,
+    entity: Entity,
+    relLookup: HasAndBelongsToManyRelLookup
+  ): DynamoTableItem {
+    const isHasAndBelongsToManyRel = relLookup[entity.type] !== undefined;
+    const sortKey = isHasAndBelongsToManyRel
+      ? this.EntityClass.partitionKeyValue(id)
+      : this.EntityClass.name;
+
+    return {
+      [this.partitionKeyAlias]: entity.partitionKeyValue(),
+      [this.sortKeyAlias]: sortKey
+    };
+  }
+
+  /**
+   * Build a lookup object to lookup a HasAndBelongsToMany relationship for an entity. Used for processing to avoid excessive looping
+   * @returns
+   */
+  private buildHasAndBelongsToManyRelLookup(): HasAndBelongsToManyRelLookup {
+    return Object.values(
+      this.entityMetadata.relationships
+    ).reduce<HasAndBelongsToManyRelLookup>((acc, rel) => {
+      if (rel.type === "HasAndBelongsToMany") {
+        acc[rel.target.name] = rel;
+      }
+      return acc;
+    }, {});
   }
 }
 
