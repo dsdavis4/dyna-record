@@ -1,19 +1,23 @@
 import type DynaRecord from "../DynaRecord";
+import { TransactGetBuilder } from "../dynamo-utils";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
 import Metadata, {
   type TableMetadata,
   type JoinTableMetadata
 } from "../metadata";
-import type { ForeignKey, EntityClass } from "../types";
-import { entityToTableItem } from "../utils";
-import BelongsToLink from "./BelongsToLink";
+import type { ForeignKey, EntityClass, DynamoTableItem } from "../types";
 
-// TODO add the correct de-normalization logic here...
+// TODO check typedoc in here
 
 /**
  * Exclude the type1 type2 instance keys
  */
 type ExcludeKeys = "type1" | "type2";
+
+/**
+ * Lookup item for looking up existing table items by id
+ */
+type TableItemLookup = Record<string, DynamoTableItem>;
 
 /**
  * ForeignKey properties of the join table
@@ -24,16 +28,23 @@ type ForeignKeyProperties<T> = {
     : never;
 };
 
+interface JoinedEntityClasses {
+  parentEntity: EntityClass<DynaRecord>;
+  linkedEntity: EntityClass<DynaRecord>;
+}
+
+interface JoinedKeys {
+  parentId: string;
+  linkedEntityId: string;
+}
+
 /**
  * Common props for building transactions
  */
 interface TransactionProps {
   tableProps: TableMetadata;
-  entities: {
-    parentEntity: EntityClass<DynaRecord>;
-    linkedEntity: EntityClass<DynaRecord>;
-  };
-  ids: { parentId: string; linkedEntityId: string };
+  entities: JoinedEntityClasses;
+  ids: JoinedKeys;
 }
 
 /**
@@ -73,13 +84,28 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     const transactionBuilder = new TransactionBuilder();
 
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
+    const transactionProps = JoinTable.transactionProps(keys, rel2, rel1);
+    const lookupTableItem = await JoinTable.preFetch(transactionProps);
 
-    JoinTable.createBelongsToLink(transactionBuilder, keys, rel1, rel2);
-    JoinTable.createBelongsToLink(transactionBuilder, keys, rel2, rel1);
+    JoinTable.denormalizeLinkRecord(
+      transactionBuilder,
+      keys,
+      rel1,
+      rel2,
+      lookupTableItem[transactionProps.ids.linkedEntityId]
+    );
+    JoinTable.denormalizeLinkRecord(
+      transactionBuilder,
+      keys,
+      rel2,
+      rel1,
+      lookupTableItem[transactionProps.ids.parentId]
+    );
 
     await transactionBuilder.executeTransaction();
   }
 
+  // TODO does this need to be updated?
   /**
    * Delete a JoinTable entry
    * Deletes BelongsToLink from each associated Entity's partition
@@ -104,6 +130,49 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     await transactionBuilder.executeTransaction();
   }
 
+  private static async preFetch(
+    transactionProps: TransactionProps
+  ): Promise<TableItemLookup> {
+    const { tableProps, entities, ids } = transactionProps;
+
+    const idAlias = tableProps.defaultAttributes.id.alias;
+
+    const parentKey = JoinTable.buildForeignEntityKey(
+      tableProps,
+      entities.linkedEntity,
+      ids.parentId
+    );
+
+    const linkedKey = JoinTable.buildForeignEntityKey(
+      tableProps,
+      entities.parentEntity,
+      ids.linkedEntityId
+    );
+
+    const transactionGetBuilder = new TransactGetBuilder();
+
+    transactionGetBuilder.addGet({
+      TableName: tableProps.name,
+      Key: parentKey
+    });
+
+    transactionGetBuilder.addGet({
+      TableName: tableProps.name,
+      Key: linkedKey
+    });
+
+    const transactionResults = await transactionGetBuilder.executeTransaction();
+
+    return transactionResults.reduce<TableItemLookup>((acc, res) => {
+      if (res.Item !== undefined) {
+        acc[res.Item[idAlias]] = res.Item;
+      }
+
+      return acc;
+    }, {});
+  }
+
+  // TODO update typedoc not using belongs to links...
   /**
    * Creates transactions:
    *   1. Create a BelongsToLink in parents partition if its not already linked
@@ -113,11 +182,12 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param parentEntityMeta
    * @param linkedEntityMeta
    */
-  private static createBelongsToLink(
+  private static denormalizeLinkRecord(
     transactionBuilder: TransactionBuilder,
     keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
-    linkedEntityMeta: JoinTableMetadata
+    linkedEntityMeta: JoinTableMetadata,
+    linkedRecord: DynamoTableItem
   ): void {
     const { tableProps, entities, ids } = this.transactionProps(
       keys,
@@ -126,7 +196,6 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     );
     const { name: tableName } = tableProps;
     const { alias: partitionKeyAlias } = tableProps.partitionKeyAttribute;
-    const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
     const { parentEntity, linkedEntity } = entities;
     const { parentId, linkedEntityId } = ids;
 
@@ -134,11 +203,8 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       {
         TableName: tableName,
         Item: {
-          ...this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta),
-          ...entityToTableItem(
-            linkedEntity,
-            BelongsToLink.build(linkedEntity.name, parentId)
-          )
+          ...linkedRecord,
+          ...this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta)
         },
         ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
       },
@@ -148,14 +214,36 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     transactionBuilder.addConditionCheck(
       {
         TableName: tableName,
-        Key: {
-          [partitionKeyAlias]: parentEntity.partitionKeyValue(linkedEntityId),
-          [sortKeyAlias]: parentEntity.name
-        },
+        Key: this.buildForeignEntityKey(
+          tableProps,
+          parentEntity,
+          linkedEntityId
+        ),
         ConditionExpression: `attribute_exists(${partitionKeyAlias})`
       },
       `${parentEntity.name} with ID ${linkedEntityId} does not exist`
     );
+  }
+
+  /**
+   * Builds the key to the foreign entity
+   * @param tableProps
+   * @param parentEntity
+   * @param linkedEntityId
+   * @returns
+   */
+  private static buildForeignEntityKey(
+    tableProps: TableMetadata,
+    parentEntity: EntityClass<DynaRecord>,
+    linkedEntityId: string
+  ): DynamoTableItem {
+    const { alias: partitionKeyAlias } = tableProps.partitionKeyAttribute;
+    const { alias: sortKeyAlias } = tableProps.sortKeyAttribute;
+
+    return {
+      [partitionKeyAlias]: parentEntity.partitionKeyValue(linkedEntityId),
+      [sortKeyAlias]: parentEntity.name
+    };
   }
 
   /**
