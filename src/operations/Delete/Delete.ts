@@ -82,6 +82,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         });
         this.buildDeleteAssociatedBelongsTransaction(id, item);
       } else {
+        // TODO move all of this to a method
         this.buildDeleteItemTransaction(item, {
           errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
             {
@@ -126,7 +127,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       {
         TableName: this.#tableName,
         Key: {
-          [this.partitionKeyAlias]: item[pkField], // TODO I think I can use the build int partionKeyValues
+          [this.partitionKeyAlias]: item[pkField], // TODO I think I can use the build in partitionKeyValue method
           [this.sortKeyAlias]: item[skField]
         }
       },
