@@ -1,4 +1,4 @@
-import DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord";
 import {
   TransactWriteBuilder,
   TransactionWriteFailedError
@@ -14,17 +14,12 @@ import {
   isHasOneRelationship,
   isHasManyRelationship
 } from "../../metadata/utils";
-import { BelongsToLink } from "../../relationships";
-import type {
-  DynamoTableItem,
-  EntityClass,
-  RelationshipLookup
-} from "../../types";
-import { entityToTableItem, isKeyOfEntity, isKeyOfObject } from "../../utils";
+import type { EntityClass, RelationshipLookup } from "../../types";
+import { entityToTableItem, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
-import { Query, QueryResult } from "../Query";
+import { type QueryResult } from "../Query";
 import { expressionBuilder, buildEntityRelationshipMetaObj } from "../utils";
-import type { DeleteOptions, ItemKeys } from "./types";
+import type { DeleteOptions } from "./types";
 
 type Entity = QueryResult<DynaRecord>;
 
@@ -64,10 +59,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     this.#belongsToRelationships = relationsObj.belongsToRelationships;
   }
 
-  // TODO START HERE - working through scenarios. I think Beer.delete is working
-  //     I need to check something like Brewery.delete which should nullify a key
-  //        - This IS updating foreign keys but not deleting the new dormalized records...
-  //      And check has and belongs to many
   /**
    * Delete an item by id
    *   - Deletes the given entity
@@ -149,8 +140,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildDeleteJoinTableLinkTransaction(item: Entity): void {
     const relMeta = this.#relationsLookup[item.type];
-
-    // TODO start here... I am getting an error because the item passed in is from the new denoralized link
 
     if (isHasAndBelongsToManyRelationship(relMeta)) {
       const belongsToLinksKeys = {

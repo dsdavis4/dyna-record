@@ -111,8 +111,7 @@ class MockInformation extends MockTable {
   public someDate?: Date;
 }
 
-// TODO unskip and fix
-describe.skip("Update", () => {
+describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
   });

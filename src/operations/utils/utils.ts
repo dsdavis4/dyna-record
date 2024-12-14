@@ -18,7 +18,7 @@ import type {
   RelationshipMetaObj
 } from "../../types";
 import { isKeyOfObject } from "../../utils";
-import { EntityAttributes } from "../types";
+import { type EntityAttributes } from "../types";
 
 /**
  * Creates an object including

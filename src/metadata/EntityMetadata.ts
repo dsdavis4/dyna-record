@@ -1,10 +1,10 @@
 import { z, ZodError, type ZodSchema, type ZodType } from "zod";
 import {
-  BelongsToRelationship,
+  type BelongsToRelationship,
   HasAndBelongsToManyRelationship,
   HasManyRelationship,
   HasOneRelationship,
-  HasRelationships,
+  type HasRelationships,
   RelationshipMetadata,
   type AttributeMetadata,
   type AttributeMetadataStorage,

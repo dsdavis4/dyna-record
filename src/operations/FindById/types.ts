@@ -6,7 +6,7 @@ import type {
   RelationshipAttributeNames
 } from "../types";
 import type { BelongsToLinkDynamoItem } from "../../types";
-import { QueryResult, QueryResults } from "../Query";
+import { type QueryResult, type QueryResults } from "../Query";
 
 /**
  * Defines options for the `FindById` operation, allowing specification of additional associations to include in the query result.
