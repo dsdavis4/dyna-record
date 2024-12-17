@@ -10,7 +10,8 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethod,
+  Organization,
+  type PaymentMethod,
   PaymentMethodProvider,
   Person,
   Teacher,
@@ -28,7 +29,7 @@ import {
 } from "../../src/decorators";
 import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
-import DynaRecord from "../../src/DynaRecord";
+import type DynaRecord from "../../src/DynaRecord";
 
 jest.mock("uuid");
 
@@ -97,7 +98,7 @@ type CapitalizeFirst<T extends string> = T extends `${infer First}${infer Rest}`
  * - Convert other keys to PascalCase
  * - Map Date attributes to ISO strings
  */
-type MockTableTableItem<T extends MockTable> = {
+type MockTableEntityTableItem<T extends MockTable> = {
   // eslint-disable-next-line @typescript-eslint/ban-types
   [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
     ? never
@@ -541,7 +542,7 @@ describe("Create", () => {
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     mockedUuidv4.mockReturnValueOnce("uuid1");
 
-    const customer: MockTableTableItem<Customer> = {
+    const customer: MockTableEntityTableItem<Customer> = {
       PK: "Customer#123",
       SK: "Customer",
       Id: "123",
@@ -552,7 +553,7 @@ describe("Create", () => {
       UpdatedAt: "2024-01-02T00:00:00.000Z"
     };
 
-    const paymentMethod: MockTableTableItem<PaymentMethod> = {
+    const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
       PK: "PaymentMethod#456",
       SK: "PaymentMethod",
       Id: "456",
@@ -589,6 +590,7 @@ describe("Create", () => {
       [{ name: "TransactGetCommand" }],
       [{ name: "TransactWriteCommand" }]
     ]);
+    // Prefetch associated records to denormalize
     expect(mockTransactGetCommand.mock.calls).toEqual([
       [
         {
@@ -689,11 +691,25 @@ describe("Create", () => {
     ]);
   });
 
-  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
-    expect.assertions(4);
+  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates denormalizes records to partitions)", async () => {
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const org: MockTableEntityTableItem<Organization> = {
+      PK: "Organization#123",
+      SK: "Organization",
+      Id: "123",
+      Type: "Organization",
+      Name: "Mock Org",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [org]
+    });
 
     const user = await User.create({
       name: "test-name",
@@ -713,49 +729,74 @@ describe("Create", () => {
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(user).toBeInstanceOf(User);
-    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Prefetch associated records to denormalize
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Organization#123", SK: "Organization" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
           TransactItems: [
             {
+              // Put the new User
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "User#email@email.com",
                   SK: "User",
-                  Type: "User",
                   Id: "email@email.com",
+                  Type: "User",
                   Email: "email@email.com",
                   Name: "test-name",
                   OrgId: "123",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             },
+            // Check that the associated Organization exists
             {
               ConditionCheck: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_exists(PK)",
-                Key: { PK: "Organization#123", SK: "Organization" },
-                TableName: "mock-table"
+                Key: {
+                  PK: "Organization#123",
+                  SK: "Organization"
+                }
               }
             },
+            // Denormalize the Organization to the User partition
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Organization#123",
                   SK: "User#email@email.com",
-                  Type: "BelongsToLink",
-                  Id: "uuid1",
-                  ForeignEntityType: "User",
-                  ForeignKey: "email@email.com",
+                  Id: "email@email.com",
+                  Type: "User",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  OrgId: "123",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             }
           ]
