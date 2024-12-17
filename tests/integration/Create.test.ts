@@ -1,4 +1,7 @@
-import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  TransactGetCommand,
+  TransactWriteCommand
+} from "@aws-sdk/lib-dynamodb";
 import {
   ContactInformation,
   Customer,
@@ -7,6 +10,7 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
+  PaymentMethod,
   PaymentMethodProvider,
   Person,
   Teacher,
@@ -22,12 +26,16 @@ import {
   HasOne,
   StringAttribute
 } from "../../src/decorators";
-import type { NullableForeignKey } from "../../src/types";
+import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
+import DynaRecord from "../../src/DynaRecord";
 
 jest.mock("uuid");
 
+const mockTransactGetItems = jest.fn();
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+
 const mockSend = jest.fn();
 const mockedUuidv4 = jest.mocked(uuidv4);
 
@@ -51,7 +59,14 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
-            return await Promise.resolve("mock");
+            if (command.name === "TransactWriteCommand") {
+              return await Promise.resolve(
+                "TransactWriteCommand-mock-response"
+              );
+            }
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
+            }
           })
         };
       })
@@ -59,9 +74,47 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
     TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
+    }),
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
     })
   };
 });
+
+// TODO move these types to a test helper
+type CapitalizeFirst<T extends string> = T extends `${infer First}${infer Rest}`
+  ? `${Uppercase<First>}${Rest}`
+  : T;
+
+/**
+ * Represents an entity a table item for MockTable classes which use pascal cases aliases
+ * Utility to assist with making test mocks
+ * Mapping rules:
+ * - Exclude attributes that are Functions, DynaRecord, or DynaRecord[]
+ * - Map "pk" to "PK" and "sk" to "SK" (string)
+ * - Map ForeignKey to string
+ * - Map NullableForeignKey to string | undefined
+ * - Convert other keys to PascalCase
+ * - Map Date attributes to ISO strings
+ */
+type MockTableTableItem<T extends MockTable> = {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
+    ? never
+    : K extends "pk"
+      ? "PK"
+      : K extends "sk"
+        ? "SK"
+        : CapitalizeFirst<string & K>]: T[K] extends ForeignKey
+    ? string
+    : T[K] extends NullableForeignKey
+      ? string | undefined
+      : T[K] extends Date
+        ? string
+        : K extends "pk" | "sk"
+          ? string
+          : T[K];
+};
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
@@ -482,14 +535,37 @@ describe("Create", () => {
     }
   });
 
-  it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
-    expect.assertions(4);
+  it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and denormalizes links)", async () => {
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4
-      .mockReturnValueOnce("uuid1")
-      .mockReturnValueOnce("uuid2")
-      .mockReturnValueOnce("uuid3");
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const customer: MockTableTableItem<Customer> = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Type: "Customer",
+      Name: "Mock Customer",
+      Address: "11 Some St",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    const paymentMethod: MockTableTableItem<PaymentMethod> = {
+      PK: "PaymentMethod#456",
+      SK: "PaymentMethod",
+      Id: "456",
+      Type: "PaymentMethod",
+      LastFour: "1234",
+      CustomerId: customer.Id,
+      CreatedAt: "2024-02-01T00:00:00.000Z",
+      UpdatedAt: "2024-02-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [customer, paymentMethod]
+    });
 
     const order = await Order.create({
       customerId: "123",
@@ -509,30 +585,53 @@ describe("Create", () => {
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(order).toBeInstanceOf(Order);
-    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Customer#123", SK: "Customer" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#456", SK: "PaymentMethod" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
           TransactItems: [
-            // Create the Order if it does not already exist
             {
+              // Put the new Order
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Order#uuid1",
                   SK: "Order",
-                  Type: "Order",
                   Id: "uuid1",
+                  Type: "Order",
                   CustomerId: "123",
-                  PaymentMethodId: "456",
                   OrderDate: "2024-01-01T00:00:00.000Z",
+                  PaymentMethodId: "456",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             },
-            // Check that the Customer the Order BelongsTo exists
+            // Check that the associated Customer exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
@@ -540,49 +639,48 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
-            // Create the BelongsToLink to link Customer HasMany Order if the link does dot exist
+            // Denormalize the Order to the Customer partition
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Customer#123",
                   SK: "Order#uuid1",
-                  Id: "uuid2",
-                  ForeignKey: "uuid1",
-                  ForeignEntityType: "Order",
-                  Type: "BelongsToLink",
+                  Id: "uuid1",
+                  Type: "Order",
+                  CustomerId: "123",
+                  OrderDate: "2024-01-01T00:00:00.000Z",
+                  PaymentMethodId: "456",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             },
-            // Check that the PaymentMethod the Order BelongsTo exists
+            // Check that the associated PaymentMethod exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
-                Key: {
-                  PK: "PaymentMethod#456",
-                  SK: "PaymentMethod"
-                },
+                Key: { PK: "PaymentMethod#456", SK: "PaymentMethod" },
                 TableName: "mock-table"
               }
             },
-            // Create the BelongsToLink to link PaymentMethod HasMany Order if the link does dot exist
+            // Denormalize the Order to the PaymentMethod partition
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "PaymentMethod#456",
                   SK: "Order#uuid1",
-                  Id: "uuid3",
-                  ForeignKey: "uuid1",
-                  ForeignEntityType: "Order",
-                  Type: "BelongsToLink",
+                  Id: "uuid1",
+                  Type: "Order",
+                  CustomerId: "123",
+                  OrderDate: "2024-01-01T00:00:00.000Z",
+                  PaymentMethodId: "456",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             }
           ]
