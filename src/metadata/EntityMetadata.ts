@@ -1,14 +1,11 @@
 import { z, ZodError, type ZodSchema, type ZodType } from "zod";
-import {
-  type BelongsToRelationship,
-  HasAndBelongsToManyRelationship,
-  HasManyRelationship,
-  HasOneRelationship,
-  type HasRelationships,
-  RelationshipMetadata,
-  type AttributeMetadata,
-  type AttributeMetadataStorage,
-  type RelationshipMetadataStorage
+import type {
+  BelongsToRelationship,
+  HasRelationships,
+  AttributeMetadata,
+  AttributeMetadataStorage,
+  RelationshipMetadataStorage,
+  RelationshipMetadata
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
@@ -150,6 +147,13 @@ class EntityMetadata {
     const errorOptions =
       error instanceof ZodError ? { cause: error.issues } : undefined;
     return new ValidationError("Validation errors", errorOptions);
+  }
+
+  /**
+   * Returns all relationship metadata for the entity
+   */
+  public get allRelationships(): RelationshipMetadata[] {
+    return Object.values(this.relationships);
   }
 
   /**

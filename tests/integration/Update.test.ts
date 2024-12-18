@@ -229,9 +229,24 @@ describe("Update", () => {
     });
 
     it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
-      expect.assertions(6);
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -249,10 +264,28 @@ describe("Update", () => {
           address: "new Address"
         } as any) // Use any to force bad type and allow runtime checks to be tested
       ).toBeUndefined();
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK5": "Customer#123",
+              ":Type1": "Customer",
+              ":Type2": "Order",
+              ":Type3": "PaymentMethod",
+              ":Type4": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -283,7 +316,7 @@ describe("Update", () => {
     });
 
     it("can update all attribute types", async () => {
-      expect.assertions(6);
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
@@ -305,9 +338,8 @@ describe("Update", () => {
         })
       ).toBeUndefined();
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {

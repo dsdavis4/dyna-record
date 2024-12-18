@@ -123,31 +123,40 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    const belongsToRelMetaBeingUpdated =
-      this.getBelongsToRelMetaAndKeyForUpdatedKeys(entityAttrs);
-
-    const entities = await this.preFetch(id, belongsToRelMetaBeingUpdated);
-    const preFetch = this.preProcessFetchedData(
-      id,
-      entities,
-      belongsToRelMetaBeingUpdated
-    );
-
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
-    const updatedEntity = { ...preFetch.entityPreUpdate, ...updatedAttrs, id };
-
     this.buildUpdateItemTransaction(id, expression);
-    this.buildUpdateRelatedEntityLinks(
-      id,
-      preFetch.relatedEntities,
-      expression
-    );
-    this.buildBelongsToTransactions(
-      preFetch.entityPreUpdate,
-      updatedEntity,
-      expression,
-      preFetch.newBelongsToEntityLookup
-    );
+
+    // TODO add explicit unit test for this - right now its tested indirectly
+    // Only need to prefetch if the entity has relationships
+    if (entityMeta.allRelationships.length > 0) {
+      const belongsToRelMetaBeingUpdated =
+        this.getBelongsToRelMetaAndKeyForUpdatedKeys(entityAttrs);
+
+      const entities = await this.preFetch(id, belongsToRelMetaBeingUpdated);
+      const preFetch = this.preProcessFetchedData(
+        id,
+        entities,
+        belongsToRelMetaBeingUpdated
+      );
+
+      const updatedEntity = {
+        ...preFetch.entityPreUpdate,
+        ...updatedAttrs,
+        id
+      };
+
+      this.buildUpdateRelatedEntityLinks(
+        id,
+        preFetch.relatedEntities,
+        expression
+      );
+      this.buildBelongsToTransactions(
+        preFetch.entityPreUpdate,
+        updatedEntity,
+        expression,
+        preFetch.newBelongsToEntityLookup
+      );
+    }
 
     await this.#transactionBuilder.executeTransaction();
 
