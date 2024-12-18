@@ -1,4 +1,9 @@
-import { TransactWriteCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  TransactWriteCommand,
+  GetCommand,
+  TransactGetCommand,
+  QueryCommand
+} from "@aws-sdk/lib-dynamodb";
 import {
   ContactInformation,
   Customer,
@@ -29,15 +34,21 @@ import {
 } from "../../src/types";
 import { ValidationError } from "../../src";
 import { createInstance } from "../../src/utils";
+import { type MockTableEntityTableItem } from "./utils";
 
 jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockedGetCommand = jest.mocked(GetCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+const mockedQueryCommand = jest.mocked(QueryCommand);
 
 const mockSend = jest.fn();
-const mockGet = jest.fn();
-const mockTransact = jest.fn();
+const mockTransactGetItems = jest.fn();
+const mockQuery = jest.fn();
+
+const mockedGetCommand = jest.mocked(GetCommand); // TODO delete this once all references are deleted
+const mockGet = jest.fn(); // TODO delete this once all references are deleted
+const mockTransact = jest.fn(); // TODO delete this once all references are deleted
 
 const mockedUuidv4 = jest.mocked(uuidv4);
 
@@ -61,22 +72,31 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
-            if (command.name === "GetCommand") {
-              return await Promise.resolve(mockGet());
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
             }
 
             if (command.name === "TransactWriteCommand") {
-              return await Promise.resolve(mockTransact());
+              return await Promise.resolve(
+                "TransactWriteCommand-mock-response"
+              );
+            }
+
+            if (command.name === "QueryCommand") {
+              return await Promise.resolve(mockQuery());
             }
           })
         };
       })
     },
-    GetCommand: jest.fn().mockImplementation(() => {
-      return { name: "GetCommand" };
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
     }),
     TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
+    }),
+    QueryCommand: jest.fn().mockImplementation(() => {
+      return { name: "QueryCommand" };
     })
   };
 });
@@ -124,11 +144,31 @@ describe("Update", () => {
     jest.clearAllMocks();
   });
 
+  // TODO make sure there is a test for updating an entity which does not need to do any prefetch
+  //      does not belong to anything (or has nullable foreign key) or have has one or has many
+
+  // TODO make sure there is a test for updating the denormalized links in foreign partitions
+
   describe("static method", () => {
-    it("will update an entity without foreign key attributes", async () => {
-      expect.assertions(6);
+    it("will update an entity without foreign key attributes (this entity has no local denormalized links)", async () => {
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -137,10 +177,28 @@ describe("Update", () => {
           address: "new Address"
         })
       ).toBeUndefined();
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK5": "Customer#123",
+              ":Type1": "Customer",
+              ":Type2": "Order",
+              ":Type3": "PaymentMethod",
+              ":Type4": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {

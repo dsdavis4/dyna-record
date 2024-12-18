@@ -153,7 +153,7 @@ describe("Create", () => {
   });
 
   it("will create an entity that has a custom id field", async () => {
-    expect.assertions(4);
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
@@ -174,6 +174,7 @@ describe("Create", () => {
     });
     expect(user).toBeInstanceOf(User);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
