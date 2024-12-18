@@ -278,6 +278,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
+  // TODO Do I really need the BelongsToLinks prefetched in order to get build these transactions?
+  // I think I can build soley from metadata...
+  // If so I need to remove the get code from here as well tests
+
   /**
    * For each related entity referenced by a "BelongsTo" relationship, insert a denormalized copy of that entity
    * into the new entity's partition. This maintains a consistent, denormalized view of relationships.

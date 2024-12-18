@@ -319,7 +319,7 @@ class Organization extends MockTable {
 
 @Entity
 class Desk extends MockTable {
-  @NumberAttribute({ alias: "DeskNum" })
+  @NumberAttribute({ alias: "Num" })
   public readonly num: number;
 
   @HasOne(() => User, { foreignKey: "deskId" })
@@ -474,6 +474,7 @@ export {
   Organization,
   Website,
   UserWebsite,
+  Desk,
   // OtherTable exports
   OtherTable,
   Teacher,
