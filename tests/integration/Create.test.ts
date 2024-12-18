@@ -17,8 +17,8 @@ import {
   Teacher,
   User,
   type Desk,
-  Assignment,
-  Student
+  type Assignment,
+  type Student
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -30,14 +30,12 @@ import {
   HasOne,
   StringAttribute
 } from "../../src/decorators";
-import type {
-  ForeignKey,
-  NullableForeignKey,
-  PartitionKey,
-  SortKey
-} from "../../src/types";
+import type { NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
-import type DynaRecord from "../../src/DynaRecord";
+import {
+  type MockTableEntityTableItem,
+  type OtherTableEntityTableItem
+} from "./utils";
 
 jest.mock("uuid");
 
@@ -89,67 +87,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
-
-// TODO move these types to a test helper
-type CapitalizeFirst<T extends string> = T extends `${infer First}${infer Rest}`
-  ? `${Uppercase<First>}${Rest}`
-  : T;
-
-/**
- * Represents an entity a table item for MockTable classes which use pascal cases aliases
- * Utility to assist with making test mocks
- * Mapping rules:
- * - Exclude attributes that are Functions, DynaRecord, or DynaRecord[]
- * - Map "pk" to "PK" and "sk" to "SK" (string)
- * - Map ForeignKey to string
- * - Map NullableForeignKey to string | undefined
- * - Convert other keys to PascalCase
- * - Map Date attributes to ISO strings
- */
-type MockTableEntityTableItem<T extends MockTable> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
-    ? never
-    : K extends "pk"
-      ? "PK"
-      : K extends "sk"
-        ? "SK"
-        : CapitalizeFirst<string & K>]: T[K] extends ForeignKey
-    ? string
-    : T[K] extends NullableForeignKey
-      ? string | undefined
-      : T[K] extends Date
-        ? string
-        : K extends "pk" | "sk"
-          ? string
-          : T[K];
-};
-
-/**
- * Represents an entity a table item for OtherTable classes which do not use table aliases
- * Utility to assist with making test mocks
- * Mapping rules:
- * - Exclude attributes that are Functions, DynaRecord, or DynaRecord[]
- * - Map PartitionKey, SortKey and ForeignKey to string
- * - Map NullableForeignKey to string | undefined
- * - Map Date attributes to ISO strings
- */
-type OtherTableEntityTableItem<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
-    ? never
-    : K]: T[K] extends PartitionKey
-    ? string
-    : T[K] extends SortKey
-      ? string
-      : T[K] extends ForeignKey
-        ? string
-        : T[K] extends NullableForeignKey
-          ? string | undefined
-          : T[K] extends Date
-            ? string
-            : T[K];
-};
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
