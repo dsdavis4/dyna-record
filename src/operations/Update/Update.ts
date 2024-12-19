@@ -207,14 +207,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     // Get the new BelongsTo relationship entities that are being updated
 
     belongsToRelFkAndMetas.forEach(({ meta, foreignKeyVal }) => {
-      transactionBuilder.addGet({
-        TableName: tableName,
-        Key: {
-          [this.partitionKeyAlias]:
-            meta.target.partitionKeyValue(foreignKeyVal),
-          [this.sortKeyAlias]: meta.target.name
-        }
-      });
+      if (foreignKeyVal !== null) {
+        transactionBuilder.addGet({
+          TableName: tableName,
+          Key: {
+            [this.partitionKeyAlias]:
+              meta.target.partitionKeyValue(foreignKeyVal),
+            [this.sortKeyAlias]: meta.target.name
+          }
+        });
+      }
     });
 
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
@@ -274,7 +276,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     });
 
     if (entityPreUpdate === undefined) {
-      throw new NotFoundError(`Item does not exist: ${id}`);
+      throw new NotFoundError(`${this.EntityClass.name} does not exist: ${id}`);
     }
 
     return { entityPreUpdate, relatedEntities, newBelongsToEntityLookup };
@@ -381,6 +383,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             updatedEntity,
             relMeta,
             foreignKey,
+            // TODO I am passing this through alot of functions. Why dont I just pass newBelongsToEntityLookup[foreignKey]
             newBelongsToEntityLookup,
             "attribute_not_exists",
             `${this.EntityClass.name} already has an associated ${relMeta.target.name}`
@@ -552,6 +555,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     persistToSelfConditionErrMessage?: string
   ): void {
     const linkedEntity = newBelongsToEntityLookup[foreignKey];
+
+    if (linkedEntity === undefined) {
+      throw new NotFoundError(
+        `${relMeta.target.name} does not exist: ${foreignKey}`
+      );
+    }
+
     const key = {
       [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(
         updatedEntity.id

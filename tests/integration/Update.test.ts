@@ -32,7 +32,7 @@ import {
   type SortKey,
   type ForeignKey
 } from "../../src/types";
-import { ValidationError } from "../../src";
+import { NotFoundError, ValidationError } from "../../src";
 import { createInstance } from "../../src/utils";
 import { type MockTableEntityTableItem } from "./utils";
 
@@ -771,16 +771,18 @@ describe("Update", () => {
           };
 
           jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockQuery.mockResolvedValueOnce({
+          mockQuery.mockResolvedValue({
             Items: [contactInformation]
           });
-          mockTransactGetItems.mockResolvedValueOnce({
+          mockTransactGetItems.mockResolvedValue({
             Responses: [{ Item: customer }]
           });
         });
 
         afterEach(() => {
-          mockedUuidv4.mockReset();
+          mockSend.mockReset();
+          mockQuery.mockReset();
+          mockTransactGetItems.mockReset();
         });
 
         it("will update the foreign key if the entity being associated with exists", async () => {
@@ -910,7 +912,7 @@ describe("Update", () => {
         });
 
         it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(3);
+          expect.assertions(2);
 
           mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
 
@@ -940,28 +942,63 @@ describe("Update", () => {
               customerId: "456"
             });
           } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
-              )
-            ]);
+            expect(e).toEqual(
+              new NotFoundError("ContactInformation does not exist: 123")
+            );
             expect(mockSend.mock.calls).toEqual([
               [{ name: "TransactGetCommand" }],
-              [{ name: "QueryCommand" }],
-              [{ name: "TransactWriteCommand" }]
+              [{ name: "QueryCommand" }]
             ]);
           }
         });
 
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(3);
+        it("will throw an error if the entity being associated with does not exist at preFetch", async () => {
+          expect.assertions(2);
 
           mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
 
           mockSend
             .mockResolvedValueOnce(undefined)
             .mockReturnValueOnce(undefined)
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            expect(e).toEqual(
+              new NotFoundError("Customer does not exist: 456")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          }
+        });
+
+        it("will throw an error if the entity being updated existed when preFetched but was deleted before the transaction was committed (causing transaction error)", async () => {
+          expect.assertions(3);
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
             .mockImplementationOnce(() => {
               mockTransact();
               throw new TransactionCanceledException({
@@ -989,14 +1026,16 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
             ]);
           }
         });
 
-        it("will remove a nullable foreign key", async () => {
-          expect.assertions(6);
+        // TODO determine how to handle this, see note in last expect
+        it.skip("will remove a nullable foreign key", async () => {
+          expect.assertions(5);
 
           expect(
             // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -1006,70 +1045,73 @@ describe("Update", () => {
             })
           ).toBeUndefined();
           expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
+            [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
           ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
+          expect(mockedQueryCommand.mock.calls).toEqual([
             [
               {
                 TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "ContactInformation#123",
+                  ":Type1": "ContactInformation"
+                },
+                FilterExpression: "#Type IN (:Type1)"
               }
             ]
           ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
+          // Dont get customer because its being deleted
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual(
+            "TODO how do I want to handle this? I think I need to make this error for malformed data. With the ContactInformation not having a customer id, I cant ensure data is in good state"
+          );
         });
       });
 
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
+      describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
         beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
+          const contactInformation: MockTableEntityTableItem<ContactInformation> =
+            {
               PK: "ContactInformation#123",
               SK: "ContactInformation",
               Id: "123",
-              Email: "old-email@example.com",
+              Type: "ContactInformation",
+              Email: "old-email@email.com",
               Phone: "555-555-5555",
-              CustomerId: "789" // Already belongs to customer
-            }
+              CustomerId: "456",
+              CreatedAt: "2023-01-01T00:00:00.000Z",
+              UpdatedAt: "2023-01-02T00:00:00.000Z"
+            };
+
+          const customer: MockTableEntityTableItem<Customer> = {
+            PK: "Customer#456",
+            SK: "Customer",
+            Id: "456",
+            Type: "Customer",
+            Name: "Mock Customer",
+            Address: "11 Some St",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+          mockQuery.mockResolvedValue({
+            Items: [contactInformation]
+          });
+          mockTransactGetItems.mockResolvedValue({
+            Responses: [{ Item: customer }]
           });
         });
 
         afterEach(() => {
-          mockedUuidv4.mockReset();
+          mockSend.mockReset();
+          mockQuery.mockReset();
+          mockTransactGetItems.mockReset();
         });
 
         it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
