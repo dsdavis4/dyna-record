@@ -546,6 +546,17 @@ describe("Create", () => {
       orderDate: new Date("2024-01-01")
     });
 
+    // TODO update all the tests to make a variable for attributes like this and spread it in to help improve readability
+    const newOrderTableAttributes = {
+      Id: "uuid1",
+      Type: "Order",
+      CustomerId: "123",
+      OrderDate: "2024-01-01T00:00:00.000Z",
+      PaymentMethodId: "456",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z"
+    };
+
     expect(order).toEqual({
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       customerId: "123",
@@ -595,13 +606,7 @@ describe("Create", () => {
                 Item: {
                   PK: "Order#uuid1",
                   SK: "Order",
-                  Id: "uuid1",
-                  Type: "Order",
-                  CustomerId: "123",
-                  OrderDate: "2024-01-01T00:00:00.000Z",
-                  PaymentMethodId: "456",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  ...newOrderTableAttributes
                 }
               }
             },
@@ -621,13 +626,7 @@ describe("Create", () => {
                 Item: {
                   PK: "Customer#123",
                   SK: "Order#uuid1",
-                  Id: "uuid1",
-                  Type: "Order",
-                  CustomerId: "123",
-                  OrderDate: "2024-01-01T00:00:00.000Z",
-                  PaymentMethodId: "456",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  ...newOrderTableAttributes
                 }
               }
             },
@@ -647,13 +646,7 @@ describe("Create", () => {
                 Item: {
                   PK: "PaymentMethod#456",
                   SK: "Order#uuid1",
-                  Id: "uuid1",
-                  Type: "Order",
-                  CustomerId: "123",
-                  OrderDate: "2024-01-01T00:00:00.000Z",
-                  PaymentMethodId: "456",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  ...newOrderTableAttributes
                 }
               }
             }

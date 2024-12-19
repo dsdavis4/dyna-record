@@ -552,7 +552,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     persistToSelfConditionErrMessage?: string
   ): void {
     const linkedEntity = newBelongsToEntityLookup[foreignKey];
-    const keyForSelf = {
+    const key = {
       [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(
         updatedEntity.id
       ),
@@ -566,7 +566,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addPut(
       {
         TableName: this.tableMetadata.name,
-        Item: { ...linkedRecordTableItem, ...keyForSelf },
+        Item: { ...linkedRecordTableItem, ...key },
         ConditionExpression: `${persistToSelfCondition}(${this.partitionKeyAlias})`
       },
       persistToSelfConditionErrMessage
