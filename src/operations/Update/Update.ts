@@ -205,7 +205,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const transactionBuilder = new TransactGetBuilder();
 
     // Get the new BelongsTo relationship entities that are being updated
-
     belongsToRelFkAndMetas.forEach(({ meta, foreignKeyVal }) => {
       if (foreignKeyVal !== null) {
         transactionBuilder.addGet({

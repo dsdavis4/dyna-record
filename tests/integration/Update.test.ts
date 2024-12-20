@@ -911,7 +911,7 @@ describe("Update", () => {
           ]);
         });
 
-        it("will throw an error if the entity being updated does not exist", async () => {
+        it("will throw an error if the entity being updated does not exist at pre fetch", async () => {
           expect.assertions(2);
 
           mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
@@ -948,6 +948,49 @@ describe("Update", () => {
             expect(mockSend.mock.calls).toEqual([
               [{ name: "TransactGetCommand" }],
               [{ name: "QueryCommand" }]
+            ]);
+          }
+        });
+
+        it("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", async () => {
+          expect.assertions(3);
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
             ]);
           }
         });
@@ -1083,7 +1126,7 @@ describe("Update", () => {
               Type: "ContactInformation",
               Email: "old-email@email.com",
               Phone: "555-555-5555",
-              CustomerId: "456",
+              CustomerId: "001",
               CreatedAt: "2023-01-01T00:00:00.000Z",
               UpdatedAt: "2023-01-02T00:00:00.000Z"
             };
@@ -1095,8 +1138,8 @@ describe("Update", () => {
             Type: "Customer",
             Name: "Mock Customer",
             Address: "11 Some St",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
+            CreatedAt: "2023-03-01T00:00:00.000Z",
+            UpdatedAt: "2023-04-02T00:00:00.000Z"
           };
 
           jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
@@ -1114,8 +1157,8 @@ describe("Update", () => {
           mockTransactGetItems.mockReset();
         });
 
-        it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
-          expect.assertions(6);
+        it("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", async () => {
+          expect.assertions(5);
 
           expect(
             // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -1125,25 +1168,47 @@ describe("Update", () => {
             })
           ).toBeUndefined();
           expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
           ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
+          expect(mockedQueryCommand.mock.calls).toEqual([
             [
               {
                 TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "ContactInformation#123",
+                  ":Type1": "ContactInformation"
+                },
+                FilterExpression: "#Type IN (:Type1)"
               }
             ]
           ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
+          expect(mockTransactGetCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Get: {
+                      TableName: "mock-table",
+                      Key: { PK: "Customer#456", SK: "Customer" }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
           expect(mockTransactWriteCommand.mock.calls).toEqual([
             [
               {
                 TransactItems: [
                   {
+                    // Update the ContactInformation including the foreign key
                     Update: {
                       TableName: "mock-table",
                       Key: {
@@ -1152,7 +1217,6 @@ describe("Update", () => {
                       },
                       UpdateExpression:
                         "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
                       ConditionExpression: "attribute_exists(PK)",
                       ExpressionAttributeNames: {
                         "#CustomerId": "CustomerId",
@@ -1166,24 +1230,28 @@ describe("Update", () => {
                       }
                     }
                   },
+                  // Delete the denormalized link to the previous ContactInformation
                   {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
                     Delete: {
                       TableName: "mock-table",
                       Key: {
-                        PK: "Customer#789",
+                        PK: "Customer#001",
                         SK: "ContactInformation"
                       }
                     }
                   },
+                  // Check that the new customer being associated with exists
+                  {
+                    ConditionCheck: {
+                      TableName: "mock-table",
+                      ConditionExpression: "attribute_exists(PK)",
+                      Key: {
+                        PK: "Customer#456",
+                        SK: "Customer"
+                      }
+                    }
+                  },
+                  // Denormalize a link of the ContactInformation to the new customer's partition
                   {
                     Put: {
                       TableName: "mock-table",
@@ -1191,12 +1259,30 @@ describe("Update", () => {
                       Item: {
                         PK: "Customer#456",
                         SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
+                        Id: "123",
+                        Type: "ContactInformation",
+                        CustomerId: "456",
+                        Email: "new-email@example.com",
+                        Phone: "555-555-5555",
+                        CreatedAt: "2023-01-01T00:00:00.000Z",
                         UpdatedAt: "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  // Overwrite the existing denormalized link to the Customer in the ContactInformation's partition
+                  {
+                    Put: {
+                      TableName: "mock-table",
+                      ConditionExpression: "attribute_exists(PK)",
+                      Item: {
+                        PK: "ContactInformation#123",
+                        SK: "Customer",
+                        Id: "456",
+                        Type: "Customer",
+                        Address: "11 Some St",
+                        Name: "Mock Customer",
+                        CreatedAt: "2023-03-01T00:00:00.000Z",
+                        UpdatedAt: "2023-04-02T00:00:00.000Z"
                       }
                     }
                   }
@@ -1206,24 +1292,113 @@ describe("Update", () => {
           ]);
         });
 
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
+        it("will throw an error if the entity being updated does not exist at preFetch", async () => {
+          expect.assertions(2);
 
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
+          mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
 
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
             });
-          });
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            expect(e).toEqual(
+              new NotFoundError("ContactInformation does not exist: 123")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          }
+        });
+
+        it("will throw an error if the entity being updated does not exist at preFetch", async () => {
+          expect.assertions(2);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            expect(e).toEqual(
+              new NotFoundError("ContactInformation does not exist: 123")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          }
+        });
+
+        it("will throw an error if the entity being updated existed at preFetch but was deleted before the transaction was committed", async () => {
+          expect.assertions(3);
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
 
           try {
             await ContactInformation.update("123", {
@@ -1238,98 +1413,78 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    // No Delete transaction because the item does not exist to look up the foreign key to build the delete operation with
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
             ]);
           }
         });
 
-        it("will throw an error if the associated entity does not exist", async () => {
-          expect.assertions(7);
+        it("will throw an error if the associated entity does not exist at preFetch", async () => {
+          expect.assertions(2);
 
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
+          mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
             });
-          });
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            expect(e).toEqual(
+              new NotFoundError("Customer does not exist: 456")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          }
+        });
+
+        it("will throw an error if the associated entity existed at preFetch but was deleted before the transaction was committed", async () => {
+          expect.assertions(3);
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
 
           try {
             await ContactInformation.update("123", {
@@ -1344,118 +1499,36 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#789",
-                          SK: "ContactInformation"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
             ]);
           }
         });
 
         it("will throw an error if the entity is already associated with the requested entity", async () => {
-          expect.assertions(7);
+          expect.assertions(3);
 
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "456" // Already belongs to customer, the same being updated
-            }
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" }
-              ],
-              $metadata: {}
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
             });
-          });
 
           try {
             await ContactInformation.update("123", {
@@ -1470,93 +1543,15 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
             ]);
           }
         });
 
         it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(6);
+          expect.assertions(5);
 
           expect(
             // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -1566,24 +1561,33 @@ describe("Update", () => {
             })
           ).toBeUndefined();
           expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
+            [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
           ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
+          expect(mockedQueryCommand.mock.calls).toEqual([
             [
               {
                 TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "ContactInformation#123",
+                  ":Type1": "ContactInformation"
+                },
+                FilterExpression: "#Type IN (:Type1)"
               }
             ]
           ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
+          // Dont get customer because its being deleted
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
           expect(mockTransactWriteCommand.mock.calls).toEqual([
             [
               {
                 TransactItems: [
+                  // Update the ContactInformation and remove the foreign key
                   {
                     Update: {
                       TableName: "mock-table",
@@ -1591,24 +1595,32 @@ describe("Update", () => {
                         PK: "ContactInformation#123",
                         SK: "ContactInformation"
                       },
+                      UpdateExpression:
+                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId",
                       ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#CustomerId": "CustomerId",
+                        "#Email": "Email",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
                       ExpressionAttributeValues: {
                         ":Email": "new-email@example.com",
                         ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
+                      }
                     }
                   },
+                  // Delete the denormalized record to Customer from the ContactInformation partition
                   {
                     Delete: {
                       TableName: "mock-table",
-                      Key: { PK: "Customer#789", SK: "ContactInformation" }
+                      Key: { PK: "ContactInformation#123", SK: "Customer" }
+                    }
+                  },
+                  // Delete the denormalized record to ContactInformation from the customer partition
+                  {
+                    Delete: {
+                      TableName: "mock-table",
+                      Key: { PK: "Customer#001", SK: "ContactInformation" }
                     }
                   }
                 ]
