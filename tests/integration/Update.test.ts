@@ -12,6 +12,7 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
+  Person,
   Pet
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -770,13 +771,14 @@ describe("Update", () => {
             UpdatedAt: "2023-01-02T00:00:00.000Z"
           };
 
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
           mockQuery.mockResolvedValue({
             Items: [contactInformation]
           });
           mockTransactGetItems.mockResolvedValue({
             Responses: [{ Item: customer }]
           });
+
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
         });
 
         afterEach(() => {
@@ -1634,91 +1636,158 @@ describe("Update", () => {
     describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
       describe("when the entity does not already belong to another entity", () => {
         beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: undefined // Does not already belong to customer
-            }
+          const pet: MockTableEntityTableItem<Pet> = {
+            PK: "Pet#123",
+            SK: "Pet",
+            Id: "123",
+            Type: "Pet",
+            Name: "Mock Pet",
+            // OwnerId: undefined, // Does not already belong to person
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          const person: MockTableEntityTableItem<Person> = {
+            PK: "Person#456",
+            SK: "Person",
+            Id: "456",
+            Type: "Person",
+            Name: "Mock Person",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          mockQuery.mockResolvedValue({
+            Items: [pet]
           });
+          mockTransactGetItems.mockResolvedValue({
+            Responses: [{ Item: person }]
+          });
+
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
         });
 
         afterEach(() => {
-          mockedUuidv4.mockReset();
+          mockSend.mockReset();
+          mockQuery.mockReset();
+          mockTransactGetItems.mockReset();
         });
 
         it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(6);
+          expect.assertions(5);
 
           expect(
             // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
+            await Pet.update("123", {
+              name: "Fido",
+              ownerId: "456"
             })
           ).toBeUndefined();
           expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
           ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
+          expect(mockedQueryCommand.mock.calls).toEqual([
             [
               {
                 TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Pet#123",
+                  ":Type1": "Pet"
+                },
+                FilterExpression: "#Type IN (:Type1)"
               }
             ]
           ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
+          expect(mockTransactGetCommand.mock.calls).toEqual([
             [
               {
                 TransactItems: [
                   {
+                    Get: {
+                      TableName: "mock-table",
+                      Key: { PK: "Person#456", SK: "Person" }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  // Update the pet and add owner id
+                  {
                     Update: {
                       TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
+                      Key: {
+                        PK: "Pet#123",
+                        SK: "Pet"
+                      },
                       UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
+                        "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
                       ConditionExpression: "attribute_exists(PK)",
                       ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
+                        "#Name": "Name",
+                        "#OwnerId": "OwnerId",
                         "#UpdatedAt": "UpdatedAt"
                       },
                       ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
+                        ":Name": "Fido",
+                        ":OwnerId": "456",
                         ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                       }
                     }
                   },
+                  // Check that the Person (owner) entity exists
                   {
                     ConditionCheck: {
                       TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
+                      ConditionExpression: "attribute_exists(PK)",
+                      Key: {
+                        PK: "Person#456",
+                        SK: "Person"
+                      }
                     }
                   },
+                  // Denormalize the Pet to Person partition
                   {
                     Put: {
                       TableName: "mock-table",
                       ConditionExpression: "attribute_not_exists(PK)",
                       Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
+                        PK: "Person#456",
+                        SK: "Pet#123",
+                        Id: "123",
+                        Type: "Pet",
+                        AdoptedDate: undefined,
+                        Name: "Fido",
+                        OwnerId: "456",
+                        CreatedAt: "2023-01-01T00:00:00.000Z",
                         UpdatedAt: "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  // Denormalize the Person to Pet partition
+                  {
+                    Put: {
+                      TableName: "mock-table",
+                      ConditionExpression: "attribute_not_exists(PK)",
+                      Item: {
+                        PK: "Pet#123",
+                        SK: "Person",
+                        Id: "456",
+                        Type: "Person",
+                        Name: "Mock Person",
+                        CreatedAt: "2023-01-01T00:00:00.000Z",
+                        UpdatedAt: "2023-01-02T00:00:00.000Z"
                       }
                     }
                   }
@@ -2769,7 +2838,7 @@ describe("Update", () => {
       });
     });
 
-    // // TODO
+    // // TODO - need to see the query with multiple Types...
     // describe("A model who HasMany of a relationship is updated", () => {});
 
     // // TODO
