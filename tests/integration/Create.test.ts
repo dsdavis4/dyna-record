@@ -939,6 +939,9 @@ describe("Create", () => {
           }
         ]
       ]);
+      // TODO I think this is missing a transaction... should there be a desk added to the user partition?
+      //    If true are other tests in here missing this?
+      //    I think... this is happening in real code pointing to an issue with the test potentially
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
