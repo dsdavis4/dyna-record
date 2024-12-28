@@ -9,6 +9,7 @@ import {
   Assignment,
   ContactInformation,
   Customer,
+  Desk,
   Grade,
   MockTable,
   MyClassWithAllAttributeTypes,
@@ -17,7 +18,8 @@ import {
   Person,
   Pet,
   PhoneBook,
-  Student
+  Student,
+  User
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -3358,11 +3360,120 @@ describe("Update", () => {
       });
     });
 
+    describe("A model who HasOne of a relationship is updated", () => {
+      it("will update the entity and the denormalized link records for its associated entities", async () => {
+        expect.assertions(5);
+
+        const desk: MockTableEntityTableItem<Desk> = {
+          PK: "Desk#123",
+          SK: "Desk",
+          Id: "123",
+          Type: "Desk",
+          Num: 1,
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
+
+        // User record denormalized to Desk partition
+        const linkedUser: MockTableEntityTableItem<User> = {
+          PK: desk.PK, // Linked record in Desk partition
+          SK: "User",
+          Id: "456",
+          Type: "User",
+          DeskId: desk.Id,
+          Name: "MockUser",
+          Email: "test@test.com",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [desk, linkedUser]
+        });
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Desk.update("123", {
+            num: 2
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Desk#123",
+                ":Type1": "Desk",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Update the Desk attributes
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Desk#123",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Desk record that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#456",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
     // TODO here
-
-    // // TODO - need to see the query with multiple Types...
-    // describe("A model who HasOne of a relationship is updated", () => {});
-
     // // TODO - need to see the query with multiple Types...
     // describe("A model who HasAndBelongsToMany of a relationship is updated", () => {});
 
