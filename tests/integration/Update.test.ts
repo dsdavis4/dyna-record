@@ -5,6 +5,7 @@ import {
   QueryCommand
 } from "@aws-sdk/lib-dynamodb";
 import {
+  Address,
   Assignment,
   ContactInformation,
   Customer,
@@ -15,6 +16,7 @@ import {
   PaymentMethod,
   Person,
   Pet,
+  PhoneBook,
   Student
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
@@ -3209,17 +3211,160 @@ describe("Update", () => {
       });
     });
 
-    // // TODO - need to see the query with multiple Types...
-    // describe("A model who HasMany of a relationship is updated", () => {});
+    describe("A model who HasMany of a relationship is updated", () => {
+      it("will update the entity and the denormalized link records for its associated entities", async () => {
+        expect.assertions(5);
 
-    // // TODO
+        const phoneBook: MockTableEntityTableItem<PhoneBook> = {
+          PK: "PhoneBook#123",
+          SK: "PhoneBook",
+          Id: "123",
+          Type: "PhoneBook",
+          Edition: "1",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
+
+        // Address record denormalized to PhoneBook partition
+        const linkedAddress1: MockTableEntityTableItem<Address> = {
+          PK: phoneBook.PK, // Linked record in PhoneBook partition
+          SK: "Address#456",
+          Id: "456",
+          Type: "Address",
+          PhoneBookId: phoneBook.Id,
+          State: "CO",
+          HomeId: "001",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        // Address record denormalized to PhoneBook partition
+        const linkedAddress2: MockTableEntityTableItem<Address> = {
+          PK: phoneBook.PK, // Linked record in PhoneBook partition
+          SK: "Address#789",
+          Id: "789",
+          Type: "Address",
+          PhoneBookId: phoneBook.Id,
+          State: "AZ",
+          HomeId: "002",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [phoneBook, linkedAddress1, linkedAddress2]
+        });
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await PhoneBook.update("123", {
+            edition: "2"
+          })
+        ).toBeUndefined();
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "PhoneBook#123",
+                ":Type1": "PhoneBook",
+                ":Type2": "Address"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the PhoneBook attributes
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "PhoneBook#123",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Update the PhoneBook records that are denormalized to the the associated Address partition
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Address#456",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Update the PhoneBook records that are denormalized to the the associated Address partition
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Address#789",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    // TODO here
+
+    // // TODO - need to see the query with multiple Types...
     // describe("A model who HasOne of a relationship is updated", () => {});
 
-    // // TODO
-    // describe("A model who BelongsTo a relationship as HasOne is updated")
-
-    // // TODO
-    // describe("A model who BelongsTo a relationship as HasMany is updated")
+    // // TODO - need to see the query with multiple Types...
+    // describe("A model who HasAndBelongsToMany of a relationship is updated", () => {});
 
     describe("types", () => {
       it("will not accept relationship attributes on update", async () => {
