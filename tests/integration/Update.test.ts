@@ -3620,6 +3620,23 @@ describe("Update", () => {
     });
 
     describe("types", () => {
+      beforeAll(() => {
+        // For type tests mock the operations to nothing because we are just testing for the type interface
+        mockQuery.mockResolvedValue({
+          Items: []
+        });
+
+        mockTransactGetItems.mockResolvedValue({
+          Responses: []
+        });
+      });
+
+      afterAll(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
       it("will not accept relationship attributes on update", async () => {
         await Order.update("123", {
           orderDate: new Date(),
@@ -3627,6 +3644,8 @@ describe("Update", () => {
           customerId: "456",
           // @ts-expect-error relationship attributes are not allowed
           customer: new Customer()
+        }).catch(() => {
+          console.log("Testing types");
         });
       });
 
@@ -3663,6 +3682,8 @@ describe("Update", () => {
           paymentMethodId: "123",
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
+        }).catch(() => {
+          console.log("Testing types");
         });
       });
 
@@ -3670,21 +3691,29 @@ describe("Update", () => {
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           id: "123"
+        }).catch(() => {
+          console.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           type: "456"
+        }).catch(() => {
+          console.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           createdAt: new Date()
+        }).catch(() => {
+          console.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           updatedAt: new Date()
+        }).catch(() => {
+          console.log("Testing types");
         });
       });
 
@@ -3692,11 +3721,15 @@ describe("Update", () => {
         await Order.update("123", {
           // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
           pk: "123"
+        }).catch(() => {
+          console.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
           sk: "456"
+        }).catch(() => {
+          console.log("Testing types");
         });
       });
 
@@ -3706,6 +3739,8 @@ describe("Update", () => {
           paymentMethodId: "123",
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
+        }).catch(() => {
+          console.log("Testing types");
         });
       });
 
