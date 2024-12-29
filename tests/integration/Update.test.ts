@@ -601,34 +601,8 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    it("will update an entity and remove nullable attributes", async () => {
-      expect.assertions(5);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-
-      const contactInformation: MockTableEntityTableItem<ContactInformation> = {
-        PK: "ContactInformation#123",
-        SK: "ContactInformation",
-        Id: "123",
-        Type: "ContactInformation",
-        Email: "email@email.com",
-        Phone: "555-555-5555",
-        CreatedAt: "2023-01-01T00:00:00.000Z",
-        UpdatedAt: "2023-01-02T00:00:00.000Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [contactInformation]
-      });
-
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await ContactInformation.update("123", {
-          email: "new@example.com",
-          phone: null
-        })
-      ).toBeUndefined();
+  describe("will update an entity and remove nullable attributes", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([
         [{ name: "QueryCommand" }],
         [{ name: "TransactWriteCommand" }]
@@ -680,8 +654,84 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    let contactInformation: MockTableEntityTableItem<ContactInformation>;
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      contactInformation = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "email@email.com",
+        Phone: "555-555-5555",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [contactInformation]
+      });
     });
 
+    it("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await ContactInformation.update("123", {
+          email: "new@example.com",
+          phone: null
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        email: "new@example.com",
+        phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        email: "new@example.com",
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(ContactInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: contactInformation.PK,
+        sk: contactInformation.SK,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("static method", () => {
     it("will update and remove multiple nullable attributes", async () => {
       expect.assertions(5);
 
@@ -3974,85 +4024,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will update an entity and remove attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(ContactInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        email: "example@example.com",
-        phone: "555-555-5555",
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        email: "new@example.com",
-        phone: null
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        email: "new@example.com",
-        phone: undefined,
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(ContactInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Email": "Email",
-                    "#Phone": "Phone",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Email": "new@example.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        email: "example@example.com",
-        phone: "555-555-5555",
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
     it("will update and remove multiple attributes", async () => {
       expect.assertions(8);
 
