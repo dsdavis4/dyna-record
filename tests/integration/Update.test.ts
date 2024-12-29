@@ -435,29 +435,8 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    it("can update all attribute types", async () => {
-      expect.assertions(5);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await MyClassWithAllAttributeTypes.update("123", {
-          stringAttribute: "1",
-          nullableStringAttribute: "2",
-          dateAttribute: new Date(),
-          nullableDateAttribute: new Date(),
-          foreignKeyAttribute: "1111",
-          nullableForeignKeyAttribute: "22222",
-          boolAttribute: true,
-          nullableBoolAttribute: false,
-          numberAttribute: 9,
-          nullableNumberAttribute: 10,
-          enumAttribute: "val-1",
-          nullableEnumAttribute: "val-2"
-        })
-      ).toBeUndefined();
+  describe("can update all attribute types", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
       expect(mockTransactGetCommand.mock.calls).toEqual([]);
@@ -512,8 +491,117 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
+    test("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: "1",
+          nullableStringAttribute: "2",
+          dateAttribute: new Date(),
+          nullableDateAttribute: new Date(),
+          foreignKeyAttribute: "1111",
+          nullableForeignKeyAttribute: "22222",
+          boolAttribute: true,
+          nullableBoolAttribute: false,
+          numberAttribute: 9,
+          nullableNumberAttribute: 10,
+          enumAttribute: "val-1",
+          nullableEnumAttribute: "val-2"
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "old-1",
+        nullableStringAttribute: "old-2",
+        dateAttribute: new Date("2023-01-02"),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "old-1111" as ForeignKey,
+        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey,
+        boolAttribute: false,
+        nullableBoolAttribute: true,
+        numberAttribute: 9,
+        nullableNumberAttribute: 8,
+        enumAttribute: "val-2",
+        nullableEnumAttribute: "val-1",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        stringAttribute: "1",
+        nullableStringAttribute: "2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "1111",
+        nullableForeignKeyAttribute: "22222",
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        stringAttribute: "1",
+        nullableStringAttribute: "2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "1111",
+        nullableForeignKeyAttribute: "22222",
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      // Assert original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MyClassWithAllAttributeTypes#123",
+        sk: "MyClassWithAllAttributeTypes",
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "old-1",
+        nullableStringAttribute: "old-2",
+        dateAttribute: new Date("2023-01-02"),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "old-1111",
+        nullableForeignKeyAttribute: "old-2222",
+        boolAttribute: false,
+        nullableBoolAttribute: true,
+        numberAttribute: 9,
+        nullableNumberAttribute: 8,
+        enumAttribute: "val-2",
+        nullableEnumAttribute: "val-1",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("static method", () => {
     it("will update an entity and remove nullable attributes", async () => {
       expect.assertions(5);
 
@@ -3886,135 +3974,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("can update all attribute types", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MyClassWithAllAttributeTypes, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        stringAttribute: "new-1",
-        nullableStringAttribute: "new-2",
-        dateAttribute: new Date(),
-        nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "new-1111",
-        nullableForeignKeyAttribute: "22222",
-        boolAttribute: true,
-        nullableBoolAttribute: false,
-        numberAttribute: 9,
-        nullableNumberAttribute: 10,
-        enumAttribute: "val-1",
-        nullableEnumAttribute: "val-2"
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "new-1",
-        nullableStringAttribute: "new-2",
-        dateAttribute: new Date(),
-        nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "new-1111",
-        nullableForeignKeyAttribute: "22222",
-        numberAttribute: 9,
-        nullableNumberAttribute: 10,
-        boolAttribute: true,
-        nullableBoolAttribute: false,
-        enumAttribute: "val-1",
-        nullableEnumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#boolAttribute": "boolAttribute",
-                    "#dateAttribute": "dateAttribute",
-                    "#enumAttribute": "enumAttribute",
-                    "#foreignKeyAttribute": "foreignKeyAttribute",
-                    "#nullableBoolAttribute": "nullableBoolAttribute",
-                    "#nullableDateAttribute": "nullableDateAttribute",
-                    "#nullableEnumAttribute": "nullableEnumAttribute",
-                    "#nullableForeignKeyAttribute":
-                      "nullableForeignKeyAttribute",
-                    "#nullableNumberAttribute": "nullableNumberAttribute",
-                    "#nullableStringAttribute": "nullableStringAttribute",
-                    "#numberAttribute": "numberAttribute",
-                    "#stringAttribute": "stringAttribute"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":boolAttribute": true,
-                    ":dateAttribute": "2023-10-16T03:31:35.918Z",
-                    ":enumAttribute": "val-1",
-                    ":foreignKeyAttribute": "new-1111",
-                    ":nullableBoolAttribute": false,
-                    ":nullableDateAttribute": "2023-10-16T03:31:35.918Z",
-                    ":nullableEnumAttribute": "val-2",
-                    ":nullableForeignKeyAttribute": "22222",
-                    ":nullableNumberAttribute": 10,
-                    ":nullableStringAttribute": "new-2",
-                    ":numberAttribute": 9,
-                    ":stringAttribute": "new-1"
-                  },
-                  Key: {
-                    PK: "MyClassWithAllAttributeTypes#123",
-                    SK: "MyClassWithAllAttributeTypes"
-                  },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Assert original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111",
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
     it("will update an entity and remove attributes", async () => {
       expect.assertions(8);
 
