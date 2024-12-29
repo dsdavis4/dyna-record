@@ -142,6 +142,11 @@ class MockInformation extends MockTable {
   public someDate?: Date;
 }
 
+// TODO make sure there is a test for updating an entity which does not need to do any prefetch
+//      does not belong to anything (or has nullable foreign key) or have has one or has many
+
+// TODO make sure there is a test for updating the denormalized links in foreign partitions
+
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
@@ -155,39 +160,8 @@ describe("Update", () => {
     jest.clearAllMocks();
   });
 
-  // TODO make sure there is a test for updating an entity which does not need to do any prefetch
-  //      does not belong to anything (or has nullable foreign key) or have has one or has many
-
-  // TODO make sure there is a test for updating the denormalized links in foreign partitions
-
-  describe("static method", () => {
-    it("will update an entity without foreign key attributes (this entity has no local denormalized links)", async () => {
-      expect.assertions(5);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-
-      const customer: MockTableEntityTableItem<Customer> = {
-        PK: "Customer#123",
-        SK: "Customer",
-        Id: "123",
-        Type: "Customer",
-        Name: "Mock Customer",
-        Address: "11 Some St",
-        CreatedAt: "2023-01-01T00:00:00.000Z",
-        UpdatedAt: "2023-01-02T00:00:00.000Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [customer]
-      });
-
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await Customer.update("123", {
-          name: "New Name",
-          address: "new Address"
-        })
-      ).toBeUndefined();
+  describe("will update an entity without foreign key attributes (this entity has no local denormalized links)", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([
         [{ name: "QueryCommand" }],
         [{ name: "TransactWriteCommand" }]
@@ -237,8 +211,84 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    let customer: MockTableEntityTableItem<Customer>;
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      customer = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
     });
 
+    it("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Customer.update("123", {
+          name: "New Name",
+          address: "new Address"
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(Customer, {
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        name: "New Name",
+        address: "new Address"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        name: "New Name", // Updated name
+        address: "new Address", // Updated address
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(Customer);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("static method", () => {
     it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
       expect.assertions(5);
 
@@ -3776,78 +3826,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will update an entity without foreign key attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(Customer, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        name: "test-name",
-        address: "test-address",
-        type: "Customer",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({ name: "newName" });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "newName", // Updated name
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now // Updated at gets updated
-      });
-      expect(updatedInstance).toBeInstanceOf(Customer);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  TableName: "mock-table",
-                  Key: { PK: "Customer#123", SK: "Customer" },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "newName",
-                    ":UpdatedAt": now.toISOString()
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "test-name",
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
     it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
       expect.assertions(8);
 
