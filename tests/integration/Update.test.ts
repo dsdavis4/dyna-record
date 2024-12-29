@@ -841,8 +841,104 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    it("will error if any attributes are the wrong type", async () => {
+  describe("will error if any attributes are the wrong type", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["stringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableStringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["dateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["nullableDateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["boolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["nullableBoolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["numberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableNumberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["foreignKeyAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableForeignKeyAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
+          options: ["val-1", "val-2"],
+          path: ["enumAttribute"],
+          received: "val-3"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
+          options: ["val-1", "val-2"],
+          path: ["nullableEnumAttribute"],
+          received: "val-4"
+        }
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
       expect.assertions(6);
 
       try {
@@ -861,102 +957,50 @@ describe("Update", () => {
           nullableEnumAttribute: "val-4"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["stringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableStringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["dateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["nullableDateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["boolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["nullableBoolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["numberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["nullableNumberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["foreignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableForeignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
-            options: ["val-1", "val-2"],
-            path: ["enumAttribute"],
-            received: "val-3"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
-            options: ["val-1", "val-2"],
-            path: ["nullableEnumAttribute"],
-            received: "val-4"
-          }
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        operationSharedAssertions(e);
       }
     });
 
+    test("instance method", async () => {
+      expect.assertions(6);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      try {
+        await instance.update({
+          stringAttribute: 1,
+          nullableStringAttribute: 2,
+          dateAttribute: 3,
+          nullableDateAttribute: 4,
+          foreignKeyAttribute: 5,
+          nullableForeignKeyAttribute: 6,
+          boolAttribute: 7,
+          nullableBoolAttribute: 8,
+          numberAttribute: "9",
+          nullableNumberAttribute: "10",
+          enumAttribute: "val-3",
+          nullableEnumAttribute: "val-4"
+        } as any); // Force any to test runtime validations
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("static method", () => {
     it("will allow nullable attributes to be set to null", async () => {
       expect.assertions(4);
 
@@ -4083,135 +4127,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will error if any attributes are the wrong type", async () => {
-      expect.assertions(5);
-
-      const instance = createInstance(MyClassWithAllAttributeTypes, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      try {
-        await instance.update({
-          stringAttribute: 1,
-          nullableStringAttribute: 2,
-          dateAttribute: 3,
-          nullableDateAttribute: 4,
-          foreignKeyAttribute: 5,
-          nullableForeignKeyAttribute: 6,
-          boolAttribute: 7,
-          nullableBoolAttribute: 8,
-          numberAttribute: "9",
-          nullableNumberAttribute: "10",
-          enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
-        } as any); // Force any to test runtime validations
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["stringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableStringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["dateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["nullableDateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["boolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["nullableBoolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["numberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["nullableNumberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["foreignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableForeignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
-            options: ["val-1", "val-2"],
-            path: ["enumAttribute"],
-            received: "val-3"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
-            options: ["val-1", "val-2"],
-            path: ["nullableEnumAttribute"],
-            received: "val-4"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
-      }
-    });
-
     it("will allow nullable attributes to be set to null", async () => {
       expect.assertions(8);
 
