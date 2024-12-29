@@ -731,21 +731,8 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    it("will update and remove multiple nullable attributes", async () => {
-      expect.assertions(5);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await MockInformation.update("123", {
-          address: "11 Some St",
-          email: "new@example.com",
-          state: null,
-          phone: null
-        })
-      ).toBeUndefined();
+  describe("will update and remove multiple nullable attributes", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
       expect(mockTransactGetCommand.mock.calls).toEqual([]);
@@ -781,8 +768,80 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
+    test("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MockInformation.update("123", {
+          address: "11 Some St",
+          email: "new@example.com",
+          state: null,
+          phone: null
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const now = new Date("2023-10-16T03:31:35.918Z");
+      jest.setSystemTime(now);
+
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        address: "11 Some St",
+        email: "new@example.com",
+        state: null,
+        phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        address: "11 Some St",
+        email: "new@example.com",
+        state: undefined,
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MockInformation#123",
+        sk: "MockInformation",
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("static method", () => {
     it("will error if any attributes are the wrong type", async () => {
       expect.assertions(6);
 
@@ -4024,93 +4083,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will update and remove multiple attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MockInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        address: "111 Some St",
-        email: "new@example.com",
-        state: null,
-        phone: null
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "111 Some St",
-        email: "new@example.com",
-        state: undefined,
-        phone: undefined,
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MockInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Address": "Address",
-                    "#Email": "Email",
-                    "#Phone": "Phone",
-                    "#State": "State",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Address": "111 Some St",
-                    ":Email": "new@example.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
     it("will error if any attributes are the wrong type", async () => {
       expect.assertions(5);
 
