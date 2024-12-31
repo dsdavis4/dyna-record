@@ -1093,8 +1093,26 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    it("will not allow non nullable attributes to be null", async () => {
+  describe("will not allow non nullable attributes to be null", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received null",
+          path: ["myAttribute"],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
       expect.assertions(7);
 
       try {
@@ -1102,24 +1120,34 @@ describe("Update", () => {
           myAttribute: null as any // Force any to test runtime validations
         });
       } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received null",
-            path: ["myAttribute"],
-            received: "null"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockedQueryCommand.mock.calls).toEqual([]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        operationSharedAssertions(e);
       }
     });
 
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MyModelNonNullableAttribute, {
+        pk: "test-pk" as PartitionKey,
+        sk: "test-sk" as SortKey,
+        id: "123",
+        type: "MyModelNonNullableAttribute",
+        myAttribute: new Date(),
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      try {
+        await instance.update({
+          myAttribute: null as any // Force any to test runtime validations
+        });
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("static method", () => {
     it("will allow nullable attributes to be set to null", async () => {
       expect.assertions(4);
 
@@ -4179,40 +4207,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will not allow non nullable attributes to be null", async () => {
-      expect.assertions(5);
-
-      const instance = createInstance(MyModelNonNullableAttribute, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyModelNonNullableAttribute",
-        myAttribute: new Date(),
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      try {
-        await instance.update({
-          myAttribute: null as any // Force any to test runtime validations
-        });
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received null",
-            path: ["myAttribute"],
-            received: "null"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
-      }
-    });
-
     it("will allow nullable attributes to be set to null", async () => {
       expect.assertions(8);
 
