@@ -1148,43 +1148,7 @@ describe("Update", () => {
   });
 
   describe("static method", () => {
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(4);
-
-      await MockInformation.update("123", {
-        someDate: null
-      });
-
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockedQueryCommand.mock.calls).toEqual([]);
-      expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      // TODO I think this test is wrong... there should be a remove statement
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#someDate": "someDate"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-    });
+    // TODO start here continue grouping tests with instance/static
 
     describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
       describe("when the entity does not already belong to another entity", () => {
@@ -4207,87 +4171,6 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MockInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({ someDate: null });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: undefined,
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MockInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#someDate": "someDate"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
     describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
       describe("when the entity does not already belong to another entity", () => {
         const now = new Date("2023-10-16T03:31:35.918Z");
