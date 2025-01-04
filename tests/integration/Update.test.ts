@@ -1486,6 +1486,63 @@ describe("Update", () => {
           }
         });
       });
+
+      describe("will throw an error if the entity being associated with does not exist at preFetch", () => {
+        const operationSharedAssertions = (e: any): void => {
+          expect(e).toEqual(new NotFoundError("Customer does not exist: 456"));
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }]
+          ]);
+        };
+
+        beforeEach(() => {
+          mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+          mockSend
+            .mockResolvedValueOnce(undefined)
+            .mockReturnValueOnce(undefined)
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        test("static method", async () => {
+          expect.assertions(2);
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(2);
+
+          try {
+            await instance.update({
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+      });
     });
   });
 
@@ -1530,44 +1587,6 @@ describe("Update", () => {
           mockSend.mockReset();
           mockQuery.mockReset();
           mockTransactGetItems.mockReset();
-        });
-
-        it("will throw an error if the entity being associated with does not exist at preFetch", async () => {
-          expect.assertions(2);
-
-          mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
-
-          mockSend
-            .mockResolvedValueOnce(undefined)
-            .mockReturnValueOnce(undefined)
-            .mockImplementationOnce(() => {
-              mockTransact();
-              throw new TransactionCanceledException({
-                message: "MockMessage",
-                CancellationReasons: [
-                  { Code: "None" },
-                  { Code: "ConditionalCheckFailed" },
-                  { Code: "None" },
-                  { Code: "None" }
-                ],
-                $metadata: {}
-              });
-            });
-
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e).toEqual(
-              new NotFoundError("Customer does not exist: 456")
-            );
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "TransactGetCommand" }],
-              [{ name: "QueryCommand" }]
-            ]);
-          }
         });
 
         it("will throw an error if the entity being updated existed when preFetched but was deleted before the transaction was committed (causing transaction error)", async () => {
