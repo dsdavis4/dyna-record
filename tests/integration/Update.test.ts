@@ -2226,62 +2226,9 @@ describe("Update", () => {
           }
         });
       });
-    });
-  });
 
-  describe("static method", () => {
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
-      describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
-        beforeEach(() => {
-          const contactInformation: MockTableEntityTableItem<ContactInformation> =
-            {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Type: "ContactInformation",
-              Email: "old-email@email.com",
-              Phone: "555-555-5555",
-              CustomerId: "001",
-              CreatedAt: "2023-01-01T00:00:00.000Z",
-              UpdatedAt: "2023-01-02T00:00:00.000Z"
-            };
-
-          const customer: MockTableEntityTableItem<Customer> = {
-            PK: "Customer#456",
-            SK: "Customer",
-            Id: "456",
-            Type: "Customer",
-            Name: "Mock Customer",
-            Address: "11 Some St",
-            CreatedAt: "2023-03-01T00:00:00.000Z",
-            UpdatedAt: "2023-04-02T00:00:00.000Z"
-          };
-
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockQuery.mockResolvedValue({
-            Items: [contactInformation]
-          });
-          mockTransactGetItems.mockResolvedValue({
-            Responses: [{ Item: customer }]
-          });
-        });
-
-        afterEach(() => {
-          mockSend.mockReset();
-          mockQuery.mockReset();
-          mockTransactGetItems.mockReset();
-        });
-
-        it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(5);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: null
-            })
-          ).toBeUndefined();
+      describe("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", () => {
+        const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -2349,10 +2296,57 @@ describe("Update", () => {
               }
             ]
           ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: null
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            email: "new-email@example.com",
+            customerId: null
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            email: "new-email@example.com",
+            customerId: undefined,
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: contactInformation.PK as PartitionKey,
+            sk: contactInformation.SK as SortKey,
+            id: contactInformation.Id,
+            type: contactInformation.Type,
+            customerId: contactInformation.CustomerId,
+            email: contactInformation.Email,
+            phone: contactInformation.Phone,
+            createdAt: new Date(contactInformation.CreatedAt),
+            updatedAt: new Date(contactInformation.UpdatedAt)
+          });
+
+          dbOperationAssertions();
         });
       });
     });
+  });
 
+  describe("static method", () => {
+    // TODO start here
     describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
       describe("when the entity does not already belong to another entity", () => {
         beforeEach(() => {
@@ -4485,129 +4479,7 @@ describe("Update", () => {
   });
 
   describe("instance method", () => {
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "789" // Already belongs to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        // TODO here for instance
-
-        it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            email: "new-email@example.com",
-            customerId: null
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "new-email@example.com",
-            customerId: undefined,
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(ContactInformation);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#789", SK: "ContactInformation" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert that original instance was not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-    });
-
+    // TODO here for instance method
     describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
       describe("when the entity does not already belong to another entity", () => {
         const now = new Date("2023-10-16T03:31:35.918Z");
