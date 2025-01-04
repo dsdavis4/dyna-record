@@ -1149,20 +1149,29 @@ describe("Update", () => {
 
   describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
     describe("when the entity does not already belong to another entity", () => {
-      let contactInformation: MockTableEntityTableItem<ContactInformation>;
+      const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "old-email@email.com",
+        Phone: "555-555-5555",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
 
       beforeEach(() => {
-        contactInformation = {
-          PK: "ContactInformation#123",
-          SK: "ContactInformation",
-          Id: "123",
-          Type: "ContactInformation",
-          Email: "old-email@email.com",
-          Phone: "555-555-5555",
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
         const customer: MockTableEntityTableItem<Customer> = {
           PK: "Customer#456",
           SK: "Customer",
@@ -1324,17 +1333,6 @@ describe("Update", () => {
         test("instance method", async () => {
           expect.assertions(7);
 
-          const instance = createInstance(ContactInformation, {
-            pk: contactInformation.PK as PartitionKey,
-            sk: contactInformation.SK as SortKey,
-            id: contactInformation.Id,
-            type: contactInformation.Type,
-            email: contactInformation.Email,
-            phone: contactInformation.Phone,
-            createdAt: new Date(contactInformation.CreatedAt),
-            updatedAt: new Date(contactInformation.UpdatedAt)
-          });
-
           const updatedInstance = await instance.update({
             email: "new-email@example.com",
             customerId: "456"
@@ -1360,6 +1358,68 @@ describe("Update", () => {
           });
 
           dbOperationAssertions();
+        });
+      });
+
+      describe("will throw an error if the entity being updated does not exist at pre fetch", () => {
+        const operationSharedAssertions = (e: any): void => {
+          expect(e).toEqual(
+            new NotFoundError("ContactInformation does not exist: 123")
+          );
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }]
+          ]);
+        };
+
+        beforeEach(() => {
+          mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        test("static method", async () => {
+          expect.assertions(2);
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(2);
+
+          try {
+            await instance.update({
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
         });
       });
     });
@@ -1406,47 +1466,6 @@ describe("Update", () => {
           mockSend.mockReset();
           mockQuery.mockReset();
           mockTransactGetItems.mockReset();
-        });
-
-        it("will throw an error if the entity being updated does not exist at pre fetch", async () => {
-          expect.assertions(2);
-
-          mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
-
-          mockSend
-            // TransactGet
-            .mockResolvedValueOnce(undefined)
-            // Query
-            .mockResolvedValueOnce(undefined)
-            // TransactWrite
-            .mockImplementationOnce(() => {
-              mockTransact();
-              throw new TransactionCanceledException({
-                message: "MockMessage",
-                CancellationReasons: [
-                  { Code: "ConditionalCheckFailed" },
-                  { Code: "None" },
-                  { Code: "None" },
-                  { Code: "None" }
-                ],
-                $metadata: {}
-              });
-            });
-
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e).toEqual(
-              new NotFoundError("ContactInformation does not exist: 123")
-            );
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "TransactGetCommand" }],
-              [{ name: "QueryCommand" }]
-            ]);
-          }
         });
 
         it("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", async () => {
