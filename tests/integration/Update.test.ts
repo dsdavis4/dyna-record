@@ -1147,61 +1147,51 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    // TODO start here continue grouping tests with instance/static
+  describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
+    describe("when the entity does not already belong to another entity", () => {
+      let contactInformation: MockTableEntityTableItem<ContactInformation>;
 
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        beforeEach(() => {
-          const contactInformation: MockTableEntityTableItem<ContactInformation> =
-            {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Type: "ContactInformation",
-              Email: "old-email@email.com",
-              Phone: "555-555-5555",
-              CreatedAt: "2023-01-01T00:00:00.000Z",
-              UpdatedAt: "2023-01-02T00:00:00.000Z"
-            };
+      beforeEach(() => {
+        contactInformation = {
+          PK: "ContactInformation#123",
+          SK: "ContactInformation",
+          Id: "123",
+          Type: "ContactInformation",
+          Email: "old-email@email.com",
+          Phone: "555-555-5555",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
 
-          const customer: MockTableEntityTableItem<Customer> = {
-            PK: "Customer#456",
-            SK: "Customer",
-            Id: "456",
-            Type: "Customer",
-            Name: "Mock Customer",
-            Address: "11 Some St",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
+        const customer: MockTableEntityTableItem<Customer> = {
+          PK: "Customer#456",
+          SK: "Customer",
+          Id: "456",
+          Type: "Customer",
+          Name: "Mock Customer",
+          Address: "11 Some St",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
 
-          mockQuery.mockResolvedValue({
-            Items: [contactInformation]
-          });
-          mockTransactGetItems.mockResolvedValue({
-            Responses: [{ Item: customer }]
-          });
-
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockQuery.mockResolvedValue({
+          Items: [contactInformation]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: customer }]
         });
 
-        afterEach(() => {
-          mockSend.mockReset();
-          mockQuery.mockReset();
-          mockTransactGetItems.mockReset();
-        });
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
 
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(5);
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
 
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            })
-          ).toBeUndefined();
+      describe("will update the foreign key if the entity being associated with exists", () => {
+        const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "TransactGetCommand" }],
             [{ name: "QueryCommand" }],
@@ -1316,6 +1306,106 @@ describe("Update", () => {
               }
             ]
           ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: "456"
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const instance = createInstance(ContactInformation, {
+            pk: contactInformation.PK as PartitionKey,
+            sk: contactInformation.SK as SortKey,
+            id: contactInformation.Id,
+            type: contactInformation.Type,
+            email: contactInformation.Email,
+            phone: contactInformation.Phone,
+            createdAt: new Date(contactInformation.CreatedAt),
+            updatedAt: new Date(contactInformation.UpdatedAt)
+          });
+
+          const updatedInstance = await instance.update({
+            email: "new-email@example.com",
+            customerId: "456"
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            email: "new-email@example.com",
+            customerId: "456",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: contactInformation.PK as PartitionKey,
+            sk: contactInformation.SK as SortKey,
+            id: contactInformation.Id,
+            type: contactInformation.Type,
+            email: contactInformation.Email,
+            phone: contactInformation.Phone,
+            createdAt: new Date(contactInformation.CreatedAt),
+            updatedAt: new Date(contactInformation.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+    });
+  });
+
+  describe("static method", () => {
+    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
+      describe("when the entity does not already belong to another entity", () => {
+        beforeEach(() => {
+          const contactInformation: MockTableEntityTableItem<ContactInformation> =
+            {
+              PK: "ContactInformation#123",
+              SK: "ContactInformation",
+              Id: "123",
+              Type: "ContactInformation",
+              Email: "old-email@email.com",
+              Phone: "555-555-5555",
+              CreatedAt: "2023-01-01T00:00:00.000Z",
+              UpdatedAt: "2023-01-02T00:00:00.000Z"
+            };
+
+          const customer: MockTableEntityTableItem<Customer> = {
+            PK: "Customer#456",
+            SK: "Customer",
+            Id: "456",
+            Type: "Customer",
+            Name: "Mock Customer",
+            Address: "11 Some St",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          mockQuery.mockResolvedValue({
+            Items: [contactInformation]
+          });
+          mockTransactGetItems.mockResolvedValue({
+            Responses: [{ Item: customer }]
+          });
+
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        });
+
+        afterEach(() => {
+          mockSend.mockReset();
+          mockQuery.mockReset();
+          mockTransactGetItems.mockReset();
         });
 
         it("will throw an error if the entity being updated does not exist at pre fetch", async () => {
@@ -4194,119 +4284,7 @@ describe("Update", () => {
           mockedUuidv4.mockReset();
         });
 
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            email: "new-email@example.com",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "new-email@example.com",
-            customerId: "456",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(ContactInformation);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Original instance is not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
+        // TODO here for isntance...
 
         it("will throw an error if the entity being updated does not exist", async () => {
           expect.assertions(7);
