@@ -3536,69 +3536,247 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    describe("A model is updating multiple ForeignKeys of different relationship types", () => {
-      @Entity
-      class Model1 extends MockTable {
-        @StringAttribute({ alias: "SomeAttr" })
-        public someAttr: string;
+  describe("A model is updating multiple ForeignKeys of different relationship types", () => {
+    @Entity
+    class Model1 extends MockTable {
+      @StringAttribute({ alias: "SomeAttr" })
+      public someAttr: string;
 
-        @HasOne(() => Model3, { foreignKey: "model1Id" })
-        public model3: Model3;
-      }
+      @HasOne(() => Model3, { foreignKey: "model1Id" })
+      public model3: Model3;
+    }
 
-      @Entity
-      class Model2 extends MockTable {
-        @StringAttribute({ alias: "OtherAttr" })
-        public otherAttr: string;
+    @Entity
+    class Model2 extends MockTable {
+      @StringAttribute({ alias: "OtherAttr" })
+      public otherAttr: string;
 
-        @HasMany(() => Model3, { foreignKey: "model2Id" })
-        public model3: Model3[];
-      }
+      @HasMany(() => Model3, { foreignKey: "model2Id" })
+      public model3: Model3[];
+    }
 
-      @Entity
-      class Model3 extends MockTable {
-        @StringAttribute({ alias: "Name" })
-        public name: string;
+    @Entity
+    class Model3 extends MockTable {
+      @StringAttribute({ alias: "Name" })
+      public name: string;
 
-        @ForeignKeyAttribute({ alias: "Model1Id", nullable: true })
-        public model1Id?: NullableForeignKey;
+      @ForeignKeyAttribute({ alias: "Model1Id", nullable: true })
+      public model1Id?: NullableForeignKey;
 
-        @ForeignKeyAttribute({ alias: "Model2Id", nullable: true })
-        public model2Id?: NullableForeignKey;
+      @ForeignKeyAttribute({ alias: "Model2Id", nullable: true })
+      public model2Id?: NullableForeignKey;
 
-        @BelongsTo(() => Model1, { foreignKey: "model1Id" })
-        public model1: Model1;
+      @BelongsTo(() => Model1, { foreignKey: "model1Id" })
+      public model1: Model1;
 
-        @BelongsTo(() => Model2, { foreignKey: "model2Id" })
-        public model2: Model2;
-      }
+      @BelongsTo(() => Model2, { foreignKey: "model2Id" })
+      public model2: Model2;
+    }
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    afterEach(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    describe("can add (for entity that is not associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK2",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK2": "Model3#123",
+                ":Type1": "Model3"
+              },
+              FilterExpression: "#Type IN (:Type1)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model1#456", SK: "Model1" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model2#789", SK: "Model2" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the Model3 entity
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Model3#123",
+                      SK: "Model3"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Model1Id": "Model1Id",
+                      "#Model2Id": "Model2Id",
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Model1Id": "456",
+                      ":Model2Id": "789",
+                      ":Name": "newName",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Check that Model1 entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model1#456",
+                      SK: "Model1"
+                    }
+                  }
+                },
+                // Denormalize Model3 entity being updated to Model1 partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model1#456",
+                      SK: "Model3",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
+                      UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Model1 entity to the Model3 partition that is being updated
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model3#123",
+                      SK: "Model1",
+                      Id: "456",
+                      Type: "Model1",
+                      SomeAttr: "someVal",
+                      CreatedAt: "2023-01-03T00:00:00.000Z",
+                      UpdatedAt: "2023-01-04T00:00:00.000Z"
+                    }
+                  }
+                },
+                // Check that Model2 entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model2#789",
+                      SK: "Model2"
+                    }
+                  }
+                },
+                // Denormalize Model3 entity being updated to Model2 partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model2#789",
+                      SK: "Model3#123",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
+                      UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Model2 entity to the Model3 partition that is being updated
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model3#123",
+                      SK: "Model2",
+                      Id: "789",
+                      Type: "Model2",
+                      OtherAttr: "otherVal",
+                      CreatedAt: "2023-01-05T00:00:00.000Z",
+                      UpdatedAt: "2023-01-06T00:00:00.000Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      const model3Item: MockTableEntityTableItem<Model3> = {
+        PK: "Model3#123",
+        SK: "Model3",
+        Id: "123",
+        Type: "Model3",
+        Name: "originalName",
+        Model1Id: undefined, // Does not already have an associated entity
+        Model2Id: undefined, // Does not already have an associated entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Model3, {
+        pk: "Model3#123" as PartitionKey,
+        sk: "Model3" as SortKey,
+        id: "123",
+        type: "Model3",
+        name: "originalName",
+        model1Id: undefined, // Does not already have an associated entity
+        model2Id: undefined, // Does not already have an associated entity
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
 
       beforeEach(() => {
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      });
-
-      afterEach(() => {
-        mockSend.mockReset();
-        mockQuery.mockReset();
-        mockTransactGetItems.mockReset();
-      });
-
-      it("can add (for entity that is not associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", async () => {
-        expect.assertions(5);
-
-        const model3Item: MockTableEntityTableItem<Model3> = {
-          PK: "Model3#123",
-          SK: "Model3",
-          Id: "123",
-          Type: "Model3",
-          Name: "originalName",
-          Model1Id: undefined, // Does not already have an associated entity
-          Model2Id: undefined, // Does not already have an associated entity
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
         const model1Item: MockTableEntityTableItem<Model1> = {
           PK: "Model1#456",
           SK: "Model1",
@@ -3625,6 +3803,10 @@ describe("Update", () => {
         mockTransactGetItems.mockResolvedValue({
           Responses: [{ Item: model1Item }, { Item: model2Item }]
         });
+      });
+
+      test("static method", async () => {
+        expect.assertions(5);
 
         expect(
           // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -3634,644 +3816,516 @@ describe("Update", () => {
             model2Id: "789"
           })
         ).toBeUndefined();
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "TransactGetCommand" }],
-          [{ name: "QueryCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              KeyConditionExpression: "#PK = :PK2",
-              ExpressionAttributeNames: {
-                "#PK": "PK",
-                "#Type": "Type"
-              },
-              ExpressionAttributeValues: {
-                ":PK2": "Model3#123",
-                ":Type1": "Model3"
-              },
-              FilterExpression: "#Type IN (:Type1)"
-            }
-          ]
-        ]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Get: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model1#456", SK: "Model1" }
-                  }
-                },
-                {
-                  Get: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model2#789", SK: "Model2" }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                // Update the Model3 entity
-                {
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "Model3#123",
-                      SK: "Model3"
-                    },
-                    UpdateExpression:
-                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Model1Id": "Model1Id",
-                      "#Model2Id": "Model2Id",
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Model1Id": "456",
-                      ":Model2Id": "789",
-                      ":Name": "newName",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Check that Model1 entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: {
-                      PK: "Model1#456",
-                      SK: "Model1"
-                    }
-                  }
-                },
-                // Denormalize Model3 entity being updated to Model1 partition
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model1#456",
-                      SK: "Model3",
-                      Id: "123",
-                      Type: "Model3",
-                      Model1Id: "456",
-                      Model2Id: "789",
-                      Name: "newName",
-                      CreatedAt: "2023-01-01T00:00:00.000Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Model1 entity to the Model3 partition that is being updated
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model3#123",
-                      SK: "Model1",
-                      Id: "456",
-                      Type: "Model1",
-                      SomeAttr: "someVal",
-                      CreatedAt: "2023-01-03T00:00:00.000Z",
-                      UpdatedAt: "2023-01-04T00:00:00.000Z"
-                    }
-                  }
-                },
-                // Check that Model2 entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: {
-                      PK: "Model2#789",
-                      SK: "Model2"
-                    }
-                  }
-                },
-                // Denormalize Model3 entity being updated to Model2 partition
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model2#789",
-                      SK: "Model3#123",
-                      Id: "123",
-                      Type: "Model3",
-                      Model1Id: "456",
-                      Model2Id: "789",
-                      Name: "newName",
-                      CreatedAt: "2023-01-01T00:00:00.000Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Model2 entity to the Model3 partition that is being updated
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model3#123",
-                      SK: "Model2",
-                      Id: "789",
-                      Type: "Model2",
-                      OtherAttr: "otherVal",
-                      CreatedAt: "2023-01-05T00:00:00.000Z",
-                      UpdatedAt: "2023-01-06T00:00:00.000Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
+
+        dbOperationAssertions();
       });
 
-      it("can update (for entity that is already associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", async () => {
-        expect.assertions(5);
+      test("instance method", async () => {
+        expect.assertions(7);
 
-        const model3Item: MockTableEntityTableItem<Model3> = {
-          PK: "Model3#123",
-          SK: "Model3",
-          Id: "123",
-          Type: "Model3",
-          Name: "originalName",
-          Model1Id: "001", // Already has an associated entity
-          Model2Id: "002", // Already has an associated entity
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
-        const model1Item: MockTableEntityTableItem<Model1> = {
-          PK: "Model1#456",
-          SK: "Model1",
-          Id: "456",
-          Type: "Model1",
-          SomeAttr: "someVal",
-          CreatedAt: "2023-01-03T00:00:00.000Z",
-          UpdatedAt: "2023-01-04T00:00:00.000Z"
-        };
-
-        const model2Item: MockTableEntityTableItem<Model2> = {
-          PK: "Model2#789",
-          SK: "Model2",
-          Id: "789",
-          Type: "Model2",
-          OtherAttr: "otherVal",
-          CreatedAt: "2023-01-05T00:00:00.000Z",
-          UpdatedAt: "2023-01-06T00:00:00.000Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [model3Item]
-        });
-        mockTransactGetItems.mockResolvedValue({
-          Responses: [{ Item: model1Item }, { Item: model2Item }]
+        const updatedInstance = await instance.update({
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789"
         });
 
-        expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await Model3.update("123", {
-            name: "newName",
-            model1Id: "456",
-            model2Id: "789"
-          })
-        ).toBeUndefined();
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "TransactGetCommand" }],
-          [{ name: "QueryCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              KeyConditionExpression: "#PK = :PK2",
-              ExpressionAttributeNames: {
-                "#PK": "PK",
-                "#Type": "Type"
-              },
-              ExpressionAttributeValues: {
-                ":PK2": "Model3#123",
-                ":Type1": "Model3"
-              },
-              FilterExpression: "#Type IN (:Type1)"
-            }
-          ]
-        ]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Get: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model1#456", SK: "Model1" }
-                  }
-                },
-                {
-                  Get: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model2#789", SK: "Model2" }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                // Update the Model3 entity
-                {
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "Model3#123",
-                      SK: "Model3"
-                    },
-                    UpdateExpression:
-                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Model1Id": "Model1Id",
-                      "#Model2Id": "Model2Id",
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Model1Id": "456",
-                      ":Model2Id": "789",
-                      ":Name": "newName",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Delete the link to the old Model1 item
-                {
-                  Delete: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model1#001", SK: "Model3" }
-                  }
-                },
-                // Check that Model1 entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: {
-                      PK: "Model1#456",
-                      SK: "Model1"
-                    }
-                  }
-                },
-                // Denormalize Model3 entity being updated to Model1 partition
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model1#456",
-                      SK: "Model3",
-                      Id: "123",
-                      Type: "Model3",
-                      Model1Id: "456",
-                      Model2Id: "789",
-                      Name: "newName",
-                      CreatedAt: "2023-01-01T00:00:00.000Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Model1 entity to the Model3 partition that is being updated
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Item: {
-                      PK: "Model3#123",
-                      SK: "Model1",
-                      Id: "456",
-                      Type: "Model1",
-                      SomeAttr: "someVal",
-                      CreatedAt: "2023-01-03T00:00:00.000Z",
-                      UpdatedAt: "2023-01-04T00:00:00.000Z"
-                    }
-                  }
-                },
-                // Delete the link to the old Model2 item
-                {
-                  Delete: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model2#002", SK: "Model3#123" }
-                  }
-                },
-                // Check that Model2 entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: {
-                      PK: "Model2#789",
-                      SK: "Model2"
-                    }
-                  }
-                },
-                // Denormalize Model3 entity being updated to Model2 partition
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "Model2#789",
-                      SK: "Model3#123",
-                      Id: "123",
-                      Type: "Model3",
-                      Model1Id: "456",
-                      Model2Id: "789",
-                      Name: "newName",
-                      CreatedAt: "2023-01-01T00:00:00.000Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Model2 entity to the Model3 partition that is being updated
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_exists(PK)",
-                    Item: {
-                      PK: "Model3#123",
-                      SK: "Model2",
-                      Id: "789",
-                      Type: "Model2",
-                      OtherAttr: "otherVal",
-                      CreatedAt: "2023-01-05T00:00:00.000Z",
-                      UpdatedAt: "2023-01-06T00:00:00.000Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-      });
-
-      it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(5);
-
-        const grade: OtherTableEntityTableItem<Grade> = {
-          myPk: "Grade|123",
-          mySk: "Grade",
-          id: "123",
-          type: "Grade",
-          gradeValue: "A+",
-          assignmentId: "001", // Already has an associated entity
-          studentId: "002", // Already has an associated entity
-          createdAt: "2023-10-01T03:31:35.918Z",
-          updatedAt: "2023-10-02T03:31:35.918Z"
-        };
-
-        const assignment: OtherTableEntityTableItem<Assignment> = {
-          myPk: "Assignment|456",
-          mySk: "Assignment",
-          id: "456",
-          type: "Assignment",
-          title: "titleVal",
-          courseId: "courseId",
-          createdAt: "2023-10-03T03:31:35.918Z",
-          updatedAt: "2023-10-04T03:31:35.918Z"
-        };
-
-        const student: OtherTableEntityTableItem<Student> = {
-          myPk: "Student|789",
-          mySk: "Student",
-          id: "789",
-          type: "Student",
-          name: "nameVal",
-          createdAt: "2023-10-05T03:31:35.918Z",
-          updatedAt: "2023-10-06T03:31:35.918Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [grade]
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
         });
-        mockTransactGetItems.mockResolvedValue({
-          Responses: [{ Item: assignment }, { Item: student }]
+        expect(updatedInstance).toBeInstanceOf(Model3);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          model1Id: instance.model1Id,
+          model2Id: instance.model2Id,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
         });
 
-        expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await Grade.update("123", {
-            gradeValue: "B",
-            assignmentId: "456",
-            studentId: "789"
-          })
-        ).toBeUndefined();
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "TransactGetCommand" }],
-          [{ name: "QueryCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "other-table",
-              KeyConditionExpression: "#myPk = :myPk2",
-              ExpressionAttributeNames: {
-                "#myPk": "myPk",
-                "#type": "type"
-              },
-              ExpressionAttributeValues: {
-                ":myPk2": "Grade|123",
-                ":type1": "Grade"
-              },
-              FilterExpression: "#type IN (:type1)"
-            }
-          ]
-        ]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Get: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|456", mySk: "Assignment" }
-                  }
-                },
-                {
-                  Get: {
-                    TableName: "other-table",
-                    Key: { myPk: "Student|789", mySk: "Student" }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                // Update the Grade entity
-                {
-                  Update: {
-                    TableName: "other-table",
-                    Key: {
-                      myPk: "Grade|123",
-                      mySk: "Grade"
-                    },
-                    UpdateExpression:
-                      "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    ExpressionAttributeNames: {
-                      "#LetterValue": "LetterValue",
-                      "#assignmentId": "assignmentId",
-                      "#studentId": "studentId",
-                      "#updatedAt": "updatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":LetterValue": "B",
-                      ":assignmentId": "456",
-                      ":studentId": "789",
-                      ":updatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Delete the link to the old Assignment item
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: {
-                      myPk: "Assignment|001",
-                      mySk: "Grade"
-                    }
-                  }
-                },
-                // Check that new Assignment entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    Key: {
-                      myPk: "Assignment|456",
-                      mySk: "Assignment"
-                    }
-                  }
-                },
-                // Denormalize Grade entity being updated to Assignment partition
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Assignment|456",
-                      mySk: "Grade",
-                      id: "123",
-                      type: "Grade",
-                      LetterValue: "B",
-                      assignmentId: "456",
-                      studentId: "789",
-                      createdAt: "2023-10-01T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Assignment entity to the Grade partition that is being updated
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    Item: {
-                      myPk: "Grade|123",
-                      mySk: "Assignment",
-                      id: "456",
-                      type: "Assignment",
-                      courseId: "courseId",
-                      title: "titleVal",
-                      createdAt: "2023-10-03T03:31:35.918Z",
-                      updatedAt: "2023-10-04T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Delete the link to the old Student item
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: {
-                      myPk: "Student|002",
-                      mySk: "Grade|123"
-                    }
-                  }
-                },
-                // Check that the new Student entity being associated with exists
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    Key: {
-                      myPk: "Student|789",
-                      mySk: "Student"
-                    }
-                  }
-                },
-                // Denormalize Grade entity being updated to Student partition
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Student|789",
-                      mySk: "Grade|123",
-                      id: "123",
-                      type: "Grade",
-                      LetterValue: "B",
-                      assignmentId: "456",
-                      studentId: "789",
-                      createdAt: "2023-10-01T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                // Denormalize Student entity to the Grade partition that is being updated
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    Item: {
-                      myPk: "Grade|123",
-                      mySk: "Student",
-                      id: "789",
-                      type: "Student",
-                      name: "nameVal",
-                      createdAt: "2023-10-05T03:31:35.918Z",
-                      updatedAt: "2023-10-06T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
+        dbOperationAssertions();
       });
     });
 
+    it("can update (for entity that is already associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", async () => {
+      expect.assertions(5);
+
+      const model3Item: MockTableEntityTableItem<Model3> = {
+        PK: "Model3#123",
+        SK: "Model3",
+        Id: "123",
+        Type: "Model3",
+        Name: "originalName",
+        Model1Id: "001", // Already has an associated entity
+        Model2Id: "002", // Already has an associated entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const model1Item: MockTableEntityTableItem<Model1> = {
+        PK: "Model1#456",
+        SK: "Model1",
+        Id: "456",
+        Type: "Model1",
+        SomeAttr: "someVal",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      const model2Item: MockTableEntityTableItem<Model2> = {
+        PK: "Model2#789",
+        SK: "Model2",
+        Id: "789",
+        Type: "Model2",
+        OtherAttr: "otherVal",
+        CreatedAt: "2023-01-05T00:00:00.000Z",
+        UpdatedAt: "2023-01-06T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [model3Item]
+      });
+      mockTransactGetItems.mockResolvedValue({
+        Responses: [{ Item: model1Item }, { Item: model2Item }]
+      });
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Model3.update("123", {
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789"
+        })
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK2": "Model3#123",
+              ":Type1": "Model3"
+            },
+            FilterExpression: "#Type IN (:Type1)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model1#456", SK: "Model1" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model2#789", SK: "Model2" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              // Update the Model3 entity
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Model3#123",
+                    SK: "Model3"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Model1Id": "Model1Id",
+                    "#Model2Id": "Model2Id",
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Model1Id": "456",
+                    ":Model2Id": "789",
+                    ":Name": "newName",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Delete the link to the old Model1 item
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model1#001", SK: "Model3" }
+                }
+              },
+              // Check that Model1 entity being associated with exists
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Model1#456",
+                    SK: "Model1"
+                  }
+                }
+              },
+              // Denormalize Model3 entity being updated to Model1 partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Model1#456",
+                    SK: "Model3",
+                    Id: "123",
+                    Type: "Model3",
+                    Model1Id: "456",
+                    Model2Id: "789",
+                    Name: "newName",
+                    CreatedAt: "2023-01-01T00:00:00.000Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize Model1 entity to the Model3 partition that is being updated
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_exists(PK)",
+                  Item: {
+                    PK: "Model3#123",
+                    SK: "Model1",
+                    Id: "456",
+                    Type: "Model1",
+                    SomeAttr: "someVal",
+                    CreatedAt: "2023-01-03T00:00:00.000Z",
+                    UpdatedAt: "2023-01-04T00:00:00.000Z"
+                  }
+                }
+              },
+              // Delete the link to the old Model2 item
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: { PK: "Model2#002", SK: "Model3#123" }
+                }
+              },
+              // Check that Model2 entity being associated with exists
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Model2#789",
+                    SK: "Model2"
+                  }
+                }
+              },
+              // Denormalize Model3 entity being updated to Model2 partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Model2#789",
+                    SK: "Model3#123",
+                    Id: "123",
+                    Type: "Model3",
+                    Model1Id: "456",
+                    Model2Id: "789",
+                    Name: "newName",
+                    CreatedAt: "2023-01-01T00:00:00.000Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize Model2 entity to the Model3 partition that is being updated
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_exists(PK)",
+                  Item: {
+                    PK: "Model3#123",
+                    SK: "Model2",
+                    Id: "789",
+                    Type: "Model2",
+                    OtherAttr: "otherVal",
+                    CreatedAt: "2023-01-05T00:00:00.000Z",
+                    UpdatedAt: "2023-01-06T00:00:00.000Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
+      expect.assertions(5);
+
+      const grade: OtherTableEntityTableItem<Grade> = {
+        myPk: "Grade|123",
+        mySk: "Grade",
+        id: "123",
+        type: "Grade",
+        gradeValue: "A+",
+        assignmentId: "001", // Already has an associated entity
+        studentId: "002", // Already has an associated entity
+        createdAt: "2023-10-01T03:31:35.918Z",
+        updatedAt: "2023-10-02T03:31:35.918Z"
+      };
+
+      const assignment: OtherTableEntityTableItem<Assignment> = {
+        myPk: "Assignment|456",
+        mySk: "Assignment",
+        id: "456",
+        type: "Assignment",
+        title: "titleVal",
+        courseId: "courseId",
+        createdAt: "2023-10-03T03:31:35.918Z",
+        updatedAt: "2023-10-04T03:31:35.918Z"
+      };
+
+      const student: OtherTableEntityTableItem<Student> = {
+        myPk: "Student|789",
+        mySk: "Student",
+        id: "789",
+        type: "Student",
+        name: "nameVal",
+        createdAt: "2023-10-05T03:31:35.918Z",
+        updatedAt: "2023-10-06T03:31:35.918Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [grade]
+      });
+      mockTransactGetItems.mockResolvedValue({
+        Responses: [{ Item: assignment }, { Item: student }]
+      });
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Grade.update("123", {
+          gradeValue: "B",
+          assignmentId: "456",
+          studentId: "789"
+        })
+      ).toBeUndefined();
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "other-table",
+            KeyConditionExpression: "#myPk = :myPk2",
+            ExpressionAttributeNames: {
+              "#myPk": "myPk",
+              "#type": "type"
+            },
+            ExpressionAttributeValues: {
+              ":myPk2": "Grade|123",
+              ":type1": "Grade"
+            },
+            FilterExpression: "#type IN (:type1)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Assignment|456", mySk: "Assignment" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|789", mySk: "Student" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              // Update the Grade entity
+              {
+                Update: {
+                  TableName: "other-table",
+                  Key: {
+                    myPk: "Grade|123",
+                    mySk: "Grade"
+                  },
+                  UpdateExpression:
+                    "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  ExpressionAttributeNames: {
+                    "#LetterValue": "LetterValue",
+                    "#assignmentId": "assignmentId",
+                    "#studentId": "studentId",
+                    "#updatedAt": "updatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":LetterValue": "B",
+                    ":assignmentId": "456",
+                    ":studentId": "789",
+                    ":updatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Delete the link to the old Assignment item
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: {
+                    myPk: "Assignment|001",
+                    mySk: "Grade"
+                  }
+                }
+              },
+              // Check that new Assignment entity being associated with exists
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: {
+                    myPk: "Assignment|456",
+                    mySk: "Assignment"
+                  }
+                }
+              },
+              // Denormalize Grade entity being updated to Assignment partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Assignment|456",
+                    mySk: "Grade",
+                    id: "123",
+                    type: "Grade",
+                    LetterValue: "B",
+                    assignmentId: "456",
+                    studentId: "789",
+                    createdAt: "2023-10-01T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize Assignment entity to the Grade partition that is being updated
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|123",
+                    mySk: "Assignment",
+                    id: "456",
+                    type: "Assignment",
+                    courseId: "courseId",
+                    title: "titleVal",
+                    createdAt: "2023-10-03T03:31:35.918Z",
+                    updatedAt: "2023-10-04T03:31:35.918Z"
+                  }
+                }
+              },
+              // Delete the link to the old Student item
+              {
+                Delete: {
+                  TableName: "other-table",
+                  Key: {
+                    myPk: "Student|002",
+                    mySk: "Grade|123"
+                  }
+                }
+              },
+              // Check that the new Student entity being associated with exists
+              {
+                ConditionCheck: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: {
+                    myPk: "Student|789",
+                    mySk: "Student"
+                  }
+                }
+              },
+              // Denormalize Grade entity being updated to Student partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Student|789",
+                    mySk: "Grade|123",
+                    id: "123",
+                    type: "Grade",
+                    LetterValue: "B",
+                    assignmentId: "456",
+                    studentId: "789",
+                    createdAt: "2023-10-01T03:31:35.918Z",
+                    updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize Student entity to the Grade partition that is being updated
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|123",
+                    mySk: "Student",
+                    id: "789",
+                    type: "Student",
+                    name: "nameVal",
+                    createdAt: "2023-10-05T03:31:35.918Z",
+                    updatedAt: "2023-10-06T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  describe("static method", () => {
     describe("A model who HasMany of a relationship is updated", () => {
       it("will update the entity and the denormalized link records for its associated entities", async () => {
         expect.assertions(5);
