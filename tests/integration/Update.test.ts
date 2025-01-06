@@ -2873,99 +2873,59 @@ describe("Update", () => {
         });
       });
     });
-  });
 
-  describe("static method", () => {
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        beforeEach(() => {
-          const pet: MockTableEntityTableItem<Pet> = {
-            PK: "Pet#123",
-            SK: "Pet",
-            Id: "123",
-            Type: "Pet",
-            Name: "Mock Pet",
-            // OwnerId: undefined, // Does not already belong to person
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
+    describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
+      const pet: MockTableEntityTableItem<Pet> = {
+        PK: "Pet#123",
+        SK: "Pet",
+        Id: "123",
+        Type: "Pet",
+        Name: "Mock Pet",
+        OwnerId: "001", // Already belongs to Person entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
 
-          const person: MockTableEntityTableItem<Person> = {
-            PK: "Person#456",
-            SK: "Person",
-            Id: "456",
-            Type: "Person",
-            Name: "Mock Person",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
-
-          mockQuery.mockResolvedValue({
-            Items: [pet]
-          });
-          mockTransactGetItems.mockResolvedValue({
-            Responses: [{ Item: person }]
-          });
-
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        });
-
-        afterEach(() => {
-          mockSend.mockReset();
-          mockQuery.mockReset();
-          mockTransactGetItems.mockReset();
-        });
+      const instance = createInstance(Pet, {
+        pk: "Pet#123" as PartitionKey,
+        sk: "Pet" as SortKey,
+        id: "123",
+        type: "Pet",
+        name: "Mock Pet",
+        ownerId: pet.OwnerId as NullableForeignKey,
+        createdAt: new Date("2023-01-01"),
+        updatedAt: new Date("2023-01-02")
       });
 
-      describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
-        beforeEach(() => {
-          const pet: MockTableEntityTableItem<Pet> = {
-            PK: "Pet#123",
-            SK: "Pet",
-            Id: "123",
-            Type: "Pet",
-            Name: "Mock Pet",
-            OwnerId: "001",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
+      beforeEach(() => {
+        const person: MockTableEntityTableItem<Person> = {
+          PK: "Person#456",
+          SK: "Person",
+          Id: "456",
+          Type: "Person",
+          Name: "Mock Person",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
 
-          const person: MockTableEntityTableItem<Person> = {
-            PK: "Person#456",
-            SK: "Person",
-            Id: "456",
-            Type: "Person",
-            Name: "Mock Person",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
-
-          mockQuery.mockResolvedValue({
-            Items: [pet]
-          });
-          mockTransactGetItems.mockResolvedValue({
-            Responses: [{ Item: person }]
-          });
-
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockQuery.mockResolvedValue({
+          Items: [pet]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: person }]
         });
 
-        afterEach(() => {
-          mockSend.mockReset();
-          mockQuery.mockReset();
-          mockTransactGetItems.mockReset();
-        });
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
 
-        it("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", async () => {
-          expect.assertions(5);
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
 
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await Pet.update("123", {
-              name: "Fido",
-              ownerId: "456"
-            })
-          ).toBeUndefined();
+      describe("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", () => {
+        const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "TransactGetCommand" }],
             [{ name: "QueryCommand" }],
@@ -3088,6 +3048,94 @@ describe("Update", () => {
               }
             ]
           ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Pet.update("123", {
+              name: "Fido",
+              ownerId: "456"
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            name: "Fido",
+            ownerId: "456"
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "Fido",
+            ownerId: "456",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Pet);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: pet.PK,
+            sk: pet.SK,
+            id: pet.Id,
+            type: pet.Type,
+            name: pet.Name,
+            ownerId: pet.OwnerId,
+            createdAt: new Date(pet.CreatedAt),
+            updatedAt: new Date(pet.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+    });
+  });
+
+  describe("static method", () => {
+    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
+      describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
+        beforeEach(() => {
+          const pet: MockTableEntityTableItem<Pet> = {
+            PK: "Pet#123",
+            SK: "Pet",
+            Id: "123",
+            Type: "Pet",
+            Name: "Mock Pet",
+            OwnerId: "001",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          const person: MockTableEntityTableItem<Person> = {
+            PK: "Person#456",
+            SK: "Person",
+            Id: "456",
+            Type: "Person",
+            Name: "Mock Person",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          };
+
+          mockQuery.mockResolvedValue({
+            Items: [pet]
+          });
+          mockTransactGetItems.mockResolvedValue({
+            Responses: [{ Item: person }]
+          });
+
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        });
+
+        afterEach(() => {
+          mockSend.mockReset();
+          mockQuery.mockReset();
+          mockTransactGetItems.mockReset();
         });
 
         it("will throw an error if the entity being updated does not exist at preFetch", async () => {
@@ -4713,123 +4761,7 @@ describe("Update", () => {
           mockedUuidv4.mockReset();
         });
 
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            lastFour: "5678",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "5678",
-            customerId: "456",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(PaymentMethod);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                      UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "Customer#789",
-                        SK: "PaymentMethod#123"
-                      }
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance is not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
+        // TODO here for instance method
 
         it("will throw an error if the entity being updated does not exist", async () => {
           expect.assertions(7);
