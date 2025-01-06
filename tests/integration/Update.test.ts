@@ -3411,60 +3411,9 @@ describe("Update", () => {
           }
         });
       });
-    });
-  });
 
-  describe("static method", () => {
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
-      describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
-        beforeEach(() => {
-          const pet: MockTableEntityTableItem<Pet> = {
-            PK: "Pet#123",
-            SK: "Pet",
-            Id: "123",
-            Type: "Pet",
-            Name: "Mock Pet",
-            OwnerId: "001",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
-
-          const person: MockTableEntityTableItem<Person> = {
-            PK: "Person#456",
-            SK: "Person",
-            Id: "456",
-            Type: "Person",
-            Name: "Mock Person",
-            CreatedAt: "2023-01-01T00:00:00.000Z",
-            UpdatedAt: "2023-01-02T00:00:00.000Z"
-          };
-
-          mockQuery.mockResolvedValue({
-            Items: [pet]
-          });
-          mockTransactGetItems.mockResolvedValue({
-            Responses: [{ Item: person }]
-          });
-
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        });
-
-        afterEach(() => {
-          mockSend.mockReset();
-          mockQuery.mockReset();
-          mockTransactGetItems.mockReset();
-        });
-
-        it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(5);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await Pet.update("123", {
-              name: "New Name",
-              ownerId: null
-            })
-          ).toBeUndefined();
+      describe("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", () => {
+        const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
@@ -3538,12 +3487,56 @@ describe("Update", () => {
               }
             ]
           ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Pet.update("123", {
+              name: "New Name",
+              ownerId: null
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            name: "New Name",
+            ownerId: null
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "New Name",
+            ownerId: undefined,
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Pet);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: pet.PK,
+            sk: pet.SK,
+            id: pet.Id,
+            type: pet.Type,
+            name: pet.Name,
+            ownerId: pet.OwnerId,
+            createdAt: new Date(pet.CreatedAt),
+            updatedAt: new Date(pet.UpdatedAt)
+          });
+
+          dbOperationAssertions();
         });
       });
     });
+  });
 
-    // TODO here... fix the tests below next. Just updated the ones above
-
+  describe("static method", () => {
     describe("A model is updating multiple ForeignKeys of different relationship types", () => {
       @Entity
       class Model1 extends MockTable {
@@ -4842,133 +4835,6 @@ describe("Update", () => {
 
   describe("instance method", () => {
     // TODO here for instance method
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        const oldCustomerId = "789" as ForeignKey;
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: oldCustomerId // Already belongs to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        // TODO here for instance method
-
-        it("will remove a nullable foreign key and delete the associated BelongsToLinks", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(Pet, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: "456" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "Pet#123",
-              SK: "Pet",
-              Id: "123",
-              name: "Fido",
-              OwnerId: "456" // Does not already belong an owner
-            }
-          });
-
-          const updatedInstance = await instance.update({
-            name: "New Name",
-            ownerId: null
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "Pet",
-            name: "New Name",
-            ownerId: undefined,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(Pet);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "Pet#123", SK: "Pet" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "Pet#123", SK: "Pet" },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#Name": "Name",
-                        "#OwnerId": "OwnerId",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":Name": "New Name",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      UpdateExpression:
-                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Person#456", SK: "Pet#123" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: "456",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-    });
 
     describe("A model is updating multiple ForeignKeys of different relationship types", () => {
       @Entity
