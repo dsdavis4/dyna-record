@@ -3220,6 +3220,132 @@ describe("Update", () => {
           }
         });
       });
+
+      describe("will throw an error if the entity being associated with does not exist at preFetch", () => {
+        const operationSharedAssertions = (e: any): void => {
+          expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }]
+          ]);
+        };
+
+        beforeEach(() => {
+          mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        test("static method", async () => {
+          expect.assertions(2);
+
+          try {
+            await Pet.update("123", {
+              name: "Fido",
+              ownerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(2);
+
+          try {
+            await instance.update({
+              name: "Fido",
+              ownerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+      });
+
+      describe("will throw an error if the associated entity existed at preFetch but was deleted before the transaction was committed", () => {
+        const operationSharedAssertions = (e: any): void => {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Person with ID '456' does not exist"
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+        };
+
+        beforeEach(() => {
+          mockSend
+            // TransactGet
+            .mockResolvedValueOnce(undefined)
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              mockTransact();
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "None" },
+                  { Code: "None" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          try {
+            await Pet.update("123", {
+              name: "Fido",
+              ownerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          try {
+            await instance.update({
+              name: "Fido",
+              ownerId: "456"
+            });
+          } catch (e: any) {
+            operationSharedAssertions(e);
+          }
+        });
+      });
     });
   });
 
@@ -3262,90 +3388,6 @@ describe("Update", () => {
           mockSend.mockReset();
           mockQuery.mockReset();
           mockTransactGetItems.mockReset();
-        });
-
-        it("will throw an error if the entity being associated with does not exist at preFetch", async () => {
-          expect.assertions(2);
-
-          mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
-
-          mockSend
-            // TransactGet
-            .mockResolvedValueOnce(undefined)
-            // Query
-            .mockResolvedValueOnce(undefined)
-            // TransactWrite
-            .mockImplementationOnce(() => {
-              mockTransact();
-              throw new TransactionCanceledException({
-                message: "MockMessage",
-                CancellationReasons: [
-                  { Code: "None" },
-                  { Code: "None" },
-                  { Code: "ConditionalCheckFailed" },
-                  { Code: "None" },
-                  { Code: "None" }
-                ],
-                $metadata: {}
-              });
-            });
-
-          try {
-            await Pet.update("123", {
-              name: "Fido",
-              ownerId: "456"
-            });
-          } catch (e: any) {
-            expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "TransactGetCommand" }],
-              [{ name: "QueryCommand" }]
-            ]);
-          }
-        });
-
-        it("will throw an error if the associated entity existed at preFetch but was deleted before the transaction was committed", async () => {
-          expect.assertions(3);
-
-          mockSend
-            // TransactGet
-            .mockResolvedValueOnce(undefined)
-            // Query
-            .mockResolvedValueOnce(undefined)
-            // TransactWrite
-            .mockImplementationOnce(() => {
-              mockTransact();
-              throw new TransactionCanceledException({
-                message: "MockMessage",
-                CancellationReasons: [
-                  { Code: "None" },
-                  { Code: "None" },
-                  { Code: "ConditionalCheckFailed" },
-                  { Code: "None" },
-                  { Code: "None" }
-                ],
-                $metadata: {}
-              });
-            });
-
-          try {
-            await Pet.update("123", {
-              name: "Fido",
-              ownerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Person with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "TransactGetCommand" }],
-              [{ name: "QueryCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-          }
         });
 
         it("will throw an error if the entity is already associated with the requested entity", async () => {
@@ -4804,121 +4846,6 @@ describe("Update", () => {
         });
 
         // TODO here for instance method
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({ lastFour: "5678", customerId: "456" });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#789",
-                          SK: "PaymentMethod#123"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
 
         it("will throw an error if the entity is already associated with the requested entity", async () => {
           expect.assertions(7);
