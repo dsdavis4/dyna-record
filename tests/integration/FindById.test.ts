@@ -509,6 +509,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
+  // TODO unrelated to this line, make a describe block for findById with includes and move related tests into then fix the test descriptions
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(3);
 
@@ -566,6 +567,7 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
+  // TODO start here
   it("findByIdWithIncludes - will set included HasAndBelongsToMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(4);
 
