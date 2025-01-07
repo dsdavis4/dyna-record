@@ -1,12 +1,11 @@
 import {
   TransactWriteCommand,
-  GetCommand,
   TransactGetCommand,
   QueryCommand
 } from "@aws-sdk/lib-dynamodb";
 import {
-  Address,
-  Assignment,
+  type Address,
+  type Assignment,
   ContactInformation,
   Customer,
   Desk,
@@ -14,16 +13,14 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethod,
-  Person,
+  type Person,
   Pet,
   PhoneBook,
-  Student,
-  User,
+  type Student,
+  type User,
   Website
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   ForeignKeyAttribute,
@@ -43,11 +40,9 @@ import {
 import { NotFoundError, ValidationError } from "../../src";
 import { createInstance } from "../../src/utils";
 import {
-  OtherTableEntityTableItem,
+  type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
-
-jest.mock("uuid");
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockTransactGetCommand = jest.mocked(TransactGetCommand);
@@ -56,12 +51,6 @@ const mockedQueryCommand = jest.mocked(QueryCommand);
 const mockSend = jest.fn();
 const mockTransactGetItems = jest.fn();
 const mockQuery = jest.fn();
-
-const mockedGetCommand = jest.mocked(GetCommand); // TODO delete this once all references are deleted
-const mockGet = jest.fn(); // TODO delete this once all references are deleted
-const mockTransact = jest.fn(); // TODO delete this once all references are deleted
-
-const mockedUuidv4 = jest.mocked(uuidv4);
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -1382,7 +1371,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -1446,7 +1434,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -1503,7 +1490,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             .mockReturnValueOnce(undefined)
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -1567,7 +1553,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -1929,7 +1914,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -1994,7 +1978,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2055,7 +2038,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2120,7 +2102,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2185,7 +2166,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2575,7 +2555,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2639,7 +2618,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2696,7 +2674,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             .mockReturnValueOnce(undefined)
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -2757,7 +2734,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             .mockReturnValueOnce(undefined)
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -3114,7 +3090,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -3179,7 +3154,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -3240,7 +3214,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -3305,7 +3278,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
@@ -3370,7 +3342,6 @@ describe("Update", () => {
             .mockResolvedValueOnce(undefined)
             // TransactWrite
             .mockImplementationOnce(() => {
-              mockTransact();
               throw new TransactionCanceledException({
                 message: "MockMessage",
                 CancellationReasons: [
