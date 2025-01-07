@@ -437,23 +437,22 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  // TODO here
-
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
-    expect.assertions(4);
+    expect.assertions(3);
+
+    const customer: MockTableEntityTableItem<Customer> = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Name: "Some Customer",
+      Address: "11 Some St",
+      Type: "Customer",
+      CreatedAt: "2022-09-14T04:26:31.148Z",
+      UpdatedAt: "2022-09-15T04:26:31.148Z"
+    };
 
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Customer#123",
-          SK: "Customer",
-          Id: "123",
-          Name: "Some Customer",
-          Address: "11 Some St",
-          Type: "Customer",
-          UpdatedAt: "2022-09-15T04:26:31.148Z"
-        }
-      ]
+      Items: [customer]
     });
 
     const result = await Customer.findById("123", {
@@ -461,12 +460,14 @@ describe("FindById", () => {
     });
 
     expect(result).toEqual({
-      type: "Customer",
       pk: "Customer#123",
       sk: "Customer",
       id: "123",
-      name: "Some Customer",
+      type: "Customer",
       address: "11 Some St",
+      contactInformation: undefined,
+      name: "Some Customer",
+      createdAt: new Date("2022-09-14T04:26:31.148Z"),
       updatedAt: new Date("2022-09-15T04:26:31.148Z"),
       orders: [],
       paymentMethods: []
@@ -475,26 +476,21 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
-          KeyConditionExpression: "#PK = :PK5",
+          KeyConditionExpression: "#PK = :PK4",
           ExpressionAttributeNames: {
             "#PK": "PK",
-            "#Type": "Type",
-            "#ForeignEntityType": "ForeignEntityType"
+            "#Type": "Type"
           },
           ExpressionAttributeValues: {
-            ":PK5": "Customer#123",
+            ":PK4": "Customer#123",
             ":Type1": "Customer",
-            ":Type2": "BelongsToLink",
-            ":ForeignEntityType3": "Order",
-            ":ForeignEntityType4": "PaymentMethod"
+            ":Type2": "Order",
+            ":Type3": "PaymentMethod"
           },
-          ConsistentRead: true
+          FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 

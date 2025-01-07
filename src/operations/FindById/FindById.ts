@@ -2,8 +2,8 @@ import type DynaRecord from "../../DynaRecord";
 import { type RelationshipMetadata } from "../../metadata";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { DynamoClient, TransactGetBuilder } from "../../dynamo-utils";
-import type { EntityClass, Optional } from "../../types";
-import { tableItemToEntity } from "../../utils";
+import type { EntityClass, Optional, RelationshipLookup } from "../../types";
+import { isKeyOfEntity, safeAssign, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import type {
   FindByIdOptions,
@@ -13,6 +13,10 @@ import type {
 } from "./types";
 import { buildEntityRelationshipMetaObj } from "../utils";
 import { type QueryResult, type QueryResults } from "../Query";
+import {
+  isHasAndBelongsToManyRelationship,
+  isHasManyRelationship
+} from "../../metadata/utils";
 
 /**
  * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.
@@ -164,6 +168,8 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
     const { relationsLookup } = buildEntityRelationshipMetaObj(includedRelMeta);
 
+    this.setIncludedRelationshipDefaults(parentEntity, relationsLookup);
+
     relatedEntities.forEach(entity => {
       const rel = relationsLookup[entity.type];
 
@@ -179,6 +185,30 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     });
 
     return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
+  }
+
+  /**
+   * Initializes default values for included relationships on a parent entity. It assigns
+   * an empty array to each relationship property for HasMany and HasAndBelongsToMany specified in `relationsLookup` if the property exists on `parentEntity`.
+   *
+   * @param parentEntity - The parent entity to initialize relationship properties on.
+   * @param relationsLookup - A mapping of relationship identifiers to their descriptions, including the relationship
+   * type and the property name on the parent entity.
+   */
+  private setIncludedRelationshipDefaults(
+    parentEntity: QueryResult<DynaRecord>,
+    relationsLookup: RelationshipLookup
+  ): void {
+    Object.values(relationsLookup).forEach(rel => {
+      if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
+
+      if (
+        isHasManyRelationship(rel) ||
+        isHasAndBelongsToManyRelationship(rel)
+      ) {
+        safeAssign(parentEntity, rel.propertyName, []);
+      }
+    });
   }
 }
 
