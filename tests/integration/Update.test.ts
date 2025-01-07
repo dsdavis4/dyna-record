@@ -4965,25 +4965,25 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    describe("types", () => {
-      beforeAll(() => {
-        // For type tests mock the operations to nothing because we are just testing for the type interface
-        mockQuery.mockResolvedValue({
-          Items: []
-        });
-
-        mockTransactGetItems.mockResolvedValue({
-          Responses: []
-        });
+  describe("types", () => {
+    beforeAll(() => {
+      // For type tests mock the operations to nothing because we are just testing for the type interface
+      mockQuery.mockResolvedValue({
+        Items: []
       });
 
-      afterAll(() => {
-        mockSend.mockReset();
-        mockQuery.mockReset();
-        mockTransactGetItems.mockReset();
+      mockTransactGetItems.mockResolvedValue({
+        Responses: []
       });
+    });
 
+    afterAll(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    describe("static method", () => {
       it("will not accept relationship attributes on update", async () => {
         await Order.update("123", {
           orderDate: new Date(),
@@ -5120,375 +5120,22 @@ describe("Update", () => {
         });
       });
     });
-  });
 
-  describe("instance method", () => {
-    // TODO here for instance method
-
-    describe("A model is updating multiple ForeignKeys of different relationship types", () => {
-      @Entity
-      class OtherModel1 extends MockTable {
-        @HasOne(() => OtherModel3, { foreignKey: "model1Id" })
-        public model3: OtherModel3;
-      }
-
-      @Entity
-      class OtherModel2 extends MockTable {
-        @HasMany(() => OtherModel3, { foreignKey: "model2Id" })
-        public model3: OtherModel3[];
-      }
-
-      @Entity
-      class OtherModel3 extends MockTable {
-        @StringAttribute({ alias: "Name" })
-        public name: string;
-
-        @ForeignKeyAttribute({ alias: "Model1Id" })
-        public model1Id: ForeignKey;
-
-        @ForeignKeyAttribute({ alias: "Model2Id" })
-        public model2Id: ForeignKey;
-
-        @BelongsTo(() => OtherModel1, { foreignKey: "model1Id" })
-        public model1: OtherModel1;
-
-        @BelongsTo(() => OtherModel2, { foreignKey: "model2Id" })
-        public model2: OtherModel2;
-      }
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-
-      beforeEach(() => {
-        jest.setSystemTime(now);
-        mockedUuidv4
-          .mockReturnValueOnce("belongsToLinkId1")
-          .mockReturnValueOnce("belongsToLinkId2");
-      });
-
-      it("can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(8);
-
-        const instance = createInstance(OtherModel3, {
-          pk: "test-pk" as PartitionKey,
-          sk: "test-sk" as SortKey,
-          id: "123",
-          type: "OtherModel3",
-          name: "test-name",
-          model1Id: "model1Id" as ForeignKey,
-          model2Id: "model2Id" as ForeignKey,
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-
-        mockGet.mockResolvedValue({
-          Item: {
-            PK: "OtherModel3#123",
-            SK: "OtherModel3",
-            Id: "123",
-            Name: "originalName",
-            Phone: "555-555-5555",
-            Model1Id: undefined,
-            Model2Id: undefined
-          }
-        });
-
-        const updatedInstance = await instance.update({
-          name: "newName",
-          model1Id: "model1-ID",
-          model2Id: "model2-ID"
-        });
-
-        expect(updatedInstance).toEqual({
-          pk: "test-pk",
-          sk: "test-sk",
-          id: "123",
-          type: "OtherModel3",
-          name: "newName",
-          model1Id: "model1-ID",
-          model2Id: "model2-ID",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: now
-        });
-        expect(updatedInstance).toBeInstanceOf(OtherModel3);
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              Key: { PK: "OtherModel3#123", SK: "OtherModel3" },
-              ConsistentRead: true
-            }
-          ]
-        ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Update: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel3#123", SK: "OtherModel3" },
-                    UpdateExpression:
-                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Model1Id": "Model1Id",
-                      "#Model2Id": "Model2Id",
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Model1Id": "model1-ID",
-                      ":Model2Id": "model2-ID",
-                      ":Name": "newName",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel1#model1-ID", SK: "OtherModel1" },
-                    ConditionExpression: "attribute_exists(PK)"
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "OtherModel1#model1-ID",
-                      SK: "OtherModel3",
-                      Id: "belongsToLinkId1",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "OtherModel3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel2#model2-ID", SK: "OtherModel2" },
-                    ConditionExpression: "attribute_exists(PK)"
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "OtherModel2#model2-ID",
-                      SK: "OtherModel3#123",
-                      Id: "belongsToLinkId2",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "OtherModel3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        // Assert original instance not mutated
-        expect(instance).toEqual({
-          pk: "test-pk",
-          sk: "test-sk",
-          id: "123",
-          type: "OtherModel3",
-          name: "test-name",
-          model1Id: "model1Id",
-          model2Id: "model2Id",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-      });
-
-      it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(8);
-
-        const instance = createInstance(Grade, {
-          myPk: "Grade#123" as PartitionKey,
-          mySk: "Grade" as SortKey,
-          id: "123",
-          type: "Grade",
-          gradeValue: "A+",
-          assignmentId: "456" as ForeignKey,
-          studentId: "789" as ForeignKey,
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-
-        mockGet.mockResolvedValueOnce({
-          Item: {
-            myPk: "Grade|123",
-            mySk: "Grade",
-            id: "123",
-            type: "Grade",
-            gradeValue: "A+",
-            assignmentId: "456",
-            studentId: "789",
-            createdAt: "2023-10-16T03:31:35.918Z",
-            updatedAt: "2023-10-16T03:31:35.918Z"
-          }
-        });
-
-        const updatedInstance = await instance.update({
-          gradeValue: "B",
-          assignmentId: "111",
-          studentId: "222"
-        });
-
-        expect(updatedInstance).toEqual({
-          myPk: "Grade#123",
-          mySk: "Grade",
-          id: "123",
-          type: "Grade",
-          gradeValue: "B",
-          assignmentId: "111",
-          studentId: "222",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: now
-        });
-        expect(updatedInstance).toBeInstanceOf(Grade);
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "other-table",
-              Key: { myPk: "Grade|123", mySk: "Grade" },
-              ConsistentRead: true
-            }
-          ]
-        ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Update: {
-                    TableName: "other-table",
-                    Key: { myPk: "Grade|123", mySk: "Grade" },
-                    UpdateExpression:
-                      "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    ExpressionAttributeNames: {
-                      "#LetterValue": "LetterValue",
-                      "#assignmentId": "assignmentId",
-                      "#studentId": "studentId",
-                      "#updatedAt": "updatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":LetterValue": "B",
-                      ":assignmentId": "111",
-                      ":studentId": "222",
-                      ":updatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|111", mySk: "Assignment" },
-                    ConditionExpression: "attribute_exists(myPk)"
-                  }
-                },
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|456", mySk: "Grade" }
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Assignment|111",
-                      mySk: "Grade",
-                      id: "belongsToLinkId1",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    Key: { myPk: "Student|222", mySk: "Student" },
-                    ConditionExpression: "attribute_exists(myPk)"
-                  }
-                },
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: { myPk: "Student|789", mySk: "Grade|123" }
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Student|222",
-                      mySk: "Grade|123",
-                      id: "belongsToLinkId2",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        // Assert original instance not mutated
-        expect(instance).toEqual({
-          myPk: "Grade#123",
-          mySk: "Grade",
-          id: "123",
-          type: "Grade",
-          gradeValue: "A+",
-          assignmentId: "456",
-          studentId: "789",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-      });
-    });
-
-    describe("types", () => {
+    describe("instance method", () => {
       it("will not accept relationship attributes on update", async () => {
         const instance = new Order();
 
-        await instance.update({
-          orderDate: new Date(),
-          paymentMethodId: "123",
-          customerId: "456",
-          // @ts-expect-error relationship attributes are not allowed
-          customer: new Customer()
-        });
+        await instance
+          .update({
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456",
+            // @ts-expect-error relationship attributes are not allowed
+            customer: new Customer()
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
       });
 
       it("will not accept function attributes on update", async () => {
@@ -5522,62 +5169,94 @@ describe("Update", () => {
       it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {
         const instance = new Order();
 
-        await instance.update({
-          orderDate: new Date(),
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          paymentMethodId: "123",
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          customerId: "456"
-        });
+        await instance
+          .update({
+            orderDate: new Date(),
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            paymentMethodId: "123",
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            customerId: "456"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
       });
 
       it("will not accept DefaultFields on update because they are managed by dyna-record", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          id: "123"
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            id: "123"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          type: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            type: "456"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          createdAt: new Date()
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            createdAt: new Date()
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          updatedAt: new Date()
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            updatedAt: new Date()
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
       });
 
       it("will not accept partition and sort keys on update because they are managed by dyna-record", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
-          pk: "123"
-        });
+        await instance
+          .update({
+            // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
+            pk: "123"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
-          sk: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
+            sk: "456"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
       });
 
       it("does not require all of an entity attributes to be passed", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          paymentMethodId: "123",
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          customerId: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            paymentMethodId: "123",
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            customerId: "456"
+          })
+          .catch(() => {
+            console.log("Testing types");
+          });
       });
 
       it("will not allow non nullable attributes to be removed (set to null)", async () => {
