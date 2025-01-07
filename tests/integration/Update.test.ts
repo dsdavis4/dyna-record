@@ -134,8 +134,6 @@ class MockInformation extends MockTable {
 // TODO make sure there is a test for updating an entity which does not need to do any prefetch
 //      does not belong to anything (or has nullable foreign key) or have has one or has many
 
-// TODO make sure there is a test for updating the denormalized links in foreign partitions
-
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
