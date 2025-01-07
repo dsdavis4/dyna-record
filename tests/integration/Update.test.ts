@@ -4776,48 +4776,157 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    describe("A model who HasAndBelongsToMany of a relationship is updated", () => {
-      it("will update the entity and the denormalized link records for its associated entities", async () => {
+  describe("A model who HasAndBelongsToMany of a relationship is updated", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK3": "Website#123",
+              ":Type1": "Website",
+              ":Type2": "User"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                // Update the Website attributes
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Website#123",
+                    SK: "Website"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "testing.com",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Update the Website records that are denormalized to the the associated User partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "User#456",
+                    SK: "Website#123"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "testing.com",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Update the Website records that are denormalized to the the associated User partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "User#789",
+                    SK: "Website#123"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "testing.com",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
+    const website: MockTableEntityTableItem<Website> = {
+      PK: "Website#123",
+      SK: "Website",
+      Id: "123",
+      Type: "Website",
+      Name: "https://dyna-record.com/",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Website, {
+      pk: "Website#123" as PartitionKey,
+      sk: "Website" as SortKey,
+      id: "123",
+      type: "Website",
+      name: "https://dyna-record.com/",
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // User record denormalized to Website partition
+      const linkedUser1: MockTableEntityTableItem<User> = {
+        PK: website.PK, // Linked record in Website partition
+        SK: "User#456",
+        Id: "456",
+        Type: "User",
+        Name: "MockUser1",
+        Email: "test-1@test.com",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      // User record denormalized to Website partition
+      const linkedUser2: MockTableEntityTableItem<User> = {
+        PK: website.PK, // Linked record in Website partition
+        SK: "User#789",
+        Id: "789",
+        Type: "User",
+        Name: "MockUser2",
+        Email: "test-2@test.com",
+        CreatedAt: "2023-01-05T00:00:00.000Z",
+        UpdatedAt: "2023-01-06T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [website, linkedUser1, linkedUser2]
+      });
+    });
+
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      test("static method", async () => {
         expect.assertions(5);
-
-        const website: MockTableEntityTableItem<Website> = {
-          PK: "Website#123",
-          SK: "Website",
-          Id: "123",
-          Type: "Website",
-          Name: "https://dyna-record.com/",
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
-        // User record denormalized to Website partition
-        const linkedUser1: MockTableEntityTableItem<User> = {
-          PK: website.PK, // Linked record in Website partition
-          SK: "User#456",
-          Id: "456",
-          Type: "User",
-          Name: "MockUser1",
-          Email: "test-1@test.com",
-          CreatedAt: "2023-01-03T00:00:00.000Z",
-          UpdatedAt: "2023-01-04T00:00:00.000Z"
-        };
-
-        // User record denormalized to Website partition
-        const linkedUser2: MockTableEntityTableItem<User> = {
-          PK: website.PK, // Linked record in Website partition
-          SK: "User#789",
-          Id: "789",
-          Type: "User",
-          Name: "MockUser2",
-          Email: "test-2@test.com",
-          CreatedAt: "2023-01-05T00:00:00.000Z",
-          UpdatedAt: "2023-01-06T00:00:00.000Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [website, linkedUser1, linkedUser2]
-        });
 
         expect(
           // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -4825,103 +4934,38 @@ describe("Update", () => {
             name: "testing.com"
           })
         ).toBeUndefined();
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "QueryCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              KeyConditionExpression: "#PK = :PK3",
-              ExpressionAttributeNames: {
-                "#PK": "PK",
-                "#Type": "Type"
-              },
-              ExpressionAttributeValues: {
-                ":PK3": "Website#123",
-                ":Type1": "Website",
-                ":Type2": "User"
-              },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
-            }
-          ]
-        ]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  // Update the Website attributes
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "Website#123",
-                      SK: "Website"
-                    },
-                    UpdateExpression:
-                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Name": "testing.com",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  // Update the Website records that are denormalized to the the associated User partition
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "User#456",
-                      SK: "Website#123"
-                    },
-                    UpdateExpression:
-                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Name": "testing.com",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  // Update the Website records that are denormalized to the the associated User partition
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "User#789",
-                      SK: "Website#123"
-                    },
-                    UpdateExpression:
-                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Name": "testing.com",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          name: "testing.com"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "testing.com",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Website);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+        dbOperationAssertions();
       });
     });
+  });
 
+  describe("static method", () => {
     describe("types", () => {
       beforeAll(() => {
         // For type tests mock the operations to nothing because we are just testing for the type interface
