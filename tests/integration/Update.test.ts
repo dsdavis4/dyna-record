@@ -4431,57 +4431,9 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    describe("A model who HasMany of a relationship is updated", () => {
-      it("will update the entity and the denormalized link records for its associated entities", async () => {
-        expect.assertions(5);
-
-        const phoneBook: MockTableEntityTableItem<PhoneBook> = {
-          PK: "PhoneBook#123",
-          SK: "PhoneBook",
-          Id: "123",
-          Type: "PhoneBook",
-          Edition: "1",
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
-        // Address record denormalized to PhoneBook partition
-        const linkedAddress1: MockTableEntityTableItem<Address> = {
-          PK: phoneBook.PK, // Linked record in PhoneBook partition
-          SK: "Address#456",
-          Id: "456",
-          Type: "Address",
-          PhoneBookId: phoneBook.Id,
-          State: "CO",
-          HomeId: "001",
-          CreatedAt: "2023-01-03T00:00:00.000Z",
-          UpdatedAt: "2023-01-04T00:00:00.000Z"
-        };
-
-        // Address record denormalized to PhoneBook partition
-        const linkedAddress2: MockTableEntityTableItem<Address> = {
-          PK: phoneBook.PK, // Linked record in PhoneBook partition
-          SK: "Address#789",
-          Id: "789",
-          Type: "Address",
-          PhoneBookId: phoneBook.Id,
-          State: "AZ",
-          HomeId: "002",
-          CreatedAt: "2023-01-05T00:00:00.000Z",
-          UpdatedAt: "2023-01-06T00:00:00.000Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [phoneBook, linkedAddress1, linkedAddress2]
-        });
-
-        expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await PhoneBook.update("123", {
-            edition: "2"
-          })
-        ).toBeUndefined();
+  describe("A model who HasMany of a relationship is updated", () => {
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
         expect(mockSend.mock.calls).toEqual([
           [{ name: "QueryCommand" }],
           [{ name: "TransactWriteCommand" }]
@@ -4576,9 +4528,102 @@ describe("Update", () => {
             }
           ]
         ]);
+      };
+
+      const phoneBook: MockTableEntityTableItem<PhoneBook> = {
+        PK: "PhoneBook#123",
+        SK: "PhoneBook",
+        Id: "123",
+        Type: "PhoneBook",
+        Edition: "1",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(PhoneBook, {
+        pk: "PhoneBook#123" as PartitionKey,
+        sk: "PhoneBook" as SortKey,
+        id: "123",
+        type: "PhoneBook",
+        edition: "1",
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        // Address record denormalized to PhoneBook partition
+        const linkedAddress1: MockTableEntityTableItem<Address> = {
+          PK: phoneBook.PK, // Linked record in PhoneBook partition
+          SK: "Address#456",
+          Id: "456",
+          Type: "Address",
+          PhoneBookId: phoneBook.Id,
+          State: "CO",
+          HomeId: "001",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        // Address record denormalized to PhoneBook partition
+        const linkedAddress2: MockTableEntityTableItem<Address> = {
+          PK: phoneBook.PK, // Linked record in PhoneBook partition
+          SK: "Address#789",
+          Id: "789",
+          Type: "Address",
+          PhoneBookId: phoneBook.Id,
+          State: "AZ",
+          HomeId: "002",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [phoneBook, linkedAddress1, linkedAddress2]
+        });
+      });
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await PhoneBook.update("123", {
+            edition: "2"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          edition: "2"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          edition: "2",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(PhoneBook);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          edition: instance.edition,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
       });
     });
+  });
 
+  describe("static method", () => {
     describe("A model who HasOne of a relationship is updated", () => {
       it("will update the entity and the denormalized link records for its associated entities", async () => {
         expect.assertions(5);
