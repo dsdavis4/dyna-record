@@ -4623,37 +4623,123 @@ describe("Update", () => {
     });
   });
 
-  describe("static method", () => {
-    describe("A model who HasOne of a relationship is updated", () => {
-      it("will update the entity and the denormalized link records for its associated entities", async () => {
+  describe("A model who HasOne of a relationship is updated", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK3": "Desk#123",
+              ":Type1": "Desk",
+              ":Type2": "User"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                // Update the Desk attributes
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Desk#123",
+                    SK: "Desk"
+                  },
+                  UpdateExpression: "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Num": "Num",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Num": 2,
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Update the Desk record that are denormalized to the the associated User partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "User#456",
+                    SK: "Desk"
+                  },
+                  UpdateExpression: "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Num": "Num",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Num": 2,
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
+    const desk: MockTableEntityTableItem<Desk> = {
+      PK: "Desk#123",
+      SK: "Desk",
+      Id: "123",
+      Type: "Desk",
+      Num: 1,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Desk, {
+      pk: "Desk#123" as PartitionKey,
+      sk: "Desk" as SortKey,
+      id: "123",
+      type: "Desk",
+      num: 1,
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // User record denormalized to Desk partition
+      const linkedUser: MockTableEntityTableItem<User> = {
+        PK: desk.PK, // Linked record in Desk partition
+        SK: "User",
+        Id: "456",
+        Type: "User",
+        DeskId: desk.Id,
+        Name: "MockUser",
+        Email: "test@test.com",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [desk, linkedUser]
+      });
+    });
+
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      test("static method", async () => {
         expect.assertions(5);
-
-        const desk: MockTableEntityTableItem<Desk> = {
-          PK: "Desk#123",
-          SK: "Desk",
-          Id: "123",
-          Type: "Desk",
-          Num: 1,
-          CreatedAt: "2023-01-01T00:00:00.000Z",
-          UpdatedAt: "2023-01-02T00:00:00.000Z"
-        };
-
-        // User record denormalized to Desk partition
-        const linkedUser: MockTableEntityTableItem<User> = {
-          PK: desk.PK, // Linked record in Desk partition
-          SK: "User",
-          Id: "456",
-          Type: "User",
-          DeskId: desk.Id,
-          Name: "MockUser",
-          Email: "test@test.com",
-          CreatedAt: "2023-01-03T00:00:00.000Z",
-          UpdatedAt: "2023-01-04T00:00:00.000Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [desk, linkedUser]
-        });
 
         expect(
           // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -4661,82 +4747,36 @@ describe("Update", () => {
             num: 2
           })
         ).toBeUndefined();
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "QueryCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              KeyConditionExpression: "#PK = :PK3",
-              ExpressionAttributeNames: {
-                "#PK": "PK",
-                "#Type": "Type"
-              },
-              ExpressionAttributeValues: {
-                ":PK3": "Desk#123",
-                ":Type1": "Desk",
-                ":Type2": "User"
-              },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
-            }
-          ]
-        ]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  // Update the Desk attributes
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "Desk#123",
-                      SK: "Desk"
-                    },
-                    UpdateExpression:
-                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Num": "Num",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Num": 2,
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  // Update the Desk record that are denormalized to the the associated User partition
-                  Update: {
-                    TableName: "mock-table",
-                    Key: {
-                      PK: "User#456",
-                      SK: "Desk"
-                    },
-                    UpdateExpression:
-                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Num": "Num",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Num": 2,
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({ num: 2 });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          num: 2,
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Desk);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          num: instance.num,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+        dbOperationAssertions();
       });
     });
+  });
 
+  describe("static method", () => {
     describe("A model who HasAndBelongsToMany of a relationship is updated", () => {
       it("will update the entity and the denormalized link records for its associated entities", async () => {
         expect.assertions(5);
