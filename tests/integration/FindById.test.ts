@@ -431,6 +431,84 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
+  it("will find an entity with included HasOne associations", async () => {
+    expect.assertions(5);
+
+    const customer: MockTableEntityTableItem<Customer> = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Type: "Customer",
+      Name: "Some Customer",
+      Address: "11 Some St",
+      CreatedAt: "2022-09-14T04:26:31.148Z",
+      UpdatedAt: "2022-09-15T04:26:31.148Z"
+    };
+
+    const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+      PK: "ContactInformation#456",
+      SK: "ContactInformation",
+      Id: "456",
+      Type: "ContactInformation",
+      CustomerId: customer.Id,
+      Email: "test@test.com",
+      Phone: "555-555-5555",
+      CreatedAt: "2022-09-16T04:26:31.148Z",
+      UpdatedAt: "2022-09-17T04:26:31.148Z"
+    };
+
+    mockQuery.mockResolvedValueOnce({
+      Items: [customer, contactInformation]
+    });
+
+    const result = await Customer.findById("123", {
+      include: [{ association: "contactInformation" }]
+    });
+
+    expect(result).toEqual({
+      pk: "Customer#123",
+      sk: "Customer",
+      id: "123",
+      type: "Customer",
+      address: "11 Some St",
+      name: "Some Customer",
+      createdAt: new Date("2022-09-14T04:26:31.148Z"),
+      updatedAt: new Date("2022-09-15T04:26:31.148Z"),
+      contactInformation: {
+        pk: "ContactInformation#456",
+        sk: "ContactInformation",
+        id: "456",
+        type: "ContactInformation",
+        customerId: "123",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        createdAt: new Date("2022-09-16T04:26:31.148Z"),
+        updatedAt: new Date("2022-09-17T04:26:31.148Z")
+      }
+    });
+    expect(result).toBeInstanceOf(Customer);
+    expect(result?.contactInformation).toBeInstanceOf(ContactInformation);
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK3",
+          ExpressionAttributeNames: {
+            "#PK": "PK",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":PK3": "Customer#123",
+            ":Type1": "Customer",
+            ":Type2": "ContactInformation"
+          },
+          FilterExpression: "(#Type IN (:Type1,:Type2))"
+        }
+      ]
+    ]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+  });
+
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(3);
 
