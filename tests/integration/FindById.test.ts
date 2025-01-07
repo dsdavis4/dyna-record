@@ -22,6 +22,7 @@ import {
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../../src/Logger";
+import { MockTableEntityTableItem } from "./utils";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
@@ -245,102 +246,82 @@ describe("FindById", () => {
   });
 
   it("will find an entity with included HasMany associations", async () => {
-    expect.assertions(7);
+    expect.assertions(6);
 
-    const orderLinks = [
+    // Denormalized Order records of associated orders in the Customer partition
+    const orders: Array<MockTableEntityTableItem<Order>> = [
       {
         PK: "Customer#123",
         SK: "Order#001",
         Id: "001",
-        Type: "BelongsToLink",
-        ForeignKey: "111",
-        ForeignEntityType: "Order",
-        UpdatedAt: "2022-10-15T09:31:15.148Z"
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "008",
+        OrderDate: "2022-10-14T09:31:15.148Z",
+        CreatedAt: "2022-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
       },
       {
         PK: "Customer#123",
         SK: "Order#003",
         Id: "003",
-        Type: "BelongsToLink",
-        ForeignKey: "112",
-        ForeignEntityType: "Order",
-        UpdatedAt: "2022-11-01T23:31:21.148Z"
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "008",
+        OrderDate: "2022-11-01T23:31:21.148Z",
+        CreatedAt: "2022-11-02T23:31:21.148Z",
+        UpdatedAt: "2022-11-03T23:31:21.148Z"
       },
       {
         PK: "Customer#123",
         SK: "Order#004",
         Id: "004",
-        Type: "BelongsToLink",
-        ForeignKey: "113",
-        ForeignEntityType: "Order",
-        UpdatedAt: "2022-09-01T23:31:21.148Z"
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "008",
+        OrderDate: "2022-09-01T23:31:21.148Z",
+        CreatedAt: "2022-09-02T23:31:21.148Z",
+        UpdatedAt: "2022-09-03T23:31:21.148Z"
       }
     ];
 
-    const paymentMethodLinks = [
+    // Denormalized PaymentMethod records of associated orders in the Customer partition
+    const paymentMethods: Array<MockTableEntityTableItem<PaymentMethod>> = [
       {
         PK: "Customer#123",
         SK: "PaymentMethod#007",
         Id: "007",
-        Type: "BelongsToLink",
-        ForeignKey: "116",
-        ForeignEntityType: "PaymentMethod",
-        UpdatedAt: "2022-10-01T12:31:21.148Z"
+        Type: "PaymentMethod",
+        CustomerId: "123",
+        LastFour: "1234",
+        CreatedAt: "2022-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
       },
       {
         PK: "Customer#123",
         SK: "PaymentMethod#008",
         Id: "008",
-        Type: "BelongsToLink",
-        ForeignKey: "117",
-        ForeignEntityType: "PaymentMethod",
+        Type: "PaymentMethod",
+        CustomerId: "123",
+        LastFour: "5678",
+        CreatedAt: "2022-11-20T12:31:21.148Z",
         UpdatedAt: "2022-11-21T12:31:21.148Z"
       }
     ];
 
+    const customer: MockTableEntityTableItem<Customer> = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Name: "Some Customer",
+      Address: "11 Some St",
+      Type: "Customer",
+      CreatedAt: "2022-09-14T04:26:31.148Z",
+      UpdatedAt: "2022-09-15T04:26:31.148Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Customer#123",
-          SK: "Customer",
-          Id: "123",
-          Name: "Some Customer",
-          Address: "11 Some St",
-          Type: "Customer",
-          UpdatedAt: "2022-09-15T04:26:31.148Z"
-        },
-        ...orderLinks,
-        ...paymentMethodLinks
-      ]
-    });
-
-    const orders = orderLinks.map(link => ({
-      Item: {
-        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-        SK: link.ForeignEntityType,
-        Id: link.ForeignKey,
-        Type: link.ForeignEntityType,
-        PaymentMethodId: "116",
-        CustomerId: link.PK.split("#")[1],
-        OrderDate: "2022-12-15T09:31:15.148Z",
-        UpdatedAt: "2023-02-15T08:31:15.148Z"
-      }
-    }));
-
-    const paymentMethods = paymentMethodLinks.map((link, idx) => ({
-      Item: {
-        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-        SK: link.ForeignEntityType,
-        Id: link.ForeignKey,
-        Type: link.ForeignEntityType,
-        CustomerId: link.PK.split("#")[1],
-        LastFour: `000${idx}`,
-        UpdatedAt: "2023-02-15T08:31:15.148Z"
-      }
-    }));
-
-    mockTransactGetItems.mockResolvedValueOnce({
-      Responses: [...orders, ...paymentMethods]
+      Items: [customer, ...orders, ...paymentMethods]
     });
 
     const result = await Customer.findById("123", {
@@ -348,63 +329,82 @@ describe("FindById", () => {
     });
 
     expect(result).toEqual({
-      type: "Customer",
       pk: "Customer#123",
       sk: "Customer",
       id: "123",
-      name: "Some Customer",
+      type: "Customer",
       address: "11 Some St",
+      contactInformation: undefined,
+      name: "Some Customer",
+      createdAt: new Date("2022-09-14T04:26:31.148Z"),
       updatedAt: new Date("2022-09-15T04:26:31.148Z"),
       orders: [
         {
-          pk: "Order#111",
-          sk: "Order",
-          id: "111",
+          pk: "Customer#123",
+          sk: "Order#001",
+          id: "001",
           type: "Order",
+          customer: undefined,
           customerId: "123",
-          paymentMethodId: "116",
-          orderDate: new Date("2022-12-15T09:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          orderDate: new Date("2022-10-14T09:31:15.148Z"),
+          paymentMethod: undefined,
+          paymentMethodId: "008",
+          createdAt: new Date("2022-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-16T09:31:15.148Z")
         },
         {
-          pk: "Order#112",
-          sk: "Order",
-          id: "112",
+          pk: "Customer#123",
+          sk: "Order#003",
+          id: "003",
           type: "Order",
+          customer: undefined,
           customerId: "123",
-          paymentMethodId: "116",
-          orderDate: new Date("2022-12-15T09:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          orderDate: new Date("2022-11-01T23:31:21.148Z"),
+          paymentMethod: undefined,
+          paymentMethodId: "008",
+          createdAt: new Date("2022-11-02T23:31:21.148Z"),
+          updatedAt: new Date("2022-11-03T23:31:21.148Z")
         },
         {
-          pk: "Order#113",
-          sk: "Order",
-          id: "113",
+          pk: "Customer#123",
+          sk: "Order#004",
+          id: "004",
           type: "Order",
+          customer: undefined,
           customerId: "123",
-          paymentMethodId: "116",
-          orderDate: new Date("2022-12-15T09:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          orderDate: new Date("2022-09-01T23:31:21.148Z"),
+          paymentMethod: undefined,
+          paymentMethodId: "008",
+          createdAt: new Date("2022-09-02T23:31:21.148Z"),
+          updatedAt: new Date("2022-09-03T23:31:21.148Z")
         }
       ],
       paymentMethods: [
         {
-          pk: "PaymentMethod#116",
-          sk: "PaymentMethod",
-          id: "116",
+          pk: "Customer#123",
+          sk: "PaymentMethod#007",
+          id: "007",
           type: "PaymentMethod",
-          lastFour: "0000",
+          customer: undefined,
           customerId: "123",
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          lastFour: "1234",
+          orders: undefined,
+          paymentMethodProvider: undefined,
+          createdAt: new Date("2022-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
         },
         {
-          pk: "PaymentMethod#117",
-          sk: "PaymentMethod",
-          id: "117",
+          pk: "Customer#123",
+          sk: "PaymentMethod#008",
+          id: "008",
           type: "PaymentMethod",
-          lastFour: "0001",
+          customer: undefined,
           customerId: "123",
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          lastFour: "5678",
+          orders: undefined,
+          paymentMethodProvider: undefined,
+          createdAt: new Date("2022-11-20T12:31:21.148Z"),
+          updatedAt: new Date("2022-11-21T12:31:21.148Z")
         }
       ]
     });
@@ -419,68 +419,25 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
-          KeyConditionExpression: "#PK = :PK5",
+          KeyConditionExpression: "#PK = :PK4",
           ExpressionAttributeNames: {
             "#PK": "PK",
-            "#Type": "Type",
-            "#ForeignEntityType": "ForeignEntityType"
+            "#Type": "Type"
           },
           ExpressionAttributeValues: {
-            ":PK5": "Customer#123",
+            ":PK4": "Customer#123",
             ":Type1": "Customer",
-            ":Type2": "BelongsToLink",
-            ":ForeignEntityType3": "Order",
-            ":ForeignEntityType4": "PaymentMethod"
+            ":Type2": "Order",
+            ":Type3": "PaymentMethod"
           },
-          ConsistentRead: true
+          FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([
-      [
-        {
-          TransactItems: [
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Order#111", SK: "Order" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Order#112", SK: "Order" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Order#113", SK: "Order" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#116", SK: "PaymentMethod" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#117", SK: "PaymentMethod" }
-              }
-            }
-          ]
-        }
-      ]
-    ]);
-    expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactGetCommand" }]
-    ]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
+
+  // TODO here
 
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(4);
