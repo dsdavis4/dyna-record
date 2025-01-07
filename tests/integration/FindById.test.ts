@@ -228,22 +228,15 @@ describe("FindById", () => {
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
         {
-          TableName: "mock-table",
-          KeyConditionExpression: "#PK = :PK4",
-          ConsistentRead: true,
-          ExpressionAttributeNames: {
-            "#ForeignEntityType": "ForeignEntityType",
-            "#PK": "PK",
-            "#Type": "Type"
-          },
+          ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
           ExpressionAttributeValues: {
-            ":ForeignEntityType3": "Order",
-            ":PK4": "Customer#123",
+            ":PK3": "Customer#123",
             ":Type1": "Customer",
-            ":Type2": "BelongsToLink"
+            ":Type2": "Order"
           },
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))"
+          FilterExpression: "(#Type IN (:Type1,:Type2))",
+          KeyConditionExpression: "#PK = :PK3",
+          TableName: "mock-table"
         }
       ]
     ]);
