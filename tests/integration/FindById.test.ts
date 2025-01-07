@@ -22,7 +22,7 @@ import {
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../../src/Logger";
-import { MockTableEntityTableItem } from "./utils";
+import { type MockTableEntityTableItem } from "./utils";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
@@ -32,7 +32,7 @@ const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
-const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand); // TODO remove this at the end of fixing tests
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -55,9 +55,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
             if (command.name === "QueryCommand") {
               return await Promise.resolve(mockQuery());
             }
-            if (command.name === "TransactGetCommand") {
-              return await Promise.resolve(mockTransactGetItems());
-            }
           })
         };
       })
@@ -67,9 +64,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
     }),
     QueryCommand: jest.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
-    }),
-    TransactGetCommand: jest.fn().mockImplementation(() => {
-      return { name: "TransactGetCommand" };
     })
   };
 });
