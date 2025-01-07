@@ -242,67 +242,6 @@ describe("FindById", () => {
   it("will find an entity with included HasMany associations", async () => {
     expect.assertions(6);
 
-    // Denormalized Order records of associated orders in the Customer partition
-    const orders: Array<MockTableEntityTableItem<Order>> = [
-      {
-        PK: "Customer#123",
-        SK: "Order#001",
-        Id: "001",
-        Type: "Order",
-        CustomerId: "123",
-        PaymentMethodId: "008",
-        OrderDate: "2022-10-14T09:31:15.148Z",
-        CreatedAt: "2022-10-15T09:31:15.148Z",
-        UpdatedAt: "2022-10-16T09:31:15.148Z"
-      },
-      {
-        PK: "Customer#123",
-        SK: "Order#003",
-        Id: "003",
-        Type: "Order",
-        CustomerId: "123",
-        PaymentMethodId: "008",
-        OrderDate: "2022-11-01T23:31:21.148Z",
-        CreatedAt: "2022-11-02T23:31:21.148Z",
-        UpdatedAt: "2022-11-03T23:31:21.148Z"
-      },
-      {
-        PK: "Customer#123",
-        SK: "Order#004",
-        Id: "004",
-        Type: "Order",
-        CustomerId: "123",
-        PaymentMethodId: "008",
-        OrderDate: "2022-09-01T23:31:21.148Z",
-        CreatedAt: "2022-09-02T23:31:21.148Z",
-        UpdatedAt: "2022-09-03T23:31:21.148Z"
-      }
-    ];
-
-    // Denormalized PaymentMethod records of associated orders in the Customer partition
-    const paymentMethods: Array<MockTableEntityTableItem<PaymentMethod>> = [
-      {
-        PK: "Customer#123",
-        SK: "PaymentMethod#007",
-        Id: "007",
-        Type: "PaymentMethod",
-        CustomerId: "123",
-        LastFour: "1234",
-        CreatedAt: "2022-10-01T12:31:21.148Z",
-        UpdatedAt: "2022-10-02T12:31:21.148Z"
-      },
-      {
-        PK: "Customer#123",
-        SK: "PaymentMethod#008",
-        Id: "008",
-        Type: "PaymentMethod",
-        CustomerId: "123",
-        LastFour: "5678",
-        CreatedAt: "2022-11-20T12:31:21.148Z",
-        UpdatedAt: "2022-11-21T12:31:21.148Z"
-      }
-    ];
-
     const customer: MockTableEntityTableItem<Customer> = {
       PK: "Customer#123",
       SK: "Customer",
@@ -313,6 +252,67 @@ describe("FindById", () => {
       CreatedAt: "2022-09-14T04:26:31.148Z",
       UpdatedAt: "2022-09-15T04:26:31.148Z"
     };
+
+    // Denormalized Order records of associated orders in the Customer partition
+    const orders: Array<MockTableEntityTableItem<Order>> = [
+      {
+        PK: customer.PK,
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "008",
+        OrderDate: "2022-10-14T09:31:15.148Z",
+        CreatedAt: "2022-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      },
+      {
+        PK: customer.PK,
+        SK: "Order#003",
+        Id: "003",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "008",
+        OrderDate: "2022-11-01T23:31:21.148Z",
+        CreatedAt: "2022-11-02T23:31:21.148Z",
+        UpdatedAt: "2022-11-03T23:31:21.148Z"
+      },
+      {
+        PK: customer.PK,
+        SK: "Order#004",
+        Id: "004",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "008",
+        OrderDate: "2022-09-01T23:31:21.148Z",
+        CreatedAt: "2022-09-02T23:31:21.148Z",
+        UpdatedAt: "2022-09-03T23:31:21.148Z"
+      }
+    ];
+
+    // Denormalized PaymentMethod records of associated orders in the Customer partition
+    const paymentMethods: Array<MockTableEntityTableItem<PaymentMethod>> = [
+      {
+        PK: customer.PK,
+        SK: "PaymentMethod#007",
+        Id: "007",
+        Type: "PaymentMethod",
+        CustomerId: customer.Id,
+        LastFour: "1234",
+        CreatedAt: "2022-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      },
+      {
+        PK: customer.PK,
+        SK: "PaymentMethod#008",
+        Id: "008",
+        Type: "PaymentMethod",
+        CustomerId: customer.Id,
+        LastFour: "5678",
+        CreatedAt: "2022-11-20T12:31:21.148Z",
+        UpdatedAt: "2022-11-21T12:31:21.148Z"
+      }
+    ];
 
     mockQuery.mockResolvedValueOnce({
       Items: [customer, ...orders, ...paymentMethods]
@@ -446,7 +446,7 @@ describe("FindById", () => {
     };
 
     const contactInformation: MockTableEntityTableItem<ContactInformation> = {
-      PK: "ContactInformation#456",
+      PK: customer.PK,
       SK: "ContactInformation",
       Id: "456",
       Type: "ContactInformation",
@@ -475,7 +475,7 @@ describe("FindById", () => {
       createdAt: new Date("2022-09-14T04:26:31.148Z"),
       updatedAt: new Date("2022-09-15T04:26:31.148Z"),
       contactInformation: {
-        pk: "ContactInformation#456",
+        pk: "Customer#123",
         sk: "ContactInformation",
         id: "456",
         type: "ContactInformation",
