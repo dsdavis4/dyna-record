@@ -22,7 +22,10 @@ import {
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../../src/Logger";
-import { type MockTableEntityTableItem } from "./utils";
+import {
+  type OtherTableEntityTableItem,
+  type MockTableEntityTableItem
+} from "./utils";
 
 const mockGet = jest.fn();
 const mockSend = jest.fn();
@@ -32,7 +35,6 @@ const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
-const mockTransactGetCommand = jest.mocked(TransactGetCommand); // TODO remove this at the end of fixing tests
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -732,9 +734,9 @@ describe("FindById", () => {
   });
 
   it("will find an entity included HasAndBelongsToMany associations", async () => {
-    expect.assertions(6);
+    expect.assertions(5);
 
-    const bookRes = {
+    const book: MockTableEntityTableItem<Book> = {
       PK: "Book#789",
       SK: "Book",
       Id: "789",
@@ -745,54 +747,39 @@ describe("FindById", () => {
       UpdatedAt: "2023-02-15T08:31:15.148Z"
     };
 
-    const authorLinks = [
+    // Author entities denormalized to Book partition via associations
+    const authors: Array<MockTableEntityTableItem<Author>> = [
       {
         PK: "Book#789",
         SK: "Author#001",
         Id: "001",
-        ForeignEntityType: "Author",
-        ForeignKey: "111",
-        Type: "BelongsToLink",
+        Type: "Author",
+        Name: "Author-1",
+        CreatedAt: "2022-10-14T09:31:15.148Z",
         UpdatedAt: "2022-10-15T09:31:15.148Z"
+      },
+      {
+        PK: "Book#789",
+        SK: "Author#002",
+        Id: "002",
+        Type: "Author",
+        Name: "Author-2",
+        CreatedAt: "2022-10-16T09:31:15.148Z",
+        UpdatedAt: "2022-10-17T09:31:15.148Z"
       },
       {
         PK: "Book#789",
         SK: "Author#003",
         Id: "003",
-        ForeignEntityType: "Author",
-        ForeignKey: "112",
-        Type: "BelongsToLink",
-        UpdatedAt: "2022-11-01T23:31:21.148Z"
-      },
-      {
-        PK: "Book#789",
-        SK: "Author#004",
-        Id: "004",
-        ForeignEntityType: "Author",
-        ForeignKey: "113",
-        Type: "BelongsToLink",
-        UpdatedAt: "2022-09-01T23:31:21.148Z"
+        Type: "Author",
+        Name: "Author-3",
+        CreatedAt: "2022-10-18T09:31:15.148Z",
+        UpdatedAt: "2022-10-19T09:31:15.148Z"
       }
     ];
 
     mockQuery.mockResolvedValueOnce({
-      Items: [bookRes, ...authorLinks]
-    });
-
-    const authorItems = authorLinks.map((link, idx) => ({
-      Item: {
-        PK: `${link.ForeignEntityType}#${link.ForeignKey}`,
-        SK: link.ForeignEntityType,
-        Id: link.ForeignKey,
-        Type: link.ForeignEntityType,
-        Name: `SomeName-${idx}`,
-        CreatedAt: "2023-02-15T08:31:15.148Z",
-        UpdatedAt: "2023-02-15T08:31:15.148Z"
-      }
-    }));
-
-    mockTransactGetItems.mockResolvedValueOnce({
-      Responses: authorItems
+      Items: [book, ...authors]
     });
 
     const result = await Book.findById("789", {
@@ -810,34 +797,31 @@ describe("FindById", () => {
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       authors: [
         {
-          pk: "Author#111",
-          sk: "Author",
-          id: "111",
+          pk: "Book#789",
+          sk: "Author#001",
+          id: "001",
           type: "Author",
-          name: "SomeName-0",
-          books: undefined,
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          name: "Author-1",
+          createdAt: new Date("2022-10-14T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-15T09:31:15.148Z")
         },
         {
-          pk: "Author#112",
-          sk: "Author",
-          id: "112",
+          pk: "Book#789",
+          sk: "Author#002",
+          id: "002",
           type: "Author",
-          name: "SomeName-1",
-          books: undefined,
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          name: "Author-2",
+          createdAt: new Date("2022-10-16T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-17T09:31:15.148Z")
         },
         {
-          pk: "Author#113",
-          sk: "Author",
-          id: "113",
+          pk: "Book#789",
+          sk: "Author#003",
+          id: "003",
           type: "Author",
-          name: "SomeName-2",
-          books: undefined,
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          name: "Author-3",
+          createdAt: new Date("2022-10-18T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-19T09:31:15.148Z")
         }
       ]
     });
@@ -849,159 +833,87 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          KeyConditionExpression: "#PK = :PK4",
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))",
-          ConsistentRead: true,
+          KeyConditionExpression: "#PK = :PK3",
           ExpressionAttributeNames: {
-            "#ForeignEntityType": "ForeignEntityType",
             "#PK": "PK",
             "#Type": "Type"
           },
           ExpressionAttributeValues: {
-            ":ForeignEntityType3": "Author",
-            ":PK4": "Book#789",
+            ":PK3": "Book#789",
             ":Type1": "Book",
-            ":Type2": "BelongsToLink"
-          }
+            ":Type2": "Author"
+          },
+          FilterExpression: "(#Type IN (:Type1,:Type2))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([
-      [
-        {
-          TransactItems: [
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Author#111", SK: "Author" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Author#112", SK: "Author" }
-              }
-            },
-            {
-              Get: {
-                TableName: "mock-table",
-                Key: { PK: "Author#113", SK: "Author" }
-              }
-            }
-          ]
-        }
-      ]
-    ]);
-    expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactGetCommand" }]
-    ]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
   it("will find a model with multiple (HasMany, HasAndBelongsMany and BelongsTo) relationships", async () => {
-    expect.assertions(8);
+    expect.assertions(7);
 
-    const courseRes = {
+    // BelongsTo -  Teacher entities denormalized to Course partition via associations
+    const teacher: OtherTableEntityTableItem<Teacher> = {
+      myPk: "Course|123",
+      mySk: "Teacher",
+      id: "004",
+      type: "Teacher",
+      name: "Teacher-1",
+      createdAt: "2023-02-20T08:31:15.148Z",
+      updatedAt: "2023-02-21T08:31:15.148Z"
+    };
+
+    // Entity being queried for
+    const course: OtherTableEntityTableItem<Course> = {
       myPk: "Course|123",
       mySk: "Course",
       id: "123",
       type: "Course",
       name: "Math",
-      teacherId: "555",
+      teacherId: teacher.id,
       createdAt: "2023-01-15T12:12:18.123Z",
       updatedAt: "2023-02-15T08:31:15.148Z"
     };
 
-    const studentCourseJoinTableItems = [
+    // HasAndBelongsToMany -  Student entities denormalized to Course partition via associations
+    const students: Array<OtherTableEntityTableItem<Student>> = [
       {
         myPk: "Course|123",
         mySk: "Student|001",
         id: "001",
-        foreignEntityType: "Student",
-        foreignKey: "456",
-        type: "BelongsToLink",
+        type: "Student",
+        name: "Student-1",
         createdAt: "2023-01-15T12:12:18.123Z",
         updatedAt: "2023-02-15T08:31:15.148Z"
       },
       {
         myPk: "Course|123",
         mySk: "Student|002",
-        foreignEntityType: "Student",
-        foreignKey: "789",
         id: "002",
-        type: "BelongsToLink",
-        createdAt: "2023-01-15T12:12:18.123Z",
-        updatedAt: "2023-02-15T08:31:15.148Z"
+        type: "Student",
+        name: "Student-2",
+        createdAt: "2023-01-16T12:12:18.123Z",
+        updatedAt: "2023-02-17T08:31:15.148Z"
       }
     ];
 
-    const assignmentBelongsToLinkTableItems = [
+    // HasMany -  Assignment entities denormalized to Course partition via associations
+    const assignments: Array<OtherTableEntityTableItem<Assignment>> = [
       {
         myPk: "Course|123",
         mySk: "Assignment|003",
         id: "003",
-        foreignEntityType: "Assignment",
-        foreignKey: "111",
-        type: "BelongsToLink",
-        createdAt: "2023-01-15T12:12:18.123Z",
-        updatedAt: "2023-02-15T08:31:15.148Z"
+        type: "Assignment",
+        title: "Assignment-1",
+        courseId: course.id,
+        createdAt: "2023-01-18T12:12:18.123Z",
+        updatedAt: "2023-02-19T08:31:15.148Z"
       }
     ];
 
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        courseRes,
-        ...studentCourseJoinTableItems,
-        ...assignmentBelongsToLinkTableItems
-      ]
-    });
-
-    const studentTableItems = studentCourseJoinTableItems.map((link, idx) => ({
-      Item: {
-        myPk: `${link.foreignEntityType}|${link.foreignKey}`,
-        mySk: link.foreignEntityType,
-        id: link.foreignKey,
-        type: link.foreignEntityType,
-        name: `SomeName-${idx}`,
-        createdAt: "2023-02-15T08:31:15.148Z",
-        updatedAt: "2023-02-15T08:31:15.148Z"
-      }
-    }));
-
-    const assignmentTableItems = assignmentBelongsToLinkTableItems.map(
-      (link, idx) => ({
-        Item: {
-          myPk: `${link.foreignEntityType}|${link.foreignKey}`,
-          mySk: link.foreignEntityType,
-          id: link.foreignKey,
-          type: link.foreignEntityType,
-          title: `SomeTitle-${idx}`,
-          courseId: "123",
-          createdAt: "2023-02-15T08:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      })
-    );
-
-    const teacherTableItem = {
-      Item: {
-        myPk: "Teacher|555",
-        mySk: "Teacher",
-        id: "555",
-        name: "TeacherName",
-        createdAt: "2023-02-15T08:31:15.148Z",
-        updatedAt: "2023-02-15T08:31:15.148Z",
-        type: "Teacher"
-      }
-    };
-
-    mockTransactGetItems.mockResolvedValueOnce({
-      Responses: [
-        ...studentTableItems,
-        ...assignmentTableItems,
-        teacherTableItem
-      ]
+      Items: [course, ...students, ...assignments, teacher]
     });
 
     const result = await Course.findById("123", {
@@ -1018,57 +930,50 @@ describe("FindById", () => {
       id: "123",
       type: "Course",
       name: "Math",
-      teacherId: "555",
+      teacherId: "004",
       createdAt: new Date("2023-01-15T12:12:18.123Z"),
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-      teacher: {
-        myPk: "Teacher|555",
-        mySk: "Teacher",
-        id: "555",
-        type: "Teacher",
-        name: "TeacherName",
-        createdAt: new Date("2023-02-15T08:31:15.148Z"),
-        updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-        courses: undefined,
-        profile: undefined
-      },
       assignments: [
         {
-          myPk: "Assignment|111",
-          mySk: "Assignment",
-          id: "111",
+          myPk: "Course|123",
+          mySk: "Assignment|003",
+          id: "003",
           type: "Assignment",
-          title: "SomeTitle-0",
           courseId: "123",
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-          course: undefined
+          title: "Assignment-1",
+          createdAt: new Date("2023-01-18T12:12:18.123Z"),
+          updatedAt: new Date("2023-02-19T08:31:15.148Z")
         }
       ],
       students: [
         {
-          myPk: "Student|456",
-          mySk: "Student",
-          id: "456",
+          myPk: "Course|123",
+          mySk: "Student|001",
+          id: "001",
           type: "Student",
-          name: "SomeName-0",
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-          courses: undefined,
-          profile: undefined
+          name: "Student-1",
+          createdAt: new Date("2023-01-15T12:12:18.123Z"),
+          updatedAt: new Date("2023-02-15T08:31:15.148Z")
         },
         {
-          myPk: "Student|789",
-          mySk: "Student",
-          id: "789",
+          myPk: "Course|123",
+          mySk: "Student|002",
+          id: "002",
           type: "Student",
-          name: "SomeName-1",
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-          courses: undefined,
-          profile: undefined
+          name: "Student-2",
+          createdAt: new Date("2023-01-16T12:12:18.123Z"),
+          updatedAt: new Date("2023-02-17T08:31:15.148Z")
         }
-      ]
+      ],
+      teacher: {
+        myPk: "Course|123",
+        mySk: "Teacher",
+        id: "004",
+        type: "Teacher",
+        name: "Teacher-1",
+        createdAt: new Date("2023-02-20T08:31:15.148Z"),
+        updatedAt: new Date("2023-02-21T08:31:15.148Z")
+      }
     });
     expect(result).toBeInstanceOf(Course);
     expect(result?.teacher).toBeInstanceOf(Teacher);
@@ -1081,63 +986,24 @@ describe("FindById", () => {
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
         {
-          ConsistentRead: true,
+          TableName: "other-table",
+          KeyConditionExpression: "#myPk = :myPk5",
           ExpressionAttributeNames: {
-            "#foreignEntityType": "foreignEntityType",
             "#myPk": "myPk",
             "#type": "type"
           },
           ExpressionAttributeValues: {
-            ":foreignEntityType3": "Teacher",
-            ":foreignEntityType4": "Assignment",
-            ":foreignEntityType5": "Student",
-            ":myPk6": "Course|123",
+            ":myPk5": "Course|123",
             ":type1": "Course",
-            ":type2": "BelongsToLink"
+            ":type2": "Teacher",
+            ":type3": "Assignment",
+            ":type4": "Student"
           },
-          FilterExpression:
-            "#type = :type1 OR (#type = :type2 AND #foreignEntityType IN (:foreignEntityType3,:foreignEntityType4,:foreignEntityType5))",
-          KeyConditionExpression: "#myPk = :myPk6",
-          TableName: "other-table"
+          FilterExpression: "(#type IN (:type1,:type2,:type3,:type4))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([
-      [
-        {
-          TransactItems: [
-            {
-              Get: {
-                TableName: "other-table",
-                Key: { myPk: "Student|456", mySk: "Student" }
-              }
-            },
-            {
-              Get: {
-                TableName: "other-table",
-                Key: { myPk: "Student|789", mySk: "Student" }
-              }
-            },
-            {
-              Get: {
-                TableName: "other-table",
-                Key: { myPk: "Assignment|111", mySk: "Assignment" }
-              }
-            },
-            {
-              Get: {
-                TableName: "other-table",
-                Key: { myPk: "Teacher|555", mySk: "Teacher" }
-              }
-            }
-          ]
-        }
-      ]
-    ]);
-    expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactGetCommand" }]
-    ]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
   describe("types", () => {
