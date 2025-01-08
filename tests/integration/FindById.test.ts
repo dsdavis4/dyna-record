@@ -249,14 +249,14 @@ describe("FindById", () => {
         PK: "Customer#123",
         SK: "Customer",
         Id: "123",
+        Type: "Customer",
         Name: "Some Customer",
         Address: "11 Some St",
-        Type: "Customer",
         CreatedAt: "2022-09-14T04:26:31.148Z",
         UpdatedAt: "2022-09-15T04:26:31.148Z"
       };
 
-      // Denormalized Order records of associated orders in the Customer partition
+      // Denormalized Order records denormalized in the Customer partition
       const orders: Array<MockTableEntityTableItem<Order>> = [
         {
           PK: customer.PK,
@@ -293,7 +293,7 @@ describe("FindById", () => {
         }
       ];
 
-      // Denormalized PaymentMethod records of associated orders in the Customer partition
+      // Denormalized PaymentMethod records denormalized in the Customer partition
       const paymentMethods: Array<MockTableEntityTableItem<PaymentMethod>> = [
         {
           PK: customer.PK,
@@ -493,6 +493,86 @@ describe("FindById", () => {
               ":PK3": "Customer#123",
               ":Type1": "Customer",
               ":Type2": "ContactInformation"
+            },
+            FilterExpression: "(#Type IN (:Type1,:Type2))"
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("will find an entity with included BelongsTo associations", async () => {
+      expect.assertions(5);
+
+      // Denormalized Customer record denormalized in the ContactInformation partition
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "ContactInformation#123",
+        SK: "Customer",
+        Id: "456",
+        Type: "Customer",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        CreatedAt: "2022-09-14T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Entity being queried
+      const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "test@test.com",
+        Phone: "555-555-5555",
+        CustomerId: customer.Id,
+        CreatedAt: "2022-09-16T04:26:31.148Z",
+        UpdatedAt: "2022-09-17T04:26:31.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer, contactInformation]
+      });
+
+      const result = await ContactInformation.findById("123", {
+        include: [{ association: "customer" }]
+      });
+
+      expect(result).toEqual({
+        pk: "ContactInformation#123",
+        sk: "ContactInformation",
+        id: "123",
+        type: "ContactInformation",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        customerId: "456",
+        createdAt: new Date("2022-09-16T04:26:31.148Z"),
+        updatedAt: new Date("2022-09-17T04:26:31.148Z"),
+        customer: {
+          pk: "ContactInformation#123",
+          sk: "Customer",
+          id: "456",
+          type: "Customer",
+          name: "Some Customer",
+          address: "11 Some St",
+          createdAt: new Date("2022-09-14T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
+        }
+      });
+      expect(result).toBeInstanceOf(ContactInformation);
+      expect(result?.customer).toBeInstanceOf(Customer);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK3": "ContactInformation#123",
+              ":Type1": "ContactInformation",
+              ":Type2": "Customer"
             },
             FilterExpression: "(#Type IN (:Type1,:Type2))"
           }
