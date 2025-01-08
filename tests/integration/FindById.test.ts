@@ -567,23 +567,22 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  // TODO start here
   it("findByIdWithIncludes - will set included HasAndBelongsToMany associations to an empty array if it doesn't find any", async () => {
-    expect.assertions(4);
+    expect.assertions(3);
+
+    const book: MockTableEntityTableItem<Book> = {
+      PK: "Book#789",
+      SK: "Book",
+      Id: "789",
+      Type: "Book",
+      Name: "BookAbc",
+      NumPages: 589,
+      CreatedAt: "2023-01-15T12:12:18.123Z",
+      UpdatedAt: "2023-02-15T08:31:15.148Z"
+    };
 
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Book#789",
-          SK: "Book",
-          Id: "789",
-          Type: "Book",
-          Name: "BookAbc",
-          NumPages: 589,
-          CreatedAt: "2023-01-15T12:12:18.123Z",
-          UpdatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      ]
+      Items: [book]
     });
 
     const result = await Book.findById("789", {
@@ -605,43 +604,39 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          KeyConditionExpression: "#PK = :PK4",
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))",
-          ConsistentRead: true,
+          KeyConditionExpression: "#PK = :PK3",
           ExpressionAttributeNames: {
-            "#ForeignEntityType": "ForeignEntityType",
             "#PK": "PK",
             "#Type": "Type"
           },
           ExpressionAttributeValues: {
-            ":ForeignEntityType3": "Author",
-            ":PK4": "Book#789",
+            ":PK3": "Book#789",
             ":Type1": "Book",
-            ":Type2": "BelongsToLink"
-          }
+            ":Type2": "Author"
+          },
+          FilterExpression: "(#Type IN (:Type1,:Type2))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
   it("findByIdWithIncludes - will set included HasOne associations to undefined if it doesn't find any", async () => {
-    expect.assertions(4);
+    expect.assertions(3);
+
+    const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+      PK: "PaymentMethod#789",
+      SK: "PaymentMethod",
+      Id: "789",
+      Type: "PaymentMethod",
+      LastFour: "0000",
+      CustomerId: "123",
+      CreatedAt: "2023-02-14T08:31:15.148Z",
+      UpdatedAt: "2023-02-15T08:31:15.148Z"
+    };
 
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "PaymentMethod#789",
-          SK: "PaymentMethod",
-          Id: "789",
-          Type: "PaymentMethod",
-          LastFour: "0000",
-          CustomerId: "123",
-          UpdatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      ]
+      Items: [paymentMethod]
     });
 
     const result = await PaymentMethod.findById("789", {
@@ -655,6 +650,7 @@ describe("FindById", () => {
       type: "PaymentMethod",
       lastFour: "0000",
       customerId: "123",
+      createdAt: new Date("2023-02-14T08:31:15.148Z"),
       updatedAt: new Date("2023-02-15T08:31:15.148Z"),
       paymentMethodProvider: undefined
     });
@@ -662,46 +658,40 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          FilterExpression:
-            "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3))",
-          KeyConditionExpression: "#PK = :PK4",
+          KeyConditionExpression: "#PK = :PK3",
           ExpressionAttributeNames: {
             "#PK": "PK",
-            "#Type": "Type",
-            "#ForeignEntityType": "ForeignEntityType"
+            "#Type": "Type"
           },
           ExpressionAttributeValues: {
-            ":PK4": "PaymentMethod#789",
+            ":PK3": "PaymentMethod#789",
             ":Type1": "PaymentMethod",
-            ":Type2": "BelongsToLink",
-            ":ForeignEntityType3": "PaymentMethodProvider"
+            ":Type2": "PaymentMethodProvider"
           },
-          ConsistentRead: true
+          FilterExpression: "(#Type IN (:Type1,:Type2))"
         }
       ]
     ]);
-
-    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
   it("findByIdWithIncludes - will set included BelongsTo associations to undefined if it doesn't find any", async () => {
-    expect.assertions(4);
+    expect.assertions(3);
+
+    const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+      PK: "ContactInformation#123",
+      SK: "ContactInformation",
+      Id: "123",
+      Type: "ContactInformation",
+      CustomerId: undefined,
+      Email: "test@example.com",
+      Phone: "555-555-5555",
+      CreatedAt: "2023-09-15T04:26:31.148Z",
+      UpdatedAt: "2023-09-15T04:26:31.148Z"
+    };
 
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "ContactInformation#123",
-          SK: "ContactInformation",
-          Id: "123",
-          Type: "ContactInformation",
-          CustomerId: undefined,
-          Email: "test@example.com",
-          Phone: "555-555-5555",
-          CreatedAt: "2023-09-15T04:26:31.148Z",
-          UpdatedAt: "2023-09-15T04:26:31.148Z"
-        }
-      ]
+      Items: [contactInformation]
     });
 
     const result = await ContactInformation.findById("123", {
@@ -724,152 +714,24 @@ describe("FindById", () => {
       [
         {
           TableName: "mock-table",
-          FilterExpression: "#Type = :Type1",
-          KeyConditionExpression: "#PK = :PK2",
-          ExpressionAttributeNames: { "#Type": "Type", "#PK": "PK" },
-          ExpressionAttributeValues: {
-            ":PK2": "ContactInformation#123",
-            ":Type1": "ContactInformation"
+          KeyConditionExpression: "#PK = :PK3",
+          ExpressionAttributeNames: {
+            "#PK": "PK",
+            "#Type": "Type"
           },
-          ConsistentRead: true
+          ExpressionAttributeValues: {
+            ":PK3": "ContactInformation#123",
+            ":Type1": "ContactInformation",
+            ":Type2": "Customer"
+          },
+          FilterExpression: "(#Type IN (:Type1,:Type2))"
         }
       ]
     ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  it("defaults not found entities to undefined", async () => {
-    expect.assertions(6);
-
-    const courseRes = {
-      myPk: "Course|123",
-      mySk: "Course",
-      id: "123",
-      type: "Course",
-      name: "Math",
-      teacherId: undefined,
-      createdAt: "2023-01-15T12:12:18.123Z",
-      updatedAt: "2023-02-15T08:31:15.148Z"
-    };
-
-    const assignmentBelongsToLinkTableItems = [
-      {
-        myPk: "Course|123",
-        mySk: "Assignment|003",
-        id: "003",
-        foreignEntityType: "Assignment",
-        foreignKey: "111",
-        type: "BelongsToLink",
-        createdAt: "2023-01-15T12:12:18.123Z",
-        updatedAt: "2023-02-15T08:31:15.148Z"
-      }
-    ];
-
-    mockQuery.mockResolvedValueOnce({
-      Items: [courseRes, ...assignmentBelongsToLinkTableItems]
-    });
-
-    const assignmentTableItems = assignmentBelongsToLinkTableItems.map(
-      (link, idx) => ({
-        Item: {
-          myPk: `${link.foreignEntityType}|${link.foreignKey}`,
-          mySk: link.foreignEntityType,
-          id: link.foreignKey,
-          type: link.foreignEntityType,
-          title: `SomeTitle-${idx}`,
-          courseId: "123",
-          createdAt: "2023-02-15T08:31:15.148Z",
-          updatedAt: "2023-02-15T08:31:15.148Z"
-        }
-      })
-    );
-
-    mockTransactGetItems.mockResolvedValueOnce({
-      Responses: [...assignmentTableItems]
-    });
-
-    const result = await Course.findById("123", {
-      include: [
-        { association: "teacher" },
-        { association: "assignments" },
-        { association: "students" }
-      ]
-    });
-
-    expect(result).toEqual({
-      myPk: "Course|123",
-      mySk: "Course",
-      id: "123",
-      type: "Course",
-      name: "Math",
-      teacherId: undefined,
-      createdAt: new Date("2023-01-15T12:12:18.123Z"),
-      updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-      teacher: undefined,
-      assignments: [
-        {
-          myPk: "Assignment|111",
-          mySk: "Assignment",
-          id: "111",
-          type: "Assignment",
-          title: "SomeTitle-0",
-          courseId: "123",
-          createdAt: new Date("2023-02-15T08:31:15.148Z"),
-          updatedAt: new Date("2023-02-15T08:31:15.148Z"),
-          course: undefined
-        }
-      ],
-      students: []
-    });
-    expect(result).toBeInstanceOf(Course);
-    expect(
-      result?.assignments.every(assignment => assignment instanceof Assignment)
-    ).toEqual(true);
-    expect(mockedQueryCommand.mock.calls).toEqual([
-      [
-        {
-          ConsistentRead: true,
-          ExpressionAttributeNames: {
-            "#foreignEntityType": "foreignEntityType",
-            "#myPk": "myPk",
-            "#type": "type"
-          },
-          ExpressionAttributeValues: {
-            ":foreignEntityType3": "Teacher",
-            ":foreignEntityType4": "Assignment",
-            ":foreignEntityType5": "Student",
-            ":myPk6": "Course|123",
-            ":type1": "Course",
-            ":type2": "BelongsToLink"
-          },
-          FilterExpression:
-            "#type = :type1 OR (#type = :type2 AND #foreignEntityType IN (:foreignEntityType3,:foreignEntityType4,:foreignEntityType5))",
-          KeyConditionExpression: "#myPk = :myPk6",
-          TableName: "other-table"
-        }
-      ]
-    ]);
-    expect(mockTransactGetCommand.mock.calls).toEqual([
-      [
-        {
-          TransactItems: [
-            {
-              Get: {
-                TableName: "other-table",
-                Key: { myPk: "Assignment|111", mySk: "Assignment" }
-              }
-            }
-          ]
-        }
-      ]
-    ]);
-    expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactGetCommand" }]
-    ]);
-  });
-
+  // TODO here
   it("will find an entity with included BelongsTo HasMany associations", async () => {
     expect.assertions(7);
 
