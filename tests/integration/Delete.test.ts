@@ -138,7 +138,7 @@ describe("Delete", () => {
     ]);
   });
 
-  it("it will delete an entity that belongs to a relationship as HasMany (Removes BelongsToLink from related HasMany partition)", async () => {
+  it("it will delete an entity that belongs to a relationship as HasMany (Removes denormalized link from related HasMany partition)", async () => {
     expect.assertions(6);
 
     const pet: MockTableEntityTableItem<Pet> = {
@@ -199,7 +199,7 @@ describe("Delete", () => {
     ]);
   });
 
-  it("it will delete an entity that belongs to a relationship as HasOne (Removes BelongsToLink from related HasOne partition)", async () => {
+  it("it will delete an entity that belongs to a relationship as HasOne (Removes denormalized link from related HasOne partition)", async () => {
     expect.assertions(6);
 
     mockQuery.mockResolvedValueOnce({
@@ -257,6 +257,8 @@ describe("Delete", () => {
       ]
     ]);
   });
+
+  // TODO here
 
   it("will remove the foreign key attribute on any the HasMany or HasOne entities that belong to it", async () => {
     expect.assertions(6);
