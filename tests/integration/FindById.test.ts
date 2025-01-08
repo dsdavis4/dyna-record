@@ -18,8 +18,7 @@ import {
 import {
   DynamoDBDocumentClient,
   GetCommand,
-  QueryCommand,
-  TransactGetCommand
+  QueryCommand
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../../src/Logger";
 import {
@@ -30,7 +29,6 @@ import {
 const mockGet = jest.fn();
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
-const mockTransactGetItems = jest.fn();
 const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
@@ -511,7 +509,6 @@ describe("FindById", () => {
     expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
   });
 
-  // TODO unrelated to this line, make a describe block for findById with includes and move related tests into then fix the test descriptions
   it("findByIdWithIncludes - will set included HasMany associations to an empty array if it doesn't find any", async () => {
     expect.assertions(3);
 
@@ -1012,7 +1009,6 @@ describe("FindById", () => {
         expect.assertions(1);
 
         mockQuery.mockResolvedValueOnce({ Items: [] });
-        mockTransactGetItems.mockResolvedValueOnce({});
 
         const result = await Customer.findById("123", {
           include: [{ association: "contactInformation" }]
@@ -1030,7 +1026,6 @@ describe("FindById", () => {
 
     it("will allow options with include options that are associations/relationships defined on the model", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       await PaymentMethod.findById("789", {
         include: [
@@ -1046,7 +1041,6 @@ describe("FindById", () => {
 
     it("will not allow include options with attributes that do not exist on the entity", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       // @ts-expect-error: Cannot include association using a key not defined on the model
       await PaymentMethod.findById("789", {
@@ -1056,7 +1050,6 @@ describe("FindById", () => {
 
     it("(BelongsTo HasMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "customer" }]
@@ -1086,7 +1079,6 @@ describe("FindById", () => {
 
     it("(BelongsTo HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethodProvider.findById("789", {
         include: [{ association: "paymentMethod" }]
@@ -1112,7 +1104,6 @@ describe("FindById", () => {
 
     it("(HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "paymentMethodProvider" }]
@@ -1142,7 +1133,6 @@ describe("FindById", () => {
 
     it("(HasMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "orders" }]
@@ -1172,7 +1162,6 @@ describe("FindById", () => {
 
     it("(HasAndBelongsToMany) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const book = await Book.findById("789", {
         include: [{ association: "authors" }]
@@ -1208,7 +1197,6 @@ describe("FindById", () => {
 
     it("(BelongsTo) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "customer" }]
@@ -1224,7 +1212,6 @@ describe("FindById", () => {
 
     it("(HasMany) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const paymentMethod = await PaymentMethod.findById("789", {
         include: [{ association: "orders" }]
@@ -1240,7 +1227,6 @@ describe("FindById", () => {
 
     it("(HasAndBelongsToMany) - included relationships should not include any of their associations", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const book = await Book.findById("789", {
         include: [{ association: "authors" }]
@@ -1256,7 +1242,6 @@ describe("FindById", () => {
 
     it("BelongsTo includes from NullableForeignKeys might be undefined", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const pet = await Pet.findById("789", {
         include: [{ association: "owner" }]
@@ -1270,7 +1255,6 @@ describe("FindById", () => {
 
     it("BelongsTo includes from (non-nullable) ForeignKeys will not be undefined", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const address = await Address.findById("123", {
         include: [{ association: "home" }]
@@ -1284,7 +1268,6 @@ describe("FindById", () => {
 
     it("included HasMany relationships will be an array", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
-      mockTransactGetItems.mockResolvedValueOnce({});
 
       const phoneBook = await PhoneBook.findById("123", {
         include: [{ association: "addresses" }]
