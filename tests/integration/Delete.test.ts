@@ -13,6 +13,7 @@ import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
+import { MockTableEntityTableItem } from "./utils";
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
@@ -86,17 +87,19 @@ describe("Delete", () => {
   it("will delete an entity that has no relationships", async () => {
     expect.assertions(6);
 
+    const mockModel: MockTableEntityTableItem<MockModel> = {
+      PK: "MockModel#123",
+      SK: "MockModel",
+      Id: "123",
+      Type: "MockModel",
+      MyVar1: "MyVar1 val",
+      MyVar2: 1,
+      CreatedAt: "2022-09-02T23:31:21.148Z",
+      UpdatedAt: "2022-09-03T23:31:21.148Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "MockModel#123",
-          SK: "MockModel",
-          Id: "123",
-          Type: "MockModel",
-          MyVar1: "MyVar1 val",
-          MyVar2: 1
-        }
-      ]
+      Items: [mockModel]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -138,17 +141,19 @@ describe("Delete", () => {
   it("it will delete an entity that belongs to a relationship as HasMany (Removes BelongsToLink from related HasMany partition)", async () => {
     expect.assertions(6);
 
+    const pet: MockTableEntityTableItem<Pet> = {
+      PK: "Pet#123",
+      SK: "Pet",
+      Id: "123",
+      Type: "Pet",
+      Name: "Fido",
+      OwnerId: "456",
+      CreatedAt: "2022-09-02T23:31:21.148Z",
+      UpdatedAt: "2022-09-03T23:31:21.148Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Pet#123",
-          SK: "Pet",
-          Id: "123",
-          Type: "Pet",
-          Name: "Fido",
-          OwnerId: "456"
-        }
-      ]
+      Items: [pet]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
