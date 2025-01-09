@@ -652,103 +652,8 @@ describe("Query", () => {
     });
   });
 
-  describe.skip("TODO", () => {
-    const operationSharedAssertions = (
-      result: QueryResults<Customer>
-    ): void => {
-      // TODO
-    };
-
-    beforeEach(() => {
-      // TODO
-    });
-
-    it("queryByKeys", async () => {
-      // TODO
-    });
-
-    it("queryByEntity", async () => {
-      // TODO
-    });
-  });
-
-  describe.skip("TODO", () => {
-    const operationSharedAssertions = (
-      result: QueryResults<Customer>
-    ): void => {
-      // TODO
-    };
-
-    beforeEach(() => {
-      // TODO
-    });
-
-    it("queryByKeys", async () => {
-      // TODO
-    });
-
-    it("queryByEntity", async () => {
-      // TODO
-    });
-  });
-
-  describe("queryByKeys", () => {
-    it("can perform complete queries with 'OR' (arbitrary example)", async () => {
-      expect.assertions(5);
-
-      // Entity representing the partition being queried on
-      const course: OtherTableEntityTableItem<Course> = {
-        myPk: "Course|123",
-        mySk: "Course",
-        id: "123",
-        type: "Course",
-        name: "Potions",
-        createdAt: "2021-09-15T04:26:31.148Z",
-        updatedAt: "2022-09-15T04:26:31.148Z"
-      };
-
-      // Assignment record denormalized to Course partition
-      const assignment: OtherTableEntityTableItem<Assignment> = {
-        myPk: "Course|123",
-        mySk: "Assignment|003",
-        id: "003",
-        title: "Assignment-1",
-        type: "Assignment",
-        courseId: course.id,
-        createdAt: "2023-01-15T12:12:18.123Z",
-        updatedAt: "2023-02-15T08:31:15.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [course, assignment]
-      });
-
-      const result = await Course.query(
-        {
-          myPk: "Course|123"
-        },
-        {
-          filter: {
-            type: ["Course", "Assignment"],
-            createdAt: { $beginsWith: "202" },
-            $or: [
-              {
-                name: "Defense Against The Dark Arts",
-                updatedAt: { $beginsWith: "2023-02-15" }
-              },
-              {
-                title: ["Assignment-1", "Assignment-2"],
-                createdAt: { $beginsWith: "2023" },
-                type: "Assignment"
-              },
-              {
-                id: "123"
-              }
-            ]
-          }
-        }
-      );
-
+  describe("can perform complete queries with 'OR' (arbitrary example)", () => {
+    const operationSharedAssertions = (result: QueryResults<Course>): void => {
       expect(result).toEqual([
         {
           myPk: "Course|123",
@@ -805,8 +710,98 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    };
+
+    beforeEach(() => {
+      // Entity representing the partition being queried on
+      const course: OtherTableEntityTableItem<Course> = {
+        myPk: "Course|123",
+        mySk: "Course",
+        id: "123",
+        type: "Course",
+        name: "Potions",
+        createdAt: "2021-09-15T04:26:31.148Z",
+        updatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Assignment record denormalized to Course partition
+      const assignment: OtherTableEntityTableItem<Assignment> = {
+        myPk: "Course|123",
+        mySk: "Assignment|003",
+        id: "003",
+        title: "Assignment-1",
+        type: "Assignment",
+        courseId: course.id,
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [course, assignment]
+      });
     });
 
+    it("queryByKeys", async () => {
+      expect.assertions(5);
+
+      const result = await Course.query(
+        {
+          myPk: "Course|123"
+        },
+        {
+          filter: {
+            type: ["Course", "Assignment"],
+            createdAt: { $beginsWith: "202" },
+            $or: [
+              {
+                name: "Defense Against The Dark Arts",
+                updatedAt: { $beginsWith: "2023-02-15" }
+              },
+              {
+                title: ["Assignment-1", "Assignment-2"],
+                createdAt: { $beginsWith: "2023" },
+                type: "Assignment"
+              },
+              {
+                id: "123"
+              }
+            ]
+          }
+        }
+      );
+
+      operationSharedAssertions(result);
+    });
+
+    it("queryByEntity", async () => {
+      expect.assertions(5);
+
+      const result = await Course.query("123", {
+        filter: {
+          type: ["Course", "Assignment"],
+          createdAt: { $beginsWith: "202" },
+          $or: [
+            {
+              name: "Defense Against The Dark Arts",
+              updatedAt: { $beginsWith: "2023-02-15" }
+            },
+            {
+              title: ["Assignment-1", "Assignment-2"],
+              createdAt: { $beginsWith: "2023" },
+              type: "Assignment"
+            },
+            {
+              id: "123"
+            }
+          ]
+        }
+      });
+
+      operationSharedAssertions(result);
+    });
+  });
+
+  describe("queryByKeys specific test", () => {
     it("can query on an index", async () => {
       expect.assertions(6);
 
@@ -944,7 +939,7 @@ describe("Query", () => {
     });
   });
 
-  describe("queryByEntity", () => {
+  describe("queryByEntity specific test", () => {
     describe("types", () => {
       it("does not serialize relationships", async () => {
         mockQuery.mockResolvedValueOnce({
