@@ -6,17 +6,16 @@ import {
   Home,
   PhoneBook,
   Book,
-  Course,
   User,
-  Author,
-  Website,
-  Address
+  type Author,
+  type Website,
+  type Address
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
-import { MockTableEntityTableItem } from "./utils";
+import { type MockTableEntityTableItem } from "./utils";
 
 /**
  * The testing type util does not support converting MLS# so set it here
@@ -845,6 +844,7 @@ describe("Delete", () => {
       }
     });
 
+    // TODO check that this is accurate.... does it need to have links returned?
     it("will throw an error if it fails to delete BelongsToLink for HasOne", async () => {
       expect.assertions(7);
 
@@ -1164,32 +1164,36 @@ describe("Delete", () => {
       }
     });
 
-    // TODO here
     it("will throw NullConstraintViolationError error if its trying to unlink a HasOne association (nullify the foreign key) on a related entity that is linked by a (non nullable) ForeignKey", async () => {
       expect.assertions(7);
 
+      const home: HomeTableItem = {
+        PK: "Home#123",
+        SK: "Home",
+        Id: "123",
+        Type: "Home",
+        "MLS#": "MLS-XXX",
+        CreatedAt: "2022-09-02T23:31:21.148Z",
+        UpdatedAt: "2022-09-03T23:31:21.148Z"
+      };
+
+      const address: MockTableEntityTableItem<Address> = {
+        PK: "Home#123",
+        SK: "Address",
+        Id: "002",
+        Type: "Address",
+        State: "CO",
+        HomeId: "111",
+        PhoneBookId: "222",
+        CreatedAt: "2021-10-17T09:31:15.148Z",
+        UpdatedAt: "2022-10-18T09:31:15.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
         Items: [
-          {
-            PK: "Home#123",
-            SK: "Home",
-            Id: "123",
-            Type: "Home",
-            State: "CO",
-            CreatedAt: "2021-10-15T08:31:15.148Z",
-            UpdatedAt: "2022-10-15T08:31:15.148Z"
-          },
+          home,
           // HasOne Address
-          {
-            PK: "Home#123",
-            SK: "Address",
-            Id: "002",
-            Type: "BelongsToLink",
-            ForeignEntityType: "Address",
-            ForeignKey: "123",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          }
+          address
         ]
       });
 
@@ -1223,42 +1227,48 @@ describe("Delete", () => {
       }
     });
 
-    it("will throw an error if it fails to delete BelongsToLinks in its own partition", async () => {
+    it("will throw an error if it fails to delete denormalized records in its own partition", async () => {
       expect.assertions(7);
+
+      const person: MockTableEntityTableItem<Person> = {
+        PK: "Person#123",
+        SK: "Person",
+        Id: "123",
+        Type: "Person",
+        Name: "Jon Doe",
+        CreatedAt: "2021-10-14T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      const pet: MockTableEntityTableItem<Pet> = {
+        PK: "Person#123",
+        SK: "Pet#001",
+        Id: "001",
+        Type: "Pet",
+        Name: "Pet-1",
+        OwnerId: person.Id,
+        CreatedAt: "2021-10-16T09:31:15.148Z",
+        UpdatedAt: "2022-10-17T09:31:15.148Z"
+      };
+
+      const home: HomeTableItem = {
+        PK: "Person#123",
+        SK: "Home",
+        Id: "002",
+        Type: "Home",
+        PersonId: person.Id,
+        "MLS#": "ABC123",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-15T09:31:15.148Z"
+      };
 
       mockQuery.mockResolvedValueOnce({
         Items: [
-          {
-            PK: "Person#123",
-            SK: "Person",
-            Id: "123",
-            Type: "Person",
-            Name: "Jon Doe",
-            CreatedAt: "2021-10-15T08:31:15.148Z",
-            UpdatedAt: "2022-10-15T08:31:15.148Z"
-          },
+          person,
           // HasMany Pets
-          {
-            PK: "Person#123",
-            SK: "Pet#111",
-            Id: "001",
-            Type: "BelongsToLink",
-            ForeignEntityType: "Pet",
-            ForeignKey: "111",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          },
+          pet,
           // HasOne Home
-          {
-            PK: "Person#123",
-            SK: "Home",
-            Id: "002",
-            Type: "BelongsToLink",
-            ForeignEntityType: "Home",
-            ForeignKey: "222",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          }
+          home
         ]
       });
 
@@ -1270,7 +1280,9 @@ describe("Delete", () => {
             { Code: "None" },
             { Code: "ConditionalCheckFailed" },
             { Code: "None" },
+            { Code: "None" },
             { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
             { Code: "None" }
           ],
           $metadata: {}
@@ -1283,7 +1295,7 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Pet#111"}'
+            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Pet#001"}'
           ),
           new ConditionalCheckFailedError(
             'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#123","sk":"Home"}'
@@ -1316,36 +1328,57 @@ describe("Delete", () => {
                     Key: { PK: "Person#123", SK: "Person" }
                   }
                 },
+                // (HasMany) Delete denormalized Pet from Person partition
                 {
-                  // Delete BelongsToLink for HasMany
                   Delete: {
                     TableName: "mock-table",
-                    Key: { PK: "Person#123", SK: "Pet#111" }
+                    Key: { PK: "Person#123", SK: "Pet#001" }
                   }
                 },
+                // (HasMany) Remove the nullable foreign key from Pet item
+                // TODO this will need to go find all denormalized pet records and update...
+                // Could I leverage logic within update?
                 {
-                  // Remove ForeignKey id for HasMany link
                   Update: {
                     TableName: "mock-table",
-                    Key: { PK: "Pet#111", SK: "Pet" },
-                    ExpressionAttributeNames: { "#OwnerId": "OwnerId" },
+                    Key: { PK: "Pet#001", SK: "Pet" },
+                    ExpressionAttributeNames: {
+                      "#OwnerId": "OwnerId"
+                    },
                     UpdateExpression: "REMOVE #OwnerId"
                   }
                 },
                 {
-                  // Delete BelongsToLink for HasOne
+                  // (HasMany) - Delete the Person record from the Pet partition
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Pet#001", SK: "Person" }
+                  }
+                },
+                {
+                  // (HasOne) Delete denormalized Home from Person partition
                   Delete: {
                     TableName: "mock-table",
                     Key: { PK: "Person#123", SK: "Home" }
                   }
                 },
                 {
-                  // Remove ForeignKey id for HasOne link
+                  // (HasOne) Remove the nullable foreign key from Home item
+                  // TODO this will need to go find all denormalized home records and update...
                   Update: {
                     TableName: "mock-table",
-                    Key: { PK: "Home#222", SK: "Home" },
-                    ExpressionAttributeNames: { "#PersonId": "PersonId" },
+                    Key: { PK: "Home#002", SK: "Home" },
+                    ExpressionAttributeNames: {
+                      "#PersonId": "PersonId"
+                    },
                     UpdateExpression: "REMOVE #PersonId"
+                  }
+                },
+                {
+                  // (HasOne) Delete denormalized Person from Home partition
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Home", SK: "Person" }
                   }
                 }
               ]
@@ -1359,11 +1392,13 @@ describe("Delete", () => {
   describe("types", () => {
     it("accepts a string as id", async () => {
       mockQuery.mockResolvedValueOnce({
-        Items: [{}]
+        Items: []
       });
 
       // @ts-expect-no-error Accepts a string as id
-      await MockModel.delete("id");
+      await MockModel.delete("id").catch(() => {
+        console.log("Testing types");
+      });
     });
   });
 });
