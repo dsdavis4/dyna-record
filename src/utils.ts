@@ -1,11 +1,6 @@
 import type DynaRecord from "./DynaRecord";
-import type {
-  DynamoTableItem,
-  BelongsToLinkDynamoItem,
-  Nullable
-} from "./types";
-import Metadata, { type TableMetadata } from "./metadata";
-import { BelongsToLink } from "./relationships";
+import type { DynamoTableItem, Nullable } from "./types";
+import Metadata from "./metadata";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type EntityAttributes } from "./operations";
 
@@ -112,19 +107,6 @@ export const isKeyOfObject = <T>(
   key: any
 ): key is keyof T => {
   return key in entity;
-};
-
-// TODO can this be deleted?
-/**
- * Type guard to check if the DynamoTableItem is a BelongsToLink
- * @param res DynamoTableItem
- * @returns boolean
- */
-export const isBelongsToLinkDynamoItem = (
-  res: DynamoTableItem,
-  tableMeta: TableMetadata
-): res is BelongsToLinkDynamoItem => {
-  return res[tableMeta.defaultAttributes.type.alias] === BelongsToLink.name;
 };
 
 /**
