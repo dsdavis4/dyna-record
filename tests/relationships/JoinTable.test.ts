@@ -22,6 +22,7 @@ import {
   OtherTableEntityTableItem
 } from "../integration/utils";
 import { NotFoundError } from "../../src";
+import Logger from "../../src/Logger";
 
 jest.mock("uuid"); // TODO delete
 
@@ -804,33 +805,53 @@ describe("JoinTable", () => {
     describe("create", () => {
       it("will not have type errors when the signature includes one of the joined models and all foreign keys", async () => {
         // @ts-expect-no-error: Signature includes model on join table, and all foreign keys
-        await AuthorBook.create({ authorId: "123", bookId: "456" });
+        await AuthorBook.create({ authorId: "123", bookId: "456" }).catch(
+          () => {
+            Logger.log("Testing types");
+          }
+        );
       });
 
       it("has an error if either of the foreign keys are missing", async () => {
         // @ts-expect-error: Missing a foreign key
-        await AuthorBook.create({ bookId: "456" });
+        await AuthorBook.create({ bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
         // @ts-expect-error: Missing a foreign key
-        await AuthorBook.create({ authorId: "123" });
+        await AuthorBook.create({ authorId: "123" }).catch(() => {
+          Logger.log("Testing types");
+        });
       });
 
       it("has an error if foreign keys are not valid keys", async () => {
         // @ts-expect-error: Invalid key
-        await AuthorBook.create({ bad: "123", bookId: "456" });
+        await AuthorBook.create({ bad: "123", bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
       });
 
       it("has an error if the foreign keys are not strings", async () => {
         // @ts-expect-error: Invalid key value
-        await AuthorBook.create({ authorId: 1, bookId: "456" });
+        await AuthorBook.create({ authorId: 1, bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
 
         // @ts-expect-error: Invalid key value
-        await AuthorBook.create({ authorId: true, bookId: "456" });
+        await AuthorBook.create({ authorId: true, bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
 
         // @ts-expect-error: Invalid key value
-        await AuthorBook.create({ authorId: false, bookId: "456" });
+        await AuthorBook.create({ authorId: false, bookId: "456" }).catch(
+          () => {
+            Logger.log("Testing types");
+          }
+        );
 
         // @ts-expect-error: Invalid key value
-        await AuthorBook.create({ authorId: null, bookId: "456" });
+        await AuthorBook.create({ authorId: null, bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
       });
     });
 
