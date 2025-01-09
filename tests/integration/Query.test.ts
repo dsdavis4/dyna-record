@@ -538,104 +538,10 @@ describe("Query", () => {
     });
   });
 
-  describe.skip("TODO", () => {
+  describe("can perform complex queries (arbitrary example)", () => {
     const operationSharedAssertions = (
       result: QueryResults<Customer>
     ): void => {
-      // TODO
-    };
-
-    beforeEach(() => {
-      // TODO
-    });
-
-    it("queryByKeys", async () => {
-      // TODO
-    });
-
-    it("queryByEntity", async () => {
-      // TODO
-    });
-  });
-
-  describe.skip("TODO", () => {
-    const operationSharedAssertions = (
-      result: QueryResults<Customer>
-    ): void => {
-      // TODO
-    };
-
-    beforeEach(() => {
-      // TODO
-    });
-
-    it("queryByKeys", async () => {
-      // TODO
-    });
-
-    it("queryByEntity", async () => {
-      // TODO
-    });
-  });
-
-  describe.skip("TODO", () => {
-    const operationSharedAssertions = (
-      result: QueryResults<Customer>
-    ): void => {
-      // TODO
-    };
-
-    beforeEach(() => {
-      // TODO
-    });
-
-    it("queryByKeys", async () => {
-      // TODO
-    });
-
-    it("queryByEntity", async () => {
-      // TODO
-    });
-  });
-
-  describe("queryByKeys", () => {
-    it("can perform complex queries (arbitrary example)", async () => {
-      expect.assertions(4);
-
-      const customer: MockTableEntityTableItem<Customer> = {
-        PK: "Customer#123",
-        SK: "Customer",
-        Id: "123",
-        Name: "Some Customer",
-        Address: "11 Some St",
-        Type: "Customer",
-        CreatedAt: "2021-09-15T04:26:31.148Z",
-        UpdatedAt: "2022-09-15T04:26:31.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [customer]
-      });
-
-      const result = await Customer.query(
-        {
-          pk: "Customer#123",
-          sk: { $beginsWith: "Order" }
-        },
-        {
-          filter: {
-            type: ["BelongsToLink", "Brewery"],
-            name: "Some Customer",
-            $or: [
-              {
-                address: ["11 Some St", "22 Other St"],
-                createdAt: { $beginsWith: "2021-09-15T" }
-              }
-            ]
-          }
-        }
-      );
-
       expect(result).toEqual([
         {
           pk: "Customer#123",
@@ -681,8 +587,112 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    };
+
+    beforeEach(() => {
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2021-09-15T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
     });
 
+    it("queryByKeys", async () => {
+      expect.assertions(4);
+
+      const result = await Customer.query(
+        {
+          pk: "Customer#123",
+          sk: { $beginsWith: "Order" }
+        },
+        {
+          filter: {
+            type: ["BelongsToLink", "Brewery"],
+            name: "Some Customer",
+            $or: [
+              {
+                address: ["11 Some St", "22 Other St"],
+                createdAt: { $beginsWith: "2021-09-15T" }
+              }
+            ]
+          }
+        }
+      );
+
+      operationSharedAssertions(result);
+    });
+
+    it("queryByEntity", async () => {
+      expect.assertions(4);
+
+      const result = await Customer.query("123", {
+        skCondition: { $beginsWith: "Order" },
+        filter: {
+          type: ["BelongsToLink", "Brewery"],
+          name: "Some Customer",
+          $or: [
+            {
+              address: ["11 Some St", "22 Other St"],
+              createdAt: { $beginsWith: "2021-09-15T" }
+            }
+          ]
+        }
+      });
+
+      operationSharedAssertions(result);
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe("queryByKeys", () => {
     it("can perform complete queries with 'OR' (arbitrary example)", async () => {
       expect.assertions(5);
 
@@ -935,85 +945,6 @@ describe("Query", () => {
   });
 
   describe("queryByEntity", () => {
-    it("can perform complex queries (arbitrary example)", async () => {
-      expect.assertions(4);
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "Customer",
-            Id: "123",
-            Name: "Some Customer",
-            Address: "11 Some St",
-            Type: "Customer",
-            CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z"
-          }
-        ]
-      });
-
-      const result = await Customer.query("123", {
-        skCondition: { $beginsWith: "Order" },
-        filter: {
-          type: ["BelongsToLink", "Brewery"],
-          name: "Some Customer",
-          $or: [
-            {
-              address: ["11 Some St", "22 Other St"],
-              createdAt: { $beginsWith: "2021-09-15T" }
-            }
-          ]
-        }
-      });
-
-      expect(result).toEqual([
-        {
-          pk: "Customer#123",
-          sk: "Customer",
-          address: "11 Some St",
-          id: "123",
-          name: "Some Customer",
-          type: "Customer",
-          createdAt: new Date("2021-09-15T04:26:31.148Z"),
-          updatedAt: new Date("2022-09-15T04:26:31.148Z")
-        }
-      ]);
-      result.forEach((res, index) => {
-        expect(res).toBeInstanceOf(Customer);
-      });
-
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            TableName: "mock-table",
-            KeyConditionExpression: "#PK = :PK7 AND begins_with(#SK, :SK8)",
-            ExpressionAttributeNames: {
-              "#Address": "Address",
-              "#Name": "Name",
-              "#PK": "PK",
-              "#SK": "SK",
-              "#Type": "Type",
-              "#CreatedAt": "CreatedAt"
-            },
-            ExpressionAttributeValues: {
-              ":Address1": "11 Some St",
-              ":Address2": "22 Other St",
-              ":Name6": "Some Customer",
-              ":PK7": "Customer#123",
-              ":SK8": "Order",
-              ":Type4": "BelongsToLink",
-              ":Type5": "Brewery",
-              ":CreatedAt3": "2021-09-15T"
-            },
-            FilterExpression:
-              "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)"
-          }
-        ]
-      ]);
-      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
-    });
-
     describe("types", () => {
       it("does not serialize relationships", async () => {
         mockQuery.mockResolvedValueOnce({
