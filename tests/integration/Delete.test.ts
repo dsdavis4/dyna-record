@@ -769,7 +769,7 @@ describe("Delete", () => {
       }
     });
 
-    it("will throw an error if it fails to delete BelongsToLink for HasMany", async () => {
+    it("will throw an error if it fails to delete denormalized records for HasMany", async () => {
       expect.assertions(7);
 
       // Denormalized Person (Owner) link in Pet partition
