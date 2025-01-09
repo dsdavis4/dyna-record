@@ -11,7 +11,7 @@ import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
-import { QueryResults } from "../../src/operations";
+import { type QueryResults } from "../../src/operations";
 
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
