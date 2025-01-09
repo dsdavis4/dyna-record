@@ -1028,33 +1028,47 @@ describe("Query", () => {
     it("queries by PK SK begins with", async () => {
       expect.assertions(6);
 
+      // Denormalized Order in Customer Partition
+      const order1: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order2: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#002",
+        Id: "002",
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "654",
+        OrderDate: "2022-10-30T09:31:15.148Z",
+        CreatedAt: "2021-10-21T09:31:15.148Z",
+        UpdatedAt: "2022-10-22T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order3: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#003",
+        Id: "003",
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "321",
+        OrderDate: "2022-11-30T09:31:15.148Z",
+        CreatedAt: "2021-11-21T09:31:15.148Z",
+        UpdatedAt: "2022-11-22T09:31:15.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "Order#111",
-            Id: "001",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "Order#112",
-            Id: "003",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "Order#113",
-            Id: "004",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z"
-          }
-        ]
+        Items: [order1, order2, order3]
       });
 
       const result = await Customer.query("123", {
@@ -1064,31 +1078,40 @@ describe("Query", () => {
       expect(result).toEqual([
         {
           pk: "Customer#123",
-          sk: "Order#111",
+          sk: "Order#001",
           id: "001",
-          type: "BelongsToLink",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-17T09:31:15.148Z"),
+          paymentMethodId: "987",
           createdAt: new Date("2021-10-15T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-15T09:31:15.148Z")
+          updatedAt: new Date("2022-10-16T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
-          sk: "Order#112",
+          sk: "Order#002",
+          id: "002",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-30T09:31:15.148Z"),
+          paymentMethodId: "654",
+          createdAt: new Date("2021-10-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-22T09:31:15.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "Order#003",
           id: "003",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-11-01T23:31:21.148Z"),
-          updatedAt: new Date("2022-11-01T23:31:21.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "Order#113",
-          id: "004",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-09-01T23:31:21.148Z"),
-          updatedAt: new Date("2022-09-01T23:31:21.148Z")
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-11-30T09:31:15.148Z"),
+          paymentMethodId: "321",
+          createdAt: new Date("2021-11-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-11-22T09:31:15.148Z")
         }
       ]);
       result.forEach(res => {
-        expect(res).toBeInstanceOf(BelongsToLink);
+        expect(res).toBeInstanceOf(Order);
       });
 
       expect(mockedQueryCommand.mock.calls).toEqual([
@@ -1107,42 +1130,47 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
-    it("queries with filter", async () => {
+    it("queries with filter on attributes that are part of included entities", async () => {
       expect.assertions(4);
 
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "9876",
+        CustomerId: "123",
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "PaymentMethod#117",
-            Id: "008",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z"
-          }
-        ]
+        Items: [paymentMethod]
       });
 
       const result = await Customer.query("123", {
         filter: {
-          type: "BelongsToLink",
-          createdAt: "2021-11-21T12:31:21.148Z"
+          type: "PaymentMethod",
+          lastFour: "9876"
         }
       });
 
       expect(result).toEqual([
         {
           pk: "Customer#123",
-          sk: "PaymentMethod#117",
-          id: "008",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-11-21T12:31:21.148Z"),
-          updatedAt: new Date("2022-11-21T12:31:21.148Z")
+          sk: "PaymentMethod#004",
+          id: "004",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "9876",
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
         }
       ]);
 
       result.forEach(res => {
-        expect(res).toBeInstanceOf(BelongsToLink);
+        expect(res).toBeInstanceOf(PaymentMethod);
       });
 
       expect(mockedQueryCommand.mock.calls).toEqual([
@@ -1151,14 +1179,14 @@ describe("Query", () => {
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#Type": "Type",
-              "#CreatedAt": "CreatedAt"
+              "#LastFour": "LastFour"
             },
             ExpressionAttributeValues: {
               ":PK3": "Customer#123",
-              ":Type1": "BelongsToLink",
-              ":CreatedAt2": "2021-11-21T12:31:21.148Z"
+              ":Type1": "PaymentMethod",
+              ":LastFour2": "9876"
             },
-            FilterExpression: "#Type = :Type1 AND #CreatedAt = :CreatedAt2",
+            FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
             KeyConditionExpression: "#PK = :PK3",
             TableName: "mock-table"
           }
