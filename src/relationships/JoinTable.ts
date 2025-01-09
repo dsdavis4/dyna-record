@@ -1,6 +1,10 @@
 import type DynaRecord from "../DynaRecord";
-import { TransactGetBuilder } from "../dynamo-utils";
+import {
+  TransactGetBuilder,
+  type TransactGetItemResponses
+} from "../dynamo-utils";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
+import { NotFoundError } from "../errors";
 import Metadata, {
   type TableMetadata,
   type JoinTableMetadata
@@ -162,6 +166,15 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
     const transactionResults = await transactionGetBuilder.executeTransaction();
 
+    if (transactionResults.length !== 2) {
+      const errorMessage = this.preFetchNotFoundErrorMessage(
+        transactionResults,
+        entities,
+        ids
+      );
+      throw new NotFoundError(errorMessage);
+    }
+
     return transactionResults.reduce<TableItemLookup>((acc, res) => {
       if (res.Item !== undefined) {
         acc[res.Item[idAlias]] = res.Item;
@@ -317,6 +330,36 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       entities: { parentEntity, linkedEntity },
       ids: { parentId, linkedEntityId }
     };
+  }
+
+  private static preFetchNotFoundErrorMessage(
+    transactionResults: TransactGetItemResponses,
+    entities: JoinedEntityClasses,
+    ids: JoinedKeys
+  ): string {
+    const joinedEntityData = [
+      { entityId: ids.parentId, entityName: entities.linkedEntity.name },
+      { entityId: ids.linkedEntityId, entityName: entities.parentEntity.name }
+    ];
+
+    const tableMeta = Metadata.getEntityTable(entities.parentEntity.name);
+    const idAlias = tableMeta.defaultAttributes.id.alias;
+
+    const foundEntityIds = new Set(
+      transactionResults
+        .filter(result => result?.Item)
+        .map(result => result.Item?.[idAlias])
+    );
+
+    const missingEntities = joinedEntityData.filter(entityData => {
+      return !foundEntityIds.has(entityData.entityId); // If not in Set, it's missing
+    });
+
+    const missingEntityStr = missingEntities
+      .map(entity => `(${entity.entityName}: ${entity.entityId})`)
+      .join(", ");
+
+    return `Entities not found: ${missingEntityStr}`;
   }
 }
 

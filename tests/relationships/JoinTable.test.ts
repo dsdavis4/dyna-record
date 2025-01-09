@@ -5,6 +5,7 @@ import {
   Course,
   Student,
   StudentCourse,
+  Teacher,
   User,
   UserWebsite,
   Website
@@ -20,6 +21,7 @@ import {
   MockTableEntityTableItem,
   OtherTableEntityTableItem
 } from "../integration/utils";
+import { NotFoundError } from "../../src";
 
 jest.mock("uuid"); // TODO delete
 
@@ -498,7 +500,115 @@ describe("JoinTable", () => {
       }
     });
 
-    it("throws an error if either of the entities do not exist", async () => {
+    describe("NotFoundError - when either of the entities are missing at pre fetch", () => {
+      it("first entity of join table missing", async () => {
+        expect.assertions(2);
+
+        const author: MockTableEntityTableItem<Author> = {
+          PK: "Author#1",
+          SK: "Author",
+          Id: "1",
+          Type: "Author",
+          Name: "Author-1",
+          CreatedAt: "2024-02-27T03:19:52.667Z",
+          UpdatedAt: "2024-02-27T03:19:52.667Z"
+        };
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: author }]
+        });
+
+        try {
+          await AuthorBook.create({ authorId: "1", bookId: "2" });
+        } catch (e) {
+          expect(e).toEqual(new NotFoundError("Entities not found: (Book: 2)"));
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+        }
+      });
+
+      it("second entity of join table missing", async () => {
+        expect.assertions(2);
+
+        const book: MockTableEntityTableItem<Book> = {
+          PK: "Book#2",
+          SK: "Book",
+          Id: "2",
+          Type: "Book",
+          Name: "Some Name",
+          NumPages: 100,
+          CreatedAt: "2021-10-15T08:31:15.148Z",
+          UpdatedAt: "2022-10-15T08:31:15.148Z"
+        };
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: book }]
+        });
+
+        try {
+          await AuthorBook.create({ authorId: "1", bookId: "2" });
+        } catch (e) {
+          expect(e).toEqual(
+            new NotFoundError("Entities not found: (Author: 1)")
+          );
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+        }
+      });
+
+      it("both entities of join table missing", async () => {
+        expect.assertions(2);
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: []
+        });
+
+        try {
+          await AuthorBook.create({ authorId: "1", bookId: "2" });
+        } catch (e) {
+          expect(e).toEqual(
+            new NotFoundError("Entities not found: (Author: 1), (Book: 2)")
+          );
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+        }
+      });
+
+      it("other table style - throws an error if the entity does not exist at pre fetch", async () => {
+        expect.assertions(2);
+
+        const course: OtherTableEntityTableItem<Course> = {
+          myPk: "Course|456",
+          mySk: "Course",
+          id: "456",
+          type: "Course",
+          name: "Math",
+          teacherId: "001",
+          createdAt: "2023-01-15T12:12:18.123Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        };
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: course }]
+        });
+
+        try {
+          await StudentCourse.create({ studentId: "123", courseId: "456" });
+        } catch (e) {
+          expect(e).toEqual(
+            new NotFoundError("Entities not found: (Student: 123)")
+          );
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+        }
+      });
+    });
+
+    it("throws an error if either of the entities existed at pre fetch but were deleted before the transaction ran", async () => {
       expect.assertions(2);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
