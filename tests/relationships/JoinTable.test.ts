@@ -5,7 +5,9 @@ import {
   Course,
   Student,
   StudentCourse,
-  UserWebsite
+  User,
+  UserWebsite,
+  Website
 } from "../integration/mockModels";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -325,16 +327,61 @@ describe("JoinTable", () => {
     });
 
     it("with custom id field - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
-      expect.assertions(3);
+      expect.assertions(4);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      const user: MockTableEntityTableItem<User> = {
+        PK: "User#email@email.com",
+        SK: "User",
+        Id: "email@email.com",
+        Type: "User",
+        Name: "Some Name",
+        Email: "test@test.com",
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      const website: MockTableEntityTableItem<Website> = {
+        PK: "Website#2",
+        SK: "Website",
+        Id: "2",
+        Type: "Website",
+        Name: "Website-1",
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      };
+
+      mockTransactGetItems.mockResolvedValue({
+        Responses: [{ Item: user }, { Item: website }]
+      });
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await UserWebsite.create({ userId: "email@email.com", websiteId: "2" })
       ).toEqual(undefined);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Website#2", SK: "Website" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "User#email@email.com", SK: "User" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -345,12 +392,12 @@ describe("JoinTable", () => {
                   Item: {
                     PK: "Website#2",
                     SK: "User#email@email.com",
-                    Type: "BelongsToLink",
-                    ForeignEntityType: "User",
-                    ForeignKey: "email@email.com",
-                    Id: "uuid1",
-                    CreatedAt: "2023-10-16T03:31:35.918Z",
-                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    Id: "email@email.com",
+                    Type: "User",
+                    Name: "Some Name",
+                    Email: "test@test.com",
+                    CreatedAt: "2021-10-15T08:31:15.148Z",
+                    UpdatedAt: "2022-10-15T08:31:15.148Z"
                   },
                   TableName: "mock-table"
                 }
@@ -358,7 +405,10 @@ describe("JoinTable", () => {
               {
                 ConditionCheck: {
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Website#2", SK: "Website" },
+                  Key: {
+                    PK: "Website#2",
+                    SK: "Website"
+                  },
                   TableName: "mock-table"
                 }
               },
@@ -368,12 +418,11 @@ describe("JoinTable", () => {
                   Item: {
                     PK: "User#email@email.com",
                     SK: "Website#2",
-                    Type: "BelongsToLink",
-                    ForeignEntityType: "Website",
-                    ForeignKey: "2",
-                    Id: "uuid2",
-                    CreatedAt: "2023-10-16T03:31:35.918Z",
-                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    Id: "2",
+                    Type: "Website",
+                    Name: "Website-1",
+                    CreatedAt: "2024-02-27T03:19:52.667Z",
+                    UpdatedAt: "2024-02-27T03:19:52.667Z"
                   },
                   TableName: "mock-table"
                 }
@@ -381,7 +430,10 @@ describe("JoinTable", () => {
               {
                 ConditionCheck: {
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "User#email@email.com", SK: "User" },
+                  Key: {
+                    PK: "User#email@email.com",
+                    SK: "User"
+                  },
                   TableName: "mock-table"
                 }
               }
