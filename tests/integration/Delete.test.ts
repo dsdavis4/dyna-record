@@ -9,7 +9,8 @@ import {
   Course,
   User,
   Author,
-  Website
+  Website,
+  Address
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -1084,41 +1085,49 @@ describe("Delete", () => {
       }
     });
 
-    it("will throw NullConstraintViolationError error if its trying to unlink a HasMany association (nullify the foreign key) on a related entity that is linked by a NullableForeignKey", async () => {
+    it("will throw NullConstraintViolationError error if its trying to unlink a HasMany association (nullify the foreign key) on a related entity that is linked by a (non nullable) ForeignKey", async () => {
       expect.assertions(7);
+
+      const phoneBook: MockTableEntityTableItem<PhoneBook> = {
+        PK: "PhoneBook#123",
+        SK: "PhoneBook",
+        Id: "123",
+        Type: "PhoneBook",
+        Edition: "1",
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      const address1: MockTableEntityTableItem<Address> = {
+        PK: "PhoneBook#123",
+        SK: "Address#001",
+        Id: "001",
+        Type: "Address",
+        State: "CO",
+        HomeId: "111",
+        PhoneBookId: phoneBook.Id,
+        CreatedAt: "2021-10-16T09:31:15.148Z",
+        UpdatedAt: "2022-10-17T09:31:15.148Z"
+      };
+
+      const address2: MockTableEntityTableItem<Address> = {
+        PK: "PhoneBook#123",
+        SK: "Address#002",
+        Id: "002",
+        Type: "Address",
+        State: "AZ",
+        HomeId: "222",
+        PhoneBookId: phoneBook.Id,
+        CreatedAt: "2021-10-18T09:31:15.148Z",
+        UpdatedAt: "2022-10-19T09:31:15.148Z"
+      };
 
       mockQuery.mockResolvedValueOnce({
         Items: [
-          {
-            PK: "PhoneBook#123",
-            SK: "PhoneBook",
-            Id: "123",
-            Type: "PhoneBook",
-            State: "CO",
-            CreatedAt: "2021-10-15T08:31:15.148Z",
-            UpdatedAt: "2022-10-15T08:31:15.148Z"
-          },
-          // HasOne Address
-          {
-            PK: "PhoneBook#123",
-            SK: "Address",
-            Id: "002",
-            Type: "BelongsToLink",
-            ForeignEntityType: "Address",
-            ForeignKey: "123",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          },
-          {
-            PK: "PhoneBook#123",
-            SK: "Address",
-            Id: "003",
-            Type: "BelongsToLink",
-            ForeignEntityType: "Address",
-            ForeignKey: "123",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          }
+          phoneBook,
+          // HasMany Address
+          address1,
+          address2
         ]
       });
 
@@ -1128,10 +1137,10 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new NullConstraintViolationError(
-            `Cannot set Address with id: '002' attribute 'phoneBookId' to null`
+            `Cannot set Address with id: '001' attribute 'phoneBookId' to null`
           ),
           new NullConstraintViolationError(
-            `Cannot set Address with id: '003' attribute 'phoneBookId' to null`
+            `Cannot set Address with id: '002' attribute 'phoneBookId' to null`
           )
         ]);
         expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
@@ -1155,7 +1164,8 @@ describe("Delete", () => {
       }
     });
 
-    it("will throw NullConstraintViolationError error if its trying to unlink a HasOne association (nullify the foreign key) on a related entity that is linked by a NullableForeignKey", async () => {
+    // TODO here
+    it("will throw NullConstraintViolationError error if its trying to unlink a HasOne association (nullify the foreign key) on a related entity that is linked by a (non nullable) ForeignKey", async () => {
       expect.assertions(7);
 
       mockQuery.mockResolvedValueOnce({
