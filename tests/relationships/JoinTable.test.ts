@@ -1,18 +1,28 @@
 import {
+  Author,
   AuthorBook,
+  Book,
   StudentCourse,
   UserWebsite
 } from "../integration/mockModels";
 import { v4 as uuidv4 } from "uuid";
-import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  TransactWriteCommand,
+  TransactGetCommand
+} from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { MockTableEntityTableItem } from "../integration/utils";
 
-jest.mock("uuid");
+jest.mock("uuid"); // TODO delete
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+
 const mockSend = jest.fn();
-const mockedUuidv4 = jest.mocked(uuidv4);
+const mockTransactGetItems = jest.fn();
+
+const mockedUuidv4 = jest.mocked(uuidv4); // TODO delete
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -34,11 +44,22 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
+            }
+
+            if (command.name === "TransactWriteCommand") {
+              return await Promise.resolve(
+                "TransactWriteCommand-mock-response"
+              );
+            }
           })
         };
       })
     },
-
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
+    }),
     TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     })
@@ -47,81 +68,132 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 describe("JoinTable", () => {
   beforeAll(() => {
+    // TODO delete
     jest.useFakeTimers();
   });
 
   afterAll(() => {
+    // TODO delete
     jest.useRealTimers();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
+
+    mockSend.mockReset();
+    mockTransactGetItems.mockReset();
   });
 
   describe("create", () => {
-    it("will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
-      expect.assertions(3);
+    it("will denormalize links for each item in a HasAndBelongsToMany relationship", async () => {
+      expect.assertions(4);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      const author: MockTableEntityTableItem<Author> = {
+        PK: "Author#1",
+        SK: "Author",
+        Id: "1",
+        Type: "Author",
+        Name: "Author-1",
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      };
+
+      const book: MockTableEntityTableItem<Book> = {
+        PK: "Book#2",
+        SK: "Book",
+        Id: "2",
+        Type: "Book",
+        Name: "Some Name",
+        NumPages: 100,
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      mockTransactGetItems.mockResolvedValue({
+        Responses: [{ Item: author }, { Item: book }]
+      });
 
       // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       expect(await AuthorBook.create({ authorId: "1", bookId: "2" })).toEqual(
         undefined
       );
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Author#1", SK: "Author" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#2", SK: "Book" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
-                // Create BelongsToLink to link Book to Author
                 Put: {
-                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "Author#1",
                     SK: "Book#2",
-                    Id: "uuid1",
-                    ForeignKey: "2",
-                    ForeignEntityType: "Book",
-                    Type: "BelongsToLink",
-                    CreatedAt: "2023-10-16T03:31:35.918Z",
-                    UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  }
+                    Id: "2",
+                    Type: "Book",
+                    Name: "Some Name",
+                    NumPages: 100,
+                    CreatedAt: "2021-10-15T08:31:15.148Z",
+                    UpdatedAt: "2022-10-15T08:31:15.148Z"
+                  },
+                  TableName: "mock-table"
                 }
               },
-              // Check that the author exists
               {
                 ConditionCheck: {
-                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Author#1", SK: "Author" }
+                  Key: {
+                    PK: "Author#1",
+                    SK: "Author"
+                  },
+                  TableName: "mock-table"
                 }
               },
               {
-                // Create BelongsToLink to link Book to Author
                 Put: {
-                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "Book#2",
                     SK: "Author#1",
-                    Id: "uuid2",
-                    ForeignKey: "1",
-                    ForeignEntityType: "Author",
-                    Type: "BelongsToLink",
-                    CreatedAt: "2023-10-16T03:31:35.918Z",
-                    UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  }
+                    Id: "1",
+                    Type: "Author",
+                    Name: "Author-1",
+                    CreatedAt: "2024-02-27T03:19:52.667Z",
+                    UpdatedAt: "2024-02-27T03:19:52.667Z"
+                  },
+                  TableName: "mock-table"
                 }
               },
               {
-                // Check that the book exists
                 ConditionCheck: {
-                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Book#2", SK: "Book" }
+                  Key: {
+                    PK: "Book#2",
+                    SK: "Book"
+                  },
+                  TableName: "mock-table"
                 }
               }
             ]
