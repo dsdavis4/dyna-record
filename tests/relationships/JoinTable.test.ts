@@ -608,13 +608,35 @@ describe("JoinTable", () => {
       });
     });
 
-    it("throws an error if either of the entities existed at pre fetch but were deleted before the transaction ran", async () => {
+    it("throws an error if both of the entities existed at pre fetch but were deleted before the transaction ran", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      const author: MockTableEntityTableItem<Author> = {
+        PK: "Author#1",
+        SK: "Author",
+        Id: "1",
+        Type: "Author",
+        Name: "Author-1",
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      };
 
-      mockSend.mockImplementationOnce(() => {
+      const book: MockTableEntityTableItem<Book> = {
+        PK: "Book#2",
+        SK: "Book",
+        Id: "2",
+        Type: "Book",
+        Name: "Some Name",
+        NumPages: 100,
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: author }, { Item: book }]
+      });
+
+      mockTransactWriteCommand.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
           message: "MockMessage",
           CancellationReasons: [
