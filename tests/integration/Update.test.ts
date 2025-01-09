@@ -43,6 +43,7 @@ import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
+import Logger from "../../src/Logger";
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockTransactGetCommand = jest.mocked(TransactGetCommand);
@@ -4961,7 +4962,7 @@ describe("Update", () => {
           // @ts-expect-error relationship attributes are not allowed
           customer: new Customer()
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
       });
 
@@ -4999,7 +5000,7 @@ describe("Update", () => {
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
       });
 
@@ -5008,28 +5009,28 @@ describe("Update", () => {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           id: "123"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           type: "456"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           createdAt: new Date()
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           updatedAt: new Date()
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
       });
 
@@ -5038,14 +5039,14 @@ describe("Update", () => {
           // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
           pk: "123"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
           sk: "456"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
       });
 
@@ -5056,7 +5057,7 @@ describe("Update", () => {
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
         }).catch(() => {
-          console.log("Testing types");
+          Logger.log("Testing types");
         });
       });
 
@@ -5103,7 +5104,7 @@ describe("Update", () => {
             customer: new Customer()
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
       });
 
@@ -5147,7 +5148,7 @@ describe("Update", () => {
             customerId: "456"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
       });
 
@@ -5160,7 +5161,7 @@ describe("Update", () => {
             id: "123"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
 
         await instance
@@ -5169,7 +5170,7 @@ describe("Update", () => {
             type: "456"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
 
         await instance
@@ -5178,7 +5179,7 @@ describe("Update", () => {
             createdAt: new Date()
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
 
         await instance
@@ -5187,7 +5188,7 @@ describe("Update", () => {
             updatedAt: new Date()
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
       });
 
@@ -5200,7 +5201,7 @@ describe("Update", () => {
             pk: "123"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
 
         await instance
@@ -5209,7 +5210,7 @@ describe("Update", () => {
             sk: "456"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
       });
 
@@ -5224,7 +5225,7 @@ describe("Update", () => {
             customerId: "456"
           })
           .catch(() => {
-            console.log("Testing types");
+            Logger.log("Testing types");
           });
       });
 

@@ -36,6 +36,7 @@ import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
 } from "./utils";
+import Logger from "../../src/Logger";
 
 jest.mock("uuid");
 
@@ -1966,7 +1967,7 @@ describe("Create", () => {
       });
 
       // @ts-expect-error relationships are not part of return value
-      console.log(res.paymentMethod);
+      Logger.log(res.paymentMethod);
     });
   });
 });
