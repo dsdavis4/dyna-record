@@ -7,7 +7,8 @@ import {
   PhoneBook,
   Book,
   Course,
-  User
+  User,
+  Author
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -403,29 +404,29 @@ describe("Delete", () => {
   it("will delete an entity from a HasAndBelongsToMany relationship", async () => {
     expect.assertions(6);
 
+    const book: MockTableEntityTableItem<Book> = {
+      PK: "Book#123",
+      SK: "Book",
+      Id: "123",
+      Type: "Book",
+      Name: "Some Name",
+      NumPages: 100,
+      CreatedAt: "2021-10-15T08:31:15.148Z",
+      UpdatedAt: "2022-10-15T08:31:15.148Z"
+    };
+
+    const author: MockTableEntityTableItem<Author> = {
+      PK: "Book#123",
+      SK: "Author#456",
+      Id: "456",
+      Type: "Author",
+      Name: "Author-1",
+      CreatedAt: "2024-02-27T03:19:52.667Z",
+      UpdatedAt: "2024-02-27T03:19:52.667Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Book#123",
-          SK: "Book",
-          Id: "123",
-          Type: "Book",
-          Name: "Some Name",
-          NumPages: 100,
-          CreatedAt: "2021-10-15T08:31:15.148Z",
-          UpdatedAt: "2022-10-15T08:31:15.148Z"
-        },
-        {
-          PK: "Book#123",
-          SK: "Author#456",
-          Id: "001",
-          Type: "BelongsToLink",
-          ForeignEntityType: "Author",
-          ForeignKey: "456",
-          CreatedAt: "2024-02-27T03:19:52.667Z",
-          UpdatedAt: "2024-02-27T03:19:52.667Z"
-        }
-      ]
+      Items: [book, author]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -458,6 +459,7 @@ describe("Delete", () => {
                 TableName: "mock-table"
               }
             },
+            // Delete denormalized records
             {
               Delete: {
                 Key: { PK: "Book#123", SK: "Author#456" },
