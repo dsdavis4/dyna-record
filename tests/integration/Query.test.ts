@@ -447,23 +447,94 @@ describe("Query", () => {
     });
   });
 
-  describe.skip("TODO", () => {
+  describe("queries with filter on attributes that are part of included entities", () => {
     const operationSharedAssertions = (
       result: QueryResults<Customer>
     ): void => {
-      // TODO
+      expect(result).toEqual([
+        {
+          pk: "Customer#123",
+          sk: "PaymentMethod#004",
+          id: "004",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "9876",
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
+        }
+      ]);
+
+      result.forEach(res => {
+        expect(res).toBeInstanceOf(PaymentMethod);
+      });
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type",
+              "#LastFour": "LastFour"
+            },
+            ExpressionAttributeValues: {
+              ":PK3": "Customer#123",
+              ":Type1": "PaymentMethod",
+              ":LastFour2": "9876"
+            },
+            FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
+            KeyConditionExpression: "#PK = :PK3",
+            TableName: "mock-table"
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     };
 
     beforeEach(() => {
-      // TODO
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "9876",
+        CustomerId: "123",
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [paymentMethod]
+      });
     });
 
     it("queryByKeys", async () => {
-      // TODO
+      expect.assertions(4);
+
+      const result = await Customer.query(
+        { pk: "Customer#123" },
+        {
+          filter: {
+            type: "PaymentMethod",
+            lastFour: "9876"
+          }
+        }
+      );
+
+      operationSharedAssertions(result);
     });
 
     it("queryByEntity", async () => {
-      // TODO
+      expect.assertions(4);
+
+      const result = await Customer.query("123", {
+        filter: {
+          type: "PaymentMethod",
+          lastFour: "9876"
+        }
+      });
+
+      operationSharedAssertions(result);
     });
   });
 
@@ -528,74 +599,6 @@ describe("Query", () => {
   });
 
   describe("queryByKeys", () => {
-    it("queries with filter on attributes that are part of included entities", async () => {
-      expect.assertions(4);
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#004",
-        Id: "004",
-        Type: "PaymentMethod",
-        LastFour: "9876",
-        CustomerId: "123",
-        CreatedAt: "2021-10-01T12:31:21.148Z",
-        UpdatedAt: "2022-10-02T12:31:21.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [paymentMethod]
-      });
-
-      const result = await Customer.query(
-        { pk: "Customer#123" },
-        {
-          filter: {
-            type: "PaymentMethod",
-            lastFour: "9876"
-          }
-        }
-      );
-
-      expect(result).toEqual([
-        {
-          pk: "Customer#123",
-          sk: "PaymentMethod#004",
-          id: "004",
-          type: "PaymentMethod",
-          customerId: "123",
-          lastFour: "9876",
-          createdAt: new Date("2021-10-01T12:31:21.148Z"),
-          updatedAt: new Date("2022-10-02T12:31:21.148Z")
-        }
-      ]);
-
-      result.forEach(res => {
-        expect(res).toBeInstanceOf(PaymentMethod);
-      });
-
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            ExpressionAttributeNames: {
-              "#PK": "PK",
-              "#Type": "Type",
-              "#LastFour": "LastFour"
-            },
-            ExpressionAttributeValues: {
-              ":PK3": "Customer#123",
-              ":Type1": "PaymentMethod",
-              ":LastFour2": "9876"
-            },
-            FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
-            KeyConditionExpression: "#PK = :PK3",
-            TableName: "mock-table"
-          }
-        ]
-      ]);
-      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
-    });
-
     it("can perform complex queries (arbitrary example)", async () => {
       expect.assertions(4);
 
@@ -932,71 +935,6 @@ describe("Query", () => {
   });
 
   describe("queryByEntity", () => {
-    it("queries with filter on attributes that are part of included entities", async () => {
-      expect.assertions(4);
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#004",
-        Id: "004",
-        Type: "PaymentMethod",
-        LastFour: "9876",
-        CustomerId: "123",
-        CreatedAt: "2021-10-01T12:31:21.148Z",
-        UpdatedAt: "2022-10-02T12:31:21.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [paymentMethod]
-      });
-
-      const result = await Customer.query("123", {
-        filter: {
-          type: "PaymentMethod",
-          lastFour: "9876"
-        }
-      });
-
-      expect(result).toEqual([
-        {
-          pk: "Customer#123",
-          sk: "PaymentMethod#004",
-          id: "004",
-          type: "PaymentMethod",
-          customerId: "123",
-          lastFour: "9876",
-          createdAt: new Date("2021-10-01T12:31:21.148Z"),
-          updatedAt: new Date("2022-10-02T12:31:21.148Z")
-        }
-      ]);
-
-      result.forEach(res => {
-        expect(res).toBeInstanceOf(PaymentMethod);
-      });
-
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            ExpressionAttributeNames: {
-              "#PK": "PK",
-              "#Type": "Type",
-              "#LastFour": "LastFour"
-            },
-            ExpressionAttributeValues: {
-              ":PK3": "Customer#123",
-              ":Type1": "PaymentMethod",
-              ":LastFour2": "9876"
-            },
-            FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
-            KeyConditionExpression: "#PK = :PK3",
-            TableName: "mock-table"
-          }
-        ]
-      ]);
-      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
-    });
-
     it("can perform complex queries (arbitrary example)", async () => {
       expect.assertions(4);
 
