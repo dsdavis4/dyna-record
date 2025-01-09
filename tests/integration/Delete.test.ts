@@ -772,17 +772,31 @@ describe("Delete", () => {
     it("will throw an error if it fails to delete BelongsToLink for HasMany", async () => {
       expect.assertions(7);
 
+      // Denormalized Person (Owner) link in Pet partition
+      const person: MockTableEntityTableItem<Person> = {
+        PK: "Pet#456",
+        SK: "Person",
+        Id: "456",
+        Type: "Person",
+        Name: "Jon Doe",
+        CreatedAt: "2021-10-14T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      // Entity being deleted
+      const pet: MockTableEntityTableItem<Pet> = {
+        PK: "Pet#123",
+        SK: "Pet",
+        Id: "123",
+        Type: "Pet",
+        Name: "Fido",
+        OwnerId: person.Id,
+        CreatedAt: "2022-09-02T23:31:21.148Z",
+        UpdatedAt: "2022-09-03T23:31:21.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Pet#123",
-            SK: "Pet",
-            Id: "123",
-            Type: "Pet",
-            Name: "Fido",
-            OwnerId: "456"
-          }
-        ]
+        Items: [pet, person]
       });
 
       mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
@@ -791,7 +805,8 @@ describe("Delete", () => {
           message: "MockMessage",
           CancellationReasons: [
             { Code: "None" },
-            { Code: "ConditionalCheckFailed" }
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
           ],
           $metadata: {}
         });
@@ -827,16 +842,24 @@ describe("Delete", () => {
             {
               TransactItems: [
                 {
+                  // Delete the entity
                   Delete: {
                     TableName: "mock-table",
                     Key: { PK: "Pet#123", SK: "Pet" }
                   }
                 },
                 {
-                  // Delete belongs to link for associated hasMany
+                  // Delete denormalized Pet from Person partition
                   Delete: {
                     TableName: "mock-table",
                     Key: { PK: "Person#456", SK: "Pet#123" }
+                  }
+                },
+                {
+                  // Delete denormalized Person from Pet partition
+                  Delete: {
+                    Key: { PK: "Pet#456", SK: "Person" },
+                    TableName: "mock-table"
                   }
                 }
               ]
@@ -846,23 +869,34 @@ describe("Delete", () => {
       }
     });
 
-    // TODO check that this is accurate.... does it need to have links returned?
     it("will throw an error if it fails to delete BelongsToLink for HasOne", async () => {
       expect.assertions(7);
 
+      // Denormalized Person in Home partition
+      const person: MockTableEntityTableItem<Person> = {
+        PK: "Home#123",
+        SK: "Person",
+        Id: "456",
+        Type: "Person",
+        Name: "Jon Doe",
+        CreatedAt: "2021-10-14T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      // Entity being deleted
       const home: HomeTableItem = {
         PK: "Home#123",
         SK: "Home",
         Id: "123",
         Type: "Home",
         "MLS#": "MLS-XXX",
-        PersonId: "456",
+        PersonId: person.Id,
         CreatedAt: "2022-09-02T23:31:21.148Z",
         UpdatedAt: "2022-09-03T23:31:21.148Z"
       };
 
       mockQuery.mockResolvedValueOnce({
-        Items: [home]
+        Items: [home, person]
       });
 
       mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
@@ -871,7 +905,8 @@ describe("Delete", () => {
           message: "MockMessage",
           CancellationReasons: [
             { Code: "None" },
-            { Code: "ConditionalCheckFailed" }
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
           ],
           $metadata: {}
         });
@@ -913,10 +948,17 @@ describe("Delete", () => {
                   }
                 },
                 {
-                  // Delete belongs to link for associated HasOne
+                  // Delete denormalize Home record from Person Partition
                   Delete: {
                     TableName: "mock-table",
                     Key: { PK: "Person#456", SK: "Home" }
+                  }
+                },
+                {
+                  // Delete denormalize Person record from Home Partition
+                  Delete: {
+                    Key: { PK: "Home#123", SK: "Person" },
+                    TableName: "mock-table"
                   }
                 }
               ]
