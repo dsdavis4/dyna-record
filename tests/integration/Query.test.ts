@@ -8,7 +8,7 @@ import {
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../../src/relationships";
 import {
-  OtherTableEntityTableItem,
+  type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
 
