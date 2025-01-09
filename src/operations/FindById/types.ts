@@ -1,11 +1,9 @@
-import type { QueryItems } from "../../dynamo-utils";
 import type DynaRecord from "../../DynaRecord";
 import type {
   EntityAttributes,
   FunctionFields,
   RelationshipAttributeNames
 } from "../types";
-import type { BelongsToLinkDynamoItem } from "../../types";
 import { type QueryResult, type QueryResults } from "../Query";
 
 /**

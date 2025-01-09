@@ -4,12 +4,7 @@ import type {
   QueryOptions as QueryBuilderOptions,
   SortKeyCondition
 } from "../../query-utils";
-import type { BelongsToLink } from "../../relationships";
-import type {
-  EntityAttributes,
-  EntityAttributesOnly,
-  RelationshipAttributeNames
-} from "../types";
+import type { EntityAttributesOnly } from "../types";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.

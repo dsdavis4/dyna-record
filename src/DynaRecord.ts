@@ -18,7 +18,7 @@ import {
   type EntityAttributesOnly
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
-import { createInstance, isKeyOfEntity, isString } from "./utils";
+import { createInstance } from "./utils";
 
 interface DynaRecordBase {
   id: string;
