@@ -1,6 +1,7 @@
-import { Course, Customer, PaymentMethod } from "./mockModels";
+import { Course, Customer, Order, PaymentMethod } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../../src/relationships";
+import { type MockTableEntityTableItem } from "./utils";
 
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
@@ -43,58 +44,88 @@ describe("Query", () => {
     it("queries by PK only", async () => {
       expect.assertions(9);
 
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2021-09-15T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order1: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order2: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#002",
+        Id: "002",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "654",
+        OrderDate: "2022-10-30T09:31:15.148Z",
+        CreatedAt: "2021-10-21T09:31:15.148Z",
+        UpdatedAt: "2022-10-22T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order3: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#003",
+        Id: "003",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "321",
+        OrderDate: "2022-11-30T09:31:15.148Z",
+        CreatedAt: "2021-11-21T09:31:15.148Z",
+        UpdatedAt: "2022-11-22T09:31:15.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod1: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "987",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod2: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#005",
+        Id: "005",
+        Type: "PaymentMethod",
+        LastFour: "654",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-04T12:31:21.148Z",
+        UpdatedAt: "2022-10-05T12:31:21.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
         Items: [
-          {
-            PK: "Customer#123",
-            SK: "Customer",
-            Id: "123",
-            Name: "Some Customer",
-            Address: "11 Some St",
-            Type: "Customer",
-            CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "Order#111",
-            Id: "001",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "Order#112",
-            Id: "003",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-11-01T23:31:21.148Z",
-            UpdatedAt: "2022-11-01T23:31:21.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "Order#113",
-            Id: "004",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-09-01T23:31:21.148Z",
-            UpdatedAt: "2022-09-01T23:31:21.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "PaymentMethod#116",
-            Id: "007",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-10-01T12:31:21.148Z",
-            UpdatedAt: "2022-10-01T12:31:21.148Z"
-          },
-          {
-            PK: "Customer#123",
-            SK: "PaymentMethod#117",
-            Id: "008",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z"
-          }
+          customer,
+          order1,
+          order2,
+          order3,
+          paymentMethod1,
+          paymentMethod2
         ]
       });
 
@@ -104,57 +135,74 @@ describe("Query", () => {
         {
           pk: "Customer#123",
           sk: "Customer",
-          address: "11 Some St",
           id: "123",
-          name: "Some Customer",
           type: "Customer",
+          address: "11 Some St",
+          name: "Some Customer",
           createdAt: new Date("2021-09-15T04:26:31.148Z"),
           updatedAt: new Date("2022-09-15T04:26:31.148Z")
         },
         {
           pk: "Customer#123",
-          sk: "Order#111",
+          sk: "Order#001",
           id: "001",
-          type: "BelongsToLink",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-17T09:31:15.148Z"),
+          paymentMethodId: "987",
           createdAt: new Date("2021-10-15T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-15T09:31:15.148Z")
+          updatedAt: new Date("2022-10-16T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
-          sk: "Order#112",
+          sk: "Order#002",
+          id: "002",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-30T09:31:15.148Z"),
+          paymentMethodId: "654",
+          createdAt: new Date("2021-10-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-22T09:31:15.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "Order#003",
           id: "003",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-11-01T23:31:21.148Z"),
-          updatedAt: new Date("2022-11-01T23:31:21.148Z")
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-11-30T09:31:15.148Z"),
+          paymentMethodId: "321",
+          createdAt: new Date("2021-11-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-11-22T09:31:15.148Z")
         },
         {
           pk: "Customer#123",
-          sk: "Order#113",
+          sk: "PaymentMethod#004",
           id: "004",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-09-01T23:31:21.148Z"),
-          updatedAt: new Date("2022-09-01T23:31:21.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "PaymentMethod#116",
-          id: "007",
-          type: "BelongsToLink",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "987",
           createdAt: new Date("2021-10-01T12:31:21.148Z"),
-          updatedAt: new Date("2022-10-01T12:31:21.148Z")
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
         },
         {
           pk: "Customer#123",
-          sk: "PaymentMethod#117",
-          id: "008",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-11-21T12:31:21.148Z"),
-          updatedAt: new Date("2022-11-21T12:31:21.148Z")
+          sk: "PaymentMethod#005",
+          id: "005",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "654",
+          createdAt: new Date("2021-10-04T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-05T12:31:21.148Z")
         }
       ]);
+
       result.forEach((res, index) => {
-        if (index === 0) expect(res).toBeInstanceOf(Customer);
-        else expect(res).toBeInstanceOf(BelongsToLink);
+        if (res.type === "Customer") expect(res).toBeInstanceOf(Customer);
+        else if (res.type === "Order") expect(res).toBeInstanceOf(Order);
+        else if (res.type === "PaymentMethod")
+          expect(res).toBeInstanceOf(PaymentMethod);
+        else throw new Error("Unexpected test type");
       });
 
       expect(mockedQueryCommand.mock.calls).toEqual([
