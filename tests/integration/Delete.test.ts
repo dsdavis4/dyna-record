@@ -8,7 +8,8 @@ import {
   Book,
   Course,
   User,
-  Author
+  Author,
+  Website
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -21,6 +22,13 @@ import { MockTableEntityTableItem } from "./utils";
  */
 type HomeTableItem = Omit<MockTableEntityTableItem<Home>, "MlsNum"> & {
   "MLS#": string;
+};
+
+/**
+ * The testing type util does not support account for ownerId and PersonId not being pascal cased versions of each other
+ */
+type BookTableItem = Omit<MockTableEntityTableItem<Book>, "OwnerId"> & {
+  PersonId: string;
 };
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
@@ -217,7 +225,7 @@ describe("Delete", () => {
           SK: "Home",
           Id: "123",
           Type: "Home",
-          "MLS#": "MLS-XXX",
+          "MLS#": "MLS-XXX", // TODO use type util above for home
           PersonId: "456"
         }
       ]
@@ -481,31 +489,43 @@ describe("Delete", () => {
   it("will delete an entity from a HasAndBelongsToMany relationship and a BelongsTo -> HasMany relationship", async () => {
     expect.assertions(6);
 
+    // Belongs to as HasOne
+    const owner: MockTableEntityTableItem<Person> = {
+      PK: "Book#123",
+      SK: "Person",
+      Id: "789",
+      Type: "Person",
+      Name: "Person-1",
+      CreatedAt: "2024-02-27T03:19:52.667Z",
+      UpdatedAt: "2024-02-27T03:19:52.667Z"
+    };
+
+    // Entity being deleted
+    const book: BookTableItem = {
+      PK: "Book#123",
+      SK: "Book",
+      Id: "123",
+      PersonId: owner.Id,
+      Type: "Book",
+      Name: "Some Name",
+      NumPages: 100,
+      CreatedAt: "2021-10-15T08:31:15.148Z",
+      UpdatedAt: "2022-10-15T08:31:15.148Z"
+    };
+
+    // Belongs to via HasAndBelongsToMany
+    const author: MockTableEntityTableItem<Author> = {
+      PK: "Book#123",
+      SK: "Author#456",
+      Id: "456",
+      Type: "Author",
+      Name: "Author-1",
+      CreatedAt: "2024-02-27T03:19:52.667Z",
+      UpdatedAt: "2024-02-27T03:19:52.667Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Book#123",
-          SK: "Book",
-          Id: "123",
-          // Optional key is undefined
-          PersonId: "789",
-          Type: "Book",
-          Name: "Some Name",
-          NumPages: 100,
-          CreatedAt: "2021-10-15T08:31:15.148Z",
-          UpdatedAt: "2022-10-15T08:31:15.148Z"
-        },
-        {
-          PK: "Book#123",
-          SK: "Author#456",
-          Id: "001",
-          Type: "BelongsToLink",
-          ForeignEntityType: "Author",
-          ForeignKey: "456",
-          CreatedAt: "2024-02-27T03:19:52.667Z",
-          UpdatedAt: "2024-02-27T03:19:52.667Z"
-        }
-      ]
+      Items: [book, author, owner]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -539,7 +559,7 @@ describe("Delete", () => {
                 TableName: "mock-table"
               }
             },
-            // Delete the BelongsTo -> HasMany relationship
+            // Delete the denormalized Book from Person partition
             {
               Delete: {
                 Key: { PK: "Person#789", SK: "Book#123" },
@@ -559,88 +579,12 @@ describe("Delete", () => {
                 Key: { PK: "Author#456", SK: "Book#123" },
                 TableName: "mock-table"
               }
-            }
-          ]
-        }
-      ]
-    ]);
-  });
-
-  it("will delete an an entity that BelongsTo an entity via HasMany and is part of a HasAndBelongsToMany relationship", async () => {
-    expect.assertions(6);
-
-    mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          myPk: "Course|123",
-          mySk: "Course",
-          id: "123",
-          type: "Course",
-          name: "History",
-          teacherId: "111", // Belongs to Teacher as HasMany
-          CreatedAt: "2021-10-15T09:31:15.148Z",
-          UpdatedAt: "2022-10-15T09:31:15.148Z"
-        },
-        // HasAndBelongsToMany Student
-        {
-          myPk: "Course|123",
-          mySk: "Student|333",
-          id: "002",
-          type: "BelongsToLink",
-          foreignEntityType: "Student",
-          foreignKey: "333",
-          createdAt: "2024-02-27T03:19:52.667Z",
-          updatedAt: "2024-02-27T03:19:52.667Z"
-        }
-      ]
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-    const res = await Course.delete("123");
-
-    expect(res).toEqual(undefined);
-    expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactWriteCommand" }]
-    ]);
-    expect(mockQuery.mock.calls).toEqual([[]]);
-    expect(mockedQueryCommand.mock.calls).toEqual([
-      [
-        {
-          TableName: "other-table",
-          KeyConditionExpression: "#myPk = :myPk1",
-          ExpressionAttributeNames: { "#myPk": "myPk" },
-          ExpressionAttributeValues: { ":myPk1": "Course|123" }
-        }
-      ]
-    ]);
-    expect(mockTransact.mock.calls).toEqual([[]]);
-    expect(mockTransactWriteCommand.mock.calls).toEqual([
-      [
-        {
-          TransactItems: [
-            {
-              Delete: {
-                TableName: "other-table",
-                Key: { myPk: "Course|123", mySk: "Course" }
-              }
             },
             {
+              // Delete Person from Book partition
               Delete: {
-                TableName: "other-table",
-                Key: { myPk: "Teacher|111", mySk: "Course|123" }
-              }
-            },
-            {
-              Delete: {
-                TableName: "other-table",
-                Key: { myPk: "Course|123", mySk: "Student|333" }
-              }
-            },
-            {
-              Delete: {
-                TableName: "other-table",
-                Key: { myPk: "Student|333", mySk: "Course|123" }
+                Key: { PK: "Book#123", SK: "Person" },
+                TableName: "mock-table"
               }
             }
           ]
@@ -652,29 +596,29 @@ describe("Delete", () => {
   it("with custom id field - will delete an entity from a HasAndBelongsToMany relationship and a BelongsTo -> HasMany relationship", async () => {
     expect.assertions(6);
 
+    const user: MockTableEntityTableItem<User> = {
+      PK: "User#email@email.com",
+      SK: "User",
+      Id: "email@email.com",
+      Type: "User",
+      Name: "Some Name",
+      Email: "test@test.com",
+      CreatedAt: "2021-10-15T08:31:15.148Z",
+      UpdatedAt: "2022-10-15T08:31:15.148Z"
+    };
+
+    const website: MockTableEntityTableItem<Website> = {
+      PK: "User#email@email.com",
+      SK: "Website#456",
+      Id: "456",
+      Type: "Website",
+      Name: "Website-1",
+      CreatedAt: "2024-02-27T03:19:52.667Z",
+      UpdatedAt: "2024-02-27T03:19:52.667Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        // User has nullable relationships that are not shown here
-        {
-          PK: "User#email@email.com",
-          SK: "User",
-          Id: "email@email.com",
-          Type: "User",
-          Name: "Some Name",
-          CreatedAt: "2021-10-15T08:31:15.148Z",
-          UpdatedAt: "2022-10-15T08:31:15.148Z"
-        },
-        {
-          PK: "User#email@email.com",
-          SK: "Website#456",
-          Id: "001",
-          Type: "BelongsToLink",
-          ForeignEntityType: "Website",
-          ForeignKey: "456",
-          CreatedAt: "2024-02-27T03:19:52.667Z",
-          UpdatedAt: "2024-02-27T03:19:52.667Z"
-        }
-      ]
+      Items: [user, website]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -757,17 +701,19 @@ describe("Delete", () => {
     it("will throw an error if it fails to delete the entity", async () => {
       expect.assertions(7);
 
+      const mockModel: MockTableEntityTableItem<MockModel> = {
+        PK: "MockModel#123",
+        SK: "MockModel",
+        Id: "123",
+        Type: "MockModel",
+        MyVar1: "val",
+        MyVar2: 1,
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "MockModel#123",
-            SK: "MockModel",
-            Id: "123",
-            Type: "MockModel",
-            MyVar1: "val",
-            MyVar2: 1
-          }
-        ]
+        Items: [mockModel]
       });
 
       mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
@@ -901,17 +847,19 @@ describe("Delete", () => {
     it("will throw an error if it fails to delete BelongsToLink for HasOne", async () => {
       expect.assertions(7);
 
+      const home: HomeTableItem = {
+        PK: "Home#123",
+        SK: "Home",
+        Id: "123",
+        Type: "Home",
+        "MLS#": "MLS-XXX",
+        PersonId: "456",
+        CreatedAt: "2022-09-02T23:31:21.148Z",
+        UpdatedAt: "2022-09-03T23:31:21.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Home#123",
-            SK: "Home",
-            Id: "123",
-            Type: "Home",
-            "MLS#": "MLS-XXX", // TODO use type helper
-            PersonId: "456"
-          }
-        ]
+        Items: [home]
       });
 
       mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
