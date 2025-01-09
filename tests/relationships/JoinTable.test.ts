@@ -28,6 +28,7 @@ const mockTransactGetCommand = jest.mocked(TransactGetCommand);
 
 const mockSend = jest.fn();
 const mockTransactGetItems = jest.fn();
+const mockTransactWriteItems = jest.fn();
 
 const mockedUuidv4 = jest.mocked(uuidv4); // TODO delete
 
@@ -56,9 +57,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
             }
 
             if (command.name === "TransactWriteCommand") {
-              return await Promise.resolve(
-                "TransactWriteCommand-mock-response"
-              );
+              return await Promise.resolve(mockTransactWriteItems());
             }
           })
         };
@@ -116,7 +115,7 @@ describe("JoinTable", () => {
         UpdatedAt: "2022-10-15T08:31:15.148Z"
       };
 
-      mockTransactGetItems.mockResolvedValue({
+      mockTransactGetItems.mockResolvedValueOnce({
         Responses: [{ Item: author }, { Item: book }]
       });
 
@@ -233,7 +232,7 @@ describe("JoinTable", () => {
         updatedAt: "2023-02-15T08:31:15.148Z"
       };
 
-      mockTransactGetItems.mockResolvedValue({
+      mockTransactGetItems.mockResolvedValueOnce({
         Responses: [{ Item: student }, { Item: course }]
       });
 
@@ -350,7 +349,7 @@ describe("JoinTable", () => {
         UpdatedAt: "2024-02-27T03:19:52.667Z"
       };
 
-      mockTransactGetItems.mockResolvedValue({
+      mockTransactGetItems.mockResolvedValueOnce({
         Responses: [{ Item: user }, { Item: website }]
       });
 
@@ -446,10 +445,32 @@ describe("JoinTable", () => {
     it("throws an error if the request fails because the entities are already linked", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      const author: MockTableEntityTableItem<Author> = {
+        PK: "Author#1",
+        SK: "Author",
+        Id: "1",
+        Type: "Author",
+        Name: "Author-1",
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      };
 
-      mockSend.mockImplementationOnce(() => {
+      const book: MockTableEntityTableItem<Book> = {
+        PK: "Book#2",
+        SK: "Book",
+        Id: "2",
+        Type: "Book",
+        Name: "Some Name",
+        NumPages: 100,
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: author }, { Item: book }]
+      });
+
+      mockTransactWriteItems.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
           message: "MockMessage",
           CancellationReasons: [
