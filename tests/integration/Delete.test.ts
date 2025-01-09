@@ -218,17 +218,19 @@ describe("Delete", () => {
   it("it will delete an entity that belongs to a relationship as HasOne (Removes denormalized link from related HasOne partition)", async () => {
     expect.assertions(6);
 
+    const home: HomeTableItem = {
+      PK: "Home#123",
+      SK: "Home",
+      Id: "123",
+      Type: "Home",
+      "MLS#": "MLS-XXX",
+      PersonId: "456",
+      CreatedAt: "2022-09-02T23:31:21.148Z",
+      UpdatedAt: "2022-09-03T23:31:21.148Z"
+    };
+
     mockQuery.mockResolvedValueOnce({
-      Items: [
-        {
-          PK: "Home#123",
-          SK: "Home",
-          Id: "123",
-          Type: "Home",
-          "MLS#": "MLS-XXX", // TODO use type util above for home
-          PersonId: "456"
-        }
-      ]
+      Items: [home]
     });
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
