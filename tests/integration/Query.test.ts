@@ -245,32 +245,10 @@ describe("Query", () => {
     });
   });
 
-  describe("queryByKeys", () => {
-    it("queries by PK and SK", async () => {
-      expect.assertions(4);
-
-      // Denormalized Order in Customer Partition
-      const order: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#001",
-        Id: "001",
-        Type: "Order",
-        CustomerId: "123",
-        PaymentMethodId: "987",
-        OrderDate: "2022-10-17T09:31:15.148Z",
-        CreatedAt: "2021-10-15T09:31:15.148Z",
-        UpdatedAt: "2022-10-16T09:31:15.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [order]
-      });
-
-      const result = await Customer.query({
-        pk: "Customer#123",
-        sk: "Order#001"
-      });
-
+  describe("queries by PK and SK", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
       expect(result).toEqual([
         {
           pk: "Customer#123",
@@ -300,8 +278,150 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    };
+
+    beforeEach(() => {
+      // Denormalized Order in Customer Partition
+      const order: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [order]
+      });
     });
 
+    it("queryByKeys", async () => {
+      expect.assertions(4);
+
+      const result = await Customer.query({
+        pk: "Customer#123",
+        sk: "Order#001"
+      });
+
+      operationSharedAssertions(result);
+    });
+
+    it("queryByEntity", async () => {
+      expect.assertions(4);
+
+      const result = await Customer.query("123", {
+        skCondition: "Order#001"
+      });
+
+      operationSharedAssertions(result);
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe.skip("TODO", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      // TODO
+    };
+
+    beforeEach(() => {
+      // TODO
+    });
+
+    it("queryByKeys", async () => {
+      // TODO
+    });
+
+    it("queryByEntity", async () => {
+      // TODO
+    });
+  });
+
+  describe("queryByKeys", () => {
     it("queries by PK SK begins with", async () => {
       expect.assertions(6);
 
@@ -812,61 +932,6 @@ describe("Query", () => {
   });
 
   describe("queryByEntity", () => {
-    it("queries by PK and SK", async () => {
-      expect.assertions(4);
-
-      // Denormalized Order in Customer Partition
-      const order: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#001",
-        Id: "001",
-        Type: "Order",
-        CustomerId: "123",
-        PaymentMethodId: "987",
-        OrderDate: "2022-10-17T09:31:15.148Z",
-        CreatedAt: "2021-10-15T09:31:15.148Z",
-        UpdatedAt: "2022-10-16T09:31:15.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [order]
-      });
-
-      const result = await Customer.query("123", {
-        skCondition: "Order#001"
-      });
-
-      expect(result).toEqual([
-        {
-          pk: "Customer#123",
-          sk: "Order#001",
-          id: "001",
-          type: "Order",
-          customerId: "123",
-          orderDate: new Date("2022-10-17T09:31:15.148Z"),
-          paymentMethodId: "987",
-          createdAt: new Date("2021-10-15T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-16T09:31:15.148Z")
-        }
-      ]);
-      expect(result[0]).toBeInstanceOf(Order);
-
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            TableName: "mock-table",
-            KeyConditionExpression: "#PK = :PK1 AND #SK = :SK2",
-            ExpressionAttributeNames: { "#PK": "PK", "#SK": "SK" },
-            ExpressionAttributeValues: {
-              ":PK1": "Customer#123",
-              ":SK2": "Order#001"
-            }
-          }
-        ]
-      ]);
-      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
-    });
-
     it("queries by PK SK begins with", async () => {
       expect.assertions(6);
 
