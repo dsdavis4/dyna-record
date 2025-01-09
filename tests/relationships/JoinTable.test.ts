@@ -1,16 +1,14 @@
 import {
-  Author,
+  type Author,
   AuthorBook,
-  Book,
-  Course,
-  Student,
+  type Book,
+  type Course,
+  type Student,
   StudentCourse,
-  Teacher,
-  User,
+  type User,
   UserWebsite,
-  Website
+  type Website
 } from "../integration/mockModels";
-import { v4 as uuidv4 } from "uuid";
 import {
   TransactWriteCommand,
   TransactGetCommand
@@ -18,13 +16,11 @@ import {
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
-  MockTableEntityTableItem,
-  OtherTableEntityTableItem
+  type MockTableEntityTableItem,
+  type OtherTableEntityTableItem
 } from "../integration/utils";
 import { NotFoundError } from "../../src";
 import Logger from "../../src/Logger";
-
-jest.mock("uuid"); // TODO delete
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockTransactGetCommand = jest.mocked(TransactGetCommand);
@@ -32,8 +28,6 @@ const mockTransactGetCommand = jest.mocked(TransactGetCommand);
 const mockSend = jest.fn();
 const mockTransactGetItems = jest.fn();
 const mockTransactWriteItems = jest.fn();
-
-const mockedUuidv4 = jest.mocked(uuidv4); // TODO delete
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -76,16 +70,6 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 });
 
 describe("JoinTable", () => {
-  beforeAll(() => {
-    // TODO delete
-    jest.useFakeTimers();
-  });
-
-  afterAll(() => {
-    // TODO delete
-    jest.useRealTimers();
-  });
-
   afterEach(() => {
     jest.clearAllMocks();
 
