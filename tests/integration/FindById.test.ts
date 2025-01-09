@@ -1078,6 +1078,62 @@ describe("FindById", () => {
   });
 
   describe("types", () => {
+    describe("findById without includes", () => {
+      beforeEach(() => {
+        mockGet.mockResolvedValueOnce({});
+      });
+
+      it("will allow id id with no options", async () => {
+        // @ts-expect-no-error: Second parameter 'options' is optional
+        await PaymentMethod.findById("789");
+      });
+
+      it("will only infer attribute types and not included relationships", async () => {
+        const result = await PaymentMethod.findById("789");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: Attributes are allowed
+          Logger.log(result.id);
+
+          // @ts-expect-no-error: Attributes are allowed
+          Logger.log(result.lastFour);
+
+          // @ts-expect-error: Relationship properties are not allowed
+          Logger.log(result.customer);
+
+          // @ts-expect-error: Relationship properties are not allowed
+          Logger.log(result.orders);
+
+          // @ts-expect-error: Relationship properties are not allowed
+          Logger.log(result.paymentMethodProvider);
+        }
+      });
+
+      it("results have entity functions", async () => {
+        const result = await PaymentMethod.findById("789");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: Functions are allowed
+          Logger.log(result.update);
+        }
+      });
+    });
+
+    describe("findById without includes", () => {
+      it("results have entity functions", async () => {
+        mockQuery.mockResolvedValueOnce({ Items: [] });
+
+        const result = await Customer.findById("123", {
+          include: [{ association: "contactInformation" }]
+        });
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: Functions are allowed
+          Logger.log(result.update);
+        }
+      });
+    });
+
     describe("operation results", () => {
       it("HasOne - when including an optional property, the returned type is optional", async () => {
         expect.assertions(1);

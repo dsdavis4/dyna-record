@@ -75,9 +75,6 @@ abstract class DynaRecord implements DynaRecordBase {
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public readonly updatedAt: Date;
 
-  // TODO add type tests for all variations of having and not having included options
-  // dont forget to test that its optional...
-  // and test that it has functions..
   // TODO check how this comment looks on published docs
   /**
    * Find an entity by Id and optionally include associations.
@@ -108,7 +105,6 @@ abstract class DynaRecord implements DynaRecordBase {
     options?: undefined
   ): Promise<Optional<EntityAttributesOnly<T>>>;
 
-  // TODO typeguard test that result can be undefined
   public static async findById<
     T extends DynaRecord,
     Opts extends FindByIdOptions<T>
