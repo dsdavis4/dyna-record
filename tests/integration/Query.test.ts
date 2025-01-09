@@ -11,6 +11,7 @@ import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
+import { QueryResults } from "../../src/operations";
 
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
@@ -49,97 +50,10 @@ describe("Query", () => {
     jest.clearAllMocks();
   });
 
-  describe("queryByKeys", () => {
-    it("queries by PK only", async () => {
-      expect.assertions(9);
-
-      const customer: MockTableEntityTableItem<Customer> = {
-        PK: "Customer#123",
-        SK: "Customer",
-        Id: "123",
-        Name: "Some Customer",
-        Address: "11 Some St",
-        Type: "Customer",
-        CreatedAt: "2021-09-15T04:26:31.148Z",
-        UpdatedAt: "2022-09-15T04:26:31.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order1: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#001",
-        Id: "001",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "987",
-        OrderDate: "2022-10-17T09:31:15.148Z",
-        CreatedAt: "2021-10-15T09:31:15.148Z",
-        UpdatedAt: "2022-10-16T09:31:15.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order2: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#002",
-        Id: "002",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "654",
-        OrderDate: "2022-10-30T09:31:15.148Z",
-        CreatedAt: "2021-10-21T09:31:15.148Z",
-        UpdatedAt: "2022-10-22T09:31:15.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order3: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#003",
-        Id: "003",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "321",
-        OrderDate: "2022-11-30T09:31:15.148Z",
-        CreatedAt: "2021-11-21T09:31:15.148Z",
-        UpdatedAt: "2022-11-22T09:31:15.148Z"
-      };
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod1: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#004",
-        Id: "004",
-        Type: "PaymentMethod",
-        LastFour: "9876",
-        CustomerId: customer.Id,
-        CreatedAt: "2021-10-01T12:31:21.148Z",
-        UpdatedAt: "2022-10-02T12:31:21.148Z"
-      };
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod2: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#005",
-        Id: "005",
-        Type: "PaymentMethod",
-        LastFour: "6543",
-        CustomerId: customer.Id,
-        CreatedAt: "2021-10-04T12:31:21.148Z",
-        UpdatedAt: "2022-10-05T12:31:21.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [
-          customer,
-          order1,
-          order2,
-          order3,
-          paymentMethod1,
-          paymentMethod2
-        ]
-      });
-
-      const result = await Customer.query({ pk: "Customer#123" });
-
+  describe("queries by PK only", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
       expect(result).toEqual([
         {
           pk: "Customer#123",
@@ -225,8 +139,113 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    };
+
+    beforeEach(() => {
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2021-09-15T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order1: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order2: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#002",
+        Id: "002",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "654",
+        OrderDate: "2022-10-30T09:31:15.148Z",
+        CreatedAt: "2021-10-21T09:31:15.148Z",
+        UpdatedAt: "2022-10-22T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order3: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#003",
+        Id: "003",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "321",
+        OrderDate: "2022-11-30T09:31:15.148Z",
+        CreatedAt: "2021-11-21T09:31:15.148Z",
+        UpdatedAt: "2022-11-22T09:31:15.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod1: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "9876",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod2: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#005",
+        Id: "005",
+        Type: "PaymentMethod",
+        LastFour: "6543",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-04T12:31:21.148Z",
+        UpdatedAt: "2022-10-05T12:31:21.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          customer,
+          order1,
+          order2,
+          order3,
+          paymentMethod1,
+          paymentMethod2
+        ]
+      });
     });
 
+    it("queryByKeys", async () => {
+      expect.assertions(9);
+
+      const result = await Customer.query({ pk: "Customer#123" });
+
+      operationSharedAssertions(result);
+    });
+
+    it("queryByEntity", async () => {
+      expect.assertions(9);
+
+      const result = await Customer.query("123");
+
+      operationSharedAssertions(result);
+    });
+  });
+
+  describe("queryByKeys", () => {
     it("queries by PK and SK", async () => {
       expect.assertions(4);
 
@@ -793,183 +812,6 @@ describe("Query", () => {
   });
 
   describe("queryByEntity", () => {
-    it("queries by PK only", async () => {
-      expect.assertions(9);
-
-      const customer: MockTableEntityTableItem<Customer> = {
-        PK: "Customer#123",
-        SK: "Customer",
-        Id: "123",
-        Name: "Some Customer",
-        Address: "11 Some St",
-        Type: "Customer",
-        CreatedAt: "2021-09-15T04:26:31.148Z",
-        UpdatedAt: "2022-09-15T04:26:31.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order1: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#001",
-        Id: "001",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "987",
-        OrderDate: "2022-10-17T09:31:15.148Z",
-        CreatedAt: "2021-10-15T09:31:15.148Z",
-        UpdatedAt: "2022-10-16T09:31:15.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order2: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#002",
-        Id: "002",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "654",
-        OrderDate: "2022-10-30T09:31:15.148Z",
-        CreatedAt: "2021-10-21T09:31:15.148Z",
-        UpdatedAt: "2022-10-22T09:31:15.148Z"
-      };
-
-      // Denormalized Order in Customer Partition
-      const order3: MockTableEntityTableItem<Order> = {
-        PK: "Customer#123",
-        SK: "Order#003",
-        Id: "003",
-        Type: "Order",
-        CustomerId: customer.Id,
-        PaymentMethodId: "321",
-        OrderDate: "2022-11-30T09:31:15.148Z",
-        CreatedAt: "2021-11-21T09:31:15.148Z",
-        UpdatedAt: "2022-11-22T09:31:15.148Z"
-      };
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod1: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#004",
-        Id: "004",
-        Type: "PaymentMethod",
-        LastFour: "9876",
-        CustomerId: customer.Id,
-        CreatedAt: "2021-10-01T12:31:21.148Z",
-        UpdatedAt: "2022-10-02T12:31:21.148Z"
-      };
-
-      // Denormalized PaymentMethod in Customer Partition
-      const paymentMethod2: MockTableEntityTableItem<PaymentMethod> = {
-        PK: "Customer#123",
-        SK: "PaymentMethod#005",
-        Id: "005",
-        Type: "PaymentMethod",
-        LastFour: "6543",
-        CustomerId: customer.Id,
-        CreatedAt: "2021-10-04T12:31:21.148Z",
-        UpdatedAt: "2022-10-05T12:31:21.148Z"
-      };
-
-      mockQuery.mockResolvedValueOnce({
-        Items: [
-          customer,
-          order1,
-          order2,
-          order3,
-          paymentMethod1,
-          paymentMethod2
-        ]
-      });
-
-      const result = await Customer.query("123");
-
-      expect(result).toEqual([
-        {
-          pk: "Customer#123",
-          sk: "Customer",
-          id: "123",
-          type: "Customer",
-          address: "11 Some St",
-          name: "Some Customer",
-          createdAt: new Date("2021-09-15T04:26:31.148Z"),
-          updatedAt: new Date("2022-09-15T04:26:31.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "Order#001",
-          id: "001",
-          type: "Order",
-          customerId: "123",
-          orderDate: new Date("2022-10-17T09:31:15.148Z"),
-          paymentMethodId: "987",
-          createdAt: new Date("2021-10-15T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-16T09:31:15.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "Order#002",
-          id: "002",
-          type: "Order",
-          customerId: "123",
-          orderDate: new Date("2022-10-30T09:31:15.148Z"),
-          paymentMethodId: "654",
-          createdAt: new Date("2021-10-21T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-22T09:31:15.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "Order#003",
-          id: "003",
-          type: "Order",
-          customerId: "123",
-          orderDate: new Date("2022-11-30T09:31:15.148Z"),
-          paymentMethodId: "321",
-          createdAt: new Date("2021-11-21T09:31:15.148Z"),
-          updatedAt: new Date("2022-11-22T09:31:15.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "PaymentMethod#004",
-          id: "004",
-          type: "PaymentMethod",
-          customerId: "123",
-          lastFour: "9876",
-          createdAt: new Date("2021-10-01T12:31:21.148Z"),
-          updatedAt: new Date("2022-10-02T12:31:21.148Z")
-        },
-        {
-          pk: "Customer#123",
-          sk: "PaymentMethod#005",
-          id: "005",
-          type: "PaymentMethod",
-          customerId: "123",
-          lastFour: "6543",
-          createdAt: new Date("2021-10-04T12:31:21.148Z"),
-          updatedAt: new Date("2022-10-05T12:31:21.148Z")
-        }
-      ]);
-
-      result.forEach((res, index) => {
-        if (res.type === "Customer") expect(res).toBeInstanceOf(Customer);
-        else if (res.type === "Order") expect(res).toBeInstanceOf(Order);
-        else if (res.type === "PaymentMethod")
-          expect(res).toBeInstanceOf(PaymentMethod);
-        else throw new Error("Unexpected test type");
-      });
-
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            TableName: "mock-table",
-            KeyConditionExpression: "#PK = :PK1",
-            ExpressionAttributeNames: { "#PK": "PK" },
-            ExpressionAttributeValues: { ":PK1": "Customer#123" }
-          }
-        ]
-      ]);
-      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
-    });
-
     it("queries by PK and SK", async () => {
       expect.assertions(4);
 
