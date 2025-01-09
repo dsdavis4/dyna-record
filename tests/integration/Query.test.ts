@@ -221,35 +221,42 @@ describe("Query", () => {
     it("queries by PK and SK", async () => {
       expect.assertions(4);
 
+      // Denormalized Order in Customer Partition
+      const order: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: "123",
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "Order#111",
-            Id: "001",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-10-15T09:31:15.148Z",
-            UpdatedAt: "2022-10-15T09:31:15.148Z"
-          }
-        ]
+        Items: [order]
       });
 
       const result = await Customer.query({
         pk: "Customer#123",
-        sk: "Order#111"
+        sk: "Order#001"
       });
 
       expect(result).toEqual([
         {
           pk: "Customer#123",
-          sk: "Order#111",
+          sk: "Order#001",
           id: "001",
-          type: "BelongsToLink",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-17T09:31:15.148Z"),
+          paymentMethodId: "987",
           createdAt: new Date("2021-10-15T09:31:15.148Z"),
-          updatedAt: new Date("2022-10-15T09:31:15.148Z")
+          updatedAt: new Date("2022-10-16T09:31:15.148Z")
         }
       ]);
-      expect(result[0]).toBeInstanceOf(BelongsToLink);
+      expect(result[0]).toBeInstanceOf(Order);
 
       expect(mockedQueryCommand.mock.calls).toEqual([
         [
@@ -259,7 +266,7 @@ describe("Query", () => {
             ExpressionAttributeNames: { "#PK": "PK", "#SK": "SK" },
             ExpressionAttributeValues: {
               ":PK1": "Customer#123",
-              ":SK2": "Order#111"
+              ":SK2": "Order#001"
             }
           }
         ]
