@@ -75,7 +75,6 @@ abstract class DynaRecord implements DynaRecordBase {
   @DateAttribute({ alias: tableDefaultFields.updatedAt.alias })
   public readonly updatedAt: Date;
 
-  // TODO check how this comment looks on published docs
   /**
    * Find an entity by Id and optionally include associations.
    *
