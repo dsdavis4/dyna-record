@@ -100,7 +100,7 @@ describe("Query", () => {
         SK: "PaymentMethod#004",
         Id: "004",
         Type: "PaymentMethod",
-        LastFour: "987",
+        LastFour: "9876",
         CustomerId: customer.Id,
         CreatedAt: "2021-10-01T12:31:21.148Z",
         UpdatedAt: "2022-10-02T12:31:21.148Z"
@@ -112,7 +112,7 @@ describe("Query", () => {
         SK: "PaymentMethod#005",
         Id: "005",
         Type: "PaymentMethod",
-        LastFour: "654",
+        LastFour: "6543",
         CustomerId: customer.Id,
         CreatedAt: "2021-10-04T12:31:21.148Z",
         UpdatedAt: "2022-10-05T12:31:21.148Z"
@@ -181,7 +181,7 @@ describe("Query", () => {
           id: "004",
           type: "PaymentMethod",
           customerId: "123",
-          lastFour: "987",
+          lastFour: "9876",
           createdAt: new Date("2021-10-01T12:31:21.148Z"),
           updatedAt: new Date("2022-10-02T12:31:21.148Z")
         },
@@ -191,7 +191,7 @@ describe("Query", () => {
           id: "005",
           type: "PaymentMethod",
           customerId: "123",
-          lastFour: "654",
+          lastFour: "6543",
           createdAt: new Date("2021-10-04T12:31:21.148Z"),
           updatedAt: new Date("2022-10-05T12:31:21.148Z")
         }
@@ -380,28 +380,31 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
-    it("queries with filter", async () => {
+    it("queries with filter on attributes that are part of included entities", async () => {
       expect.assertions(4);
 
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "9876",
+        CustomerId: "123",
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "PaymentMethod#117",
-            Id: "008",
-            Type: "BelongsToLink",
-            CreatedAt: "2021-11-21T12:31:21.148Z",
-            UpdatedAt: "2022-11-21T12:31:21.148Z"
-          }
-        ]
+        Items: [paymentMethod]
       });
 
       const result = await Customer.query(
         { pk: "Customer#123" },
         {
           filter: {
-            type: "BelongsToLink",
-            createdAt: "2021-11-21T12:31:21.148Z"
+            type: "PaymentMethod",
+            lastFour: "9876"
           }
         }
       );
@@ -409,16 +412,18 @@ describe("Query", () => {
       expect(result).toEqual([
         {
           pk: "Customer#123",
-          sk: "PaymentMethod#117",
-          id: "008",
-          type: "BelongsToLink",
-          createdAt: new Date("2021-11-21T12:31:21.148Z"),
-          updatedAt: new Date("2022-11-21T12:31:21.148Z")
+          sk: "PaymentMethod#004",
+          id: "004",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "9876",
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
         }
       ]);
 
       result.forEach(res => {
-        expect(res).toBeInstanceOf(BelongsToLink);
+        expect(res).toBeInstanceOf(PaymentMethod);
       });
 
       expect(mockedQueryCommand.mock.calls).toEqual([
@@ -427,14 +432,14 @@ describe("Query", () => {
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#Type": "Type",
-              "#CreatedAt": "CreatedAt"
+              "#LastFour": "LastFour"
             },
             ExpressionAttributeValues: {
               ":PK3": "Customer#123",
-              ":Type1": "BelongsToLink",
-              ":CreatedAt2": "2021-11-21T12:31:21.148Z"
+              ":Type1": "PaymentMethod",
+              ":LastFour2": "9876"
             },
-            FilterExpression: "#Type = :Type1 AND #CreatedAt = :CreatedAt2",
+            FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
             KeyConditionExpression: "#PK = :PK3",
             TableName: "mock-table"
           }
