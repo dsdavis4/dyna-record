@@ -2,6 +2,8 @@ import {
   Author,
   AuthorBook,
   Book,
+  Course,
+  Student,
   StudentCourse,
   UserWebsite
 } from "../integration/mockModels";
@@ -12,7 +14,10 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { MockTableEntityTableItem } from "../integration/utils";
+import {
+  MockTableEntityTableItem,
+  OtherTableEntityTableItem
+} from "../integration/utils";
 
 jest.mock("uuid"); // TODO delete
 
@@ -203,64 +208,114 @@ describe("JoinTable", () => {
     });
 
     it("alternate table style - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
-      expect.assertions(3);
+      expect.assertions(4);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      const student: OtherTableEntityTableItem<Student> = {
+        myPk: "Student|1",
+        mySk: "Student",
+        id: "1",
+        type: "Student",
+        name: "MockName",
+        createdAt: "2024-03-01T00:00:00.000Z",
+        updatedAt: "2024-03-02T00:00:00.000Z"
+      };
+
+      const course: OtherTableEntityTableItem<Course> = {
+        myPk: "Course|2",
+        mySk: "Course",
+        id: "2",
+        type: "Course",
+        name: "Math",
+        teacherId: "001",
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      };
+
+      mockTransactGetItems.mockResolvedValue({
+        Responses: [{ Item: student }, { Item: course }]
+      });
 
       // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       const res = await StudentCourse.create({ studentId: "1", courseId: "2" });
 
       expect(res).toEqual(undefined);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Course|2", mySk: "Course" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|1", mySk: "Student" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
                 Put: {
-                  TableName: "other-table",
                   ConditionExpression: "attribute_not_exists(myPk)",
                   Item: {
                     myPk: "Course|2",
                     mySk: "Student|1",
-                    id: "uuid1",
-                    type: "BelongsToLink",
-                    foreignKey: "1",
-                    foreignEntityType: "Student",
-                    createdAt: "2023-10-16T03:31:35.918Z",
-                    updatedAt: "2023-10-16T03:31:35.918Z"
-                  }
+                    id: "1",
+                    type: "Student",
+                    name: "MockName",
+                    createdAt: "2024-03-01T00:00:00.000Z",
+                    updatedAt: "2024-03-02T00:00:00.000Z"
+                  },
+                  TableName: "other-table"
                 }
               },
               {
                 ConditionCheck: {
-                  Key: { myPk: "Course|2", mySk: "Course" },
-                  TableName: "other-table",
-                  ConditionExpression: "attribute_exists(myPk)"
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: {
+                    myPk: "Course|2",
+                    mySk: "Course"
+                  },
+                  TableName: "other-table"
                 }
               },
               {
                 Put: {
-                  TableName: "other-table",
                   ConditionExpression: "attribute_not_exists(myPk)",
                   Item: {
                     myPk: "Student|1",
                     mySk: "Course|2",
-                    id: "uuid2",
-                    type: "BelongsToLink",
-                    foreignKey: "2",
-                    foreignEntityType: "Course",
-                    createdAt: "2023-10-16T03:31:35.918Z",
-                    updatedAt: "2023-10-16T03:31:35.918Z"
-                  }
+                    id: "2",
+                    type: "Course",
+                    name: "Math",
+                    teacherId: "001",
+                    createdAt: "2023-01-15T12:12:18.123Z",
+                    updatedAt: "2023-02-15T08:31:15.148Z"
+                  },
+                  TableName: "other-table"
                 }
               },
               {
                 ConditionCheck: {
-                  TableName: "other-table",
-                  Key: { myPk: "Student|1", mySk: "Student" },
-                  ConditionExpression: "attribute_exists(myPk)"
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: {
+                    myPk: "Student|1",
+                    mySk: "Student"
+                  },
+                  TableName: "other-table"
                 }
               }
             ]
