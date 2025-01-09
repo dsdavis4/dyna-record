@@ -15,6 +15,13 @@ import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
 import { MockTableEntityTableItem } from "./utils";
 
+/**
+ * The testing type util does not support converting MLS# so set it here
+ */
+type HomeTableItem = Omit<MockTableEntityTableItem<Home>, "MlsNum"> & {
+  "MLS#": string;
+};
+
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
 
@@ -258,44 +265,48 @@ describe("Delete", () => {
     ]);
   });
 
-  // TODO here
-
-  it("will remove the foreign key attribute on any the HasMany or HasOne entities that belong to it", async () => {
+  it("will remove the foreign key attribute on any of the HasMany or HasOne entities that belong to it", async () => {
     expect.assertions(6);
+
+    const person: MockTableEntityTableItem<Person> = {
+      PK: "Person#123",
+      SK: "Person",
+      Id: "123",
+      Type: "Person",
+      Name: "Jon Doe",
+      CreatedAt: "2021-10-14T08:31:15.148Z",
+      UpdatedAt: "2022-10-15T08:31:15.148Z"
+    };
+
+    const pet: MockTableEntityTableItem<Pet> = {
+      PK: "Person#123",
+      SK: "Pet#001",
+      Id: "001",
+      Type: "Pet",
+      Name: "Pet-1",
+      OwnerId: person.Id,
+      CreatedAt: "2021-10-16T09:31:15.148Z",
+      UpdatedAt: "2022-10-17T09:31:15.148Z"
+    };
+
+    const home: HomeTableItem = {
+      PK: "Person#123",
+      SK: "Home",
+      Id: "002",
+      Type: "Home",
+      PersonId: person.Id,
+      "MLS#": "ABC123",
+      CreatedAt: "2021-10-15T09:31:15.148Z",
+      UpdatedAt: "2022-10-15T09:31:15.148Z"
+    };
 
     mockQuery.mockResolvedValueOnce({
       Items: [
-        {
-          PK: "Person#123",
-          SK: "Person",
-          Id: "123",
-          Type: "Person",
-          Name: "Jon Doe",
-          CreatedAt: "2021-10-15T08:31:15.148Z",
-          UpdatedAt: "2022-10-15T08:31:15.148Z"
-        },
+        person,
         // HasMany Pets
-        {
-          PK: "Person#123",
-          SK: "Pet#111",
-          Id: "001",
-          Type: "BelongsToLink",
-          ForeignEntityType: "Pet",
-          ForeignKey: "111",
-          CreatedAt: "2021-10-15T09:31:15.148Z",
-          UpdatedAt: "2022-10-15T09:31:15.148Z"
-        },
+        pet,
         // HasOne Home
-        {
-          PK: "Person#123",
-          SK: "Home",
-          Id: "002",
-          Type: "BelongsToLink",
-          ForeignEntityType: "Home",
-          ForeignKey: "222",
-          CreatedAt: "2021-10-15T09:31:15.148Z",
-          UpdatedAt: "2022-10-15T09:31:15.148Z"
-        }
+        home
       ]
     });
 
@@ -330,36 +341,57 @@ describe("Delete", () => {
                 Key: { PK: "Person#123", SK: "Person" }
               }
             },
+            // (HasMany) Delete denormalized Pet from Person partition
             {
-              // Delete BelongsToLink for HasMany
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Person#123", SK: "Pet#111" }
+                Key: { PK: "Person#123", SK: "Pet#001" }
               }
             },
+            // (HasMany) Remove the nullable foreign key from Pet item
+            // TODO this will need to go find all denormalized pet records and update...
+            // Could I leverage logic within update?
             {
-              // Remove ForeignKey id for HasMany link
               Update: {
                 TableName: "mock-table",
-                Key: { PK: "Pet#111", SK: "Pet" },
-                ExpressionAttributeNames: { "#OwnerId": "OwnerId" },
+                Key: { PK: "Pet#001", SK: "Pet" },
+                ExpressionAttributeNames: {
+                  "#OwnerId": "OwnerId"
+                },
                 UpdateExpression: "REMOVE #OwnerId"
               }
             },
             {
-              // Delete BelongsToLink for HasOne
+              // (HasMany) - Delete the Person record from the Pet partition
+              Delete: {
+                TableName: "mock-table",
+                Key: { PK: "Pet#001", SK: "Person" }
+              }
+            },
+            {
+              // (HasOne) Delete denormalized Home from Person partition
               Delete: {
                 TableName: "mock-table",
                 Key: { PK: "Person#123", SK: "Home" }
               }
             },
             {
-              // Remove ForeignKey id for HasOne link
+              // (HasOne) Remove the nullable foreign key from Home item
+              // TODO this will need to go find all denormalized home records and update...
               Update: {
                 TableName: "mock-table",
-                Key: { PK: "Home#222", SK: "Home" },
-                ExpressionAttributeNames: { "#PersonId": "PersonId" },
+                Key: { PK: "Home#002", SK: "Home" },
+                ExpressionAttributeNames: {
+                  "#PersonId": "PersonId"
+                },
                 UpdateExpression: "REMOVE #PersonId"
+              }
+            },
+            {
+              // (HasOne) Delete denormalized Person from Home partition
+              Delete: {
+                TableName: "mock-table",
+                Key: { PK: "Home", SK: "Person" }
               }
             }
           ]
@@ -874,7 +906,7 @@ describe("Delete", () => {
             SK: "Home",
             Id: "123",
             Type: "Home",
-            "MLS#": "MLS-XXX",
+            "MLS#": "MLS-XXX", // TODO use type helper
             PersonId: "456"
           }
         ]
