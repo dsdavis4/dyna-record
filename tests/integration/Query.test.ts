@@ -1,7 +1,16 @@
-import { Course, Customer, Order, PaymentMethod } from "./mockModels";
+import {
+  Assignment,
+  Course,
+  Customer,
+  Order,
+  PaymentMethod
+} from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../../src/relationships";
-import { type MockTableEntityTableItem } from "./utils";
+import {
+  OtherTableEntityTableItem,
+  type MockTableEntityTableItem
+} from "./utils";
 
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
@@ -451,19 +460,19 @@ describe("Query", () => {
     it("can perform complex queries (arbitrary example)", async () => {
       expect.assertions(4);
 
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2021-09-15T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "Customer#123",
-            SK: "Customer",
-            Id: "123",
-            Name: "Some Customer",
-            Address: "11 Some St",
-            Type: "Customer",
-            CreatedAt: "2021-09-15T04:26:31.148Z",
-            UpdatedAt: "2022-09-15T04:26:31.148Z"
-          }
-        ]
+        Items: [customer]
       });
 
       const result = await Customer.query(
@@ -535,28 +544,31 @@ describe("Query", () => {
     it("can perform complete queries with 'OR' (arbitrary example)", async () => {
       expect.assertions(5);
 
+      // Entity representing the partition being queried on
+      const course: OtherTableEntityTableItem<Course> = {
+        myPk: "Course|123",
+        mySk: "Course",
+        id: "123",
+        type: "Course",
+        name: "Potions",
+        createdAt: "2021-09-15T04:26:31.148Z",
+        updatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Assignment record denormalized to Course partition
+      const assignment: OtherTableEntityTableItem<Assignment> = {
+        myPk: "Course|123",
+        mySk: "Assignment|003",
+        id: "003",
+        title: "Assignment-1",
+        type: "Assignment",
+        courseId: course.id,
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      };
+
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            myPk: "Course|123",
-            mySk: "Course",
-            id: "123",
-            type: "Course",
-            name: "Potions",
-            createdAt: "2021-09-15T04:26:31.148Z",
-            updatedAt: "2022-09-15T04:26:31.148Z"
-          },
-          {
-            myPk: "Course|123",
-            mySk: "Assignment|003",
-            id: "003",
-            foreignEntityType: "Assignment",
-            foreignKey: "111",
-            type: "BelongsToLink",
-            createdAt: "2023-01-15T12:12:18.123Z",
-            updatedAt: "2023-02-15T08:31:15.148Z"
-          }
-        ]
+        Items: [course, assignment]
       });
 
       const result = await Course.query(
@@ -565,17 +577,17 @@ describe("Query", () => {
         },
         {
           filter: {
-            type: ["BelongsToLink", "Brewery"],
+            type: ["Course", "Assignment"],
             createdAt: { $beginsWith: "202" },
             $or: [
               {
-                foreignKey: "111",
+                name: "Defense Against The Dark Arts",
                 updatedAt: { $beginsWith: "2023-02-15" }
               },
               {
-                foreignKey: ["222", "333"],
-                createdAt: { $beginsWith: "2021-09-15T" },
-                foreignEntityType: "Assignment"
+                title: ["Assignment-1", "Assignment-2"],
+                createdAt: { $beginsWith: "2023" },
+                type: "Assignment"
               },
               {
                 id: "123"
@@ -599,44 +611,44 @@ describe("Query", () => {
           myPk: "Course|123",
           mySk: "Assignment|003",
           id: "003",
-          type: "BelongsToLink",
-          foreignKey: "111",
-          foreignEntityType: "Assignment",
+          type: "Assignment",
+          title: "Assignment-1",
+          courseId: "123",
           createdAt: new Date("2023-01-15T12:12:18.123Z"),
           updatedAt: new Date("2023-02-15T08:31:15.148Z")
         }
       ]);
       expect(result[0]).toBeInstanceOf(Course);
-      expect(result[1]).toBeInstanceOf(BelongsToLink);
+      expect(result[1]).toBeInstanceOf(Assignment);
       expect(mockedQueryCommand.mock.calls).toEqual([
         [
           {
+            TableName: "other-table",
+            KeyConditionExpression: "#myPk = :myPk11",
             ExpressionAttributeNames: {
               "#createdAt": "createdAt",
-              "#foreignEntityType": "foreignEntityType",
-              "#foreignKey": "foreignKey",
               "#id": "id",
               "#myPk": "myPk",
+              "#name": "name",
+              "#title": "title",
               "#type": "type",
               "#updatedAt": "updatedAt"
             },
             ExpressionAttributeValues: {
               ":createdAt10": "202",
-              ":createdAt5": "2021-09-15T",
-              ":foreignEntityType6": "Assignment",
-              ":foreignKey1": "111",
-              ":foreignKey3": "222",
-              ":foreignKey4": "333",
+              ":createdAt5": "2023",
               ":id7": "123",
               ":myPk11": "Course|123",
-              ":type8": "BelongsToLink",
-              ":type9": "Brewery",
+              ":name1": "Defense Against The Dark Arts",
+              ":title3": "Assignment-1",
+              ":title4": "Assignment-2",
+              ":type6": "Assignment",
+              ":type8": "Course",
+              ":type9": "Assignment",
               ":updatedAt2": "2023-02-15"
             },
             FilterExpression:
-              "((#foreignKey = :foreignKey1 AND begins_with(#updatedAt, :updatedAt2)) OR (#foreignKey IN (:foreignKey3,:foreignKey4) AND begins_with(#createdAt, :createdAt5) AND #foreignEntityType = :foreignEntityType6) OR #id = :id7) AND (#type IN (:type8,:type9) AND begins_with(#createdAt, :createdAt10))",
-            KeyConditionExpression: "#myPk = :myPk11",
-            TableName: "other-table"
+              "((#name = :name1 AND begins_with(#updatedAt, :updatedAt2)) OR (#title IN (:title3,:title4) AND begins_with(#createdAt, :createdAt5) AND #type = :type6) OR #id = :id7) AND (#type IN (:type8,:type9) AND begins_with(#createdAt, :createdAt10))"
           }
         ]
       ]);
