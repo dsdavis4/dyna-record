@@ -94,11 +94,15 @@ interface UpdateMetadata<T extends DynaRecord> {
  * @template T - The type of the entity being updated, extending `DynaRecord`.
  */
 class Update<T extends DynaRecord> extends OperationBase<T> {
-  readonly #transactionBuilder: TransactWriteBuilder;
+  protected readonly transactionBuilder: TransactWriteBuilder;
 
-  constructor(Entity: EntityClass<T>) {
+  constructor(
+    Entity: EntityClass<T>,
+    transactionBuilder?: TransactWriteBuilder
+  ) {
     super(Entity);
-    this.#transactionBuilder = new TransactWriteBuilder();
+    // Use the transaction builder passed to the class, or instantiate a new one
+    this.transactionBuilder = transactionBuilder ?? new TransactWriteBuilder();
   }
 
   /**
@@ -158,9 +162,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       );
     }
 
-    await this.#transactionBuilder.executeTransaction();
+    await this.commitTransaction();
 
     return updatedAttrs;
+  }
+
+  protected async commitTransaction(): Promise<void> {
+    await this.transactionBuilder.executeTransaction();
   }
 
   /**
@@ -331,7 +339,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     };
     const tableKeys = entityToTableItem(this.EntityClass, keys);
 
-    this.#transactionBuilder.addUpdate(
+    this.transactionBuilder.addUpdate(
       {
         TableName: tableName,
         Key: tableKeys,
@@ -437,7 +445,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       foreignKey
     );
 
-    this.#transactionBuilder.addUpdate({
+    this.transactionBuilder.addUpdate({
       TableName: tableName,
       Key: newKey,
       ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
@@ -505,7 +513,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
     };
 
-    this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
+    this.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
   /**
@@ -526,7 +534,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       foreignKey
     );
     const tableItem = entityToTableItem(this.EntityClass, updatedEntity);
-    this.#transactionBuilder.addPut(
+    this.transactionBuilder.addPut(
       {
         TableName: this.tableMetadata.name,
         Item: { ...tableItem, ...key },
@@ -572,7 +580,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       relMeta.target,
       linkedEntity
     );
-    this.#transactionBuilder.addPut(
+    this.transactionBuilder.addPut(
       {
         TableName: this.tableMetadata.name,
         Item: { ...linkedRecordTableItem, ...key },
@@ -613,12 +621,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       oldForeignKey
     );
 
-    this.#transactionBuilder.addDelete({
+    this.transactionBuilder.addDelete({
       TableName: this.tableMetadata.name,
       Key: oldKeysToSelf
     });
 
-    this.#transactionBuilder.addDelete({
+    this.transactionBuilder.addDelete({
       TableName: this.tableMetadata.name,
       Key: oldKeysToForeignEntity
     });
@@ -647,7 +655,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       oldForeignKey
     );
 
-    this.#transactionBuilder.addDelete({
+    this.transactionBuilder.addDelete({
       TableName: this.tableMetadata.name,
       Key: oldKeysToForeignEntity
     });
@@ -680,7 +688,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const hasAndBelongsToManyLookup = this.buildHasAndBelongsToManyRelLookup();
 
     relatedEntities.forEach(entity => {
-      this.#transactionBuilder.addUpdate({
+      this.transactionBuilder.addUpdate({
         TableName: this.tableMetadata.name,
         Key: this.buildUpdatedRelatedEntityLinkKey(
           entityId,
