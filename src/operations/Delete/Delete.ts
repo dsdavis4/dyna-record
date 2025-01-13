@@ -9,7 +9,8 @@ import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
   isRelationshipMetadataWithForeignKey,
-  isBelongsToRelationship
+  isBelongsToRelationship,
+  isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import type { EntityClass, RelationshipLookup } from "../../types";
 import { isKeyOfObject } from "../../utils";
@@ -80,6 +81,10 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     const { self, linkedEntities } = await this.preFetch(id);
 
     this.buildDeleteSelfTransactions(self);
+
+    linkedEntities.forEach(entity => {
+      this.buildDeleteJoinTableLinkTransaction(entity);
+    });
 
     await Promise.all(
       linkedEntities.map(async entity => {
@@ -229,6 +234,41 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         }
       }
     });
+  }
+
+  /**
+   * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
+   * @param item - BelongsToLink from HasAndBelongsToMany relationship
+   */
+  private buildDeleteJoinTableLinkTransaction(item: Entity): void {
+    const relMeta = this.#relationsLookup[item.type];
+
+    if (isHasAndBelongsToManyRelationship(relMeta)) {
+      this.buildDeleteItemTransaction(item, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          {
+            // TODO dry up getting these keys. What about using the helper?
+            [this.#partitionKeyField]:
+              item[this.#partitionKeyField as keyof typeof item],
+            [this.#sortKeyField]: item[this.#sortKeyField as keyof typeof item]
+          }
+        )}`
+      });
+
+      const belongsToLinksKeys = {
+        // TODO dry up or use helper. I should be able to use the helper for this...
+        // TODO I did this type casting of keyof item alot in here.. clean that up
+        [this.#partitionKeyField]:
+          item[this.#sortKeyField as keyof typeof item],
+        [this.#sortKeyField]: item[this.#partitionKeyField as keyof typeof item]
+      };
+
+      this.buildDeleteItemTransaction(belongsToLinksKeys, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          belongsToLinksKeys
+        )}`
+      });
+    }
   }
 
   /**
