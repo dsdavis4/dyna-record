@@ -621,15 +621,23 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       oldForeignKey
     );
 
-    this.transactionBuilder.addDelete({
-      TableName: this.tableMetadata.name,
-      Key: oldKeysToSelf
-    });
+    this.transactionBuilder.addDelete(
+      {
+        TableName: this.tableMetadata.name,
+        Key: oldKeysToSelf
+      },
+      // TODO I added this with delete logic, add a test within update class for this
+      `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToSelf)}`
+    );
 
-    this.transactionBuilder.addDelete({
-      TableName: this.tableMetadata.name,
-      Key: oldKeysToForeignEntity
-    });
+    this.transactionBuilder.addDelete(
+      {
+        TableName: this.tableMetadata.name,
+        Key: oldKeysToForeignEntity
+      },
+      // TODO I added this with delete logic, add a test within update class for this
+      `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToForeignEntity)}`
+    );
   }
 
   /**
@@ -688,16 +696,20 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const hasAndBelongsToManyLookup = this.buildHasAndBelongsToManyRelLookup();
 
     relatedEntities.forEach(entity => {
-      this.transactionBuilder.addUpdate({
-        TableName: this.tableMetadata.name,
-        Key: this.buildUpdatedRelatedEntityLinkKey(
-          entityId,
-          entity,
-          hasAndBelongsToManyLookup
-        ),
-        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
-        ...expression
-      });
+      this.transactionBuilder.addUpdate(
+        {
+          TableName: this.tableMetadata.name,
+          Key: this.buildUpdatedRelatedEntityLinkKey(
+            entityId,
+            entity,
+            hasAndBelongsToManyLookup
+          ),
+          ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
+          ...expression
+        },
+        // TODO add test for this within update test file. I added this while working on delete
+        `${entity.constructor.name} is not associated with ${this.EntityClass.name} - ${entityId}`
+      );
     });
   }
 
