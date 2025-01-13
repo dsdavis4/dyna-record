@@ -1233,6 +1233,7 @@ describe("Delete", () => {
                   // (HasOne) Delete denormalized Person from Home partition
                   Delete: {
                     TableName: "mock-table",
+                    // TODO this is a bad key...
                     Key: { PK: "Home", SK: "Person" }
                   }
                 }
@@ -1536,6 +1537,7 @@ describe("Delete", () => {
                   // (HasOne) Delete denormalized Person from Home partition
                   Delete: {
                     TableName: "mock-table",
+                    // TODO this is a bad key...
                     Key: { PK: "Home", SK: "Person" }
                   }
                 }

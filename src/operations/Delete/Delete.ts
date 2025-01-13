@@ -10,7 +10,9 @@ import {
   doesEntityBelongToRelAsHasOne,
   isRelationshipMetadataWithForeignKey,
   isBelongsToRelationship,
-  isHasAndBelongsToManyRelationship
+  isHasAndBelongsToManyRelationship,
+  isHasOneRelationship,
+  isHasManyRelationship
 } from "../../metadata/utils";
 import type { EntityClass, RelationshipLookup } from "../../types";
 import { isKeyOfObject } from "../../utils";
@@ -28,9 +30,14 @@ interface PreFetchResult {
    */
   self?: QueryResult<DynaRecord>;
   /**
-   * Denormalized link records for associated entities
+   * Denormalized link records for associated entities that do not have a foreign key reference
    */
   linkedEntities: QueryResults<DynaRecord>;
+  /**
+   * Denormalized link records for associated entities with foreign key reference
+   * This indicates it needs to have a foreign key nullified
+   */
+  linkedEntitiesWithFkRef: QueryResults<DynaRecord>; // TODO can this be shortened?
 }
 
 /**
@@ -78,16 +85,30 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param id
    */
   public async run(id: string): Promise<void> {
-    const { self, linkedEntities } = await this.preFetch(id);
+    const preFetchRes = await this.preFetch(id);
 
-    this.buildDeleteSelfTransactions(self);
+    this.buildDeleteSelfTransactions(preFetchRes.self);
 
-    linkedEntities.forEach(entity => {
-      this.buildDeleteJoinTableLinkTransaction(entity);
+    preFetchRes.linkedEntities.forEach(item => {
+      // TODO move all of this to a method
+      this.buildDeleteItemTransaction(item, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          {
+            // TODO dry up getting these keys. What about using the helper?
+            [this.#partitionKeyField]:
+              item[this.#partitionKeyField as keyof typeof item],
+            [this.#sortKeyField]: item[this.#sortKeyField as keyof typeof item]
+          }
+        )}`
+      });
+      this.buildDeleteJoinTableLinkTransaction(item);
+
+      // TODO is this needed. If I comment out I dont think anything happens...
+      this.buildDeleteHasManyOrHasOneLinks(item);
     });
 
     await Promise.all(
-      linkedEntities.map(async entity => {
+      preFetchRes.linkedEntitiesWithFkRef.map(async entity => {
         await this.buildNullifyForeignKeyTransaction(entity);
       })
     );
@@ -114,12 +135,17 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       (acc, item) => {
         const isItemSelf = item.id === id && item instanceof this.EntityClass;
 
-        if (isItemSelf) acc.self = item;
-        else acc.linkedEntities.push(item);
+        if (isItemSelf) {
+          acc.self = item;
+        } else if (this.doesEntityNeedForeignKeyNullified(item)) {
+          acc.linkedEntitiesWithFkRef.push(item);
+        } else {
+          acc.linkedEntities.push(item);
+        }
 
         return acc;
       },
-      { linkedEntities: [] }
+      { linkedEntities: [], linkedEntitiesWithFkRef: [] }
     );
 
     // TODO add test for new self not defined
@@ -129,8 +155,23 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
 
     return {
       self: prefetchResult.self,
-      linkedEntities: prefetchResult.linkedEntities
+      linkedEntities: prefetchResult.linkedEntities,
+      linkedEntitiesWithFkRef: prefetchResult.linkedEntitiesWithFkRef
     };
+  }
+
+  /**
+   * Returns true if the linked entity needs to have a foreign key nullified
+   * @param relMeta
+   * @returns
+   */
+  private doesEntityNeedForeignKeyNullified(linkedEntity: Entity): boolean {
+    const relMeta = this.#relationsLookup[linkedEntity.type];
+
+    return (
+      !isBelongsToRelationship(relMeta) &&
+      isRelationshipMetadataWithForeignKey(relMeta)
+    );
   }
 
   /**
@@ -178,10 +219,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
   private async buildNullifyForeignKeyTransaction(item: Entity): Promise<void> {
     const relMeta = this.#relationsLookup[item.type];
 
-    if (
-      !isBelongsToRelationship(relMeta) &&
-      isRelationshipMetadataWithForeignKey(relMeta)
-    ) {
+    if (isRelationshipMetadataWithForeignKey(relMeta)) {
       const entityAttrs = Metadata.getEntityAttributes(relMeta.target.name);
 
       const attrMeta = Object.values(entityAttrs).find(
@@ -244,23 +282,36 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     const relMeta = this.#relationsLookup[item.type];
 
     if (isHasAndBelongsToManyRelationship(relMeta)) {
-      this.buildDeleteItemTransaction(item, {
-        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-          {
-            // TODO dry up getting these keys. What about using the helper?
-            [this.#partitionKeyField]:
-              item[this.#partitionKeyField as keyof typeof item],
-            [this.#sortKeyField]: item[this.#sortKeyField as keyof typeof item]
-          }
-        )}`
-      });
-
       const belongsToLinksKeys = {
         // TODO dry up or use helper. I should be able to use the helper for this...
         // TODO I did this type casting of keyof item alot in here.. clean that up
         [this.#partitionKeyField]:
           item[this.#sortKeyField as keyof typeof item],
         [this.#sortKeyField]: item[this.#partitionKeyField as keyof typeof item]
+      };
+
+      this.buildDeleteItemTransaction(belongsToLinksKeys, {
+        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          belongsToLinksKeys
+        )}`
+      });
+    }
+  }
+
+  /**
+   * Deletes the denormalized records in foreign HasOne or HasMany relationship partition
+   * @param item
+   */
+  private buildDeleteHasManyOrHasOneLinks(item: Entity): void {
+    const relMeta = this.#relationsLookup[item.type];
+    // TODO are keys correct for both types?
+    if (isHasOneRelationship(relMeta) || isHasManyRelationship(relMeta)) {
+      const belongsToLinksKeys = {
+        // TODO dry up or use helper. I should be able to use the helper for this...
+        // TODO I did this type casting of keyof item alot in here.. clean that up
+        [this.#partitionKeyField]:
+          item[this.#sortKeyField as keyof typeof item],
+        [this.#sortKeyField]: this.EntityClass.name
       };
 
       this.buildDeleteItemTransaction(belongsToLinksKeys, {
