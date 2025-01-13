@@ -97,6 +97,16 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 });
 
 describe("Delete", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -290,7 +300,8 @@ describe("Delete", () => {
       UpdatedAt: "2022-10-15T08:31:15.148Z"
     };
 
-    const pet: MockTableEntityTableItem<Pet> = {
+    // Pet entity denormalized to Person partition
+    const petPersonLink: MockTableEntityTableItem<Pet> = {
       PK: "Person#123",
       SK: "Pet#001",
       Id: "001",
@@ -301,7 +312,8 @@ describe("Delete", () => {
       UpdatedAt: "2022-10-17T09:31:15.148Z"
     };
 
-    const home: HomeTableItem = {
+    // Home entity denormalized to Person partition
+    const homePersonLink: HomeTableItem = {
       PK: "Person#123",
       SK: "Home",
       Id: "002",
@@ -312,32 +324,107 @@ describe("Delete", () => {
       UpdatedAt: "2022-10-15T09:31:15.148Z"
     };
 
+    // Initial pre-fetch
     mockQuery.mockResolvedValueOnce({
       Items: [
         person,
         // HasMany Pets
-        pet,
+        petPersonLink,
         // HasOne Home
-        home
+        homePersonLink
       ]
     });
+
+    // Begin get Pet and associated records
+
+    const pet: MockTableEntityTableItem<Pet> = {
+      ...petPersonLink,
+      PK: `Pet#${petPersonLink.Id}`
+    };
+
+    // Get the pet with denormlized reocrds
+    mockQuery.mockResolvedValueOnce({ Items: [pet] });
+
+    // End get Pet and associated records
+
+    // Begin get Home and associated records
+
+    const home: HomeTableItem = {
+      ...homePersonLink,
+      PK: `Home#${homePersonLink.Id}`
+    };
+
+    // Address record denormalized to Home partition
+    const addressHomeLink: MockTableEntityTableItem<Address> = {
+      PK: home.PK,
+      SK: "Address",
+      Id: "003",
+      Type: "Address",
+      State: "CO",
+      HomeId: home.Id,
+      PhoneBookId: "111",
+      CreatedAt: "2021-11-15T09:31:15.148Z",
+      UpdatedAt: "2022-11-16T09:31:15.148Z"
+    };
+
+    // Get Home with its denormalized link records
+    mockQuery.mockResolvedValueOnce({ Items: [home, addressHomeLink] });
+
+    // End get Home and associated records
 
     // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await Person.delete("123");
 
     expect(res).toEqual(undefined);
     expect(mockSend.mock.calls).toEqual([
-      [{ name: "QueryCommand" }],
-      [{ name: "TransactWriteCommand" }]
+      [{ name: "QueryCommand" }], // Initial prefetch
+      [{ name: "QueryCommand" }], // Getting records for which foreign key nullification must be denormalized
+      [{ name: "QueryCommand" }], // Getting records for which foreign key nullification must be denormalized
+      [{ name: "TransactWriteCommand" }] // Save everything
     ]);
-    expect(mockQuery.mock.calls).toEqual([[]]);
+    expect(mockQuery.mock.calls).toEqual([[], [], []]);
     expect(mockedQueryCommand.mock.calls).toEqual([
       [
         {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
-          ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Person#123" }
+          ExpressionAttributeNames: {
+            "#PK": "PK"
+          },
+          ExpressionAttributeValues: {
+            ":PK1": "Person#123"
+          }
+        }
+      ],
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK2",
+          FilterExpression: "#Type IN (:Type1)",
+          ExpressionAttributeNames: {
+            "#PK": "PK",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":PK2": "Pet#001",
+            ":Type1": "Pet"
+          }
+        }
+      ],
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK3",
+          FilterExpression: "#Type IN (:Type1,:Type2)",
+          ExpressionAttributeNames: {
+            "#PK": "PK",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":PK3": "Home#002",
+            ":Type1": "Home",
+            ":Type2": "Address"
+          }
         }
       ]
     ]);
@@ -350,27 +437,42 @@ describe("Delete", () => {
               // Delete Item
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Person#123", SK: "Person" }
+                Key: {
+                  PK: "Person#123",
+                  SK: "Person"
+                }
               }
             },
-            // (HasMany) Delete denormalized Pet from Person partition
             {
-              Delete: {
-                TableName: "mock-table",
-                Key: { PK: "Person#123", SK: "Pet#001" }
-              }
-            },
-            // (HasMany) Remove the nullable foreign key from Pet item
-            // TODO this will need to go find all denormalized pet records and update...
-            // Could I leverage logic within update?
-            {
+              // (HasMany) Remove the nullable foreign key from Pet item
               Update: {
                 TableName: "mock-table",
                 Key: { PK: "Pet#001", SK: "Pet" },
+                ConditionExpression: "attribute_exists(PK)",
                 ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
                   "#OwnerId": "OwnerId"
                 },
-                UpdateExpression: "REMOVE #OwnerId"
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                },
+                UpdateExpression: "SET #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+              }
+            },
+            {
+              // (HasOne) Remove the nullable foreign key from Home item
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Home#002", SK: "Home" },
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
+                  "#PersonId": "PersonId"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                },
+                UpdateExpression: "SET #UpdatedAt = :UpdatedAt REMOVE #PersonId"
               }
             },
             {
@@ -381,29 +483,40 @@ describe("Delete", () => {
               }
             },
             {
-              // (HasOne) Delete denormalized Home from Person partition
+              // (HasMany) Delete denormalized Pet from Person partition
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Person#123", SK: "Home" }
+                Key: { PK: "Person#123", SK: "Pet#001" }
               }
             },
             {
-              // (HasOne) Remove the nullable foreign key from Home item
-              // TODO this will need to go find all denormalized home records and update...
+              // Since the Home record was updated to remove Person foreign key, update denormalized Home records. In this case the record within Address partition
               Update: {
                 TableName: "mock-table",
-                Key: { PK: "Home#002", SK: "Home" },
+                Key: { PK: "Address#003", SK: "Home" },
+                ConditionExpression: "attribute_exists(PK)",
                 ExpressionAttributeNames: {
+                  "#UpdatedAt": "UpdatedAt",
                   "#PersonId": "PersonId"
                 },
-                UpdateExpression: "REMOVE #PersonId"
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                },
+                UpdateExpression: "SET #UpdatedAt = :UpdatedAt REMOVE #PersonId"
               }
             },
             {
               // (HasOne) Delete denormalized Person from Home partition
               Delete: {
                 TableName: "mock-table",
-                Key: { PK: "Home", SK: "Person" }
+                Key: { PK: "Home#002", SK: "Person" }
+              }
+            },
+            {
+              // (HasOne) Delete denormalized Home from Person partition
+              Delete: {
+                TableName: "mock-table",
+                Key: { PK: "Person#123", SK: "Home" }
               }
             }
           ]
