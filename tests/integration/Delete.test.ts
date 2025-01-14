@@ -574,7 +574,7 @@ describe("Delete", () => {
             "ConditionalCheckFailed: Home with ID '002' does not exist"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Address is not associated with Home - 002"
+            "ConditionalCheckFailed: Address (003) is not associated with Home (002)"
           )
         ]);
 

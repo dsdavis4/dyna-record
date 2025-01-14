@@ -4865,10 +4865,10 @@ describe("Update", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Address is not associated with PhoneBook - 123"
+            "ConditionalCheckFailed: Address (456) is not associated with PhoneBook (123)"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Address is not associated with PhoneBook - 123"
+            "ConditionalCheckFailed: Address (789) is not associated with PhoneBook (123)"
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -5080,7 +5080,7 @@ describe("Update", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: User is not associated with Desk - 123"
+            "ConditionalCheckFailed: User (456) is not associated with Desk (123)"
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -5323,10 +5323,10 @@ describe("Update", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: User is not associated with Website - 123"
+            "ConditionalCheckFailed: User (456) is not associated with Website (123)"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: User is not associated with Website - 123"
+            "ConditionalCheckFailed: User (789) is not associated with Website (123)"
           )
         ]);
         expect(mockSend.mock.calls).toEqual([

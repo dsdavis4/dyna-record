@@ -703,7 +703,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
           ...expression
         },
-        `${entity.constructor.name} is not associated with ${this.EntityClass.name} - ${entityId}`
+        `${entity.constructor.name} (${entity.id}) is not associated with ${this.EntityClass.name} (${entityId})`
       );
     });
   }
