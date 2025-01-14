@@ -130,7 +130,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     this.buildUpdateItemTransaction(id, expression);
 
-    // TODO add explicit unit test for this - right now its tested indirectly
     // Only need to prefetch if the entity has relationships
     if (entityMeta.allRelationships.length > 0) {
       const belongsToRelMetaBeingUpdated =
@@ -704,6 +703,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
           ...expression
         },
+        // TODO here...
         // TODO add test for this within update test file. I added this while working on delete
         `${entity.constructor.name} is not associated with ${this.EntityClass.name} - ${entityId}`
       );

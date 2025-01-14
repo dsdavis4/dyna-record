@@ -589,6 +589,98 @@ describe("Update", () => {
     });
   });
 
+  describe("can update an entity without relationships - no prefetch or denormalization", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MockInformation#123",
+                    SK: "MockInformation"
+                  },
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":State": "CO",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  UpdateExpression:
+                    "SET #State = :State, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    test("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MockInformation.update("123", {
+          state: "CO"
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "test@test.com",
+        state: "AZ",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        state: "CO"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        state: "CO",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
+      // Assert original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MockInformation#123",
+        sk: "MockInformation",
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "test@test.com",
+        state: "AZ",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
   describe("will update an entity and remove nullable attributes", () => {
     const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([
