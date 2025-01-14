@@ -27,8 +27,6 @@ interface DynaRecordBase {
   updatedAt: Date;
 }
 
-// TODO here... I just fixed delete operation... now update the tests
-
 /**
  * Serves as an abstract base class for entities in the ORM system. It defines standard fields such as `id`, `type`, `createdAt`, and `updatedAt`, and provides static methods for CRUD operations and queries. This class encapsulates common behaviors and properties that all entities share, leveraging decorators for attribute metadata and supporting operations like finding, creating, updating, and deleting entities.
  *
@@ -155,17 +153,16 @@ abstract class DynaRecord implements DynaRecordBase {
    *  },
    *  {
    *    filter: {
-   *      type: ["BelongsToLink", "Profile"],
-   *      createdAt: { $beginsWith: "202" },
+   *      type: ["Profile", "Preferences"],
+   *      createdAt: { $beginsWith: "2023" },
    *      $or: [
    *        {
-   *         foreignKey: "111",
-   *         updatedAt: { $beginsWith: "2023-02-15" }
+   *         name: "John",
+   *         email: { $beginsWith: "testing }
    *        },
    *        {
-   *          foreignKey: ["222", "333"],
-   *          createdAt: { $beginsWith: "2021-09-15T" },
-   *          foreignEntityType: "Order"
+   *          name: "Jane",
+   *          updatedAt: { $beginsWith: "2024" },
    *        },
    *       {
    *         id: "123"
@@ -218,7 +215,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * const user = await User.query("123", {
    *   filter: {
-   *     type: "BelongsToLink",
+   *     type: "Profile",
    *     createdAt: "2023-11-21T12:31:21.148Z"
    *    }
    * });
@@ -259,7 +256,7 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * Update an entity. If foreign keys are included in the attribute then:
    *   - Manages associated relationship links as needed
-   *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
+   *   - If the entity already had a foreign key relationship, then denormalized records will be deleted from each partition
    *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
@@ -321,7 +318,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
   /**
    * Delete an entity by ID
-   *   - Delete all BelongsToLinks
+   *   - Delete all denormalized records
    *   - Disassociate all foreign keys of linked models
    * @param id - The id of the entity to update
    *
