@@ -232,14 +232,14 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
             `Cannot set ${relMeta.target.name} with id: '${item.id}' attribute '${relMeta.foreignKey}' to null`
           )
         );
+      } else {
+        const op = new UpdateDryRun<typeof item>(
+          relMeta.target,
+          this.#transactionBuilder
+        );
+
+        await op.run(item.id, { [relMeta.foreignKey]: null });
       }
-
-      const op = new UpdateDryRun<typeof item>(
-        relMeta.target,
-        this.#transactionBuilder
-      );
-
-      await op.run(item.id, { [relMeta.foreignKey]: null });
     }
   }
 
