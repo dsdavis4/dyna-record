@@ -295,6 +295,14 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     entityId: string,
     foreignKeyValue: string
   ): void {
+    // TODO start here
+    // For keys like this I think I can use the hlper but its making table items
+    // to avoid changing back and forth make a
+    // buildDeleteItemTransaction that takes table keys
+    // and a buildDeleteEntityTransaction that takes entity fields, converts to table then calls buildDeleteItemTransaction
+    // I think its important to share the belongs to keys logic
+    // TODO should the belongs to keys buildre helper be used in Create
+    // TODO should the belongs to keys buildre helper be used in JoinTable?
     const belongsToLinksKeys = {
       [this.#partitionKeyField]:
         relMeta.target.partitionKeyValue(foreignKeyValue),

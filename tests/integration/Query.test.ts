@@ -939,6 +939,7 @@ describe("Query", () => {
     });
   });
 
+  // TODO add a type test that the return type can be the entity or anything of a relationship...
   describe("queryByEntity specific test", () => {
     describe("types", () => {
       it("does not serialize relationships", async () => {
