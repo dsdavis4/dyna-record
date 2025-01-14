@@ -10,9 +10,7 @@ import {
   doesEntityBelongToRelAsHasOne,
   isRelationshipMetadataWithForeignKey,
   isBelongsToRelationship,
-  isHasAndBelongsToManyRelationship,
-  isHasOneRelationship,
-  isHasManyRelationship
+  isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
 import type { EntityClass, RelationshipLookup } from "../../types";
 import { isKeyOfObject } from "../../utils";
@@ -102,9 +100,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         )}`
       });
       this.buildDeleteJoinTableLinkTransaction(item);
-
-      // TODO is this needed. If I comment out I dont think anything happens...
-      this.buildDeleteHasManyOrHasOneLinks(item);
     });
 
     await Promise.all(
@@ -288,30 +283,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         [this.#partitionKeyField]:
           item[this.#sortKeyField as keyof typeof item],
         [this.#sortKeyField]: item[this.#partitionKeyField as keyof typeof item]
-      };
-
-      this.buildDeleteItemTransaction(belongsToLinksKeys, {
-        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-          belongsToLinksKeys
-        )}`
-      });
-    }
-  }
-
-  /**
-   * Deletes the denormalized records in foreign HasOne or HasMany relationship partition
-   * @param item
-   */
-  private buildDeleteHasManyOrHasOneLinks(item: Entity): void {
-    const relMeta = this.#relationsLookup[item.type];
-    // TODO are keys correct for both types?
-    if (isHasOneRelationship(relMeta) || isHasManyRelationship(relMeta)) {
-      const belongsToLinksKeys = {
-        // TODO dry up or use helper. I should be able to use the helper for this...
-        // TODO I did this type casting of keyof item alot in here.. clean that up
-        [this.#partitionKeyField]:
-          item[this.#sortKeyField as keyof typeof item],
-        [this.#sortKeyField]: this.EntityClass.name
       };
 
       this.buildDeleteItemTransaction(belongsToLinksKeys, {
