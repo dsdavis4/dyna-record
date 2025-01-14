@@ -12,7 +12,11 @@ import {
   isBelongsToRelationship,
   isHasAndBelongsToManyRelationship
 } from "../../metadata/utils";
-import type { EntityClass, RelationshipLookup } from "../../types";
+import type {
+  DynamoTableItem,
+  EntityClass,
+  RelationshipLookup
+} from "../../types";
 import { isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import type { QueryResults, QueryResult } from "../Query";
@@ -90,12 +94,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     preFetchRes.linkedEntities.forEach(item => {
       this.buildDeleteItemTransaction(item, {
         errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-          {
-            // TODO dry up getting these keys. What about using the helper?
-            [this.#partitionKeyField]:
-              item[this.#partitionKeyField as keyof typeof item],
-            [this.#sortKeyField]: item[this.#sortKeyField as keyof typeof item]
-          }
+          this.buildKeyObject(item, this.#partitionKeyField, this.#sortKeyField)
         )}`
       });
       this.buildDeleteJoinTableLinkTransaction(item);
@@ -187,17 +186,14 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     item: Partial<Entity>,
     options: DeleteOptions
   ): void {
-    // TODO can I not cast?
     const pkField = this.#partitionKeyField as keyof typeof item;
     const skField = this.#sortKeyField as keyof typeof item;
-
-    // TODO is there a better way to get these values?
 
     this.#transactionBuilder.addDelete(
       {
         TableName: this.#tableName,
         Key: {
-          [this.partitionKeyAlias]: item[pkField], // TODO I think I can use the build in partitionKeyValue method
+          [this.partitionKeyAlias]: item[pkField],
           [this.sortKeyAlias]: item[skField]
         }
       },
@@ -276,14 +272,11 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     const relMeta = this.#relationsLookup[item.type];
 
     if (isHasAndBelongsToManyRelationship(relMeta)) {
-      const belongsToLinksKeys = {
-        // TODO dry up or use helper. I should be able to use the helper for this...
-        // TODO I did this type casting of keyof item alot in here.. clean that up
-        [this.#partitionKeyField]:
-          item[this.#sortKeyField as keyof typeof item],
-        [this.#sortKeyField]: item[this.#partitionKeyField as keyof typeof item]
-      };
-
+      const belongsToLinksKeys = this.buildKeyObject(
+        item,
+        this.#sortKeyField,
+        this.#partitionKeyField
+      );
       this.buildDeleteItemTransaction(belongsToLinksKeys, {
         errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
           belongsToLinksKeys
@@ -303,7 +296,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     entityId: string,
     foreignKeyValue: string
   ): void {
-    // TODO use the helper here...
     const belongsToLinksKeys = {
       [this.#partitionKeyField]:
         relMeta.target.partitionKeyValue(foreignKeyValue),
@@ -345,6 +337,21 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    */
   private trackValidationError(err: Error): void {
     this.#validationErrors.push(err);
+  }
+
+  private buildKeyObject(
+    item: Partial<Entity>,
+    pkField: string,
+    skField: string
+  ): DynamoTableItem {
+    if (isKeyOfObject(item, pkField) && isKeyOfObject(item, skField)) {
+      return {
+        [this.#partitionKeyField]: item[pkField],
+        [this.#sortKeyField]: item[skField]
+      };
+    }
+
+    throw new Error("Invalid keys");
   }
 }
 
