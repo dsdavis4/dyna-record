@@ -11,8 +11,6 @@ import Metadata, {
 } from "../metadata";
 import type { ForeignKey, EntityClass, DynamoTableItem } from "../types";
 
-// TODO check typedoc in here
-
 /**
  * Exclude the type1 type2 instance keys
  */
@@ -54,7 +52,7 @@ interface TransactionProps {
 /**
  * Abstract class representing a join table for HasAndBelongsToMany relationships.
  * This class should be extended for specific join table implementations.
- * It is virtual and not persisted to the database but manages the BelongsToLinks
+ * It is virtual and not persisted to the database but manages the denormalized records
  * in each related entity's partition.
  *
  * Example:
@@ -73,7 +71,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
   /**
    * Create a JoinTable entry
-   * Adds BelongsToLink to each associated Entity's partition
+   * Adds denormalized copy of the related entity to each associated Entity's partition
    * @param this
    * @param keys
    */
@@ -111,7 +109,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
   /**
    * Delete a JoinTable entry
-   * Deletes BelongsToLink from each associated Entity's partition
+   * Deletes denormalized records from each associated Entity's partition
    * @param this
    * @param keys
    */
@@ -184,10 +182,9 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     }, {});
   }
 
-  // TODO update typedoc not using belongs to links...
   /**
    * Creates transactions:
-   *   1. Create a BelongsToLink in parents partition if its not already linked
+   *   1. Create a denormalized record in parents partition if its not already linked
    *   2. Ensures that the parent EntityExists
    * @param transactionBuilder
    * @param keys
@@ -260,7 +257,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
   /**
    * Deletes transactions:
-   *   1. Delete a BelongsToLink in parents partition if its linked
+   *   1. Delete a denormalized record in parents partition if its linked
    * @param transactionBuilder
    * @param keys
    * @param parentEntityMeta
