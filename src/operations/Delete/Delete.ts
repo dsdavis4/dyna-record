@@ -88,7 +88,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     this.buildDeleteSelfTransactions(preFetchRes.self);
 
     preFetchRes.linkedEntities.forEach(item => {
-      // TODO move all of this to a method
       this.buildDeleteItemTransaction(item, {
         errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
           {
