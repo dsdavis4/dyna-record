@@ -132,9 +132,6 @@ class MockInformation extends MockTable {
   public someDate?: Date;
 }
 
-// TODO make sure there is a test for updating an entity which does not need to do any prefetch
-//      does not belong to anything (or has nullable foreign key) or have has one or has many
-
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
