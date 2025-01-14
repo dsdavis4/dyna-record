@@ -4670,6 +4670,58 @@ describe("Update", () => {
   });
 
   describe("A model who HasMany of a relationship is updated", () => {
+    const phoneBook: MockTableEntityTableItem<PhoneBook> = {
+      PK: "PhoneBook#123",
+      SK: "PhoneBook",
+      Id: "123",
+      Type: "PhoneBook",
+      Edition: "1",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(PhoneBook, {
+      pk: "PhoneBook#123" as PartitionKey,
+      sk: "PhoneBook" as SortKey,
+      id: "123",
+      type: "PhoneBook",
+      edition: "1",
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // Address record denormalized to PhoneBook partition
+      const linkedAddress1: MockTableEntityTableItem<Address> = {
+        PK: phoneBook.PK, // Linked record in PhoneBook partition
+        SK: "Address#456",
+        Id: "456",
+        Type: "Address",
+        PhoneBookId: phoneBook.Id,
+        State: "CO",
+        HomeId: "001",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      // Address record denormalized to PhoneBook partition
+      const linkedAddress2: MockTableEntityTableItem<Address> = {
+        PK: phoneBook.PK, // Linked record in PhoneBook partition
+        SK: "Address#789",
+        Id: "789",
+        Type: "Address",
+        PhoneBookId: phoneBook.Id,
+        State: "AZ",
+        HomeId: "002",
+        CreatedAt: "2023-01-05T00:00:00.000Z",
+        UpdatedAt: "2023-01-06T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [phoneBook, linkedAddress1, linkedAddress2]
+      });
+    });
+
     describe("will update the entity and the denormalized link records for its associated entities", () => {
       const dbOperationAssertions = (): void => {
         expect(mockSend.mock.calls).toEqual([
@@ -4768,58 +4820,6 @@ describe("Update", () => {
         ]);
       };
 
-      const phoneBook: MockTableEntityTableItem<PhoneBook> = {
-        PK: "PhoneBook#123",
-        SK: "PhoneBook",
-        Id: "123",
-        Type: "PhoneBook",
-        Edition: "1",
-        CreatedAt: "2023-01-01T00:00:00.000Z",
-        UpdatedAt: "2023-01-02T00:00:00.000Z"
-      };
-
-      const instance = createInstance(PhoneBook, {
-        pk: "PhoneBook#123" as PartitionKey,
-        sk: "PhoneBook" as SortKey,
-        id: "123",
-        type: "PhoneBook",
-        edition: "1",
-        createdAt: new Date("2023-01-01T00:00:00.000Z"),
-        updatedAt: new Date("2023-01-02T00:00:00.000Z")
-      });
-
-      beforeEach(() => {
-        // Address record denormalized to PhoneBook partition
-        const linkedAddress1: MockTableEntityTableItem<Address> = {
-          PK: phoneBook.PK, // Linked record in PhoneBook partition
-          SK: "Address#456",
-          Id: "456",
-          Type: "Address",
-          PhoneBookId: phoneBook.Id,
-          State: "CO",
-          HomeId: "001",
-          CreatedAt: "2023-01-03T00:00:00.000Z",
-          UpdatedAt: "2023-01-04T00:00:00.000Z"
-        };
-
-        // Address record denormalized to PhoneBook partition
-        const linkedAddress2: MockTableEntityTableItem<Address> = {
-          PK: phoneBook.PK, // Linked record in PhoneBook partition
-          SK: "Address#789",
-          Id: "789",
-          Type: "Address",
-          PhoneBookId: phoneBook.Id,
-          State: "AZ",
-          HomeId: "002",
-          CreatedAt: "2023-01-05T00:00:00.000Z",
-          UpdatedAt: "2023-01-06T00:00:00.000Z"
-        };
-
-        mockQuery.mockResolvedValue({
-          Items: [phoneBook, linkedAddress1, linkedAddress2]
-        });
-      });
-
       test("static method", async () => {
         expect.assertions(5);
 
@@ -4859,83 +4859,69 @@ describe("Update", () => {
         dbOperationAssertions();
       });
     });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Address is not associated with PhoneBook - 123"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Address is not associated with PhoneBook - 123"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await PhoneBook.update("123", {
+            edition: "2"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({
+            edition: "2"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+    });
   });
 
   describe("A model who HasOne of a relationship is updated", () => {
-    const dbOperationAssertions = (): void => {
-      expect(mockSend.mock.calls).toEqual([
-        [{ name: "QueryCommand" }],
-        [{ name: "TransactWriteCommand" }]
-      ]);
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            TableName: "mock-table",
-            KeyConditionExpression: "#PK = :PK3",
-            ExpressionAttributeNames: {
-              "#PK": "PK",
-              "#Type": "Type"
-            },
-            ExpressionAttributeValues: {
-              ":PK3": "Desk#123",
-              ":Type1": "Desk",
-              ":Type2": "User"
-            },
-            FilterExpression: "#Type IN (:Type1,:Type2)"
-          }
-        ]
-      ]);
-      expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                // Update the Desk attributes
-                Update: {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "Desk#123",
-                    SK: "Desk"
-                  },
-                  UpdateExpression: "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Num": "Num",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Num": 2,
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              },
-              {
-                // Update the Desk record that are denormalized to the the associated User partition
-                Update: {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "User#456",
-                    SK: "Desk"
-                  },
-                  UpdateExpression: "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Num": "Num",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Num": 2,
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-    };
-
     const desk: MockTableEntityTableItem<Desk> = {
       PK: "Desk#123",
       SK: "Desk",
@@ -4976,6 +4962,82 @@ describe("Update", () => {
     });
 
     describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Desk#123",
+                ":Type1": "Desk",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Update the Desk attributes
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Desk#123",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Desk record that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#456",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
       test("static method", async () => {
         expect.assertions(5);
 
@@ -5012,106 +5074,63 @@ describe("Update", () => {
         dbOperationAssertions();
       });
     });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User is not associated with Desk - 123"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await Desk.update("123", {
+            num: 2
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({ num: 2 });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+    });
   });
 
   describe("A model who HasAndBelongsToMany of a relationship is updated", () => {
-    const dbOperationAssertions = (): void => {
-      expect(mockSend.mock.calls).toEqual([
-        [{ name: "QueryCommand" }],
-        [{ name: "TransactWriteCommand" }]
-      ]);
-      expect(mockedQueryCommand.mock.calls).toEqual([
-        [
-          {
-            TableName: "mock-table",
-            KeyConditionExpression: "#PK = :PK3",
-            ExpressionAttributeNames: {
-              "#PK": "PK",
-              "#Type": "Type"
-            },
-            ExpressionAttributeValues: {
-              ":PK3": "Website#123",
-              ":Type1": "Website",
-              ":Type2": "User"
-            },
-            FilterExpression: "#Type IN (:Type1,:Type2)"
-          }
-        ]
-      ]);
-      expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                // Update the Website attributes
-                Update: {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "Website#123",
-                    SK: "Website"
-                  },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "testing.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              },
-              {
-                // Update the Website records that are denormalized to the the associated User partition
-                Update: {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "User#456",
-                    SK: "Website#123"
-                  },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "testing.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              },
-              {
-                // Update the Website records that are denormalized to the the associated User partition
-                Update: {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "User#789",
-                    SK: "Website#123"
-                  },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "testing.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-    };
-
     const website: MockTableEntityTableItem<Website> = {
       PK: "Website#123",
       SK: "Website",
@@ -5163,6 +5182,103 @@ describe("Update", () => {
     });
 
     describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Website#123",
+                ":Type1": "Website",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Update the Website attributes
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Website#123",
+                      SK: "Website"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Website records that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#456",
+                      SK: "Website#123"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Website records that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#789",
+                      SK: "Website#123"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
       test("static method", async () => {
         expect.assertions(5);
 
@@ -5199,6 +5315,66 @@ describe("Update", () => {
           updatedAt: instance.updatedAt
         });
         dbOperationAssertions();
+      });
+    });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User is not associated with Website - 123"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User is not associated with Website - 123"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await Website.update("123", {
+            name: "testing.com"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({
+            name: "testing.com"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
       });
     });
   });

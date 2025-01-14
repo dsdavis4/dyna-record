@@ -703,8 +703,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
           ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
           ...expression
         },
-        // TODO here...
-        // TODO add test for this within update test file. I added this while working on delete
         `${entity.constructor.name} is not associated with ${this.EntityClass.name} - ${entityId}`
       );
     });
