@@ -1085,7 +1085,6 @@ describe("Update", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
       expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      // TODO I think this is wrong... There should be a remove...
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -1097,17 +1096,17 @@ describe("Update", () => {
                     PK: "MockInformation#123",
                     SK: "MockInformation"
                   },
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt",
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
+                    "#Phone": "Phone",
                     "#UpdatedAt": "UpdatedAt",
                     "#someDate": "someDate"
                   },
                   ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
-                  }
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #Phone, #someDate"
                 }
               }
             ]
@@ -1124,7 +1123,8 @@ describe("Update", () => {
       expect.assertions(4);
 
       await MockInformation.update("123", {
-        someDate: null
+        someDate: null,
+        phone: null
       });
 
       dbOperationAssertions();
@@ -1147,11 +1147,15 @@ describe("Update", () => {
         updatedAt: new Date("2023-10-02")
       });
 
-      const updatedInstance = await instance.update({ someDate: null });
+      const updatedInstance = await instance.update({
+        someDate: null,
+        phone: null
+      });
 
       expect(updatedInstance).toEqual({
         ...instance,
         someDate: undefined,
+        phone: undefined,
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(updatedInstance).toBeInstanceOf(MockInformation);

@@ -24,7 +24,9 @@ export const entityToTableItem = <T extends DynaRecord>(
 
         // If the attribute has a custom serializer, serialize it
         const value =
-          serializers === undefined ? val : serializers.toTableAttribute(val);
+          serializers === undefined || val === null
+            ? val
+            : serializers.toTableAttribute(val);
 
         acc[alias] = value as NativeScalarAttributeValue;
       }
