@@ -2,7 +2,7 @@ import type DynaRecord from "./DynaRecord";
 import type { DynamoTableItem, Nullable } from "./types";
 import Metadata from "./metadata";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import { type EntityAttributes } from "./operations";
+import { type EntityAttributesOnly } from "./operations";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
@@ -75,7 +75,7 @@ export const tableItemToEntity = <T extends DynaRecord>(
  */
 export const createInstance = <T extends DynaRecord>(
   EntityClass: new () => T,
-  attributes: EntityAttributes<T>
+  attributes: EntityAttributesOnly<T>
 ): T => {
   const entity = new EntityClass();
 
@@ -172,7 +172,7 @@ export const isString = (value: any): value is string => {
  * safeAssign(entity, "name", "Jane Doe");
  */
 export const safeAssign = <
-  TObject extends EntityAttributes<DynaRecord>,
+  TObject extends EntityAttributesOnly<DynaRecord>,
   TKey extends keyof TObject,
   TValue
 >(
@@ -183,7 +183,11 @@ export const safeAssign = <
   object[key] = value as TObject[TKey];
 };
 
-// TODO typedoc
+/**
+ * Type guard to check if a string is a Nullable<string>
+ * @param val
+ * @returns
+ */
 export const isNullableString = (val: unknown): val is Nullable<string> => {
   return typeof val === "string" || val === null;
 };

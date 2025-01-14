@@ -1,5 +1,5 @@
 import type DynaRecord from "../DynaRecord";
-import { type EntityAttributes } from "../operations/types";
+import { type EntityAttributesOnly } from "../operations/types";
 import type { NullableForeignKey, ForeignKey, Optional } from "../types";
 
 /**
@@ -11,7 +11,7 @@ export type ForeignEntityAttribute<T extends DynaRecord> = {
     : T[K] extends NullableForeignKey
       ? Optional<K>
       : never;
-}[keyof EntityAttributes<T>];
+}[keyof EntityAttributesOnly<T>];
 
 /**
  * Represents the properties of an attribute that are configurable via the {@link Attribute} decorator.

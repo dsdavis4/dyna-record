@@ -13,7 +13,7 @@ import type { CreateOptions } from "./types";
 import {
   type EntityDefinedAttributes,
   type EntityAttributeDefaultFields,
-  type EntityAttributes
+  type EntityAttributesOnly
 } from "../types";
 import { isBelongsToRelationship } from "../../metadata/utils";
 import { type BelongsToRelationship } from "../../metadata";
@@ -61,7 +61,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @throws If the entity already exists, a uniqueness violation error is raised.
    * @throws If a required foreign key does not correspond to an existing entity, an error is raised.
    */
-  public async run(attributes: CreateOptions<T>): Promise<EntityAttributes<T>> {
+  public async run(
+    attributes: CreateOptions<T>
+  ): Promise<EntityAttributesOnly<T>> {
     const entityAttrs =
       this.entityMetadata.parseRawEntityDefinedAttributes(attributes);
 
@@ -103,7 +105,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildReservedAttributes(
     entityAttrs: EntityDefinedAttributes<DynaRecord>
-  ): EntityAttributes<DynaRecord> {
+  ): EntityAttributesOnly<DynaRecord> {
     const { idField } = this.entityMetadata;
 
     const id =
@@ -170,7 +172,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private buildBelongsToTransactions(
-    entityData: EntityAttributes<DynaRecord>,
+    entityData: EntityAttributesOnly<DynaRecord>,
     tableItem: DynamoTableItem
   ): void {
     const tableName = this.tableMetadata.name;
@@ -214,7 +216,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private async getBelongsToTableItems(
-    entityData: EntityAttributes<DynaRecord>
+    entityData: EntityAttributesOnly<DynaRecord>
   ): Promise<DynamoTableItem[]> {
     const { name: tableName } = this.tableMetadata;
     const transactionBuilder = new TransactGetBuilder();

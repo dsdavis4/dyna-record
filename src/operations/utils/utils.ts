@@ -18,7 +18,7 @@ import type {
   RelationshipMetaObj
 } from "../../types";
 import { isKeyOfObject } from "../../utils";
-import { type EntityAttributes } from "../types";
+import { type EntityAttributesOnly } from "../types";
 
 /**
  * Creates an object including
@@ -51,7 +51,7 @@ export const buildEntityRelationshipMetaObj = (
  * @returns
  */
 export const extractForeignKeyFromEntity = <
-  T extends Partial<EntityAttributes<DynaRecord>>
+  T extends Partial<EntityAttributesOnly<DynaRecord>>
 >(
   relMeta: RelationshipMetadata,
   entity: T

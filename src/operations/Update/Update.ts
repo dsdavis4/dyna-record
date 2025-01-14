@@ -24,13 +24,16 @@ import OperationBase from "../OperationBase";
 import type { UpdatedAttributes, UpdateOptions } from "./types";
 import type { DynamoTableItem, EntityClass, WithRequired } from "../../types";
 import Metadata from "../../metadata";
-import { type EntityAttributesOnly, type EntityAttributes } from "../types";
+import {
+  type EntityAttributesInstance,
+  type EntityAttributesOnly
+} from "../types";
 import { NotFoundError } from "../../errors";
 
-type Entity = EntityAttributesOnly<DynaRecord>;
+type Entity = EntityAttributesInstance<DynaRecord>;
 
 type PartialEntityWithId = WithRequired<
-  Partial<EntityAttributes<DynaRecord>>,
+  Partial<EntityAttributesOnly<DynaRecord>>,
   "id"
 >;
 
@@ -363,7 +366,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private buildBelongsToTransactions(
-    entityPreUpdate: EntityAttributes<DynaRecord>,
+    entityPreUpdate: EntityAttributesOnly<DynaRecord>,
     updatedEntity: PartialEntityWithId,
     updateExpression: UpdateExpression,
     newBelongsToEntityLookup: BelongsToEntityLookup

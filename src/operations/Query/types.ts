@@ -4,7 +4,7 @@ import type {
   QueryOptions as QueryBuilderOptions,
   SortKeyCondition
 } from "../../query-utils";
-import type { EntityAttributesOnly } from "../types";
+import type { EntityAttributesInstance } from "../types";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.
@@ -89,10 +89,10 @@ export type RelationshipEntities<T extends DynaRecord> = {
  * @returns An array of objects representing the entity attributes of `T` or its related entities.
  */
 export type QueryResults<T extends DynaRecord> = Array<
-  | EntityAttributesOnly<T>
+  | EntityAttributesInstance<T>
   | (RelationshipEntities<T> extends infer R
       ? R extends DynaRecord
-        ? EntityAttributesOnly<R>
+        ? EntityAttributesInstance<R>
         : never
       : never)
 >;

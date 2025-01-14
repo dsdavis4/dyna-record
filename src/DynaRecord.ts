@@ -14,8 +14,8 @@ import {
   Update,
   type UpdateOptions,
   Delete,
-  type EntityAttributes,
-  type EntityAttributesOnly
+  type EntityAttributesOnly,
+  type EntityAttributesInstance
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -102,7 +102,7 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     options?: undefined
-  ): Promise<Optional<EntityAttributesOnly<T>>>;
+  ): Promise<Optional<EntityAttributesInstance<T>>>;
 
   public static async findById<
     T extends DynaRecord,
@@ -120,7 +120,9 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<Optional<EntityAttributesOnly<T> | FindByIdIncludesRes<T, Opts>>> {
+  ): Promise<
+    Optional<EntityAttributesInstance<T> | FindByIdIncludesRes<T, Opts>>
+  > {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
@@ -310,7 +312,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
     const updatedInstance = Object.fromEntries(
       Object.entries(clone).filter(([_, value]) => value !== null)
-    ) as EntityAttributes<T>;
+    ) as EntityAttributesOnly<T>;
 
     // Return the updated instance, which is of type `this`
     return createInstance<T>(InstanceClass, updatedInstance);

@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type DynaRecord from "../DynaRecord";
 import type { ForeignKey } from "../types";
-import type { EntityAttributes } from "../operations";
+import type { EntityAttributesOnly } from "../operations";
 
 // TODO is this class needed anymore?
 // TODO If not - I should look at and evaluate all cases of BelongsToLink in the project
@@ -9,7 +9,7 @@ import type { EntityAttributes } from "../operations";
 /**
  * Extends `DynaRecord` with properties specific to "BelongsTo" relationships, such as `foreignEntityType` and `foreignKey`.
  */
-interface BelongsToLinkProps extends EntityAttributes<DynaRecord> {
+interface BelongsToLinkProps extends EntityAttributesOnly<DynaRecord> {
   foreignEntityType: string;
   foreignKey: string;
 }
