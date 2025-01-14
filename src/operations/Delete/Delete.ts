@@ -141,8 +141,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       { linkedEntities: [], linkedEntitiesWithFkRef: [] }
     );
 
-    // TODO add test for new self not defined
-    if (items.length === 0 || prefetchResult.self === undefined) {
+    if (prefetchResult.self === undefined) {
       throw new NotFoundError(`Item does not exist: ${id}`);
     }
 
