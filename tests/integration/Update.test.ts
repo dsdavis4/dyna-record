@@ -1593,7 +1593,7 @@ describe("Update", () => {
       });
 
       // TODO determine how to handle this, see note in last expect
-      describe.skip("will remove a nullable foreign key", () => {
+      describe("will remove a nullable foreign key", () => {
         const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "QueryCommand" }],
@@ -1616,11 +1616,38 @@ describe("Update", () => {
               }
             ]
           ]);
-          // Dont get customer because its being deleted
+          // Don't get customer because its being deleted
           expect(mockTransactGetCommand.mock.calls).toEqual([]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual(
-            "TODO how do I want to handle this? I think I need to make this error for malformed data. With the ContactInformation not having a customer id, I cant ensure data is in good state"
-          );
+          // Does not include removing a denormalized link because it doesn't exist
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "ContactInformation#123",
+                        SK: "ContactInformation"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#CustomerId": "CustomerId",
+                        "#Email": "Email",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Email": "new-email@example.com",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
         };
 
         test("static method", async () => {
@@ -2773,8 +2800,7 @@ describe("Update", () => {
         });
       });
 
-      // TODO determine how to handle this
-      describe.skip("will remove a nullable foreign key and delete the links for the associated entity", () => {
+      describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
         const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
             [{ name: "QueryCommand" }],
@@ -2797,11 +2823,38 @@ describe("Update", () => {
               }
             ]
           ]);
-          // Dont get owner (Person) because its being deleted
+          // Don't get owner (Person) because its being deleted
           expect(mockTransactGetCommand.mock.calls).toEqual([]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual(
-            "TODO how do I handle this?"
-          );
+          // Does not include removing a denormalized link because it doesn't exist
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Pet#123",
+                        SK: "Pet"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#OwnerId": "OwnerId",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "New Name",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
         };
 
         it("static method", async () => {

@@ -405,7 +405,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             oldFk,
             newBelongsToEntityLookup
           );
-        } else {
+        } else if (foreignKey !== null) {
           this.buildUpdateBelongsToLinkedRecords(
             entityId,
             relMeta,
