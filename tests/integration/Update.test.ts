@@ -1592,7 +1592,6 @@ describe("Update", () => {
         });
       });
 
-      // TODO determine how to handle this, see note in last expect
       describe("will remove a nullable foreign key", () => {
         const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
@@ -2346,6 +2345,68 @@ describe("Update", () => {
           });
 
           dbOperationAssertions();
+        });
+      });
+
+      describe("will throw an error if it fails to delete the old denormalized records", () => {
+        beforeEach(() => {
+          mockSend
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "ConditionalCheckFailed" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        const operationSharedAssertions = (e: any): void => {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"ContactInformation#123","SK":"Customer"}'
+            ),
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Customer#001","SK":"ContactInformation"}'
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          try {
+            await ContactInformation.update("123", {
+              email: "new-email@example.com",
+              customerId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          try {
+            await instance.update({
+              email: "new-email@example.com",
+              customerId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
         });
       });
     });
@@ -3554,6 +3615,68 @@ describe("Update", () => {
           });
 
           dbOperationAssertions();
+        });
+      });
+
+      describe("will throw an error if it fails to delete the old denormalized records", () => {
+        beforeEach(() => {
+          mockSend
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" },
+                  { Code: "ConditionalCheckFailed" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
+
+        const operationSharedAssertions = (e: any): void => {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Pet#123","SK":"Person"}'
+            ),
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#001","SK":"Pet#123"}'
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          try {
+            await Pet.update("123", {
+              name: "New Name",
+              ownerId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          try {
+            await instance.update({
+              name: "New Name",
+              ownerId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
         });
       });
     });

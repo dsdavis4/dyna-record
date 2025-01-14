@@ -590,7 +590,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
-  // TODO unit test this second delete
   /**
    * Removes the old link record associated with a previous "BelongsTo" foreign key when the foreign key changes.
    *
@@ -626,7 +625,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         TableName: this.tableMetadata.name,
         Key: oldKeysToSelf
       },
-      // TODO I added this with delete logic, add a test within update class for this
       `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToSelf)}`
     );
 
@@ -635,7 +633,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         TableName: this.tableMetadata.name,
         Key: oldKeysToForeignEntity
       },
-      // TODO I added this with delete logic, add a test within update class for this
       `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToForeignEntity)}`
     );
   }
