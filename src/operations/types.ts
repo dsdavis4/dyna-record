@@ -72,7 +72,6 @@ export type EntityAttributesOnly<T extends DynaRecord> = Omit<
   RelationshipAttributeNames<T>
 >;
 
-// TODO dry up by refereeing EntityAttributesOnly
 /**
  * Entity attributes excluding relationship attributes
  * Represents the raw attributes of a class (no functions)
