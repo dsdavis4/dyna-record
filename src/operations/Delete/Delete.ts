@@ -35,7 +35,7 @@ interface PreFetchResult {
    * Denormalized link records for associated entities with foreign key reference
    * This indicates it needs to have a foreign key nullified
    */
-  linkedEntitiesWithFkRef: QueryResults<DynaRecord>; // TODO can this be shortened?
+  linkedEntitiesWithFkRef: QueryResults<DynaRecord>;
 }
 
 /**
