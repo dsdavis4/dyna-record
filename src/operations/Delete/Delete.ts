@@ -6,8 +6,6 @@ import {
 import { NotFoundError, NullConstraintViolationError } from "../../errors";
 import Metadata, { type BelongsToRelationship } from "../../metadata";
 import {
-  doesEntityBelongToRelAsHasMany,
-  doesEntityBelongToRelAsHasOne,
   isRelationshipMetadataWithForeignKey,
   isBelongsToRelationship,
   isHasAndBelongsToManyRelationship
@@ -267,17 +265,18 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       ) {
         const foreignKeyValue = item[relMeta.foreignKey];
 
-        if (doesEntityBelongToRelAsHasMany(this.EntityClass, relMeta)) {
-          this.buildDeleteBelongsToHasManyTransaction(
-            relMeta,
-            entityId,
-            foreignKeyValue
-          );
-        }
+        const belongsToLinksKeys = buildBelongsToLinkKey(
+          this.EntityClass,
+          entityId,
+          relMeta,
+          foreignKeyValue
+        );
 
-        if (doesEntityBelongToRelAsHasOne(this.EntityClass, relMeta)) {
-          this.buildDeleteBelongsToHasOneTransaction(relMeta, foreignKeyValue);
-        }
+        this.buildDeleteItemTransaction(belongsToLinksKeys, {
+          errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+            belongsToLinksKeys
+          )}`
+        });
       }
     });
   }
@@ -301,54 +300,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         )}`
       });
     }
-  }
-
-  /**
-   * Deletes associated BelongsToLink for a BelongsTo HasMany relationship
-   * @param relMeta
-   * @param entityId
-   * @param foreignKeyValue
-   */
-  private buildDeleteBelongsToHasManyTransaction(
-    relMeta: BelongsToRelationship,
-    entityId: string,
-    foreignKeyValue: string
-  ): void {
-    const belongsToLinksKeys = buildBelongsToLinkKey(
-      this.EntityClass,
-      entityId,
-      relMeta,
-      foreignKeyValue
-    );
-
-    this.buildDeleteItemTransaction(belongsToLinksKeys, {
-      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-        belongsToLinksKeys
-      )}`
-    });
-  }
-
-  /**
-   * Deletes associated BelongsToLink for a BelongsTo HasOne relationship
-   * @param relMeta
-   * @param foreignKeyValue
-   */
-  private buildDeleteBelongsToHasOneTransaction(
-    relMeta: BelongsToRelationship,
-    foreignKeyValue: string
-  ): void {
-    const belongsToLinksKeys = buildBelongsToLinkKey(
-      this.EntityClass,
-      "", // Not needed for HasOne
-      relMeta,
-      foreignKeyValue
-    );
-
-    this.buildDeleteItemTransaction(belongsToLinksKeys, {
-      errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
-        belongsToLinksKeys
-      )}`
-    });
   }
 
   /**
