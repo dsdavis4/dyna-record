@@ -1033,7 +1033,7 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Pet#123"}'
+            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#456","SK":"Pet#123"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -1133,7 +1133,7 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"pk":"Person#456","sk":"Home"}'
+            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#456","SK":"Home"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([

@@ -21,7 +21,10 @@ import { isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import type { QueryResults, QueryResult } from "../Query";
 import { UpdateDryRun } from "../Update";
-import { buildEntityRelationshipMetaObj } from "../utils";
+import {
+  buildBelongsToLinkKey,
+  buildEntityRelationshipMetaObj
+} from "../utils";
 import type { DeleteOptions } from "./types";
 
 type Entity = QueryResult<DynaRecord>;
@@ -92,7 +95,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     this.buildDeleteSelfTransactions(preFetchRes.self);
 
     preFetchRes.linkedEntities.forEach(item => {
-      this.buildDeleteItemTransaction(item, {
+      this.buildDeleteEntityTransaction(item, {
         errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
           this.buildKeyObject(item, this.#partitionKeyField, this.#sortKeyField)
         )}`
@@ -171,33 +174,49 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param self
    */
   private buildDeleteSelfTransactions(self: Entity): void {
-    this.buildDeleteItemTransaction(self, {
+    this.buildDeleteEntityTransaction(self, {
       errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${self.id}`
     });
     this.buildDeleteAssociatedBelongsTransaction(self.id, self);
   }
 
   /**
-   * Deletes an item
-   * @param item
+   * Deletes an item when given the table keys
+   * @param keys - The key to delete representing the table keys, as opposed to the entities keys
    */
   private buildDeleteItemTransaction(
-    item: Partial<Entity>,
+    keys: Partial<Entity>,
     options: DeleteOptions
   ): void {
-    const pkField = this.#partitionKeyField as keyof typeof item;
-    const skField = this.#sortKeyField as keyof typeof item;
-
     this.#transactionBuilder.addDelete(
       {
         TableName: this.#tableName,
-        Key: {
-          [this.partitionKeyAlias]: item[pkField],
-          [this.sortKeyAlias]: item[skField]
-        }
+        Key: keys
       },
       options.errorMessage
     );
+  }
+
+  /**
+   * Deletes an item when given the keys of the entity. Converts the keys to the table alias
+   * @param keys - The key to delete representing the entity keys, as opposed to the table keys
+   */
+  private buildDeleteEntityTransaction(
+    keys: Partial<Entity>,
+    options: DeleteOptions
+  ): void {
+    if (
+      isKeyOfObject(keys, this.#partitionKeyField) &&
+      isKeyOfObject(keys, this.#sortKeyField)
+    ) {
+      this.buildDeleteItemTransaction(
+        {
+          [this.partitionKeyAlias]: keys[this.#partitionKeyField],
+          [this.sortKeyAlias]: keys[this.#sortKeyField]
+        },
+        options
+      );
+    }
   }
 
   /**
@@ -276,7 +295,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         this.#sortKeyField,
         this.#partitionKeyField
       );
-      this.buildDeleteItemTransaction(belongsToLinksKeys, {
+      this.buildDeleteEntityTransaction(belongsToLinksKeys, {
         errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
           belongsToLinksKeys
         )}`
@@ -295,19 +314,12 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     entityId: string,
     foreignKeyValue: string
   ): void {
-    // TODO start here
-    // For keys like this I think I can use the hlper but its making table items
-    // to avoid changing back and forth make a
-    // buildDeleteItemTransaction that takes table keys
-    // and a buildDeleteEntityTransaction that takes entity fields, converts to table then calls buildDeleteItemTransaction
-    // I think its important to share the belongs to keys logic
-    // TODO should the belongs to keys buildre helper be used in Create
-    // TODO should the belongs to keys buildre helper be used in JoinTable?
-    const belongsToLinksKeys = {
-      [this.#partitionKeyField]:
-        relMeta.target.partitionKeyValue(foreignKeyValue),
-      [this.#sortKeyField]: this.EntityClass.partitionKeyValue(entityId)
-    };
+    const belongsToLinksKeys = buildBelongsToLinkKey(
+      this.EntityClass,
+      entityId,
+      relMeta,
+      foreignKeyValue
+    );
 
     this.buildDeleteItemTransaction(belongsToLinksKeys, {
       errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
@@ -325,11 +337,12 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     relMeta: BelongsToRelationship,
     foreignKeyValue: string
   ): void {
-    const belongsToLinksKeys = {
-      [this.#partitionKeyField]:
-        relMeta.target.partitionKeyValue(foreignKeyValue),
-      [this.#sortKeyField]: this.EntityClass.name
-    };
+    const belongsToLinksKeys = buildBelongsToLinkKey(
+      this.EntityClass,
+      "", // Not needed for HasOne
+      relMeta,
+      foreignKeyValue
+    );
 
     this.buildDeleteItemTransaction(belongsToLinksKeys, {
       errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
