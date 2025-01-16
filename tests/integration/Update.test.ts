@@ -2552,7 +2552,7 @@ describe("Update", () => {
           });
         });
 
-        describe("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", () => {
+        describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
           const dbOperationAssertions = (): void => {
             expect(mockSend.mock.calls).toEqual([
               [{ name: "QueryCommand" }],
@@ -2691,10 +2691,10 @@ describe("Update", () => {
             expect(e.constructor.name).toEqual("TransactionWriteFailedError");
             expect(e.errors).toEqual([
               new ConditionalCheckFailedError(
-                'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"ContactInformation#123","SK":"Customer"}'
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"ContactInformation#123","SK":"Customer"}'
               ),
               new ConditionalCheckFailedError(
-                'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Customer#001","SK":"ContactInformation"}'
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Customer#001","SK":"ContactInformation"}'
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
@@ -4034,7 +4034,7 @@ describe("Update", () => {
           });
         });
 
-        describe("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", () => {
+        describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
           const dbOperationAssertions = (): void => {
             expect(mockSend.mock.calls).toEqual([
               [{ name: "QueryCommand" }],
@@ -4179,10 +4179,10 @@ describe("Update", () => {
             expect(e.constructor.name).toEqual("TransactionWriteFailedError");
             expect(e.errors).toEqual([
               new ConditionalCheckFailedError(
-                'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Pet#123","SK":"Person"}'
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Pet#123","SK":"Person"}'
               ),
               new ConditionalCheckFailedError(
-                'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#001","SK":"Pet#123"}'
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#001","SK":"Pet#123"}'
               )
             ]);
             expect(mockSend.mock.calls).toEqual([

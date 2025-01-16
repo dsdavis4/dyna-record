@@ -2,7 +2,7 @@ import { type RelationshipMetadata } from "../metadata";
 import { type OrFilter } from "./types";
 
 /**
- * Builds the filter so that relationships that are included in the query will have their {@link BelongsToLink} included in the query
+ * Builds the filter so that relationships that are included in the query will have their relationships included in the query
  * @param parentClassName
  * @param includedRelationships
  * @returns

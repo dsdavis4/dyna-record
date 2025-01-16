@@ -627,7 +627,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         TableName: this.tableMetadata.name,
         Key: oldKeysToSelf
       },
-      `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToSelf)}`
+      `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToSelf)}`
     );
 
     this.transactionBuilder.addDelete(
@@ -635,7 +635,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         TableName: this.tableMetadata.name,
         Key: oldKeysToForeignEntity
       },
-      `Failed to delete BelongsToLink with keys: ${JSON.stringify(oldKeysToForeignEntity)}`
+      `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToForeignEntity)}`
     );
   }
 

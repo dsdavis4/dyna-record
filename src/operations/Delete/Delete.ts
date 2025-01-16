@@ -46,7 +46,7 @@ interface PreFetchResult {
 /**
  * Implements the operation for deleting an entity and its related data from the database within the ORM framework.
  *
- * Delete an entity, everything in its partition, BelongsToLinks and nullifies ForeignKeys on attributes that BelongTo it
+ * Delete an entity, everything in its partition, denormalized records and nullifies ForeignKeys on attributes that BelongTo it
  * If the foreign key is non nullable than it will throw a NullConstraintViolationError
  *
  * The `Delete` operation supports complex scenarios, such as deleting related entities in "BelongsTo" relationships, nullifying or removing foreign keys to maintain data integrity, and handling many-to-many relationships through join tables.
@@ -83,7 +83,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * Delete an item by id
    *   - Deletes the given entity
    *   - Deletes each item in the entity's partition
-   *   - For each item in the entity's partition which is of type 'BelongsToLink' it:
+   *   - For each item in the entity's partition which is a denormalized record it:
    *     - Will nullify the associated relationship's ForeignKey attribute if the attribute is nullable
    * @param id
    */
@@ -94,7 +94,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
 
     preFetchRes.linkedEntities.forEach(item => {
       this.buildDeleteEntityTransaction(item, {
-        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
           this.buildKeyObject(item, this.#partitionKeyField, this.#sortKeyField)
         )}`
       });
@@ -273,7 +273,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         );
 
         this.buildDeleteItemTransaction(belongsToLinksKeys, {
-          errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+          errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
             belongsToLinksKeys
           )}`
         });
@@ -283,7 +283,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
 
   /**
    * If the item has a JoinTable entry (is part of HasAndBelongsToMany relationship) then delete both JoinTable entries
-   * @param item - BelongsToLink from HasAndBelongsToMany relationship
+   * @param item - Denormalized record from HasAndBelongsToMany relationship
    */
   private buildDeleteJoinTableLinkTransaction(item: Entity): void {
     const relMeta = this.#relationsLookup[item.type];
@@ -295,7 +295,7 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         this.#partitionKeyField
       );
       this.buildDeleteEntityTransaction(belongsToLinksKeys, {
-        errorMessage: `Failed to delete BelongsToLink with keys: ${JSON.stringify(
+        errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
           belongsToLinksKeys
         )}`
       });

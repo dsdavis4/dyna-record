@@ -125,8 +125,8 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
 
-    JoinTable.deleteBelongsToLink(transactionBuilder, keys, rel1, rel2);
-    JoinTable.deleteBelongsToLink(transactionBuilder, keys, rel2, rel1);
+    JoinTable.deleteLink(transactionBuilder, keys, rel1, rel2);
+    JoinTable.deleteLink(transactionBuilder, keys, rel2, rel1);
 
     await transactionBuilder.executeTransaction();
   }
@@ -263,7 +263,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param parentEntityMeta
    * @param linkedEntityMeta
    */
-  private static deleteBelongsToLink(
+  private static deleteLink(
     transactionBuilder: TransactionBuilder,
     keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,

@@ -27,10 +27,10 @@ export type IncludedAssociations<T extends DynaRecord> = NonNullable<
 >;
 
 /**
- * Describes the structure of query results, sorting them into the main entity item and any associated `BelongsToLink` items. Used during processing
+ * Describes the structure of query results, sorting them into the main entity item and any associated items. Used during processing
  *
  * @property {QueryItems[number]} item - The main entity item retrieved from the query.
- * @property {BelongsToLinkDynamoItem[]} belongsToLinks - An array of `BelongsToLinkDynamoItem` instances associated with the main entity item.
+ * @property {QueryItems[]} relatedEntities - An array of `denormalized records` instances associated with the main entity item.
  */
 export interface SortedQueryResults {
   entity?: QueryResult<DynaRecord>;

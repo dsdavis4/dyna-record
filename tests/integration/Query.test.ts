@@ -6,7 +6,6 @@ import {
   PaymentMethod
 } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { BelongsToLink } from "../../src/relationships";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
@@ -577,7 +576,7 @@ describe("Query", () => {
               ":Name6": "Some Customer",
               ":PK7": "Customer#123",
               ":SK8": "Order",
-              ":Type4": "BelongsToLink",
+              ":Type4": "Beer",
               ":Type5": "Brewery",
               ":CreatedAt3": "2021-09-15T"
             },
@@ -616,7 +615,7 @@ describe("Query", () => {
         },
         {
           filter: {
-            type: ["BelongsToLink", "Brewery"],
+            type: ["Beer", "Brewery"],
             name: "Some Customer",
             $or: [
               {
@@ -637,7 +636,7 @@ describe("Query", () => {
       const result = await Customer.query("123", {
         skCondition: { $beginsWith: "Order" },
         filter: {
-          type: ["BelongsToLink", "Brewery"],
+          type: ["Beer", "Brewery"],
           name: "Some Customer",
           $or: [
             {
@@ -946,10 +945,7 @@ describe("Query", () => {
 
         const paymentMethod = result[0];
 
-        if (
-          paymentMethod !== undefined &&
-          !(paymentMethod instanceof BelongsToLink)
-        ) {
+        if (paymentMethod !== undefined) {
           // @ts-expect-error: Query does not include HasOne or BelongsTo associations
           Logger.log(paymentMethod.customer);
 

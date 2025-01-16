@@ -27,7 +27,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
    * Run the query operation
    * @param key EntityId or object with PartitionKey and optional SortKey conditions
    * @param options Filter conditions, indexName, or SortKey conditions if querying by keys
-   * @returns Array of Entity or BelongsToLinks
+   * @returns Array of Entity or denormalized records
    */
   public async run(
     key: string | EntityKeyConditions<T>,

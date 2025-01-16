@@ -21,9 +21,7 @@ export const tableDefaultFields: Record<
   id: { alias: "id" },
   type: { alias: "type" },
   createdAt: { alias: "createdAt" },
-  updatedAt: { alias: "updatedAt" },
-  foreignKey: { alias: "foreignKey" },
-  foreignEntityType: { alias: "foreignEntityType" }
+  updatedAt: { alias: "updatedAt" }
 } as const;
 
 /**

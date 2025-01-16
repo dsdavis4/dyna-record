@@ -1,5 +1,4 @@
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 import type DynaRecord from "./DynaRecord";
 
@@ -42,14 +41,6 @@ export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
  * A utility type for objects with string keys and string values.
  */
 export type StringObj = Record<string, string>;
-
-/**
- * Describes the shape of a DynamoDB item representing a `BelongsToLink`, enforcing type consistency.
- */
-export interface BelongsToLinkDynamoItem {
-  Type: typeof BelongsToLink.name;
-  [key: string]: NativeScalarAttributeValue;
-}
 
 /**
  * A utility type for making a type optional, allowing it to be undefined.

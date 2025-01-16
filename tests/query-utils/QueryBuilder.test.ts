@@ -5,9 +5,11 @@ import {
   Entity,
   PartitionKeyAttribute,
   SortKeyAttribute,
-  StringAttribute
+  StringAttribute,
+  HasMany,
+  ForeignKeyAttribute
 } from "../../src/decorators";
-import type { PartitionKey, SortKey } from "../../src/types";
+import type { ForeignKey, PartitionKey, SortKey } from "../../src/types";
 
 @Table({
   name: "mock-table",
@@ -16,9 +18,7 @@ import type { PartitionKey, SortKey } from "../../src/types";
     id: { alias: "Id" },
     type: { alias: "Type" },
     createdAt: { alias: "CreatedAt" },
-    updatedAt: { alias: "UpdatedAt" },
-    foreignKey: { alias: "ForeignKey" },
-    foreignEntityType: { alias: "ForeignEntityType" }
+    updatedAt: { alias: "UpdatedAt" }
   }
 })
 class MockTable extends DynaRecord {
@@ -34,6 +34,9 @@ class MockTable extends DynaRecord {
 class Scale extends MockTable {
   @StringAttribute({ alias: "Name" })
   public name: string;
+
+  @ForeignKeyAttribute({ alias: "RoomId" })
+  public readonly roomId: ForeignKey;
 }
 
 @Entity
@@ -41,6 +44,9 @@ class Scale extends MockTable {
 class Room extends MockTable {
   @StringAttribute({ alias: "Name" })
   public name: string;
+
+  @HasMany(() => Scale, { foreignKey: "roomId" })
+  public readonly scales: Scale[];
 }
 
 describe("QueryBuilder", () => {
@@ -88,31 +94,28 @@ describe("QueryBuilder", () => {
       key: { pk: "Room#123" },
       options: {
         filter: {
-          $or: [
-            { type: "Room" },
-            { type: "BelongsToLink", foreignEntityType: ["Brewery", "Scale"] }
-          ]
+          $or: [{ type: "Room" }, { type: "Scale", name: ["test1", "test2"] }]
         }
       }
     });
 
     expect(queryBuilder.build()).toEqual({
+      TableName: "mock-table",
+      KeyConditionExpression: "#PK = :PK5",
+      FilterExpression:
+        "#Type = :Type1 OR (#Type = :Type2 AND #Name IN (:Name3,:Name4))",
       ExpressionAttributeNames: {
+        "#Name": "Name",
         "#PK": "PK",
-        "#Type": "Type",
-        "#ForeignEntityType": "ForeignEntityType"
+        "#Type": "Type"
       },
       ExpressionAttributeValues: {
+        ":Name3": "test1",
+        ":Name4": "test2",
         ":PK5": "Room#123",
         ":Type1": "Room",
-        ":Type2": "BelongsToLink",
-        ":ForeignEntityType3": "Brewery",
-        ":ForeignEntityType4": "Scale"
-      },
-      FilterExpression:
-        "#Type = :Type1 OR (#Type = :Type2 AND #ForeignEntityType IN (:ForeignEntityType3,:ForeignEntityType4))",
-      KeyConditionExpression: "#PK = :PK5",
-      TableName: "mock-table"
+        ":Type2": "Scale"
+      }
     });
   });
 
@@ -126,10 +129,7 @@ describe("QueryBuilder", () => {
         filter: {
           type: "Process",
           name: ["Process1", "Process2"],
-          $or: [
-            { type: "BelongsToLink" },
-            { createdAt: { $beginsWith: "2021-09-05" } }
-          ]
+          $or: [{ type: "Room" }, { createdAt: { $beginsWith: "2021-09-05" } }]
         }
       }
     });
@@ -150,7 +150,7 @@ describe("QueryBuilder", () => {
         ":Name4": "Process1",
         ":Name5": "Process2",
         ":PK6": "Scale#123",
-        ":Type1": "BelongsToLink",
+        ":Type1": "Room",
         ":Type3": "Process"
       }
     });

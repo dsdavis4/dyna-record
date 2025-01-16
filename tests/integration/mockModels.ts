@@ -31,9 +31,7 @@ import type {
     id: { alias: "Id" },
     type: { alias: "Type" },
     createdAt: { alias: "CreatedAt" },
-    updatedAt: { alias: "UpdatedAt" },
-    foreignKey: { alias: "ForeignKey" },
-    foreignEntityType: { alias: "ForeignEntityType" }
+    updatedAt: { alias: "UpdatedAt" }
   }
 })
 abstract class MockTable extends DynaRecord {

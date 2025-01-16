@@ -89,7 +89,7 @@ export type QueryResults<T extends DynaRecord> = Array<
 >;
 
 /**
- * A utility type that represents a single item in the query results, which can be either an entity or a `BelongsToLink`. This type is derived from the `QueryResults` array type, providing a convenient way to refer to individual results from a query.
+ * A utility type that represents a single item in the query results, which can be either an entity or a associated entity. This type is derived from the `QueryResults` array type, providing a convenient way to refer to individual results from a query.
  *
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  */

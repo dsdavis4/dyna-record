@@ -614,10 +614,10 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#123","SK":"Pet#001"}'
+            'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#123","SK":"Pet#001"}'
           ),
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#123","SK":"Home"}'
+            'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#123","SK":"Home"}'
           )
         ]);
 
@@ -1033,7 +1033,7 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#456","SK":"Pet#123"}'
+            'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#456","SK":"Pet#123"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([
@@ -1084,7 +1084,7 @@ describe("Delete", () => {
       }
     });
 
-    it("will throw an error if it fails to delete BelongsToLink for HasOne", async () => {
+    it("will throw an error if it fails to delete denormalized record for HasOne", async () => {
       expect.assertions(7);
 
       // Denormalized Person in Home partition
@@ -1133,7 +1133,7 @@ describe("Delete", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            'ConditionalCheckFailed: Failed to delete BelongsToLink with keys: {"PK":"Person#456","SK":"Home"}'
+            'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#456","SK":"Home"}'
           )
         ]);
         expect(mockSend.mock.calls).toEqual([

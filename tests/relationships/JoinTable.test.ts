@@ -195,7 +195,7 @@ describe("JoinTable", () => {
       ]);
     });
 
-    it("alternate table style - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+    it("alternate table style - will create a denormalized record entry for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(4);
 
       const student: OtherTableEntityTableItem<Student> = {
@@ -312,7 +312,7 @@ describe("JoinTable", () => {
       ]);
     });
 
-    it("with custom id field - will create a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+    it("with custom id field - will create a denormalized record for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(4);
 
       const user: MockTableEntityTableItem<User> = {
@@ -651,7 +651,7 @@ describe("JoinTable", () => {
   });
 
   describe("delete", () => {
-    it("will delete a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+    it("will delete a denormalized record entry for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(3);
 
       // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -664,7 +664,7 @@ describe("JoinTable", () => {
           {
             TransactItems: [
               {
-                // Create BelongsToLink to link Book to Author
+                // Create denormalized record to link Book to Author
                 Delete: {
                   TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
@@ -675,7 +675,7 @@ describe("JoinTable", () => {
                 }
               },
               {
-                // Create BelongsToLink to link Book to Author
+                // Create denormalized record to link Book to Author
                 Delete: {
                   TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
@@ -691,7 +691,7 @@ describe("JoinTable", () => {
       ]);
     });
 
-    it("alternate table style - will delete a BelongsToLink for each item in a HasAndBelongsToMany relationship", async () => {
+    it("alternate table style - will delete a denormalized record for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(3);
 
       // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -723,7 +723,7 @@ describe("JoinTable", () => {
       ]);
     });
 
-    it("with custom id field - will delete a BelongsToLink entry for each item in a HasAndBelongsToMany relationship", async () => {
+    it("with custom id field - will delete a denormalized record entry for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(3);
 
       expect(
