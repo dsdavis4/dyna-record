@@ -3,9 +3,7 @@ import {
   Course,
   Customer,
   Order,
-  PaymentMethod,
-  PaymentMethodProvider,
-  Student
+  PaymentMethod
 } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../../src/relationships";
