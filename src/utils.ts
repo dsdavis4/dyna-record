@@ -124,26 +124,6 @@ export const chunkArray = <T>(array: T[], size: number): T[][] => {
 };
 
 /**
- * Checks if a value is a valid property key (string, number, or symbol).
- *
- * @param value The value to be checked. This can be of any type.
- * @returns `true` if the value is a `string`, `number`, or `symbol` (i.e., a valid property key); otherwise, `false`.
- *
- * @example
- * Logger.log(isPropertyKey('test')); // true
- * Logger.log(isPropertyKey(123)); // true
- * Logger.log(isPropertyKey(Symbol('sym'))); // true
- * Logger.log(isPropertyKey({})); // false
- */
-export const isPropertyKey = (value: any): value is PropertyKey => {
-  return (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "symbol"
-  );
-};
-
-/**
  * Checks if the given value is a string.
  *
  * @param value - The value to check. This can be any type as the function is meant to validate if it's a string.
