@@ -538,7 +538,7 @@ describe("Create", () => {
     };
 
     mockTransactGetItems.mockResolvedValueOnce({
-      Responses: [customer, paymentMethod]
+      Responses: [{ Item: customer }, { Item: paymentMethod }]
     });
 
     const order = await Order.create({
@@ -649,6 +649,40 @@ describe("Create", () => {
                   ...newOrderTableAttributes
                 }
               }
+            },
+            // Denormalize the Customer to the Order partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Order#uuid1",
+                  SK: "Customer",
+                  Id: "123",
+                  Type: "Customer",
+                  Name: "Mock Customer",
+                  Address: "11 Some St",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
+            },
+            // Denormalize the PaymentMethod to the Order partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Order#uuid1",
+                  SK: "PaymentMethod",
+                  Id: "456",
+                  Type: "PaymentMethod",
+                  CustomerId: "123",
+                  LastFour: "1234",
+                  CreatedAt: "2024-02-01T00:00:00.000Z",
+                  UpdatedAt: "2024-02-02T00:00:00.000Z"
+                }
+              }
             }
           ]
         }
@@ -673,7 +707,7 @@ describe("Create", () => {
     };
 
     mockTransactGetItems.mockResolvedValueOnce({
-      Responses: [org]
+      Responses: [{ Item: org }]
     });
 
     const user = await User.create({
@@ -763,6 +797,22 @@ describe("Create", () => {
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
                 }
               }
+            },
+            // Denormalize the Organization to the User partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "Organization",
+                  Id: "123",
+                  Type: "Organization",
+                  Name: "Mock Org",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
             }
           ]
         }
@@ -789,7 +839,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [paymentMethod]
+        Responses: [{ Item: paymentMethod }]
       });
 
       const paymentMethodProvider = await PaymentMethodProvider.create({
@@ -875,6 +925,23 @@ describe("Create", () => {
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
+              },
+              // Denormalize the PaymentMethod to the PaymentMethodProvider partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "PaymentMethodProvider#uuid1",
+                    SK: "PaymentMethod",
+                    Id: "123",
+                    Type: "PaymentMethod",
+                    CustomerId: "456",
+                    LastFour: "1234",
+                    CreatedAt: "2024-02-01T00:00:00.000Z",
+                    UpdatedAt: "2024-02-02T00:00:00.000Z"
+                  }
+                }
               }
             ]
           }
@@ -899,7 +966,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [desk]
+        Responses: [{ Item: desk }]
       });
 
       const user = await User.create({
@@ -939,9 +1006,6 @@ describe("Create", () => {
           }
         ]
       ]);
-      // TODO I think this is missing a transaction... should there be a desk added to the user partition?
-      //    If true are other tests in here missing this?
-      //    I think... this is happening in real code pointing to an issue with the test potentially
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -989,6 +1053,22 @@ describe("Create", () => {
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
+              },
+              // Denormalize the Desk to the User partition
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Desk",
+                    Id: "123",
+                    Type: "Desk",
+                    Num: 1,
+                    CreatedAt: "2024-01-01T00:00:00.000Z",
+                    UpdatedAt: "2024-01-02T00:00:00.000Z"
+                  },
+                  TableName: "mock-table"
+                }
               }
             ]
           }
@@ -1014,7 +1094,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [paymentMethod]
+        Responses: [{ Item: paymentMethod }]
       });
 
       mockSend
@@ -1055,10 +1135,10 @@ describe("Create", () => {
       mockedUuidv4.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
-        myPk: "PaymentMethod|123",
-        mySk: "PaymentMethod",
+        myPk: "Assignment|123",
+        mySk: "Assignment",
         id: "123",
-        type: "PaymentMethod",
+        type: "Assignment",
         title: "MockTitle",
         courseId: "987",
         createdAt: "2024-02-01T00:00:00.000Z",
@@ -1076,7 +1156,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [assignment, student]
+        Responses: [{ Item: assignment }, { Item: student }]
       });
 
       const grade = await Grade.create({
@@ -1154,7 +1234,7 @@ describe("Create", () => {
                   }
                 }
               },
-              // Denormalize the Assignment to the Grade partition
+              // Denormalize the Grade to the Assignment partition
               {
                 Put: {
                   TableName: "other-table",
@@ -1200,6 +1280,39 @@ describe("Create", () => {
                     updatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
+              },
+              // Denormalize the Assignment to the Grade partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|uuid1",
+                    mySk: "Assignment",
+                    id: "123",
+                    type: "Assignment",
+                    courseId: "987",
+                    title: "MockTitle",
+                    createdAt: "2024-02-01T00:00:00.000Z",
+                    updatedAt: "2024-02-02T00:00:00.000Z"
+                  }
+                }
+              },
+              // Denormalize the Student to the Grade partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|uuid1",
+                    mySk: "Student",
+                    id: "456",
+                    type: "Student",
+                    name: "MockName",
+                    createdAt: "2024-03-01T00:00:00.000Z",
+                    updatedAt: "2024-03-02T00:00:00.000Z"
+                  }
+                }
               }
             ]
           }
@@ -1234,7 +1347,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [org, desk]
+        Responses: [{ Item: org }, { Item: desk }]
       });
 
       const user = await User.create({
@@ -1322,7 +1435,7 @@ describe("Create", () => {
                   }
                 }
               },
-              // Denormalize the Organization to the User partition
+              // Denormalize the User to the Organization partition
               {
                 Put: {
                   TableName: "mock-table",
@@ -1370,6 +1483,38 @@ describe("Create", () => {
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
+              },
+              // Denormalize the Organization to the User partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Organization",
+                    Id: "123",
+                    Type: "Organization",
+                    Name: "Mock Org",
+                    CreatedAt: "2024-01-01T00:00:00.000Z",
+                    UpdatedAt: "2024-01-02T00:00:00.000Z"
+                  }
+                }
+              },
+              // Denormalize the Desk to the User partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Desk",
+                    Id: "456",
+                    Type: "Desk",
+                    Num: 1,
+                    CreatedAt: "2024-02-01T00:00:00.000Z",
+                    UpdatedAt: "2024-02-02T00:00:00.000Z"
+                  }
+                }
               }
             ]
           }
@@ -1384,10 +1529,10 @@ describe("Create", () => {
       mockedUuidv4.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
-        myPk: "PaymentMethod|123",
-        mySk: "PaymentMethod",
+        myPk: "Assignment|123",
+        mySk: "Assignment",
         id: "123",
-        type: "PaymentMethod",
+        type: "Assignment",
         title: "MockTitle",
         courseId: "987",
         createdAt: "2024-02-01T00:00:00.000Z",
@@ -1405,7 +1550,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [assignment, student]
+        Responses: [{ Item: assignment }, { Item: student }]
       });
 
       mockSend
@@ -1554,7 +1699,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [customer, paymentMethod]
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
 
       mockSend
@@ -1618,7 +1763,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [customer, paymentMethod]
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
 
       mockSend
@@ -1685,7 +1830,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [customer, paymentMethod]
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
 
       mockSend
@@ -1756,7 +1901,7 @@ describe("Create", () => {
       };
 
       mockTransactGetItems.mockResolvedValueOnce({
-        Responses: [customer, paymentMethod]
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
 
       mockSend

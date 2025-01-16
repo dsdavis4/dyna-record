@@ -280,8 +280,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
   }
 
-  // TODO this block does not appear to have unit tests
-
   /**
    * For each related entity referenced by a "BelongsTo" relationship, insert a denormalized copy of that entity
    * into the new entity's partition. This maintains a consistent, denormalized view of relationships.
