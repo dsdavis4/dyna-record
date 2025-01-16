@@ -49,8 +49,8 @@
     "prettier": "^3.2.5",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
-    "typedoc": "^0.25.12",
-    "typedoc-plugin-missing-exports": "^2.2.0",
+    "typedoc": "^0.27.6",
+    "typedoc-plugin-missing-exports": "^3.1.0",
     "typescript": "^5.7.2"
   },
   "engines": {
