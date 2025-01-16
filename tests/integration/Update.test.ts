@@ -2575,7 +2575,7 @@ describe("Update", () => {
                 }
               ]
             ]);
-            // Dont get customer because its being deleted
+            // Don't get customer because its being deleted
             expect(mockTransactGetCommand.mock.calls).toEqual([]);
             expect(mockTransactWriteCommand.mock.calls).toEqual([
               [
@@ -4057,7 +4057,7 @@ describe("Update", () => {
                 }
               ]
             ]);
-            // Dont get customer because its being deleted
+            // Don't get customer because its being deleted
             expect(mockTransactGetCommand.mock.calls).toEqual([]);
             expect(mockTransactWriteCommand.mock.calls).toEqual([
               [

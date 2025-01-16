@@ -3,7 +3,7 @@ import { type RelationshipMetadata } from "../../metadata";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
 import { DynamoClient, TransactGetBuilder } from "../../dynamo-utils";
 import type { EntityClass, Optional, RelationshipLookup } from "../../types";
-import { isKeyOfEntity, safeAssign, tableItemToEntity } from "../../utils";
+import { safeAssign, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import type {
   FindByIdOptions,

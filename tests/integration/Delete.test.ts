@@ -494,7 +494,7 @@ describe("Delete", () => {
         PK: `Pet#${petPersonLink.Id}`
       };
 
-      // Get the pet with denormlized reocrds
+      // Get the pet with denormalized records
       mockQuery.mockResolvedValueOnce({ Items: [pet] });
 
       // End get Pet and associated records
