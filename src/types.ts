@@ -1,5 +1,4 @@
 import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import { type BelongsToLink } from "./relationships";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 import type DynaRecord from "./DynaRecord";
 
@@ -44,14 +43,6 @@ export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
 export type StringObj = Record<string, string>;
 
 /**
- * Describes the shape of a DynamoDB item representing a `BelongsToLink`, enforcing type consistency.
- */
-export interface BelongsToLinkDynamoItem {
-  Type: typeof BelongsToLink.name;
-  [key: string]: NativeScalarAttributeValue;
-}
-
-/**
  * A utility type for making a type optional, allowing it to be undefined.
  */
 export type Optional<T> = T | undefined;
@@ -84,3 +75,10 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
  * Represents an instance of a class decorated with the `Entity` decorator in DynaRecord, encapsulating entity logic.
  */
 export type EntityClass<T> = (new () => T) & typeof DynaRecord;
+
+/**
+ * Make a single property of an object required
+ */
+export type WithRequired<T, K extends keyof T> = Omit<T, K> & {
+  [P in K]-?: T[P];
+};

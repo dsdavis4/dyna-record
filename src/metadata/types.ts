@@ -7,7 +7,6 @@ import type {
   TableMetadata
 } from ".";
 import type DynaRecord from "../DynaRecord";
-import type { BelongsToLink } from "../relationships";
 import type { MakeOptional } from "../types";
 import type { ZodType } from "zod";
 
@@ -50,15 +49,13 @@ export type JoinTableMetadataStorage = Record<string, JoinTableMetadata[]>;
 export type DefaultDateFields = "createdAt" | "updatedAt";
 
 /**
- * Specifies the default fields used in entities, including fields from `DynaRecord` or `BelongsToLink`. Instance methods are excluded
+ * Specifies the default fields used in entities, including fields from `DynaRecord`. Instance methods are excluded
  */
-export type DefaultFields =
-  | {
-      [K in keyof DynaRecord]: DynaRecord[K] extends (...args: any[]) => any
-        ? never
-        : K;
-    }[keyof DynaRecord]
-  | keyof BelongsToLink;
+export type DefaultFields = {
+  [K in keyof DynaRecord]: DynaRecord[K] extends (...args: any[]) => any
+    ? never
+    : K;
+}[keyof DynaRecord];
 
 /**
  * Defines the structure for default fields within a table, mapping field names to their `AttributeMetadata` aliases.

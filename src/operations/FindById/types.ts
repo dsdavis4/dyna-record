@@ -1,11 +1,10 @@
-import type { QueryItems } from "../../dynamo-utils";
 import type DynaRecord from "../../DynaRecord";
 import type {
-  EntityAttributes,
+  EntityAttributesOnly,
   FunctionFields,
   RelationshipAttributeNames
 } from "../types";
-import type { BelongsToLinkDynamoItem } from "../../types";
+import { type QueryResult, type QueryResults } from "../Query";
 
 /**
  * Defines options for the `FindById` operation, allowing specification of additional associations to include in the query result.
@@ -28,14 +27,14 @@ export type IncludedAssociations<T extends DynaRecord> = NonNullable<
 >;
 
 /**
- * Describes the structure of query results, sorting them into the main entity item and any associated `BelongsToLink` items. Used during processing
+ * Describes the structure of query results, sorting them into the main entity item and any associated items. Used during processing
  *
  * @property {QueryItems[number]} item - The main entity item retrieved from the query.
- * @property {BelongsToLinkDynamoItem[]} belongsToLinks - An array of `BelongsToLinkDynamoItem` instances associated with the main entity item.
+ * @property {QueryItems[]} relatedEntities - An array of `denormalized records` instances associated with the main entity item.
  */
 export interface SortedQueryResults {
-  item: QueryItems[number];
-  belongsToLinks: BelongsToLinkDynamoItem[];
+  entity?: QueryResult<DynaRecord>;
+  relatedEntities: QueryResults<DynaRecord>;
 }
 
 /**
@@ -60,9 +59,9 @@ type EntityKeysWithIncludedAssociations<
   P extends keyof T
 > = {
   [K in P]: T[K] extends DynaRecord
-    ? EntityAttributes<T>
+    ? EntityAttributesOnly<T>
     : T[K] extends DynaRecord[]
-      ? Array<EntityAttributes<T[K][number]>>
+      ? Array<EntityAttributesOnly<T[K][number]>>
       : T[K];
 };
 
@@ -77,5 +76,5 @@ export type FindByIdIncludesRes<
   Opts extends FindByIdOptions<T>
 > = EntityKeysWithIncludedAssociations<
   T,
-  keyof EntityAttributes<T> | IncludedKeys<T, Opts> | FunctionFields<T>
+  keyof EntityAttributesOnly<T> | IncludedKeys<T, Opts> | FunctionFields<T>
 >;

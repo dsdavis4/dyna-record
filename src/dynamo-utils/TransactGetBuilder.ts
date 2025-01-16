@@ -14,7 +14,7 @@ class TransactGetBuilder {
   /**
    * Execute the transaction
    */
-  async executeTransaction(): Promise<TransactGetItemResponses> {
+  public async executeTransaction(): Promise<TransactGetItemResponses> {
     const transactionChunks = chunkArray(
       this.#transactionItems,
       MAX_TRANSACTION_ITEMS
@@ -37,6 +37,13 @@ class TransactGetBuilder {
    */
   public addGet(item: Get): void {
     this.#transactionItems.push({ Get: item });
+  }
+
+  /**
+   * Returns true if there are transactions to execute
+   */
+  public hasTransactions(): boolean {
+    return this.#transactionItems.length > 0;
   }
 }
 

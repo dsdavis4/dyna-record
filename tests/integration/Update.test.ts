@@ -1,16 +1,26 @@
-import { TransactWriteCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import {
+  TransactWriteCommand,
+  TransactGetCommand,
+  QueryCommand
+} from "@aws-sdk/lib-dynamodb";
+import {
+  type Address,
+  type Assignment,
   ContactInformation,
   Customer,
+  Desk,
   Grade,
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethod,
-  Pet
+  type Person,
+  Pet,
+  PhoneBook,
+  type Student,
+  type User,
+  Website
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { v4 as uuidv4 } from "uuid";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   ForeignKeyAttribute,
@@ -27,19 +37,21 @@ import {
   type SortKey,
   type ForeignKey
 } from "../../src/types";
-import { ValidationError } from "../../src";
+import { NotFoundError, ValidationError } from "../../src";
 import { createInstance } from "../../src/utils";
-
-jest.mock("uuid");
+import {
+  type OtherTableEntityTableItem,
+  type MockTableEntityTableItem
+} from "./utils";
+import Logger from "../../src/Logger";
 
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockedGetCommand = jest.mocked(GetCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+const mockedQueryCommand = jest.mocked(QueryCommand);
 
 const mockSend = jest.fn();
-const mockGet = jest.fn();
-const mockTransact = jest.fn();
-
-const mockedUuidv4 = jest.mocked(uuidv4);
+const mockTransactGetItems = jest.fn();
+const mockQuery = jest.fn();
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -61,22 +73,31 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
-            if (command.name === "GetCommand") {
-              return await Promise.resolve(mockGet());
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
             }
 
             if (command.name === "TransactWriteCommand") {
-              return await Promise.resolve(mockTransact());
+              return await Promise.resolve(
+                "TransactWriteCommand-mock-response"
+              );
+            }
+
+            if (command.name === "QueryCommand") {
+              return await Promise.resolve(mockQuery());
             }
           })
         };
       })
     },
-    GetCommand: jest.fn().mockImplementation(() => {
-      return { name: "GetCommand" };
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
     }),
     TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
+    }),
+    QueryCommand: jest.fn().mockImplementation(() => {
+      return { name: "QueryCommand" };
     })
   };
 });
@@ -124,23 +145,30 @@ describe("Update", () => {
     jest.clearAllMocks();
   });
 
-  describe("static method", () => {
-    it("will update an entity without foreign key attributes", async () => {
-      expect.assertions(6);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await Customer.update("123", {
-          name: "New Name",
-          address: "new Address"
-        })
-      ).toBeUndefined();
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+  describe("will update an entity without foreign key attributes (this entity has no local denormalized links)", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK5": "Customer#123",
+              ":Type1": "Customer",
+              ":Type2": "Order",
+              ":Type3": "PaymentMethod",
+              ":Type4": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -168,12 +196,159 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    let customer: MockTableEntityTableItem<Customer>;
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      customer = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
     });
 
-    it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
-      expect.assertions(6);
+    test("static method", async () => {
+      expect.assertions(5);
 
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await Customer.update("123", {
+          name: "New Name",
+          address: "new Address"
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(Customer, {
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        name: "New Name",
+        address: "new Address"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        name: "New Name", // Updated name
+        address: "new Address", // Updated address
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(Customer);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK5",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK5": "Customer#123",
+              ":Type1": "Customer",
+              ":Type2": "Order",
+              ":Type3": "PaymentMethod",
+              ":Type4": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Customer#123", SK: "Customer" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #Address = :Address, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Address": "Address",
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Address": "new Address",
+                    ":Name": "New Name",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
+    let customer: MockTableEntityTableItem<Customer>;
+
+    beforeEach(() => {
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      customer = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [customer]
+      });
+    });
+
+    test("static method", async () => {
+      expect.assertions(5);
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
@@ -191,65 +366,65 @@ describe("Update", () => {
           address: "new Address"
         } as any) // Use any to force bad type and allow runtime checks to be tested
       ).toBeUndefined();
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  TableName: "mock-table",
-                  Key: { PK: "Customer#123", SK: "Customer" },
-                  UpdateExpression:
-                    "SET #Name = :Name, #Address = :Address, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Address": "Address",
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Address": "new Address",
-                    ":Name": "New Name",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
+
+      dbOperationAssertions();
     });
 
-    it("can update all attribute types", async () => {
-      expect.assertions(6);
+    test("instance method", async () => {
+      expect.assertions(7);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      const instance = createInstance(Customer, {
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
 
-      expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await MyClassWithAllAttributeTypes.update("123", {
-          stringAttribute: "1",
-          nullableStringAttribute: "2",
-          dateAttribute: new Date(),
-          nullableDateAttribute: new Date(),
-          foreignKeyAttribute: "1111",
-          nullableForeignKeyAttribute: "22222",
-          boolAttribute: true,
-          nullableBoolAttribute: false,
-          numberAttribute: 9,
-          nullableNumberAttribute: 10,
-          enumAttribute: "val-1",
-          nullableEnumAttribute: "val-2"
-        })
-      ).toBeUndefined();
+      const updatedInstance = await instance.update({
+        // Begin reserved keys
+        pk: "2",
+        sk: "3",
+        id: "4",
+        type: "bad type",
+        updatedAt: new Date(),
+        createdAt: new Date(),
+        update: () => {},
+        // End reserved keys
+        name: "New Name",
+        address: "new Address"
+      } as any); // Use any to force bad type and allow runtime checks to be tested
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        name: "New Name", // Updated name
+        address: "new Address", // Updated address
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(Customer);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: customer.PK as PartitionKey,
+        sk: customer.SK as SortKey,
+        id: customer.Id,
+        type: customer.Type,
+        name: customer.Name,
+        address: customer.Address,
+        createdAt: new Date(customer.CreatedAt),
+        updatedAt: new Date(customer.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("can update all attribute types", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
@@ -301,30 +476,245 @@ describe("Update", () => {
           }
         ]
       ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
-    it("will update an entity and remove attributes", async () => {
-      expect.assertions(6);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    test("static method", async () => {
+      expect.assertions(5);
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await ContactInformation.update("123", {
-          email: "new@example.com",
-          phone: null
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: "1",
+          nullableStringAttribute: "2",
+          dateAttribute: new Date(),
+          nullableDateAttribute: new Date(),
+          foreignKeyAttribute: "1111",
+          nullableForeignKeyAttribute: "22222",
+          boolAttribute: true,
+          nullableBoolAttribute: false,
+          numberAttribute: 9,
+          nullableNumberAttribute: 10,
+          enumAttribute: "val-1",
+          nullableEnumAttribute: "val-2"
         })
       ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "old-1",
+        nullableStringAttribute: "old-2",
+        dateAttribute: new Date("2023-01-02"),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "old-1111" as ForeignKey,
+        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey,
+        boolAttribute: false,
+        nullableBoolAttribute: true,
+        numberAttribute: 9,
+        nullableNumberAttribute: 8,
+        enumAttribute: "val-2",
+        nullableEnumAttribute: "val-1",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        stringAttribute: "1",
+        nullableStringAttribute: "2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "1111",
+        nullableForeignKeyAttribute: "22222",
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        stringAttribute: "1",
+        nullableStringAttribute: "2",
+        dateAttribute: new Date(),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "1111",
+        nullableForeignKeyAttribute: "22222",
+        boolAttribute: true,
+        nullableBoolAttribute: false,
+        numberAttribute: 9,
+        nullableNumberAttribute: 10,
+        enumAttribute: "val-1",
+        nullableEnumAttribute: "val-2",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      // Assert original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MyClassWithAllAttributeTypes#123",
+        sk: "MyClassWithAllAttributeTypes",
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "old-1",
+        nullableStringAttribute: "old-2",
+        dateAttribute: new Date("2023-01-02"),
+        nullableDateAttribute: new Date(),
+        foreignKeyAttribute: "old-1111",
+        nullableForeignKeyAttribute: "old-2222",
+        boolAttribute: false,
+        nullableBoolAttribute: true,
+        numberAttribute: 9,
+        nullableNumberAttribute: 8,
+        enumAttribute: "val-2",
+        nullableEnumAttribute: "val-1",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("can update an entity without relationships - no prefetch or denormalization", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
                 Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MockInformation#123",
+                    SK: "MockInformation"
+                  },
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":State": "CO",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  UpdateExpression:
+                    "SET #State = :State, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    test("static method", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MockInformation.update("123", {
+          state: "CO"
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    test("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "test@test.com",
+        state: "AZ",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        state: "CO"
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        state: "CO",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
+      // Assert original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MockInformation#123",
+        sk: "MockInformation",
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "test@test.com",
+        state: "AZ",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("will update an entity and remove nullable attributes", () => {
+    const dbOperationAssertions = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK2": "ContactInformation#123",
+              ":Type1": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1)"
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "ContactInformation#123",
+                    SK: "ContactInformation"
+                  },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone",
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
                     "#Email": "Email",
@@ -334,46 +724,108 @@ describe("Update", () => {
                   ExpressionAttributeValues: {
                     ":Email": "new@example.com",
                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone"
+                  }
                 }
               }
             ]
           }
         ]
       ]);
+    };
+
+    let contactInformation: MockTableEntityTableItem<ContactInformation>;
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      contactInformation = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "email@email.com",
+        Phone: "555-555-5555",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [contactInformation]
+      });
     });
 
-    it("will update and remove multiple attributes", async () => {
-      expect.assertions(6);
-
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    it("static method", async () => {
+      expect.assertions(5);
 
       expect(
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        await MockInformation.update("123", {
-          address: "11 Some St",
+        await ContactInformation.update("123", {
           email: "new@example.com",
-          state: null,
           phone: null
         })
       ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        email: "new@example.com",
+        phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        email: "new@example.com",
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(ContactInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: contactInformation.PK,
+        sk: contactInformation.SK,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("will update and remove multiple nullable attributes", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
                 Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MockInformation#123",
+                    SK: "MockInformation"
+                  },
+                  UpdateExpression:
+                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State",
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
                     "#Address": "Address",
@@ -386,21 +838,185 @@ describe("Update", () => {
                     ":Address": "11 Some St",
                     ":Email": "new@example.com",
                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State"
+                  }
                 }
               }
             ]
           }
         ]
       ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
-    it("will error if any attributes are the wrong type", async () => {
+    test("static method", async () => {
       expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await MockInformation.update("123", {
+          address: "11 Some St",
+          email: "new@example.com",
+          state: null,
+          phone: null
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const now = new Date("2023-10-16T03:31:35.918Z");
+      jest.setSystemTime(now);
+
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        address: "11 Some St",
+        email: "new@example.com",
+        state: null,
+        phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        address: "11 Some St",
+        email: "new@example.com",
+        state: undefined,
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MockInformation#123",
+        sk: "MockInformation",
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("will error if any attributes are the wrong type", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["stringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableStringAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["dateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received number",
+          path: ["nullableDateAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["boolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "boolean",
+          message: "Expected boolean, received number",
+          path: ["nullableBoolAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["numberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableNumberAttribute"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["foreignKeyAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableForeignKeyAttribute"],
+          received: "number"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
+          options: ["val-1", "val-2"],
+          path: ["enumAttribute"],
+          received: "val-3"
+        },
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
+          options: ["val-1", "val-2"],
+          path: ["nullableEnumAttribute"],
+          received: "val-4"
+        }
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
+      expect.assertions(6);
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
@@ -418,328 +1034,577 @@ describe("Update", () => {
           nullableEnumAttribute: "val-4"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["stringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableStringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["dateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["nullableDateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["boolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["nullableBoolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["numberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["nullableNumberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["foreignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableForeignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
-            options: ["val-1", "val-2"],
-            path: ["enumAttribute"],
-            received: "val-3"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
-            options: ["val-1", "val-2"],
-            path: ["nullableEnumAttribute"],
-            received: "val-4"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        operationSharedAssertions(e);
       }
     });
 
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(5);
+    test("instance method", async () => {
+      expect.assertions(6);
 
-      await MockInformation.update("123", {
-        someDate: null
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
       });
 
+      try {
+        await instance.update({
+          stringAttribute: 1,
+          nullableStringAttribute: 2,
+          dateAttribute: 3,
+          nullableDateAttribute: 4,
+          foreignKeyAttribute: 5,
+          nullableForeignKeyAttribute: 6,
+          boolAttribute: 7,
+          nullableBoolAttribute: 8,
+          numberAttribute: "9",
+          nullableNumberAttribute: "10",
+          enumAttribute: "val-3",
+          nullableEnumAttribute: "val-4"
+        } as any); // Force any to test runtime validations
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("will allow nullable attributes to be set to null", () => {
+    const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
                 Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MockInformation#123",
+                    SK: "MockInformation"
+                  },
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
+                    "#Phone": "Phone",
                     "#UpdatedAt": "UpdatedAt",
                     "#someDate": "someDate"
                   },
                   ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                   },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
                   UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #Phone, #someDate"
                 }
               }
             ]
           }
         ]
       ]);
+    };
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
-    it("will not allow non nullable attributes to be null", async () => {
-      expect.assertions(5);
+    it("static method", async () => {
+      expect.assertions(4);
+
+      await MockInformation.update("123", {
+        someDate: null,
+        phone: null
+      });
+
+      dbOperationAssertions();
+    });
+
+    it("instance method", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        someDate: new Date(),
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        someDate: null,
+        phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        someDate: undefined,
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(MockInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: "MockInformation#123",
+        sk: "MockInformation",
+        id: "123",
+        type: "MockInformation",
+        address: "9 Example Ave",
+        email: "example@example.com",
+        someDate: new Date(),
+        state: "SomeState",
+        phone: "555-555-5555",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      dbOperationAssertions();
+    });
+  });
+
+  describe("will not allow non nullable attributes to be null", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Expected date, received null",
+          path: ["myAttribute"],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
+      expect.assertions(7);
 
       try {
         await MyModelNonNullableAttribute.update("123", {
           myAttribute: null as any // Force any to test runtime validations
         });
       } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received null",
-            path: ["myAttribute"],
-            received: "null"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        operationSharedAssertions(e);
       }
     });
 
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(5);
+    test("instance method", async () => {
+      expect.assertions(7);
 
-      await MockInformation.update("123", {
-        someDate: null
+      const instance = createInstance(MyModelNonNullableAttribute, {
+        pk: "test-pk" as PartitionKey,
+        sk: "test-sk" as SortKey,
+        id: "123",
+        type: "MyModelNonNullableAttribute",
+        myAttribute: new Date(),
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
       });
 
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
+      try {
+        await instance.update({
+          myAttribute: null as any // Force any to test runtime validations
+        });
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("an entity which BelongsTo an entity who HasOne of it", () => {
+    describe("when the entity does not already belong to another entity", () => {
+      const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "old-email@email.com",
+        Phone: "555-555-5555",
+        CustomerId: undefined, // Not already associated to an entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      beforeEach(() => {
+        const customer: MockTableEntityTableItem<Customer> = {
+          PK: "Customer#456",
+          SK: "Customer",
+          Id: "456",
+          Type: "Customer",
+          Name: "Mock Customer",
+          Address: "11 Some St",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [contactInformation]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: customer }]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("will update the entity and its denormalized records", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
               {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "ContactInformation#123",
+                  ":Type1": "ContactInformation"
+                },
+
+                FilterExpression: "#Type IN (:Type1)"
+              }
+            ]
+          ]);
+          // Does not need to fetch denormalized record
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "ContactInformation#123",
+                        SK: "ContactInformation"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Email": "Email",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Email": "new-email@example.com",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await ContactInformation.update("123", {
+              email: "new-email@example.com"
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            email: "new-email@example.com"
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            email: "new-email@example.com",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: contactInformation.PK as PartitionKey,
+            sk: contactInformation.SK as SortKey,
+            id: contactInformation.Id,
+            type: contactInformation.Type,
+            email: contactInformation.Email,
+            phone: contactInformation.Phone,
+            createdAt: new Date(contactInformation.CreatedAt),
+            updatedAt: new Date(contactInformation.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+
+      describe("when a foreign key is updated", () => {
+        describe("will update the foreign key if the entity being associated with exists", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
                   ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#someDate": "someDate"
+                    "#PK": "PK",
+                    "#Type": "Type"
                   },
                   ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
+                    ":PK2": "ContactInformation#123",
+                    ":Type1": "ContactInformation"
                   },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
+                  FilterExpression: "#Type IN (:Type1)"
                 }
-              }
-            ]
-          }
-        ]
-      ]);
-    });
+              ]
+            ]);
+            // Get the new customer so that it can be denormalized
+            expect(mockTransactGetCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      Get: {
+                        TableName: "mock-table",
+                        Key: { PK: "Customer#456", SK: "Customer" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      // Update the ContactInformation entity
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "ContactInformation#123",
+                          SK: "ContactInformation"
+                        },
+                        UpdateExpression:
+                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#CustomerId": "CustomerId",
+                          "#Email": "Email",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":CustomerId": "456",
+                          ":Email": "new-email@example.com",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Check that the customer being associated with exists
+                    {
+                      ConditionCheck: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Key: {
+                          PK: "Customer#456",
+                          SK: "Customer"
+                        }
+                      }
+                    },
+                    // Denormalize ContactInformation to Customer partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "Customer#456",
+                          SK: "ContactInformation",
+                          Id: "123",
+                          Type: "ContactInformation",
+                          CustomerId: "456",
+                          Email: "new-email@example.com",
+                          Phone: "555-555-5555",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Denormalize Customer to ContactInformation partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "ContactInformation#123",
+                          SK: "Customer",
+                          Id: "456",
+                          Type: "Customer",
+                          Address: "11 Some St",
+                          Name: "Mock Customer",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-01-02T00:00:00.000Z"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
 
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: undefined // Does not already belong to customer
+          test("static method", async () => {
+            expect.assertions(5);
+
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              })
+            ).toBeUndefined();
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
+              email: "new-email@example.com",
+              customerId: "456"
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              email: "new-email@example.com",
+              customerId: "456",
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(ContactInformation);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: contactInformation.PK as PartitionKey,
+              sk: contactInformation.SK as SortKey,
+              id: contactInformation.Id,
+              type: contactInformation.Type,
+              email: contactInformation.Email,
+              phone: contactInformation.Phone,
+              createdAt: new Date(contactInformation.CreatedAt),
+              updatedAt: new Date(contactInformation.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if the entity being updated does not exist at pre fetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(
+              new NotFoundError("ContactInformation does not exist: 123")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
             }
           });
         });
 
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(6);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
+        describe("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
             expect(e.constructor.name).toEqual("TransactionWriteFailedError");
             expect(e.errors).toEqual([
               new ConditionalCheckFailedError(
@@ -747,103 +1612,120 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
             ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
+          };
 
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
           });
 
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being associated with does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(
+              new NotFoundError("Customer does not exist: 456")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              .mockResolvedValueOnce(undefined)
+              .mockReturnValueOnce(undefined)
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being updated existed when preFetched but was deleted before the transaction was committed (causing transaction error)", () => {
+          const operationSharedAssertions = (e: any): void => {
             expect(e.constructor.name).toEqual("TransactionWriteFailedError");
             expect(e.errors).toEqual([
               new ConditionalCheckFailedError(
@@ -851,23 +1733,86 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
             ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will remove a nullable foreign key", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
               [
                 {
                   TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
                   },
-                  ConsistentRead: true
+                  ExpressionAttributeValues: {
+                    ":PK2": "ContactInformation#123",
+                    ":Type1": "ContactInformation"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
                 }
               ]
             ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
+            // Don't get customer because its being deleted
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
+            // Does not include removing a denormalized link because it doesn't exist
             expect(mockTransactWriteCommand.mock.calls).toEqual([
               [
                 {
@@ -879,9 +1824,6 @@ describe("Update", () => {
                           PK: "ContactInformation#123",
                           SK: "ContactInformation"
                         },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
                         ConditionExpression: "attribute_exists(PK)",
                         ExpressionAttributeNames: {
                           "#CustomerId": "CustomerId",
@@ -889,372 +1831,283 @@ describe("Update", () => {
                           "#UpdatedAt": "UpdatedAt"
                         },
                         ExpressionAttributeValues: {
-                          ":CustomerId": "456",
                           ":Email": "new-email@example.com",
                           ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
+                        },
+                        UpdateExpression:
+                          "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
                       }
                     }
                   ]
                 }
               ]
             ]);
-          }
-        });
+          };
 
-        it("will remove a nullable foreign key", async () => {
-          expect.assertions(6);
+          test("static method", async () => {
+            expect.assertions(5);
 
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: null
+              })
+            ).toBeUndefined();
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
               email: "new-email@example.com",
               customerId: null
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              email: "new-email@example.com",
+              customerId: undefined,
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(ContactInformation);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: contactInformation.PK as PartitionKey,
+              sk: contactInformation.SK as SortKey,
+              id: contactInformation.Id,
+              type: contactInformation.Type,
+              email: contactInformation.Email,
+              phone: contactInformation.Phone,
+              createdAt: new Date(contactInformation.CreatedAt),
+              updatedAt: new Date(contactInformation.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+      });
+    });
+
+    describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
+      const contactInformation: MockTableEntityTableItem<ContactInformation> = {
+        PK: "ContactInformation#123",
+        SK: "ContactInformation",
+        Id: "123",
+        Type: "ContactInformation",
+        Email: "old-email@email.com",
+        Phone: "555-555-5555",
+        CustomerId: "001", // Already associated to an entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        customerId: contactInformation.CustomerId as NullableForeignKey,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      beforeEach(() => {
+        const customer: MockTableEntityTableItem<Customer> = {
+          PK: "Customer#456",
+          SK: "Customer",
+          Id: "456",
+          Type: "Customer",
+          Name: "Mock Customer",
+          Address: "11 Some St",
+          CreatedAt: "2023-03-01T00:00:00.000Z",
+          UpdatedAt: "2023-04-02T00:00:00.000Z"
+        };
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockQuery.mockResolvedValue({
+          Items: [contactInformation]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: customer }]
         });
       });
 
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "789" // Already belongs to customer
-            }
-          });
-        });
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
 
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
-          expect.assertions(6);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            })
-          ).toBeUndefined();
+      describe("will update the entity and its denormalized records", () => {
+        const dbOperationAssertions = (): void => {
           expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
+            [{ name: "QueryCommand" }],
             [{ name: "TransactWriteCommand" }]
           ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
+          expect(mockedQueryCommand.mock.calls).toEqual([
             [
               {
                 TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "ContactInformation#123",
+                  ":Type1": "ContactInformation"
+                },
+
+                FilterExpression: "#Type IN (:Type1)"
               }
             ]
           ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
+          // Get denormalized entity to update
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
           expect(mockTransactWriteCommand.mock.calls).toEqual([
             [
               {
                 TransactItems: [
                   {
+                    // Update the main entity
                     Update: {
                       TableName: "mock-table",
                       Key: {
                         PK: "ContactInformation#123",
                         SK: "ContactInformation"
                       },
-                      UpdateExpression:
-                        "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
                       ConditionExpression: "attribute_exists(PK)",
                       ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
                         "#Email": "Email",
                         "#UpdatedAt": "UpdatedAt"
                       },
                       ExpressionAttributeValues: {
-                        ":CustomerId": "456",
                         ":Email": "new-email@example.com",
                         ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
+                      },
+                      UpdateExpression:
+                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt"
                     }
                   },
                   {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
-                    Delete: {
+                    // Update the entity's denormalized copy to existing partition
+                    Update: {
                       TableName: "mock-table",
                       Key: {
-                        PK: "Customer#789",
+                        PK: "Customer#001",
                         SK: "ContactInformation"
-                      }
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Email": "Email",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Email": "new-email@example.com",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt"
                     }
                   }
                 ]
               }
             ]
           ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await ContactInformation.update("123", {
+              email: "new-email@example.com"
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
         });
 
-        it("will throw an error if the entity being updated does not exist", async () => {
+        test("instance method", async () => {
           expect.assertions(7);
 
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
+          const updatedInstance = await instance.update({
+            email: "new-email@example.com"
           });
 
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
-              )
-            ]);
+          expect(updatedInstance).toEqual({
+            ...instance,
+            email: "new-email@example.com",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(ContactInformation);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: contactInformation.PK as PartitionKey,
+            sk: contactInformation.SK as SortKey,
+            id: contactInformation.Id,
+            type: contactInformation.Type,
+            email: contactInformation.Email,
+            phone: contactInformation.Phone,
+            customerId: contactInformation.CustomerId,
+            createdAt: new Date(contactInformation.CreatedAt),
+            updatedAt: new Date(contactInformation.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+
+      describe("when a foreign key is updated", () => {
+        describe("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", () => {
+          const dbOperationAssertions = (): void => {
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
             ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
+            expect(mockedQueryCommand.mock.calls).toEqual([
               [
                 {
                   TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
                   },
-                  ConsistentRead: true
+                  ExpressionAttributeValues: {
+                    ":PK2": "ContactInformation#123",
+                    ":Type1": "ContactInformation"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
                 }
               ]
             ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
+            expect(mockTransactGetCommand.mock.calls).toEqual([
               [
                 {
                   TransactItems: [
                     {
-                      Update: {
+                      Get: {
                         TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    // No Delete transaction because the item does not exist to look up the foreign key to build the delete operation with
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
+                        Key: { PK: "Customer#456", SK: "Customer" }
                       }
                     }
                   ]
                 }
               ]
             ]);
-          }
-        });
-
-        it("will throw an error if the associated entity does not exist", async () => {
-          expect.assertions(7);
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await ContactInformation.update("123", {
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
             expect(mockTransactWriteCommand.mock.calls).toEqual([
               [
                 {
                   TransactItems: [
                     {
+                      // Update the ContactInformation including the foreign key
                       Update: {
                         TableName: "mock-table",
                         Key: {
@@ -1263,7 +2116,6 @@ describe("Update", () => {
                         },
                         UpdateExpression:
                           "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
                         ConditionExpression: "attribute_exists(PK)",
                         ExpressionAttributeNames: {
                           "#CustomerId": "CustomerId",
@@ -1277,24 +2129,28 @@ describe("Update", () => {
                         }
                       }
                     },
+                    // Delete the denormalized link to the previous ContactInformation
                     {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
                       Delete: {
                         TableName: "mock-table",
                         Key: {
-                          PK: "Customer#789",
+                          PK: "Customer#001",
                           SK: "ContactInformation"
                         }
                       }
                     },
+                    // Check that the new customer being associated with exists
+                    {
+                      ConditionCheck: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Key: {
+                          PK: "Customer#456",
+                          SK: "Customer"
+                        }
+                      }
+                    },
+                    // Denormalize a link of the ContactInformation to the new customer's partition
                     {
                       Put: {
                         TableName: "mock-table",
@@ -1302,12 +2158,30 @@ describe("Update", () => {
                         Item: {
                           PK: "Customer#456",
                           SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
+                          Id: "123",
+                          Type: "ContactInformation",
+                          CustomerId: "456",
+                          Email: "new-email@example.com",
+                          Phone: "555-555-5555",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
                           UpdatedAt: "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Overwrite the existing denormalized link to the Customer in the ContactInformation's partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Item: {
+                          PK: "ContactInformation#123",
+                          SK: "Customer",
+                          Id: "456",
+                          Type: "Customer",
+                          Address: "11 Some St",
+                          Name: "Mock Customer",
+                          CreatedAt: "2023-03-01T00:00:00.000Z",
+                          UpdatedAt: "2023-04-02T00:00:00.000Z"
                         }
                       }
                     }
@@ -1315,43 +2189,307 @@ describe("Update", () => {
                 }
               ]
             ]);
-          }
-        });
+          };
 
-        it("will throw an error if the entity is already associated with the requested entity", async () => {
-          expect.assertions(7);
+          test("static method", async () => {
+            expect.assertions(5);
 
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "456" // Already belongs to customer, the same being updated
-            }
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              })
+            ).toBeUndefined();
+            dbOperationAssertions();
           });
 
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" }
-              ],
-              $metadata: {}
-            });
-          });
+          test("instance method", async () => {
+            expect.assertions(7);
 
-          try {
-            await ContactInformation.update("123", {
+            const updatedInstance = await instance.update({
               email: "new-email@example.com",
               customerId: "456"
             });
-          } catch (e: any) {
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              email: "new-email@example.com",
+              customerId: "456",
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(ContactInformation);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: contactInformation.PK as PartitionKey,
+              sk: contactInformation.SK as SortKey,
+              id: contactInformation.Id,
+              type: contactInformation.Type,
+              customerId: contactInformation.CustomerId,
+              email: contactInformation.Email,
+              phone: contactInformation.Phone,
+              createdAt: new Date(contactInformation.CreatedAt),
+              updatedAt: new Date(contactInformation.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if the entity being updated does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(
+              new NotFoundError("ContactInformation does not exist: 123")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being updated existed at preFetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the associated entity does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(
+              new NotFoundError("Customer does not exist: 456")
+            );
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the associated entity existed at preFetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Customer with ID '456' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity is already associated with the requested entity", () => {
+          const operationSharedAssertions = (e: any): void => {
             expect(e.constructor.name).toEqual("TransactionWriteFailedError");
             expect(e.errors).toEqual([
               new ConditionalCheckFailedError(
@@ -1359,27 +2497,91 @@ describe("Update", () => {
               )
             ]);
             expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
               [{ name: "TransactWriteCommand" }]
             ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
               [
                 {
                   TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
                   },
-                  ConsistentRead: true
+                  ExpressionAttributeValues: {
+                    ":PK2": "ContactInformation#123",
+                    ":Type1": "ContactInformation"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
                 }
               ]
             ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
+            // Don't get customer because its being deleted
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
             expect(mockTransactWriteCommand.mock.calls).toEqual([
               [
                 {
                   TransactItems: [
+                    // Update the ContactInformation and remove the foreign key
                     {
                       Update: {
                         TableName: "mock-table",
@@ -1388,8 +2590,7 @@ describe("Update", () => {
                           SK: "ContactInformation"
                         },
                         UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
+                          "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId",
                         ConditionExpression: "attribute_exists(PK)",
                         ExpressionAttributeNames: {
                           "#CustomerId": "CustomerId",
@@ -1397,1056 +2598,1732 @@ describe("Update", () => {
                           "#UpdatedAt": "UpdatedAt"
                         },
                         ExpressionAttributeValues: {
-                          ":CustomerId": "456",
                           ":Email": "new-email@example.com",
                           ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                         }
                       }
                     },
+                    // Delete the denormalized record to Customer from the ContactInformation partition
                     {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
                       Delete: {
                         TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation"
-                        }
+                        Key: { PK: "ContactInformation#123", SK: "Customer" }
                       }
                     },
+                    // Delete the denormalized record to ContactInformation from the customer partition
                     {
-                      Put: {
+                      Delete: {
                         TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
+                        Key: { PK: "Customer#001", SK: "ContactInformation" }
                       }
                     }
                   ]
                 }
               ]
             ]);
-          }
-        });
+          };
 
-        it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(6);
+          test("static method", async () => {
+            expect.assertions(5);
 
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await ContactInformation.update("123", {
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: null
+              })
+            ).toBeUndefined();
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
               email: "new-email@example.com",
               customerId: null
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#789", SK: "ContactInformation" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              email: "new-email@example.com",
+              customerId: undefined,
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(ContactInformation);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: contactInformation.PK as PartitionKey,
+              sk: contactInformation.SK as SortKey,
+              id: contactInformation.Id,
+              type: contactInformation.Type,
+              customerId: contactInformation.CustomerId,
+              email: contactInformation.Email,
+              phone: contactInformation.Phone,
+              createdAt: new Date(contactInformation.CreatedAt),
+              updatedAt: new Date(contactInformation.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if it fails to delete the old denormalized records", () => {
+          beforeEach(() => {
+            mockSend
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "ConditionalCheckFailed" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"ContactInformation#123","SK":"Customer"}'
+              ),
+              new ConditionalCheckFailedError(
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Customer#001","SK":"ContactInformation"}'
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await ContactInformation.update("123", {
+                email: "new-email@example.com",
+                customerId: null
+              });
+            } catch (e) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                email: "new-email@example.com",
+                customerId: null
+              });
+            } catch (e) {
+              operationSharedAssertions(e);
+            }
+          });
         });
       });
     });
+  });
 
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: undefined // Does not already belong to customer
-            }
-          });
-        });
+  describe("an entity which BelongsTo an entity who HasMany of it", () => {
+    describe("when the entity does not already belong to another entity", () => {
+      const pet: MockTableEntityTableItem<Pet> = {
+        PK: "Pet#123",
+        SK: "Pet",
+        Id: "123",
+        Type: "Pet",
+        Name: "Mock Pet",
+        OwnerId: undefined, // Does not already belong to person
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
 
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(6);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                      UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key", async () => {
-          expect.assertions(6);
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "Pet#123",
-              SK: "Pet",
-              Id: "123",
-              name: "Fido",
-              OwnerId: undefined // Does not already belong an owner
-            }
-          });
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await Pet.update("123", {
-              name: "New Name",
-              ownerId: null
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "Pet#123", SK: "Pet" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "Pet#123", SK: "Pet" },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#Name": "Name",
-                        "#OwnerId": "OwnerId",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":Name": "New Name",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      UpdateExpression:
-                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-        });
+      const instance = createInstance(Pet, {
+        pk: "Pet#123" as PartitionKey,
+        sk: "Pet" as SortKey,
+        id: "123",
+        type: "Pet",
+        name: "Mock Pet",
+        ownerId: undefined,
+        createdAt: new Date("2023-01-01"),
+        updatedAt: new Date("2023-01-02")
       });
-
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: "789" // Already belongs to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(6);
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                      UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "Customer#789",
-                        SK: "PaymentMethod#123"
-                      }
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    // No Delete transaction because the item does not exist to look up the foreign key to build the delete operation with
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#789",
-                          SK: "PaymentMethod#123"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity is already associated with the requested entity", async () => {
-          expect.assertions(7);
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: "456" // Already belongs to customer, the same being updated
-            }
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await PaymentMethod.update("123", {
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' already belongs to Customer with Id '456'"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key and delete the associated BelongsToLinks", async () => {
-          expect.assertions(6);
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "Pet#123",
-              SK: "Pet",
-              Id: "123",
-              name: "Fido",
-              OwnerId: "456" // Does not already belong an owner
-            }
-          });
-
-          expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-            await Pet.update("123", {
-              name: "New Name",
-              ownerId: null
-            })
-          ).toBeUndefined();
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "Pet#123", SK: "Pet" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "Pet#123", SK: "Pet" },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#Name": "Name",
-                        "#OwnerId": "OwnerId",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":Name": "New Name",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      UpdateExpression:
-                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Person#456", SK: "Pet#123" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-        });
-      });
-    });
-
-    describe("A model is updating multiple ForeignKeys of different relationship types", () => {
-      @Entity
-      class Model1 extends MockTable {
-        @HasOne(() => Model3, { foreignKey: "model1Id" })
-        public model3: Model3;
-      }
-
-      @Entity
-      class Model2 extends MockTable {
-        @HasMany(() => Model3, { foreignKey: "model2Id" })
-        public model3: Model3[];
-      }
-
-      @Entity
-      class Model3 extends MockTable {
-        @StringAttribute({ alias: "Name" })
-        public name: string;
-
-        @ForeignKeyAttribute({ alias: "Model1Id" })
-        public model1Id: ForeignKey;
-
-        @ForeignKeyAttribute({ alias: "Model2Id" })
-        public model2Id: ForeignKey;
-
-        @BelongsTo(() => Model1, { foreignKey: "model1Id" })
-        public model1: Model1;
-
-        @BelongsTo(() => Model2, { foreignKey: "model2Id" })
-        public model2: Model2;
-      }
 
       beforeEach(() => {
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4
-          .mockReturnValueOnce("belongsToLinkId1")
-          .mockReturnValueOnce("belongsToLinkId2");
-      });
+        const person: MockTableEntityTableItem<Person> = {
+          PK: "Person#456",
+          SK: "Person",
+          Id: "456",
+          Type: "Person",
+          Name: "Mock Person",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
 
-      it("can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(6);
-
-        mockGet.mockResolvedValue({
-          Item: {
-            PK: "Model3#123",
-            SK: "Model3",
-            Id: "123",
-            Name: "originalName",
-            Phone: "555-555-5555",
-            Model1Id: undefined,
-            Model2Id: undefined
-          }
+        mockQuery.mockResolvedValue({
+          Items: [pet]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: person }]
         });
 
-        expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await Model3.update("123", {
-            name: "newName",
-            model1Id: "model1-ID",
-            model2Id: "model2-ID"
-          })
-        ).toBeUndefined();
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("will update the entity and its denormalized records", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Pet#123",
+                  ":Type1": "Pet"
+                },
+                FilterExpression: "#Type IN (:Type1)"
+              }
+            ]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Pet#123",
+                        SK: "Pet"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "Fido",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Pet.update("123", {
+              name: "Fido"
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            name: "Fido"
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "Fido",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Pet);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: pet.PK,
+            sk: pet.SK,
+            id: pet.Id,
+            type: pet.Type,
+            name: pet.Name,
+            ownerId: undefined,
+            createdAt: new Date(pet.CreatedAt),
+            updatedAt: new Date(pet.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+
+      describe("when a foreign key is updated", () => {
+        describe("will update the foreign key if the entity being associated with exists", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Pet#123",
+                    ":Type1": "Pet"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            expect(mockTransactGetCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      Get: {
+                        TableName: "mock-table",
+                        Key: { PK: "Person#456", SK: "Person" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    // Update the pet and add owner id
+                    {
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Pet#123",
+                          SK: "Pet"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OwnerId": "OwnerId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "Fido",
+                          ":OwnerId": "456",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Check that the Person (owner) entity exists
+                    {
+                      ConditionCheck: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Key: {
+                          PK: "Person#456",
+                          SK: "Person"
+                        }
+                      }
+                    },
+                    // Denormalize the Pet to Person partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "Person#456",
+                          SK: "Pet#123",
+                          Id: "123",
+                          Type: "Pet",
+                          AdoptedDate: undefined,
+                          Name: "Fido",
+                          OwnerId: "456",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Denormalize the Person to Pet partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "Pet#123",
+                          SK: "Person",
+                          Id: "456",
+                          Type: "Person",
+                          Name: "Mock Person",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-01-02T00:00:00.000Z"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
+
+          test("static method", async () => {
+            expect.assertions(5);
+
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              })
+            ).toBeUndefined();
+
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
+              name: "Fido",
+              ownerId: "456"
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "Fido",
+              ownerId: "456",
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Pet);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: pet.PK,
+              sk: pet.SK,
+              id: pet.Id,
+              type: pet.Type,
+              name: pet.Name,
+              ownerId: undefined,
+              createdAt: new Date(pet.CreatedAt),
+              updatedAt: new Date(pet.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if the entity being updated does not exist at pre fetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(new NotFoundError("Pet does not exist: 123"));
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockQuery.mockResolvedValueOnce({ Items: [] });
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Pet with ID '123' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being associated with does not exist at pre fetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist at pre fetch
+
+            mockSend
+              .mockResolvedValueOnce(undefined)
+              .mockReturnValueOnce(undefined)
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being associated with existed when preFetched but was deleted before the transaction was committed (causing transaction error)", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Person with ID '456' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              .mockResolvedValueOnce(undefined)
+              .mockReturnValueOnce(undefined)
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Pet#123",
+                    ":Type1": "Pet"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            // Don't get owner (Person) because its being deleted
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
+            // Does not include removing a denormalized link because it doesn't exist
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Pet#123",
+                          SK: "Pet"
+                        },
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OwnerId": "OwnerId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "New Name",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
+
+          it("static method", async () => {
+            expect.assertions(5);
+
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Pet.update("123", {
+                name: "New Name",
+                ownerId: null
+              })
+            ).toBeUndefined();
+
+            dbOperationAssertions();
+          });
+
+          it("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
+              name: "New Name",
+              ownerId: null
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "New Name",
+              ownerId: undefined,
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Pet);
+            expect(instance).toEqual({
+              pk: pet.PK,
+              sk: pet.SK,
+              id: pet.Id,
+              type: pet.Type,
+              name: pet.Name,
+              ownerId: undefined,
+              createdAt: new Date(pet.CreatedAt),
+              updatedAt: new Date(pet.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+      });
+    });
+
+    describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
+      const pet: MockTableEntityTableItem<Pet> = {
+        PK: "Pet#123",
+        SK: "Pet",
+        Id: "123",
+        Type: "Pet",
+        Name: "Mock Pet",
+        OwnerId: "001", // Already belongs to Person entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Pet, {
+        pk: "Pet#123" as PartitionKey,
+        sk: "Pet" as SortKey,
+        id: "123",
+        type: "Pet",
+        name: "Mock Pet",
+        ownerId: pet.OwnerId as NullableForeignKey,
+        createdAt: new Date("2023-01-01"),
+        updatedAt: new Date("2023-01-02")
+      });
+
+      beforeEach(() => {
+        const person: MockTableEntityTableItem<Person> = {
+          PK: "Person#456",
+          SK: "Person",
+          Id: "456",
+          Type: "Person",
+          Name: "Mock Person",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [pet]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: person }]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("will update the entity and its denormalized records", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Pet#123",
+                  ":Type1": "Pet"
+                },
+                FilterExpression: "#Type IN (:Type1)"
+              }
+            ]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    // Update the Pet
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Pet#123",
+                        SK: "Pet"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "Fido",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
+                    }
+                  },
+                  {
+                    // Update the Pet's denormalized records in associated partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Person#001",
+                        SK: "Pet#123"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "Fido",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Pet.update("123", {
+              name: "Fido"
+            })
+          ).toBeUndefined();
+
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const updatedInstance = await instance.update({
+            name: "Fido"
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "Fido",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Pet);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: pet.PK,
+            sk: pet.SK,
+            id: pet.Id,
+            type: pet.Type,
+            name: pet.Name,
+            ownerId: "001",
+            createdAt: new Date(pet.CreatedAt),
+            updatedAt: new Date(pet.UpdatedAt)
+          });
+
+          dbOperationAssertions();
+        });
+      });
+
+      describe("when a foreign key is updated", () => {
+        describe("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Pet#123",
+                    ":Type1": "Pet"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            expect(mockTransactGetCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      Get: {
+                        TableName: "mock-table",
+                        Key: { PK: "Person#456", SK: "Person" }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      // Update the Pet including the foreign key
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Pet#123",
+                          SK: "Pet"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OwnerId": "OwnerId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "Fido",
+                          ":OwnerId": "456",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Delete the denormalized link to the previous Person (owner)
+                    {
+                      Delete: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Person#001",
+                          SK: "Pet#123"
+                        }
+                      }
+                    },
+                    // Check that the new Person (owner) being associated with exists
+                    {
+                      ConditionCheck: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Key: {
+                          PK: "Person#456",
+                          SK: "Person"
+                        }
+                      }
+                    },
+                    // Denormalize a link of the Pet to the new Persons's (owners) partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "Person#456",
+                          SK: "Pet#123",
+                          Id: "123",
+                          Type: "Pet",
+                          AdoptedDate: undefined,
+                          Name: "Fido",
+                          OwnerId: "456",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Overwrite the existing denormalized link to the Person in the Pets's partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Item: {
+                          PK: "Pet#123",
+                          SK: "Person",
+                          Id: "456",
+                          Type: "Person",
+                          Name: "Mock Person",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-01-02T00:00:00.000Z"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
+
+          test("static method", async () => {
+            expect.assertions(5);
+
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              })
+            ).toBeUndefined();
+
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
+              name: "Fido",
+              ownerId: "456"
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "Fido",
+              ownerId: "456",
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Pet);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: pet.PK,
+              sk: pet.SK,
+              id: pet.Id,
+              type: pet.Type,
+              name: pet.Name,
+              ownerId: pet.OwnerId,
+              createdAt: new Date(pet.CreatedAt),
+              updatedAt: new Date(pet.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if the entity being updated does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(new NotFoundError("Pet does not exist: 123"));
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being updated existed at preFetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Pet with ID '123' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity being associated with does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist but will fail in transaction
+
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(2);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(2);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the associated entity existed at preFetch but was deleted before the transaction was committed", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Person with ID '456' does not exist"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will throw an error if the entity is already associated with the requested entity", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                "ConditionalCheckFailed: Person with id: 456 already has an associated Pet"
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "TransactGetCommand" }],
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          beforeEach(() => {
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "Fido",
+                ownerId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+
+        describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Pet#123",
+                    ":Type1": "Pet"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            // Don't get customer because its being deleted
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    // Update the Pet and remove the foreign key
+                    {
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Pet#123",
+                          SK: "Pet"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId",
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OwnerId": "OwnerId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "New Name",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Delete the denormalized record to Person from the Pet partition
+                    {
+                      Delete: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Pet#123",
+                          SK: "Person"
+                        }
+                      }
+                    },
+                    // Delete the denormalized record to Pet from the Person partition
+                    {
+                      Delete: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Person#001",
+                          SK: "Pet#123"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
+
+          test("static method", async () => {
+            expect.assertions(5);
+
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Pet.update("123", {
+                name: "New Name",
+                ownerId: null
+              })
+            ).toBeUndefined();
+
+            dbOperationAssertions();
+          });
+
+          test("instance method", async () => {
+            expect.assertions(7);
+
+            const updatedInstance = await instance.update({
+              name: "New Name",
+              ownerId: null
+            });
+
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "New Name",
+              ownerId: undefined,
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Pet);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: pet.PK,
+              sk: pet.SK,
+              id: pet.Id,
+              type: pet.Type,
+              name: pet.Name,
+              ownerId: pet.OwnerId,
+              createdAt: new Date(pet.CreatedAt),
+              updatedAt: new Date(pet.UpdatedAt)
+            });
+
+            dbOperationAssertions();
+          });
+        });
+
+        describe("will throw an error if it fails to delete the old denormalized records", () => {
+          beforeEach(() => {
+            mockSend
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "None" },
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "ConditionalCheckFailed" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
+
+          const operationSharedAssertions = (e: any): void => {
+            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+            expect(e.errors).toEqual([
+              new ConditionalCheckFailedError(
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Pet#123","SK":"Person"}'
+              ),
+              new ConditionalCheckFailedError(
+                'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#001","SK":"Pet#123"}'
+              )
+            ]);
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+          };
+
+          test("static method", async () => {
+            expect.assertions(3);
+
+            try {
+              await Pet.update("123", {
+                name: "New Name",
+                ownerId: null
+              });
+            } catch (e) {
+              operationSharedAssertions(e);
+            }
+          });
+
+          test("instance method", async () => {
+            expect.assertions(3);
+
+            try {
+              await instance.update({
+                name: "New Name",
+                ownerId: null
+              });
+            } catch (e) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
+      });
+    });
+  });
+
+  describe("A model is updating multiple ForeignKeys of different relationship types", () => {
+    @Entity
+    class Model1 extends MockTable {
+      @StringAttribute({ alias: "SomeAttr" })
+      public someAttr: string;
+
+      @HasOne(() => Model3, { foreignKey: "model1Id" })
+      public model3: Model3;
+    }
+
+    @Entity
+    class Model2 extends MockTable {
+      @StringAttribute({ alias: "OtherAttr" })
+      public otherAttr: string;
+
+      @HasMany(() => Model3, { foreignKey: "model2Id" })
+      public model3: Model3[];
+    }
+
+    @Entity
+    class Model3 extends MockTable {
+      @StringAttribute({ alias: "Name" })
+      public name: string;
+
+      @ForeignKeyAttribute({ alias: "Model1Id", nullable: true })
+      public model1Id?: NullableForeignKey;
+
+      @ForeignKeyAttribute({ alias: "Model2Id", nullable: true })
+      public model2Id?: NullableForeignKey;
+
+      @BelongsTo(() => Model1, { foreignKey: "model1Id" })
+      public model1: Model1;
+
+      @BelongsTo(() => Model2, { foreignKey: "model2Id" })
+      public model2: Model2;
+    }
+
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    afterEach(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    describe("can add (for entity that is not associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", () => {
+      const dbOperationAssertions = (): void => {
         expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
           [{ name: "TransactWriteCommand" }]
         ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
+        expect(mockedQueryCommand.mock.calls).toEqual([
           [
             {
               TableName: "mock-table",
-              Key: { PK: "Model3#123", SK: "Model3" },
-              ConsistentRead: true
+              KeyConditionExpression: "#PK = :PK2",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK2": "Model3#123",
+                ":Type1": "Model3"
+              },
+              FilterExpression: "#Type IN (:Type1)"
             }
           ]
         ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
+        expect(mockTransactGetCommand.mock.calls).toEqual([
           [
             {
               TransactItems: [
                 {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model1#456", SK: "Model1" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model2#789", SK: "Model2" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the Model3 entity
+                {
                   Update: {
                     TableName: "mock-table",
-                    Key: { PK: "Model3#123", SK: "Model3" },
+                    Key: {
+                      PK: "Model3#123",
+                      SK: "Model3"
+                    },
                     UpdateExpression:
                       "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
                     ConditionExpression: "attribute_exists(PK)",
@@ -2457,56 +4334,100 @@ describe("Update", () => {
                       "#UpdatedAt": "UpdatedAt"
                     },
                     ExpressionAttributeValues: {
-                      ":Model1Id": "model1-ID",
-                      ":Model2Id": "model2-ID",
+                      ":Model1Id": "456",
+                      ":Model2Id": "789",
                       ":Name": "newName",
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                     }
                   }
                 },
+                // Check that Model1 entity being associated with exists
                 {
                   ConditionCheck: {
                     TableName: "mock-table",
-                    Key: { PK: "Model1#model1-ID", SK: "Model1" },
-                    ConditionExpression: "attribute_exists(PK)"
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model1#456",
+                      SK: "Model1"
+                    }
                   }
                 },
+                // Denormalize Model3 entity being updated to Model1 partition
                 {
                   Put: {
                     TableName: "mock-table",
                     ConditionExpression: "attribute_not_exists(PK)",
                     Item: {
-                      PK: "Model1#model1-ID",
+                      PK: "Model1#456",
                       SK: "Model3",
-                      Id: "belongsToLinkId1",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "Model3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
                       UpdatedAt: "2023-10-16T03:31:35.918Z"
                     }
                   }
                 },
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    Key: { PK: "Model2#model2-ID", SK: "Model2" },
-                    ConditionExpression: "attribute_exists(PK)"
-                  }
-                },
+                // Denormalize Model1 entity to the Model3 partition that is being updated
                 {
                   Put: {
                     TableName: "mock-table",
                     ConditionExpression: "attribute_not_exists(PK)",
                     Item: {
-                      PK: "Model2#model2-ID",
+                      PK: "Model3#123",
+                      SK: "Model1",
+                      Id: "456",
+                      Type: "Model1",
+                      SomeAttr: "someVal",
+                      CreatedAt: "2023-01-03T00:00:00.000Z",
+                      UpdatedAt: "2023-01-04T00:00:00.000Z"
+                    }
+                  }
+                },
+                // Check that Model2 entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model2#789",
+                      SK: "Model2"
+                    }
+                  }
+                },
+                // Denormalize Model3 entity being updated to Model2 partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model2#789",
                       SK: "Model3#123",
-                      Id: "belongsToLinkId2",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "Model3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
                       UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Model2 entity to the Model3 partition that is being updated
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model3#123",
+                      SK: "Model2",
+                      Id: "789",
+                      Type: "Model2",
+                      OtherAttr: "otherVal",
+                      CreatedAt: "2023-01-05T00:00:00.000Z",
+                      UpdatedAt: "2023-01-06T00:00:00.000Z"
                     }
                   }
                 }
@@ -2514,56 +4435,450 @@ describe("Update", () => {
             }
           ]
         ]);
+      };
+
+      const model3Item: MockTableEntityTableItem<Model3> = {
+        PK: "Model3#123",
+        SK: "Model3",
+        Id: "123",
+        Type: "Model3",
+        Name: "originalName",
+        Model1Id: undefined, // Does not already have an associated entity
+        Model2Id: undefined, // Does not already have an associated entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Model3, {
+        pk: "Model3#123" as PartitionKey,
+        sk: "Model3" as SortKey,
+        id: "123",
+        type: "Model3",
+        name: "originalName",
+        model1Id: undefined, // Does not already have an associated entity
+        model2Id: undefined, // Does not already have an associated entity
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
       });
 
-      it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(6);
+      beforeEach(() => {
+        const model1Item: MockTableEntityTableItem<Model1> = {
+          PK: "Model1#456",
+          SK: "Model1",
+          Id: "456",
+          Type: "Model1",
+          SomeAttr: "someVal",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
 
-        mockGet.mockResolvedValueOnce({
-          Item: {
-            myPk: "Grade|123",
-            mySk: "Grade",
-            id: "123",
-            type: "Grade",
-            gradeValue: "A+",
-            assignmentId: "456",
-            studentId: "789",
-            createdAt: "2023-10-16T03:31:35.918Z",
-            updatedAt: "2023-10-16T03:31:35.918Z"
-          }
+        const model2Item: MockTableEntityTableItem<Model2> = {
+          PK: "Model2#789",
+          SK: "Model2",
+          Id: "789",
+          Type: "Model2",
+          OtherAttr: "otherVal",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [model3Item]
         });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: model1Item }, { Item: model2Item }]
+        });
+      });
+
+      test("static method", async () => {
+        expect.assertions(5);
 
         expect(
           // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await Grade.update("123", {
-            gradeValue: "B",
-            assignmentId: "111",
-            studentId: "222"
+          await Model3.update("123", {
+            name: "newName",
+            model1Id: "456",
+            model2Id: "789"
           })
         ).toBeUndefined();
+
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Model3);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          model1Id: instance.model1Id,
+          model2Id: instance.model2Id,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
+      });
+    });
+
+    describe("can update (for entity that is already associated) foreign keys for an entity that belongs to entities as both HasMany and HasOne relationships", () => {
+      const dbOperationAssertions = (): void => {
         expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
           [{ name: "TransactWriteCommand" }]
         ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
+        expect(mockedQueryCommand.mock.calls).toEqual([
           [
             {
-              TableName: "other-table",
-              Key: { myPk: "Grade|123", mySk: "Grade" },
-              ConsistentRead: true
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK2",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK2": "Model3#123",
+                ":Type1": "Model3"
+              },
+              FilterExpression: "#Type IN (:Type1)"
             }
           ]
         ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
+        expect(mockTransactGetCommand.mock.calls).toEqual([
           [
             {
               TransactItems: [
                 {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model1#456", SK: "Model1" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model2#789", SK: "Model2" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the Model3 entity
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Model3#123",
+                      SK: "Model3"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Model1Id": "Model1Id",
+                      "#Model2Id": "Model2Id",
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Model1Id": "456",
+                      ":Model2Id": "789",
+                      ":Name": "newName",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Delete the link to the old Model1 item
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model1#001", SK: "Model3" }
+                  }
+                },
+                // Check that Model1 entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model1#456",
+                      SK: "Model1"
+                    }
+                  }
+                },
+                // Denormalize Model3 entity being updated to Model1 partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model1#456",
+                      SK: "Model3",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
+                      UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Model1 entity to the Model3 partition that is being updated
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Item: {
+                      PK: "Model3#123",
+                      SK: "Model1",
+                      Id: "456",
+                      Type: "Model1",
+                      SomeAttr: "someVal",
+                      CreatedAt: "2023-01-03T00:00:00.000Z",
+                      UpdatedAt: "2023-01-04T00:00:00.000Z"
+                    }
+                  }
+                },
+                // Delete the link to the old Model2 item
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Model2#002", SK: "Model3#123" }
+                  }
+                },
+                // Check that Model2 entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Model2#789",
+                      SK: "Model2"
+                    }
+                  }
+                },
+                // Denormalize Model3 entity being updated to Model2 partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Model2#789",
+                      SK: "Model3#123",
+                      Id: "123",
+                      Type: "Model3",
+                      Model1Id: "456",
+                      Model2Id: "789",
+                      Name: "newName",
+                      CreatedAt: "2023-01-01T00:00:00.000Z",
+                      UpdatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Model2 entity to the Model3 partition that is being updated
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_exists(PK)",
+                    Item: {
+                      PK: "Model3#123",
+                      SK: "Model2",
+                      Id: "789",
+                      Type: "Model2",
+                      OtherAttr: "otherVal",
+                      CreatedAt: "2023-01-05T00:00:00.000Z",
+                      UpdatedAt: "2023-01-06T00:00:00.000Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      const model3Item: MockTableEntityTableItem<Model3> = {
+        PK: "Model3#123",
+        SK: "Model3",
+        Id: "123",
+        Type: "Model3",
+        Name: "originalName",
+        Model1Id: "001", // Already has an associated entity
+        Model2Id: "002", // Already has an associated entity
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Model3, {
+        pk: "Model3#123" as PartitionKey,
+        sk: "Model3" as SortKey,
+        id: "123",
+        type: "Model3",
+        name: "originalName",
+        model1Id: "001" as NullableForeignKey, // Already has an associated entity
+        model2Id: "002" as NullableForeignKey, // Already has an associated entity
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const model1Item: MockTableEntityTableItem<Model1> = {
+          PK: "Model1#456",
+          SK: "Model1",
+          Id: "456",
+          Type: "Model1",
+          SomeAttr: "someVal",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        const model2Item: MockTableEntityTableItem<Model2> = {
+          PK: "Model2#789",
+          SK: "Model2",
+          Id: "789",
+          Type: "Model2",
+          OtherAttr: "otherVal",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [model3Item]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: model1Item }, { Item: model2Item }]
+        });
+      });
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Model3.update("123", {
+            name: "newName",
+            model1Id: "456",
+            model2Id: "789"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "newName",
+          model1Id: "456",
+          model2Id: "789",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Model3);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          model1Id: instance.model1Id,
+          model2Id: instance.model2Id,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
+      });
+    });
+
+    describe("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "other-table",
+              KeyConditionExpression: "#myPk = :myPk2",
+              ExpressionAttributeNames: {
+                "#myPk": "myPk",
+                "#type": "type"
+              },
+              ExpressionAttributeValues: {
+                ":myPk2": "Grade|123",
+                ":type1": "Grade"
+              },
+              FilterExpression: "#type IN (:type1)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "other-table",
+                    Key: { myPk: "Assignment|456", mySk: "Assignment" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "other-table",
+                    Key: { myPk: "Student|789", mySk: "Student" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the Grade entity
+                {
                   Update: {
                     TableName: "other-table",
-                    Key: { myPk: "Grade|123", mySk: "Grade" },
+                    Key: {
+                      myPk: "Grade|123",
+                      mySk: "Grade"
+                    },
                     UpdateExpression:
                       "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
                     ConditionExpression: "attribute_exists(myPk)",
@@ -2575,67 +4890,120 @@ describe("Update", () => {
                     },
                     ExpressionAttributeValues: {
                       ":LetterValue": "B",
-                      ":assignmentId": "111",
-                      ":studentId": "222",
+                      ":assignmentId": "456",
+                      ":studentId": "789",
                       ":updatedAt": "2023-10-16T03:31:35.918Z"
                     }
                   }
                 },
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|111", mySk: "Assignment" },
-                    ConditionExpression: "attribute_exists(myPk)"
-                  }
-                },
+                // Delete the link to the old Assignment item
                 {
                   Delete: {
                     TableName: "other-table",
-                    Key: { myPk: "Assignment|456", mySk: "Grade" }
+                    Key: {
+                      myPk: "Assignment|001",
+                      mySk: "Grade"
+                    }
                   }
                 },
+                // Check that new Assignment entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "other-table",
+                    ConditionExpression: "attribute_exists(myPk)",
+                    Key: {
+                      myPk: "Assignment|456",
+                      mySk: "Assignment"
+                    }
+                  }
+                },
+                // Denormalize Grade entity being updated to Assignment partition
                 {
                   Put: {
                     TableName: "other-table",
                     ConditionExpression: "attribute_not_exists(myPk)",
                     Item: {
-                      myPk: "Assignment|111",
+                      myPk: "Assignment|456",
                       mySk: "Grade",
-                      id: "belongsToLinkId1",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
+                      id: "123",
+                      type: "Grade",
+                      LetterValue: "B",
+                      assignmentId: "456",
+                      studentId: "789",
+                      createdAt: "2023-10-01T03:31:35.918Z",
                       updatedAt: "2023-10-16T03:31:35.918Z"
                     }
                   }
                 },
+                // Denormalize Assignment entity to the Grade partition that is being updated
                 {
-                  ConditionCheck: {
+                  Put: {
                     TableName: "other-table",
-                    Key: { myPk: "Student|222", mySk: "Student" },
-                    ConditionExpression: "attribute_exists(myPk)"
+                    ConditionExpression: "attribute_exists(myPk)",
+                    Item: {
+                      myPk: "Grade|123",
+                      mySk: "Assignment",
+                      id: "456",
+                      type: "Assignment",
+                      courseId: "courseId",
+                      title: "titleVal",
+                      createdAt: "2023-10-03T03:31:35.918Z",
+                      updatedAt: "2023-10-04T03:31:35.918Z"
+                    }
                   }
                 },
+                // Delete the link to the old Student item
                 {
                   Delete: {
                     TableName: "other-table",
-                    Key: { myPk: "Student|789", mySk: "Grade|123" }
+                    Key: {
+                      myPk: "Student|002",
+                      mySk: "Grade|123"
+                    }
                   }
                 },
+                // Check that the new Student entity being associated with exists
+                {
+                  ConditionCheck: {
+                    TableName: "other-table",
+                    ConditionExpression: "attribute_exists(myPk)",
+                    Key: {
+                      myPk: "Student|789",
+                      mySk: "Student"
+                    }
+                  }
+                },
+                // Denormalize Grade entity being updated to Student partition
                 {
                   Put: {
                     TableName: "other-table",
                     ConditionExpression: "attribute_not_exists(myPk)",
                     Item: {
-                      myPk: "Student|222",
+                      myPk: "Student|789",
                       mySk: "Grade|123",
-                      id: "belongsToLinkId2",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
+                      id: "123",
+                      type: "Grade",
+                      LetterValue: "B",
+                      assignmentId: "456",
+                      studentId: "789",
+                      createdAt: "2023-10-01T03:31:35.918Z",
                       updatedAt: "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Denormalize Student entity to the Grade partition that is being updated
+                {
+                  Put: {
+                    TableName: "other-table",
+                    ConditionExpression: "attribute_exists(myPk)",
+                    Item: {
+                      myPk: "Grade|123",
+                      mySk: "Student",
+                      id: "789",
+                      type: "Student",
+                      name: "nameVal",
+                      createdAt: "2023-10-05T03:31:35.918Z",
+                      updatedAt: "2023-10-06T03:31:35.918Z"
                     }
                   }
                 }
@@ -2643,10 +5011,840 @@ describe("Update", () => {
             }
           ]
         ]);
+      };
+
+      const grade: OtherTableEntityTableItem<Grade> = {
+        myPk: "Grade|123",
+        mySk: "Grade",
+        id: "123",
+        type: "Grade",
+        gradeValue: "A+",
+        assignmentId: "001", // Already has an associated entity
+        studentId: "002", // Already has an associated entity
+        createdAt: "2023-10-01T03:31:35.918Z",
+        updatedAt: "2023-10-02T03:31:35.918Z"
+      };
+
+      const instance = createInstance(Grade, {
+        myPk: "Grade|123" as PartitionKey,
+        mySk: "Grade" as SortKey,
+        id: "123",
+        type: "Grade",
+        gradeValue: "A+",
+        assignmentId: "001" as ForeignKey, // Already has an associated entity
+        studentId: "002" as ForeignKey, // Already has an associated entity
+        createdAt: new Date("2023-10-01T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-02T03:31:35.918Z")
+      });
+
+      beforeEach(() => {
+        const assignment: OtherTableEntityTableItem<Assignment> = {
+          myPk: "Assignment|456",
+          mySk: "Assignment",
+          id: "456",
+          type: "Assignment",
+          title: "titleVal",
+          courseId: "courseId",
+          createdAt: "2023-10-03T03:31:35.918Z",
+          updatedAt: "2023-10-04T03:31:35.918Z"
+        };
+
+        const student: OtherTableEntityTableItem<Student> = {
+          myPk: "Student|789",
+          mySk: "Student",
+          id: "789",
+          type: "Student",
+          name: "nameVal",
+          createdAt: "2023-10-05T03:31:35.918Z",
+          updatedAt: "2023-10-06T03:31:35.918Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [grade]
+        });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [{ Item: assignment }, { Item: student }]
+        });
+      });
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Grade.update("123", {
+            gradeValue: "B",
+            assignmentId: "456",
+            studentId: "789"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          gradeValue: "B",
+          assignmentId: "456",
+          studentId: "789"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          gradeValue: "B",
+          assignmentId: "456",
+          studentId: "789",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Grade);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          myPk: instance.myPk,
+          mySk: instance.mySk,
+          id: instance.id,
+          type: instance.type,
+          gradeValue: instance.gradeValue,
+          assignmentId: instance.assignmentId,
+          studentId: instance.studentId,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
+      });
+    });
+  });
+
+  describe("A model who HasMany of a relationship is updated", () => {
+    const phoneBook: MockTableEntityTableItem<PhoneBook> = {
+      PK: "PhoneBook#123",
+      SK: "PhoneBook",
+      Id: "123",
+      Type: "PhoneBook",
+      Edition: "1",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(PhoneBook, {
+      pk: "PhoneBook#123" as PartitionKey,
+      sk: "PhoneBook" as SortKey,
+      id: "123",
+      type: "PhoneBook",
+      edition: "1",
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // Address record denormalized to PhoneBook partition
+      const linkedAddress1: MockTableEntityTableItem<Address> = {
+        PK: phoneBook.PK, // Linked record in PhoneBook partition
+        SK: "Address#456",
+        Id: "456",
+        Type: "Address",
+        PhoneBookId: phoneBook.Id,
+        State: "CO",
+        HomeId: "001",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      // Address record denormalized to PhoneBook partition
+      const linkedAddress2: MockTableEntityTableItem<Address> = {
+        PK: phoneBook.PK, // Linked record in PhoneBook partition
+        SK: "Address#789",
+        Id: "789",
+        Type: "Address",
+        PhoneBookId: phoneBook.Id,
+        State: "AZ",
+        HomeId: "002",
+        CreatedAt: "2023-01-05T00:00:00.000Z",
+        UpdatedAt: "2023-01-06T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [phoneBook, linkedAddress1, linkedAddress2]
       });
     });
 
-    describe("types", () => {
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "PhoneBook#123",
+                ":Type1": "PhoneBook",
+                ":Type2": "Address"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the PhoneBook attributes
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "PhoneBook#123",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Update the PhoneBook records that are denormalized to the the associated Address partition
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Address#456",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Update the PhoneBook records that are denormalized to the the associated Address partition
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Address#789",
+                      SK: "PhoneBook"
+                    },
+                    UpdateExpression:
+                      "SET #Edition = :Edition, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Edition": "Edition",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Edition": "2",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await PhoneBook.update("123", {
+            edition: "2"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          edition: "2"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          edition: "2",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(PhoneBook);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          edition: instance.edition,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
+      });
+    });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Address (456) is not associated with PhoneBook (123)"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Address (789) is not associated with PhoneBook (123)"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await PhoneBook.update("123", {
+            edition: "2"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({
+            edition: "2"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+    });
+  });
+
+  describe("A model who HasOne of a relationship is updated", () => {
+    const desk: MockTableEntityTableItem<Desk> = {
+      PK: "Desk#123",
+      SK: "Desk",
+      Id: "123",
+      Type: "Desk",
+      Num: 1,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Desk, {
+      pk: "Desk#123" as PartitionKey,
+      sk: "Desk" as SortKey,
+      id: "123",
+      type: "Desk",
+      num: 1,
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // User record denormalized to Desk partition
+      const linkedUser: MockTableEntityTableItem<User> = {
+        PK: desk.PK, // Linked record in Desk partition
+        SK: "User",
+        Id: "456",
+        Type: "User",
+        DeskId: desk.Id,
+        Name: "MockUser",
+        Email: "test@test.com",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [desk, linkedUser]
+      });
+    });
+
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Desk#123",
+                ":Type1": "Desk",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Update the Desk attributes
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Desk#123",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Desk record that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#456",
+                      SK: "Desk"
+                    },
+                    UpdateExpression:
+                      "SET #Num = :Num, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Num": "Num",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Num": 2,
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Desk.update("123", {
+            num: 2
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({ num: 2 });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          num: 2,
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Desk);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          num: instance.num,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+        dbOperationAssertions();
+      });
+    });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User (456) is not associated with Desk (123)"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await Desk.update("123", {
+            num: 2
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({ num: 2 });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+    });
+  });
+
+  describe("A model who HasAndBelongsToMany of a relationship is updated", () => {
+    const website: MockTableEntityTableItem<Website> = {
+      PK: "Website#123",
+      SK: "Website",
+      Id: "123",
+      Type: "Website",
+      Name: "https://dyna-record.com/",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Website, {
+      pk: "Website#123" as PartitionKey,
+      sk: "Website" as SortKey,
+      id: "123",
+      type: "Website",
+      name: "https://dyna-record.com/",
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // User record denormalized to Website partition
+      const linkedUser1: MockTableEntityTableItem<User> = {
+        PK: website.PK, // Linked record in Website partition
+        SK: "User#456",
+        Id: "456",
+        Type: "User",
+        Name: "MockUser1",
+        Email: "test-1@test.com",
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      // User record denormalized to Website partition
+      const linkedUser2: MockTableEntityTableItem<User> = {
+        PK: website.PK, // Linked record in Website partition
+        SK: "User#789",
+        Id: "789",
+        Type: "User",
+        Name: "MockUser2",
+        Email: "test-2@test.com",
+        CreatedAt: "2023-01-05T00:00:00.000Z",
+        UpdatedAt: "2023-01-06T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [website, linkedUser1, linkedUser2]
+      });
+    });
+
+    describe("will update the entity and the denormalized link records for its associated entities", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Website#123",
+                ":Type1": "Website",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Update the Website attributes
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Website#123",
+                      SK: "Website"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Website records that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#456",
+                      SK: "Website#123"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                {
+                  // Update the Website records that are denormalized to the the associated User partition
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "User#789",
+                      SK: "Website#123"
+                    },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "testing.com",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Website.update("123", {
+            name: "testing.com"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          name: "testing.com"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "testing.com",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Website);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+        dbOperationAssertions();
+      });
+    });
+
+    describe("will throw an error if it fails update denormalized records for its associated entities", () => {
+      const operationSharedAssertions = (e: any): void => {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User (456) is not associated with Website (123)"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: User (789) is not associated with Website (123)"
+          )
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      };
+
+      beforeEach(() => {
+        mockSend
+          // Query
+          .mockResolvedValueOnce(undefined)
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+      });
+
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await Website.update("123", {
+            name: "testing.com"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+
+      test("instance method", async () => {
+        expect.assertions(3);
+
+        try {
+          await instance.update({
+            name: "testing.com"
+          });
+        } catch (e) {
+          operationSharedAssertions(e);
+        }
+      });
+    });
+  });
+
+  describe("types", () => {
+    beforeAll(() => {
+      // For type tests mock the operations to nothing because we are just testing for the type interface
+      mockQuery.mockResolvedValue({
+        Items: []
+      });
+
+      mockTransactGetItems.mockResolvedValue({
+        Responses: []
+      });
+    });
+
+    afterAll(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    describe("static method", () => {
       it("will not accept relationship attributes on update", async () => {
         await Order.update("123", {
           orderDate: new Date(),
@@ -2654,6 +5852,8 @@ describe("Update", () => {
           customerId: "456",
           // @ts-expect-error relationship attributes are not allowed
           customer: new Customer()
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -2690,6 +5890,8 @@ describe("Update", () => {
           paymentMethodId: "123",
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -2697,21 +5899,29 @@ describe("Update", () => {
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           id: "123"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           type: "456"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           createdAt: new Date()
+        }).catch(() => {
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
           updatedAt: new Date()
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -2719,11 +5929,15 @@ describe("Update", () => {
         await Order.update("123", {
           // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
           pk: "123"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
 
         await Order.update("123", {
           // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
           sk: "456"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -2733,6 +5947,8 @@ describe("Update", () => {
           paymentMethodId: "123",
           // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
           customerId: "456"
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -2765,3264 +5981,22 @@ describe("Update", () => {
         });
       });
     });
-  });
 
-  describe("instance method", () => {
-    it("will update an entity without foreign key attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(Customer, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        name: "test-name",
-        address: "test-address",
-        type: "Customer",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({ name: "newName" });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "newName", // Updated name
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now // Updated at gets updated
-      });
-      expect(updatedInstance).toBeInstanceOf(Customer);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  TableName: "mock-table",
-                  Key: { PK: "Customer#123", SK: "Customer" },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "newName",
-                    ":UpdatedAt": now.toISOString()
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "test-name",
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("has runtime schema validation to ensure that reserved keys are not set on update. They will be omitted from update", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(Customer, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        name: "test-name",
-        address: "test-address",
-        type: "Customer",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        // Begin reserved keys
-        pk: "2",
-        sk: "3",
-        id: "4",
-        type: "bad type",
-        updatedAt: new Date(),
-        createdAt: new Date(),
-        update: () => {},
-        // End reserved keys
-        name: "newName"
-      } as any); // Use any to force bad type and allow runtime checks to be tested
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "newName", // Updated name
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now // Updated at gets updated
-      });
-      expect(updatedInstance).toBeInstanceOf(Customer);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  TableName: "mock-table",
-                  Key: { PK: "Customer#123", SK: "Customer" },
-                  UpdateExpression:
-                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Name": "Name",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Name": "newName",
-                    ":UpdatedAt": now.toISOString()
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        name: "test-name",
-        type: "Customer",
-        address: "test-address",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("can update all attribute types", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MyClassWithAllAttributeTypes, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        stringAttribute: "new-1",
-        nullableStringAttribute: "new-2",
-        dateAttribute: new Date(),
-        nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "new-1111",
-        nullableForeignKeyAttribute: "22222",
-        boolAttribute: true,
-        nullableBoolAttribute: false,
-        numberAttribute: 9,
-        nullableNumberAttribute: 10,
-        enumAttribute: "val-1",
-        nullableEnumAttribute: "val-2"
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "new-1",
-        nullableStringAttribute: "new-2",
-        dateAttribute: new Date(),
-        nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "new-1111",
-        nullableForeignKeyAttribute: "22222",
-        numberAttribute: 9,
-        nullableNumberAttribute: 10,
-        boolAttribute: true,
-        nullableBoolAttribute: false,
-        enumAttribute: "val-1",
-        nullableEnumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#boolAttribute": "boolAttribute",
-                    "#dateAttribute": "dateAttribute",
-                    "#enumAttribute": "enumAttribute",
-                    "#foreignKeyAttribute": "foreignKeyAttribute",
-                    "#nullableBoolAttribute": "nullableBoolAttribute",
-                    "#nullableDateAttribute": "nullableDateAttribute",
-                    "#nullableEnumAttribute": "nullableEnumAttribute",
-                    "#nullableForeignKeyAttribute":
-                      "nullableForeignKeyAttribute",
-                    "#nullableNumberAttribute": "nullableNumberAttribute",
-                    "#nullableStringAttribute": "nullableStringAttribute",
-                    "#numberAttribute": "numberAttribute",
-                    "#stringAttribute": "stringAttribute"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":boolAttribute": true,
-                    ":dateAttribute": "2023-10-16T03:31:35.918Z",
-                    ":enumAttribute": "val-1",
-                    ":foreignKeyAttribute": "new-1111",
-                    ":nullableBoolAttribute": false,
-                    ":nullableDateAttribute": "2023-10-16T03:31:35.918Z",
-                    ":nullableEnumAttribute": "val-2",
-                    ":nullableForeignKeyAttribute": "22222",
-                    ":nullableNumberAttribute": 10,
-                    ":nullableStringAttribute": "new-2",
-                    ":numberAttribute": 9,
-                    ":stringAttribute": "new-1"
-                  },
-                  Key: {
-                    PK: "MyClassWithAllAttributeTypes#123",
-                    SK: "MyClassWithAllAttributeTypes"
-                  },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Assert original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111",
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("will update an entity and remove attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(ContactInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        email: "example@example.com",
-        phone: "555-555-5555",
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        email: "new@example.com",
-        phone: null
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        email: "new@example.com",
-        phone: undefined,
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(ContactInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Email": "Email",
-                    "#Phone": "Phone",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Email": "new@example.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        email: "example@example.com",
-        phone: "555-555-5555",
-        type: "ContactInformation",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("will update and remove multiple attributes", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MockInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({
-        address: "111 Some St",
-        email: "new@example.com",
-        state: null,
-        phone: null
-      });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "111 Some St",
-        email: "new@example.com",
-        state: undefined,
-        phone: undefined,
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MockInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#Address": "Address",
-                    "#Email": "Email",
-                    "#Phone": "Phone",
-                    "#State": "State",
-                    "#UpdatedAt": "UpdatedAt"
-                  },
-                  ExpressionAttributeValues: {
-                    ":Address": "111 Some St",
-                    ":Email": "new@example.com",
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #Address = :Address, #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #Phone, #State"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("will error if any attributes are the wrong type", async () => {
-      expect.assertions(5);
-
-      const instance = createInstance(MyClassWithAllAttributeTypes, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyClassWithAllAttributeTypes",
-        stringAttribute: "1",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
-        boolAttribute: true,
-        numberAttribute: 9,
-        enumAttribute: "val-2",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      try {
-        await instance.update({
-          stringAttribute: 1,
-          nullableStringAttribute: 2,
-          dateAttribute: 3,
-          nullableDateAttribute: 4,
-          foreignKeyAttribute: 5,
-          nullableForeignKeyAttribute: 6,
-          boolAttribute: 7,
-          nullableBoolAttribute: 8,
-          numberAttribute: "9",
-          nullableNumberAttribute: "10",
-          enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
-        } as any); // Force any to test runtime validations
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["stringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableStringAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["dateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received number",
-            path: ["nullableDateAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["boolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "boolean",
-            message: "Expected boolean, received number",
-            path: ["nullableBoolAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["numberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "number",
-            message: "Expected number, received string",
-            path: ["nullableNumberAttribute"],
-            received: "string"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["foreignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_type",
-            expected: "string",
-            message: "Expected string, received number",
-            path: ["nullableForeignKeyAttribute"],
-            received: "number"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
-            options: ["val-1", "val-2"],
-            path: ["enumAttribute"],
-            received: "val-3"
-          },
-          {
-            code: "invalid_enum_value",
-            message:
-              "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
-            options: ["val-1", "val-2"],
-            path: ["nullableEnumAttribute"],
-            received: "val-4"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
-      }
-    });
-
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MockInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({ someDate: null });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: undefined,
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MockInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#someDate": "someDate"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    it("will not allow non nullable attributes to be null", async () => {
-      expect.assertions(5);
-
-      const instance = createInstance(MyModelNonNullableAttribute, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MyModelNonNullableAttribute",
-        myAttribute: new Date(),
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      try {
-        await instance.update({
-          myAttribute: null as any // Force any to test runtime validations
-        });
-      } catch (e: any) {
-        expect(e).toBeInstanceOf(ValidationError);
-        expect(e.message).toEqual("Validation errors");
-        expect(e.cause).toEqual([
-          {
-            code: "invalid_type",
-            expected: "date",
-            message: "Expected date, received null",
-            path: ["myAttribute"],
-            received: "null"
-          }
-        ]);
-        expect(mockSend.mock.calls).toEqual([undefined]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
-      }
-    });
-
-    it("will allow nullable attributes to be set to null", async () => {
-      expect.assertions(8);
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
-
-      const instance = createInstance(MockInformation, {
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-
-      const updatedInstance = await instance.update({ someDate: null });
-
-      expect(updatedInstance).toEqual({
-        pk: "test-pk" as PartitionKey,
-        sk: "test-sk" as SortKey,
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: undefined,
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: now
-      });
-      expect(updatedInstance).toBeInstanceOf(MockInformation);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockGet.mock.calls).toEqual([]);
-      expect(mockedGetCommand.mock.calls).toEqual([]);
-      expect(mockTransact.mock.calls).toEqual([[]]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([
-        [
-          {
-            TransactItems: [
-              {
-                Update: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  ExpressionAttributeNames: {
-                    "#UpdatedAt": "UpdatedAt",
-                    "#someDate": "someDate"
-                  },
-                  ExpressionAttributeValues: {
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":someDate": undefined
-                  },
-                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
-                  TableName: "mock-table",
-                  UpdateExpression:
-                    "SET #someDate = :someDate, #UpdatedAt = :UpdatedAt"
-                }
-              }
-            ]
-          }
-        ]
-      ]);
-      // Original instance is not mutated
-      expect(instance).toEqual({
-        pk: "test-pk",
-        sk: "test-sk",
-        id: "123",
-        type: "MockInformation",
-        address: "9 Example Ave",
-        email: "example@example.com",
-        someDate: new Date(),
-        state: "SomeState",
-        phone: "555-555-5555",
-        createdAt: new Date("2023-10-01"),
-        updatedAt: new Date("2023-10-02")
-      });
-    });
-
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasOne of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: undefined // Does not already belong to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            email: "new-email@example.com",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "new-email@example.com",
-            customerId: "456",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(ContactInformation);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Original instance is not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          expect(
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: null
-            })
-          ).toEqual({
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "new-email@example.com",
-            phone: "555-555-5555",
-            customerId: undefined,
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Original instance is not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "789" // Already belongs to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key and delete the old BelongsToLink if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            email: "new-email@example.com",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "new-email@example.com",
-            customerId: "456",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(ContactInformation);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      // Check that the entity being updated exists
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    // Check that the entity being associated with exists
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "Customer#789",
-                        SK: "ContactInformation"
-                      }
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "ContactInformation",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "ContactInformation",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert that original instance was not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: ContactInformation with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    // No Delete transaction because the item does not exist to look up the foreign key to build the delete operation with
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the associated entity does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#789",
-                          SK: "ContactInformation"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity is already associated with the requested entity", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "ContactInformation#123",
-              SK: "ContactInformation",
-              Id: "123",
-              Email: "old-email@example.com",
-              Phone: "555-555-5555",
-              CustomerId: "456" // Already belongs to customer, the same being updated
-            }
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              email: "new-email@example.com",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with id: 456 already has an associated ContactInformation"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: {
-                    PK: "ContactInformation#123",
-                    SK: "ContactInformation"
-                  },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "ContactInformation#123",
-                          SK: "ContactInformation"
-                        },
-                        UpdateExpression:
-                          "SET #Email = :Email, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        // Check that the entity being updated exists
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#Email": "Email",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":Email": "new-email@example.com",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      // Check that the entity being associated with exists
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "ContactInformation",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "ContactInformation",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key and delete the BelongsToLinks for the associated entity", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(ContactInformation, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            email: "new-email@example.com",
-            customerId: null
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            email: "new-email@example.com",
-            customerId: undefined,
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(ContactInformation);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "ContactInformation#123", SK: "ContactInformation" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "ContactInformation#123",
-                        SK: "ContactInformation"
-                      },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeValues: {
-                        ":Email": "new-email@example.com",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      ExpressionAttributeNames: {
-                        "#Email": "Email",
-                        "#UpdatedAt": "UpdatedAt",
-                        "#CustomerId": "CustomerId"
-                      },
-                      UpdateExpression:
-                        "SET #Email = :Email, #UpdatedAt = :UpdatedAt REMOVE #CustomerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#789", SK: "ContactInformation" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert that original instance was not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            email: "example@example.com",
-            phone: "555-555-5555",
-            type: "ContactInformation",
-            customerId: "789",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-    });
-
-    describe("ForeignKey is updated for entity which BelongsTo an entity who HasMany of it", () => {
-      describe("when the entity does not already belong to another entity", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: undefined // Does not already belong to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: "111" as ForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            lastFour: "5678",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "5678",
-            customerId: "456",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(PaymentMethod);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                      UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: "111",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: "111" as ForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({ lastFour: "5678", customerId: "456" });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: "111" as ForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({
-              lastFour: "5678",
-              customerId: "456"
-            });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(Pet, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: undefined,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "Pet#123",
-              SK: "Pet",
-              Id: "123",
-              name: "Fido",
-              OwnerId: undefined // Does not already belong an owner
-            }
-          });
-
-          const updatedInstance = await instance.update({
-            name: "New Name",
-            ownerId: null
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "Pet",
-            name: "New Name",
-            ownerId: undefined,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(Pet);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "Pet#123", SK: "Pet" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "Pet#123", SK: "Pet" },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#Name": "Name",
-                        "#OwnerId": "OwnerId",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":Name": "New Name",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      UpdateExpression:
-                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: undefined,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-
-      describe("when the entity belongs to another another entity (Adds delete transaction for existing BelongsToLink)", () => {
-        const now = new Date("2023-10-16T03:31:35.918Z");
-
-        const oldCustomerId = "789" as ForeignKey;
-
-        beforeEach(() => {
-          jest.setSystemTime(now);
-          mockedUuidv4.mockReturnValueOnce("belongsToLinkId1");
-          mockGet.mockResolvedValue({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: oldCustomerId // Already belongs to customer
-            }
-          });
-        });
-
-        afterEach(() => {
-          mockedUuidv4.mockReset();
-        });
-
-        it("will update the foreign key if the entity being associated with exists", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          const updatedInstance = await instance.update({
-            lastFour: "5678",
-            customerId: "456"
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "5678",
-            customerId: "456",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(PaymentMethod);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                      UpdateExpression:
-                        "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#CustomerId": "CustomerId",
-                        "#LastFour": "LastFour",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":CustomerId": "456",
-                        ":LastFour": "5678",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  },
-                  {
-                    ConditionCheck: {
-                      TableName: "mock-table",
-                      Key: { PK: "Customer#456", SK: "Customer" },
-                      ConditionExpression: "attribute_exists(PK)"
-                    }
-                  },
-                  {
-                    // Delete old BelongsToLink
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: {
-                        PK: "Customer#789",
-                        SK: "PaymentMethod#123"
-                      }
-                    }
-                  },
-                  {
-                    Put: {
-                      TableName: "mock-table",
-                      ConditionExpression: "attribute_not_exists(PK)",
-                      Item: {
-                        PK: "Customer#456",
-                        SK: "PaymentMethod#123",
-                        Id: "belongsToLinkId1",
-                        Type: "BelongsToLink",
-                        ForeignEntityType: "PaymentMethod",
-                        ForeignKey: "123",
-                        CreatedAt: "2023-10-16T03:31:35.918Z",
-                        UpdatedAt: "2023-10-16T03:31:35.918Z"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance is not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-
-        it("will throw an error if the entity being updated does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({}); // Entity does not exist but will fail in transaction
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({ lastFour: "5678", customerId: "456" });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    // No Delete transaction because the item does not exist to look up the foreign key to build the delete operation with
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity being associated with does not exist", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" },
-                { Code: "None" },
-                { Code: "None" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({ lastFour: "5678", customerId: "456" });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: Customer with ID '456' does not exist"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#789",
-                          SK: "PaymentMethod#123"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will throw an error if the entity is already associated with the requested entity", async () => {
-          expect.assertions(7);
-
-          const instance = createInstance(PaymentMethod, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "PaymentMethod",
-            lastFour: "1234",
-            customerId: oldCustomerId,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "PaymentMethod#123",
-              SK: "PaymentMethod",
-              Id: "123",
-              lastFour: "1234",
-              CustomerId: "456" // Already belongs to customer, the same being updated
-            }
-          });
-
-          mockSend.mockReturnValueOnce(undefined).mockImplementationOnce(() => {
-            mockTransact();
-            throw new TransactionCanceledException({
-              message: "MockMessage",
-              CancellationReasons: [
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "None" },
-                { Code: "ConditionalCheckFailed" }
-              ],
-              $metadata: {}
-            });
-          });
-
-          try {
-            await instance.update({ lastFour: "5678", customerId: "456" });
-          } catch (e: any) {
-            expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-            expect(e.errors).toEqual([
-              new ConditionalCheckFailedError(
-                "ConditionalCheckFailed: PaymentMethod with ID '123' already belongs to Customer with Id '456'"
-              )
-            ]);
-            expect(mockSend.mock.calls).toEqual([
-              [{ name: "GetCommand" }],
-              [{ name: "TransactWriteCommand" }]
-            ]);
-            expect(mockGet.mock.calls).toEqual([[]]);
-            expect(mockedGetCommand.mock.calls).toEqual([
-              [
-                {
-                  TableName: "mock-table",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  ConsistentRead: true
-                }
-              ]
-            ]);
-            expect(mockTransact.mock.calls).toEqual([[]]);
-            expect(mockTransactWriteCommand.mock.calls).toEqual([
-              [
-                {
-                  TransactItems: [
-                    {
-                      Update: {
-                        TableName: "mock-table",
-                        Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                        UpdateExpression:
-                          "SET #LastFour = :LastFour, #CustomerId = :CustomerId, #UpdatedAt = :UpdatedAt",
-                        ConditionExpression: "attribute_exists(PK)",
-                        ExpressionAttributeNames: {
-                          "#CustomerId": "CustomerId",
-                          "#LastFour": "LastFour",
-                          "#UpdatedAt": "UpdatedAt"
-                        },
-                        ExpressionAttributeValues: {
-                          ":CustomerId": "456",
-                          ":LastFour": "5678",
-                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    },
-                    {
-                      ConditionCheck: {
-                        TableName: "mock-table",
-                        Key: { PK: "Customer#456", SK: "Customer" },
-                        ConditionExpression: "attribute_exists(PK)"
-                      }
-                    },
-                    {
-                      // Delete old BelongsToLink
-                      Delete: {
-                        TableName: "mock-table",
-                        Key: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123"
-                        }
-                      }
-                    },
-                    {
-                      Put: {
-                        TableName: "mock-table",
-                        ConditionExpression: "attribute_not_exists(PK)",
-                        Item: {
-                          PK: "Customer#456",
-                          SK: "PaymentMethod#123",
-                          Id: "belongsToLinkId1",
-                          Type: "BelongsToLink",
-                          ForeignEntityType: "PaymentMethod",
-                          ForeignKey: "123",
-                          CreatedAt: "2023-10-16T03:31:35.918Z",
-                          UpdatedAt: "2023-10-16T03:31:35.918Z"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ]
-            ]);
-          }
-        });
-
-        it("will remove a nullable foreign key and delete the associated BelongsToLinks", async () => {
-          expect.assertions(8);
-
-          const instance = createInstance(Pet, {
-            pk: "test-pk" as PartitionKey,
-            sk: "test-sk" as SortKey,
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: "456" as NullableForeignKey,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-
-          mockGet.mockResolvedValueOnce({
-            Item: {
-              PK: "Pet#123",
-              SK: "Pet",
-              Id: "123",
-              name: "Fido",
-              OwnerId: "456" // Does not already belong an owner
-            }
-          });
-
-          const updatedInstance = await instance.update({
-            name: "New Name",
-            ownerId: null
-          });
-
-          expect(updatedInstance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "Pet",
-            name: "New Name",
-            ownerId: undefined,
-            createdAt: new Date("2023-10-01"),
-            updatedAt: now
-          });
-          expect(updatedInstance).toBeInstanceOf(Pet);
-          expect(mockSend.mock.calls).toEqual([
-            [{ name: "GetCommand" }],
-            [{ name: "TransactWriteCommand" }]
-          ]);
-          expect(mockGet.mock.calls).toEqual([[]]);
-          expect(mockedGetCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                Key: { PK: "Pet#123", SK: "Pet" },
-                ConsistentRead: true
-              }
-            ]
-          ]);
-          expect(mockTransact.mock.calls).toEqual([[]]);
-          expect(mockTransactWriteCommand.mock.calls).toEqual([
-            [
-              {
-                TransactItems: [
-                  {
-                    Update: {
-                      TableName: "mock-table",
-                      Key: { PK: "Pet#123", SK: "Pet" },
-                      ConditionExpression: "attribute_exists(PK)",
-                      ExpressionAttributeNames: {
-                        "#Name": "Name",
-                        "#OwnerId": "OwnerId",
-                        "#UpdatedAt": "UpdatedAt"
-                      },
-                      ExpressionAttributeValues: {
-                        ":Name": "New Name",
-                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                      },
-                      UpdateExpression:
-                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-                    }
-                  },
-                  {
-                    Delete: {
-                      TableName: "mock-table",
-                      Key: { PK: "Person#456", SK: "Pet#123" }
-                    }
-                  }
-                ]
-              }
-            ]
-          ]);
-          // Assert original instance not mutated
-          expect(instance).toEqual({
-            pk: "test-pk",
-            sk: "test-sk",
-            id: "123",
-            type: "Pet",
-            name: "fido",
-            ownerId: "456",
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-02")
-          });
-        });
-      });
-    });
-
-    describe("A model is updating multiple ForeignKeys of different relationship types", () => {
-      @Entity
-      class OtherModel1 extends MockTable {
-        @HasOne(() => OtherModel3, { foreignKey: "model1Id" })
-        public model3: OtherModel3;
-      }
-
-      @Entity
-      class OtherModel2 extends MockTable {
-        @HasMany(() => OtherModel3, { foreignKey: "model2Id" })
-        public model3: OtherModel3[];
-      }
-
-      @Entity
-      class OtherModel3 extends MockTable {
-        @StringAttribute({ alias: "Name" })
-        public name: string;
-
-        @ForeignKeyAttribute({ alias: "Model1Id" })
-        public model1Id: ForeignKey;
-
-        @ForeignKeyAttribute({ alias: "Model2Id" })
-        public model2Id: ForeignKey;
-
-        @BelongsTo(() => OtherModel1, { foreignKey: "model1Id" })
-        public model1: OtherModel1;
-
-        @BelongsTo(() => OtherModel2, { foreignKey: "model2Id" })
-        public model2: OtherModel2;
-      }
-
-      const now = new Date("2023-10-16T03:31:35.918Z");
-
-      beforeEach(() => {
-        jest.setSystemTime(now);
-        mockedUuidv4
-          .mockReturnValueOnce("belongsToLinkId1")
-          .mockReturnValueOnce("belongsToLinkId2");
-      });
-
-      it("can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(8);
-
-        const instance = createInstance(OtherModel3, {
-          pk: "test-pk" as PartitionKey,
-          sk: "test-sk" as SortKey,
-          id: "123",
-          type: "OtherModel3",
-          name: "test-name",
-          model1Id: "model1Id" as ForeignKey,
-          model2Id: "model2Id" as ForeignKey,
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-
-        mockGet.mockResolvedValue({
-          Item: {
-            PK: "OtherModel3#123",
-            SK: "OtherModel3",
-            Id: "123",
-            Name: "originalName",
-            Phone: "555-555-5555",
-            Model1Id: undefined,
-            Model2Id: undefined
-          }
-        });
-
-        const updatedInstance = await instance.update({
-          name: "newName",
-          model1Id: "model1-ID",
-          model2Id: "model2-ID"
-        });
-
-        expect(updatedInstance).toEqual({
-          pk: "test-pk",
-          sk: "test-sk",
-          id: "123",
-          type: "OtherModel3",
-          name: "newName",
-          model1Id: "model1-ID",
-          model2Id: "model2-ID",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: now
-        });
-        expect(updatedInstance).toBeInstanceOf(OtherModel3);
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "mock-table",
-              Key: { PK: "OtherModel3#123", SK: "OtherModel3" },
-              ConsistentRead: true
-            }
-          ]
-        ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Update: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel3#123", SK: "OtherModel3" },
-                    UpdateExpression:
-                      "SET #Name = :Name, #Model1Id = :Model1Id, #Model2Id = :Model2Id, #UpdatedAt = :UpdatedAt",
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#Model1Id": "Model1Id",
-                      "#Model2Id": "Model2Id",
-                      "#Name": "Name",
-                      "#UpdatedAt": "UpdatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":Model1Id": "model1-ID",
-                      ":Model2Id": "model2-ID",
-                      ":Name": "newName",
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel1#model1-ID", SK: "OtherModel1" },
-                    ConditionExpression: "attribute_exists(PK)"
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "OtherModel1#model1-ID",
-                      SK: "OtherModel3",
-                      Id: "belongsToLinkId1",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "OtherModel3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "mock-table",
-                    Key: { PK: "OtherModel2#model2-ID", SK: "OtherModel2" },
-                    ConditionExpression: "attribute_exists(PK)"
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "mock-table",
-                    ConditionExpression: "attribute_not_exists(PK)",
-                    Item: {
-                      PK: "OtherModel2#model2-ID",
-                      SK: "OtherModel3#123",
-                      Id: "belongsToLinkId2",
-                      Type: "BelongsToLink",
-                      ForeignEntityType: "OtherModel3",
-                      ForeignKey: "123",
-                      CreatedAt: "2023-10-16T03:31:35.918Z",
-                      UpdatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        // Assert original instance not mutated
-        expect(instance).toEqual({
-          pk: "test-pk",
-          sk: "test-sk",
-          id: "123",
-          type: "OtherModel3",
-          name: "test-name",
-          model1Id: "model1Id",
-          model2Id: "model2Id",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-      });
-
-      it("alternate table (different alias/keys) - can update foreign keys for an entity that includes both HasMany and Belongs to relationships", async () => {
-        expect.assertions(8);
-
-        const instance = createInstance(Grade, {
-          myPk: "Grade#123" as PartitionKey,
-          mySk: "Grade" as SortKey,
-          id: "123",
-          type: "Grade",
-          gradeValue: "A+",
-          assignmentId: "456" as ForeignKey,
-          studentId: "789" as ForeignKey,
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-
-        mockGet.mockResolvedValueOnce({
-          Item: {
-            myPk: "Grade|123",
-            mySk: "Grade",
-            id: "123",
-            type: "Grade",
-            gradeValue: "A+",
-            assignmentId: "456",
-            studentId: "789",
-            createdAt: "2023-10-16T03:31:35.918Z",
-            updatedAt: "2023-10-16T03:31:35.918Z"
-          }
-        });
-
-        const updatedInstance = await instance.update({
-          gradeValue: "B",
-          assignmentId: "111",
-          studentId: "222"
-        });
-
-        expect(updatedInstance).toEqual({
-          myPk: "Grade#123",
-          mySk: "Grade",
-          id: "123",
-          type: "Grade",
-          gradeValue: "B",
-          assignmentId: "111",
-          studentId: "222",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: now
-        });
-        expect(updatedInstance).toBeInstanceOf(Grade);
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "GetCommand" }],
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockGet.mock.calls).toEqual([[]]);
-        expect(mockedGetCommand.mock.calls).toEqual([
-          [
-            {
-              TableName: "other-table",
-              Key: { myPk: "Grade|123", mySk: "Grade" },
-              ConsistentRead: true
-            }
-          ]
-        ]);
-        expect(mockTransact.mock.calls).toEqual([[]]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Update: {
-                    TableName: "other-table",
-                    Key: { myPk: "Grade|123", mySk: "Grade" },
-                    UpdateExpression:
-                      "SET #LetterValue = :LetterValue, #assignmentId = :assignmentId, #studentId = :studentId, #updatedAt = :updatedAt",
-                    ConditionExpression: "attribute_exists(myPk)",
-                    ExpressionAttributeNames: {
-                      "#LetterValue": "LetterValue",
-                      "#assignmentId": "assignmentId",
-                      "#studentId": "studentId",
-                      "#updatedAt": "updatedAt"
-                    },
-                    ExpressionAttributeValues: {
-                      ":LetterValue": "B",
-                      ":assignmentId": "111",
-                      ":studentId": "222",
-                      ":updatedAt": "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|111", mySk: "Assignment" },
-                    ConditionExpression: "attribute_exists(myPk)"
-                  }
-                },
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: { myPk: "Assignment|456", mySk: "Grade" }
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Assignment|111",
-                      mySk: "Grade",
-                      id: "belongsToLinkId1",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    TableName: "other-table",
-                    Key: { myPk: "Student|222", mySk: "Student" },
-                    ConditionExpression: "attribute_exists(myPk)"
-                  }
-                },
-                {
-                  Delete: {
-                    TableName: "other-table",
-                    Key: { myPk: "Student|789", mySk: "Grade|123" }
-                  }
-                },
-                {
-                  Put: {
-                    TableName: "other-table",
-                    ConditionExpression: "attribute_not_exists(myPk)",
-                    Item: {
-                      myPk: "Student|222",
-                      mySk: "Grade|123",
-                      id: "belongsToLinkId2",
-                      type: "BelongsToLink",
-                      foreignKey: "123",
-                      foreignEntityType: "Grade",
-                      createdAt: "2023-10-16T03:31:35.918Z",
-                      updatedAt: "2023-10-16T03:31:35.918Z"
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-        // Assert original instance not mutated
-        expect(instance).toEqual({
-          myPk: "Grade#123",
-          mySk: "Grade",
-          id: "123",
-          type: "Grade",
-          gradeValue: "A+",
-          assignmentId: "456",
-          studentId: "789",
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-      });
-    });
-
-    describe("types", () => {
+    describe("instance method", () => {
       it("will not accept relationship attributes on update", async () => {
         const instance = new Order();
 
-        await instance.update({
-          orderDate: new Date(),
-          paymentMethodId: "123",
-          customerId: "456",
-          // @ts-expect-error relationship attributes are not allowed
-          customer: new Customer()
-        });
+        await instance
+          .update({
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456",
+            // @ts-expect-error relationship attributes are not allowed
+            customer: new Customer()
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("will not accept function attributes on update", async () => {
@@ -6056,62 +6030,94 @@ describe("Update", () => {
       it("will allow ForeignKey attributes to be passed at their inferred type without casting to type ForeignKey", async () => {
         const instance = new Order();
 
-        await instance.update({
-          orderDate: new Date(),
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          paymentMethodId: "123",
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          customerId: "456"
-        });
+        await instance
+          .update({
+            orderDate: new Date(),
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            paymentMethodId: "123",
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            customerId: "456"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("will not accept DefaultFields on update because they are managed by dyna-record", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          id: "123"
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            id: "123"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          type: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            type: "456"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          createdAt: new Date()
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            createdAt: new Date()
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
-          updatedAt: new Date()
-        });
+        await instance
+          .update({
+            // @ts-expect-error default fields are not accepted on update, they are managed by dyna-record
+            updatedAt: new Date()
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("will not accept partition and sort keys on update because they are managed by dyna-record", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
-          pk: "123"
-        });
+        await instance
+          .update({
+            // @ts-expect-error primary key fields are not accepted on update, they are managed by dyna-record
+            pk: "123"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
 
-        await instance.update({
-          // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
-          sk: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-error sort key fields are not accepted on update, they are managed by dyna-record
+            sk: "456"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("does not require all of an entity attributes to be passed", async () => {
         const instance = new Order();
 
-        await instance.update({
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          paymentMethodId: "123",
-          // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
-          customerId: "456"
-        });
+        await instance
+          .update({
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            paymentMethodId: "123",
+            // @ts-expect-no-error ForeignKey is of type string so it can be passed as such without casing to ForeignKey
+            customerId: "456"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("will not allow non nullable attributes to be removed (set to null)", async () => {

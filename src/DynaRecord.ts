@@ -14,7 +14,8 @@ import {
   Update,
   type UpdateOptions,
   Delete,
-  type EntityAttributes
+  type EntityAttributesOnly,
+  type EntityAttributesInstance
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -75,21 +76,34 @@ abstract class DynaRecord implements DynaRecordBase {
   public readonly updatedAt: Date;
 
   /**
-   * Find an entity by Id and optionally include associations
-   * @param {string} id - Entity Id
-   * @param {Object} options - FindByIdOptions
-   * @returns An entity with included associations serialized
+   * Find an entity by Id and optionally include associations.
+   *
+   * @param {string} id - Entity Id.
+   * @param {undefined} [options] - No options provided, returns the entity without included associations.
+   * @returns {Optional<T>} An entity without included associations serialized.
    *
    * @example Without included relationships
    * ```typescript
    * const user = await User.findById("userId");
    * ```
    *
+   * ---
+   *
+   * @param {string} id - Entity Id.
+   * @param {FindByIdOptions<T>} options - FindByIdOptions specifying associations to include.
+   * @returns {FindByIdIncludesRes<T, FindByIdOptions<T>>} An entity with included associations serialized.
+   *
    * @example With included relationships
    * ```typescript
    * const user = await User.findById("userId", { include: [{ association: "profile" }] });
    * ```
    */
+  public static async findById<T extends DynaRecord>(
+    this: EntityClass<T>,
+    id: string,
+    options?: undefined
+  ): Promise<Optional<EntityAttributesInstance<T>>>;
+
   public static async findById<
     T extends DynaRecord,
     Opts extends FindByIdOptions<T>
@@ -97,7 +111,18 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     options?: Opts
-  ): Promise<Optional<T | FindByIdIncludesRes<T, Opts>>> {
+  ): Promise<Optional<FindByIdIncludesRes<T, Opts>>>;
+
+  public static async findById<
+    T extends DynaRecord,
+    Opts extends FindByIdOptions<T>
+  >(
+    this: EntityClass<T>,
+    id: string,
+    options?: Opts
+  ): Promise<
+    Optional<EntityAttributesInstance<T> | FindByIdIncludesRes<T, Opts>>
+  > {
     const op = new FindById<T>(this);
     return await op.run(id, options);
   }
@@ -130,23 +155,22 @@ abstract class DynaRecord implements DynaRecordBase {
    *  },
    *  {
    *    filter: {
-   *    type: ["BelongsToLink", "Profile"],
-   *    createdAt: { $beginsWith: "202" },
-   *    $or: [
-   *      {
-   *        foreignKey: "111",
-   *        updatedAt: { $beginsWith: "2023-02-15" }
-   *      },
-   *      {
-   *        foreignKey: ["222", "333"],
-   *        createdAt: { $beginsWith: "2021-09-15T" },
-   *        foreignEntityType: "Order"
-   *      },
-   *      {
-   *        id: "123"
-   *      }
-   *    ]
-   *  }
+   *      type: ["Profile", "Preferences"],
+   *      createdAt: { $beginsWith: "2023" },
+   *      $or: [
+   *        {
+   *         name: "John",
+   *         email: { $beginsWith: "testing }
+   *        },
+   *        {
+   *          name: "Jane",
+   *          updatedAt: { $beginsWith: "2024" },
+   *        },
+   *       {
+   *         id: "123"
+   *       }
+   *      ]
+   *    }
    * }
    *);
    * ```
@@ -193,7 +217,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * const user = await User.query("123", {
    *   filter: {
-   *     type: "BelongsToLink",
+   *     type: "Profile",
    *     createdAt: "2023-11-21T12:31:21.148Z"
    *    }
    * });
@@ -215,7 +239,7 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Create an entity. If foreign keys are included in the attributes then BelongsToLinks will be demoralized accordingly
+   * Create an entity. If foreign keys are included in the attributes then links will be demoralized accordingly
    * @param attributes - Attributes of the model to create
    * @returns The new Entity
    *
@@ -233,8 +257,8 @@ abstract class DynaRecord implements DynaRecordBase {
 
   /**
    * Update an entity. If foreign keys are included in the attribute then:
-   *   - BelongsToLinks will be created accordingly
-   *   - If the entity already had a foreign key relationship, then those BelongsToLinks will be deleted
+   *   - Manages associated relationship links as needed
+   *   - If the entity already had a foreign key relationship, then denormalized records will be deleted from each partition
    *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
@@ -288,7 +312,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
     const updatedInstance = Object.fromEntries(
       Object.entries(clone).filter(([_, value]) => value !== null)
-    ) as EntityAttributes<T>;
+    ) as EntityAttributesOnly<T>;
 
     // Return the updated instance, which is of type `this`
     return createInstance<T>(InstanceClass, updatedInstance);
@@ -296,7 +320,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
   /**
    * Delete an entity by ID
-   *   - Delete all BelongsToLinks
+   *   - Delete all denormalized records
    *   - Disassociate all foreign keys of linked models
    * @param id - The id of the entity to update
    *
@@ -326,6 +350,10 @@ abstract class DynaRecord implements DynaRecordBase {
   public static partitionKeyValue(id: string): string {
     const { delimiter } = Metadata.getEntityTable(this.name);
     return `${this.name}${delimiter}${id}`;
+  }
+
+  public partitionKeyValue(): string {
+    return (this.constructor as typeof DynaRecord).partitionKeyValue(this.id);
   }
 }
 

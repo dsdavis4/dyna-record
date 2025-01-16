@@ -63,9 +63,18 @@ export type RelationshipAttributeNames<T> = {
 }[keyof T];
 
 /**
- * Entity attributes excluding relationship attributes
+ * Entity class instance with attributes excluding relationship attributes
  */
-export type EntityAttributes<T extends DynaRecord> = Omit<
+export type EntityAttributesInstance<T extends DynaRecord> = Omit<
+  T,
+  RelationshipAttributeNames<T>
+>;
+
+/**
+ * Entity attributes excluding relationship attributes
+ * Represents the raw attributes of a class (no functions)
+ */
+export type EntityAttributesOnly<T extends DynaRecord> = Omit<
   T,
   RelationshipAttributeNames<T> | FunctionFields<T>
 >;

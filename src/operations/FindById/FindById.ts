@@ -1,29 +1,9 @@
 import type DynaRecord from "../../DynaRecord";
-import Metadata, { type RelationshipMetadata } from "../../metadata";
-import {
-  DynamoClient,
-  type TransactGetItemResponses,
-  type QueryItems
-} from "../../dynamo-utils";
-import { QueryBuilder } from "../../query-utils";
+import { type RelationshipMetadata } from "../../metadata";
 import { includedRelationshipsFilter } from "../../query-utils/Filters";
-import { TransactGetBuilder } from "../../dynamo-utils";
-import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import type {
-  BelongsToLinkDynamoItem,
-  RelationshipMetaObj,
-  RelationshipLookup,
-  EntityClass,
-  Optional
-} from "../../types";
-import {
-  isBelongsToLinkDynamoItem,
-  isKeyOfEntity,
-  isPropertyKey,
-  isString,
-  safeAssign,
-  tableItemToEntity
-} from "../../utils";
+import { DynamoClient, TransactGetBuilder } from "../../dynamo-utils";
+import type { EntityClass, Optional, RelationshipLookup } from "../../types";
+import { safeAssign, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import type {
   FindByIdOptions,
@@ -32,11 +12,11 @@ import type {
   SortedQueryResults
 } from "./types";
 import { buildEntityRelationshipMetaObj } from "../utils";
+import { type QueryResult, type QueryResults } from "../Query";
 import {
   isHasAndBelongsToManyRelationship,
   isHasManyRelationship
 } from "../../metadata/utils";
-import Logger from "../../Logger";
 
 /**
  * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.
@@ -107,157 +87,52 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     includedAssociations: IncludedAssociations<T>
   ): Promise<Optional<FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
-    const includedRels = this.getIncludedRelationships(includedAssociations);
-    const params = this.buildFindByIdIncludesQuery(id, includedRels);
+    const includedRelMeta = this.getIncludedRelationships(includedAssociations);
 
-    const queryResults = await DynamoClient.query({
-      ...params,
-      ConsistentRead: true
-    });
-
-    if (queryResults.length === 0) {
-      return undefined;
-    }
-
-    const sortedQueryResults = this.filterQueryResults(queryResults);
-    const relationsObj = buildEntityRelationshipMetaObj(includedRels);
-
-    this.buildGetIncludedRelationshipsTransaction(
-      sortedQueryResults,
-      relationsObj
+    const includedTypesFilter = includedRelationshipsFilter(
+      this.EntityClass.name,
+      includedRelMeta
     );
 
-    const transactionRes = await this.#transactionBuilder.executeTransaction();
+    const queryResults = await this.EntityClass.query<DynaRecord>(id, {
+      filter: includedTypesFilter
+    });
+
+    if (queryResults.length === 0) return undefined;
+
+    const filtered = this.filterQueryResults(id, queryResults);
+
+    if (filtered.entity === undefined) return;
 
     return this.resolveFindByIdIncludesResults(
-      sortedQueryResults.item,
-      transactionRes,
-      relationsObj.relationsLookup
+      filtered.entity,
+      filtered.relatedEntities,
+      includedRelMeta
     );
   }
 
   /**
-   * Build the query to find the entity, and any of the BelongsToLinks for the included models
-   * @param id
-   * @param includedRelationships
+   * Filters query results by parent entity and related entities for processing
+   * @param entityId - The id of the parent entity
+   * @param queryResults - The results of the query on the parent partition
    * @returns
    */
-  private buildFindByIdIncludesQuery(
-    id: string,
-    includedRelationships: RelationshipMetadata[]
-  ): QueryCommandInput {
-    const modelPartitionKey = this.tableMetadata.partitionKeyAttribute.name;
-
-    const partitionFilter = includedRelationshipsFilter(
-      this.EntityClass.name,
-      includedRelationships
-    );
-
-    return new QueryBuilder({
-      entityClassName: this.EntityClass.name,
-      key: { [modelPartitionKey]: this.EntityClass.partitionKeyValue(id) },
-      options: { filter: partitionFilter }
-    }).build();
-  }
-
-  /**
-   * Sort query results into an object containing:
-   *  - item: The FindById DynamoItem
-   *  - belongsToLinks: BelongsToLinkDynamoItem records for each of the included relationships
-   * @param queryResults
-   * @returns
-   */
-  private filterQueryResults(queryResults: QueryItems): SortedQueryResults {
+  private filterQueryResults(
+    entityId: string,
+    queryResults: QueryResults<DynaRecord>
+  ): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
-        const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
-        if (res[typeAlias] === this.EntityClass.name) acc.item = res;
-        if (isBelongsToLinkDynamoItem(res, this.tableMetadata))
-          acc.belongsToLinks.push(res);
+        if (entityId === res.id) {
+          acc.entity = res;
+        } else {
+          acc.relatedEntities.push(res);
+        }
+
         return acc;
       },
-      { item: {}, belongsToLinks: [] as BelongsToLinkDynamoItem[] }
+      { entity: undefined, relatedEntities: [] }
     );
-  }
-
-  private buildGetIncludedRelationshipsTransaction(
-    sortedQueryResults: SortedQueryResults,
-    relationsObj: RelationshipMetaObj
-  ): void {
-    this.buildGetRelationshipsThroughLinksTransaction(
-      sortedQueryResults.belongsToLinks,
-      relationsObj.relationsLookup
-    );
-
-    this.buildGetRelationshipsThroughForeignKeyTransaction(
-      sortedQueryResults.item,
-      relationsObj.belongsToRelationships
-    );
-  }
-
-  /**
-   * Builds transactions to get an associated entity via a BelongsToLink (HasOne or HasMany)
-   * @param belongsToLinks
-   * @param relationsLookup
-   */
-  private buildGetRelationshipsThroughLinksTransaction(
-    belongsToLinks: BelongsToLinkDynamoItem[],
-    relationsLookup: RelationshipMetaObj["relationsLookup"]
-  ): void {
-    const { name: tableName, defaultAttributes } = this.tableMetadata;
-
-    belongsToLinks.forEach(link => {
-      const foreignKey = link[defaultAttributes.foreignKey.alias];
-      const foreignEntityType = link[defaultAttributes.foreignEntityType.alias];
-
-      if (isPropertyKey(foreignEntityType) && isString(foreignKey)) {
-        const rel = relationsLookup[foreignEntityType];
-
-        this.#transactionBuilder.addGet({
-          TableName: tableName,
-          Key: {
-            [this.partitionKeyAlias]: rel.target.partitionKeyValue(foreignKey),
-            [this.sortKeyAlias]: rel.target.name
-          }
-        });
-      } else {
-        Logger.error(
-          // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-          `Corrupted foreign key value. Invalid type. ${foreignEntityType} - ${foreignKey}`
-        );
-      }
-    });
-  }
-
-  /**
-   * Builds transactions to get an associated entity using a foreign key on the parent model (BelongsTo)
-   * @param belongsToLinks
-   * @param relationsLookup
-   */
-  private buildGetRelationshipsThroughForeignKeyTransaction(
-    item: QueryItems[number],
-    belongsToRelationships: RelationshipMetaObj["belongsToRelationships"]
-  ): void {
-    if (belongsToRelationships.length > 0) {
-      const { name: tableName } = this.tableMetadata;
-      const attributes = Metadata.getEntityAttributes(this.EntityClass.name);
-
-      belongsToRelationships.forEach(rel => {
-        const foreignKeyTableAlias: string = attributes[rel.foreignKey].alias;
-        const foreignKeyVal: string = item[foreignKeyTableAlias];
-
-        if (foreignKeyVal === undefined) return;
-
-        this.#transactionBuilder.addGet({
-          TableName: tableName,
-          Key: {
-            [this.partitionKeyAlias]:
-              rel.target.partitionKeyValue(foreignKeyVal),
-            [this.sortKeyAlias]: rel.target.name
-          }
-        });
-      });
-    }
   }
 
   /**
@@ -280,47 +155,32 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Serialize the FindById item to its class, serialize results from included relationships query onto the entity
-   * @param entityTableItem
-   * @param transactionResults
-   * @param relationsLookup
+   * Resolve query results into parent entity with included relationships
+   * @param parentEntity
+   * @param relatedEntities
+   * @param includedRelMeta
    * @returns
    */
   private resolveFindByIdIncludesResults(
-    entityTableItem: QueryItems[number],
-    transactionResults: TransactGetItemResponses,
-    relationsLookup: RelationshipLookup
+    parentEntity: QueryResult<DynaRecord>,
+    relatedEntities: QueryResults<DynaRecord>,
+    includedRelMeta: RelationshipMetadata[]
   ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
-    const parentEntity = tableItemToEntity<T>(
-      this.EntityClass,
-      entityTableItem
-    );
-    const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
+    const { relationsLookup } = buildEntityRelationshipMetaObj(includedRelMeta);
 
     this.setIncludedRelationshipDefaults(parentEntity, relationsLookup);
 
-    transactionResults.forEach(res => {
-      const tableItem = res.Item;
+    relatedEntities.forEach(entity => {
+      const rel = relationsLookup[entity.type];
 
-      if (tableItem !== undefined) {
-        const rel = relationsLookup[tableItem[typeAlias]];
+      if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {
+        const entities = parentEntity[rel.propertyName];
 
-        if (isKeyOfEntity(parentEntity, rel.propertyName)) {
-          if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {
-            const entity = tableItemToEntity(rel.target, tableItem);
-            const entities = parentEntity[rel.propertyName] ?? [];
+        if (Array.isArray(entities)) entities.push(entity);
 
-            if (Array.isArray(entities)) {
-              entities.push(entity);
-            }
-
-            Object.assign(parentEntity, { [rel.propertyName]: entities });
-          } else {
-            Object.assign(parentEntity, {
-              [rel.propertyName]: tableItemToEntity(rel.target, tableItem)
-            });
-          }
-        }
+        Object.assign(parentEntity, { [rel.propertyName]: entities });
+      } else {
+        Object.assign(parentEntity, { [rel.propertyName]: entity });
       }
     });
 
@@ -336,12 +196,10 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * type and the property name on the parent entity.
    */
   private setIncludedRelationshipDefaults(
-    parentEntity: T,
+    parentEntity: QueryResult<DynaRecord>,
     relationsLookup: RelationshipLookup
   ): void {
     Object.values(relationsLookup).forEach(rel => {
-      if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
-
       if (
         isHasManyRelationship(rel) ||
         isHasAndBelongsToManyRelationship(rel)

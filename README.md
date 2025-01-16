@@ -89,9 +89,7 @@ import DynaRecord, {
     id: { alias: "Id" },
     type: { alias: "Type" },
     createdAt: { alias: "CreatedAt" },
-    updatedAt: { alias: "UpdatedAt" },
-    foreignKey: { alias: "ForeignKey" },
-    foreignEntityType: { alias: "ForeignEntityType" }
+    updatedAt: { alias: "UpdatedAt" }
   }
 })
 abstract class MyTable extends DynaRecord {
@@ -203,7 +201,7 @@ class Course extends MyTable {
 
 ### Relationships
 
-Dyna-Record supports defining relationships between entities such as [@HasOne](https://dyna-record.com/functions/HasOne.html), [@HasMany](https://dyna-record.com/functions/HasMany.html), [@BelongsTo](https://dyna-record.com/functions/BelongsTo.html) and [@HasAndBelongsToMany](https://dyna-record.com/functions/HasAndBelongsToMany.html). It does this by de-normalizing [BelongsToLinks](https://dyna-record.com/classes/BelongsToLink.html) according the each pattern to support relational querying.
+Dyna-Record supports defining relationships between entities such as [@HasOne](https://dyna-record.com/functions/HasOne.html), [@HasMany](https://dyna-record.com/functions/HasMany.html), [@BelongsTo](https://dyna-record.com/functions/BelongsTo.html) and [@HasAndBelongsToMany](https://dyna-record.com/functions/HasAndBelongsToMany.html). It does this by de-normalizing records to each of its related entities partitions.
 
 A relationship can be defined as nullable or non-nullable. Non-nullable relationships will be enforced via transactions and violations will result in [NullConstraintViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
 
@@ -393,7 +391,7 @@ There are two main patterns; query by id and query by primary key
 
 To query items using the id, simply pass the partition key value as the first parameter. This fetches all items that share the same partition key value.
 
-The result will be an array of the entity and [BelongsToLinks](https://dyna-record.com/classes/BelongsToLink.html)
+The result will be an array of the entity or related entities that match the filters
 
 ##### Query by id
 
@@ -416,7 +414,7 @@ const result = await Customer.query("123", {
 To be more precise to the underlying data, you can specify the partition key and sort key directly. The keys here will be the partition and sort keys defined on the [table](#table) class.
 
 ```typescript
-const orderLinks = await Customer.query({
+const orders = await Customer.query({
   pk: "Customer#123",
   sk: { $beginsWith: "Order" }
 });
@@ -433,17 +431,17 @@ const result = await Course.query(
   },
   {
     filter: {
-      type: ["BelongsToLink", "Brewery"],
+      type: ["Assignment", "Teacher"],
       createdAt: { $beginsWith: "202" },
       $or: [
         {
-          foreignKey: "111",
+          name: "Potions",
           updatedAt: { $beginsWith: "2023-02-15" }
         },
         {
-          foreignKey: ["222", "333"],
+          type: ["science", "math"],
           createdAt: { $beginsWith: "2021-09-15T" },
-          foreignEntityType: "Assignment"
+          type: "Assignment"
         },
         {
           id: "123"
@@ -540,14 +538,14 @@ await User.delete("user-id");
 
 When deleting entities involved in HasMany or HasOne relationships:
 
-If a Pet belongs to an Owner (HasMany relationship), deleting the Pet will remove its BelongsToLink from the Owner's partition.
-If a Home belongs to a Person (HasOne relationship), deleting the Home will remove its BelongsToLink from the Person's partition.
+If a Pet belongs to an Owner (HasMany relationship), deleting the Pet will remove its denormalized records from the Owner's partition.
+If a Home belongs to a Person (HasOne relationship), deleting the Home will remove its denormalized records from the Person's partition.
 
 ```typescript
 await Home.delete("123");
 ```
 
-This deletes the Home entity and its BelongsToLink with a Person.
+This deletes the Home entity and its denormalized record with a Person.
 
 #### Deleting Entities from HasAndBelongsToMany Relationships
 

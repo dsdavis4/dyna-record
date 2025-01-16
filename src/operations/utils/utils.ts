@@ -1,11 +1,24 @@
 import type DynaRecord from "../../DynaRecord";
-import type { RelationshipMetadata } from "../../metadata";
+import type {
+  BelongsToRelationship,
+  RelationshipMetadata
+} from "../../metadata";
+import Metadata from "../../metadata";
 import {
+  doesEntityBelongToRelAsHasMany,
+  doesEntityBelongToRelAsHasOne,
   isBelongsToRelationship,
   isRelationshipMetadataWithForeignKey
 } from "../../metadata/utils";
-import type { ForeignKey, Optional, RelationshipMetaObj } from "../../types";
+import type {
+  DynamoTableItem,
+  EntityClass,
+  ForeignKey,
+  Optional,
+  RelationshipMetaObj
+} from "../../types";
 import { isKeyOfObject } from "../../utils";
+import { type EntityAttributesOnly } from "../types";
 
 /**
  * Creates an object including
@@ -37,13 +50,50 @@ export const buildEntityRelationshipMetaObj = (
  * @param entity - instance of DynaRecord
  * @returns
  */
-export const extractForeignKeyFromEntity = <T extends DynaRecord>(
+export const extractForeignKeyFromEntity = <
+  T extends Partial<EntityAttributesOnly<DynaRecord>>
+>(
   relMeta: RelationshipMetadata,
-  entity?: T
+  entity: T
 ): Optional<ForeignKey> => {
-  return entity !== undefined &&
-    isRelationshipMetadataWithForeignKey(relMeta) &&
+  return isRelationshipMetadataWithForeignKey(relMeta) &&
     isKeyOfObject(entity, relMeta.foreignKey)
     ? entity[relMeta.foreignKey]
     : undefined;
+};
+
+/**
+ * Creates the PK and SK (key) for a table item that BelongsTo another as HasMany or HasOne
+ * @param entityClass
+ * @param entityId
+ * @param relMeta
+ * @param foreignKey
+ * @returns
+ */
+export const buildBelongsToLinkKey = (
+  entityClass: EntityClass<DynaRecord>,
+  entityId: string,
+  relMeta: BelongsToRelationship,
+  foreignKey: string
+): DynamoTableItem => {
+  const tableMeta = Metadata.getEntityTable(entityClass.name);
+
+  const partitionKeyAlias = tableMeta.partitionKeyAttribute.alias;
+  const sortKeyAlias = tableMeta.sortKeyAttribute.alias;
+
+  if (doesEntityBelongToRelAsHasMany(entityClass, relMeta)) {
+    return {
+      [partitionKeyAlias]: relMeta.target.partitionKeyValue(foreignKey),
+      [sortKeyAlias]: entityClass.partitionKeyValue(entityId)
+    };
+  }
+
+  if (doesEntityBelongToRelAsHasOne(entityClass, relMeta)) {
+    return {
+      [partitionKeyAlias]: relMeta.target.partitionKeyValue(foreignKey),
+      [sortKeyAlias]: entityClass.name
+    };
+  }
+
+  throw new Error("Failed to build BelongsTo key for linked record");
 };

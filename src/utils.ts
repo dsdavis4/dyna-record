@@ -1,12 +1,8 @@
 import type DynaRecord from "./DynaRecord";
-import type { DynamoTableItem, BelongsToLinkDynamoItem } from "./types";
-import Metadata, {
-  type AttributeMetadata,
-  type TableMetadata
-} from "./metadata";
-import { BelongsToLink } from "./relationships";
+import type { DynamoTableItem, Nullable } from "./types";
+import Metadata from "./metadata";
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import { type EntityAttributes } from "./operations";
+import { type EntityAttributesOnly } from "./operations";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions
@@ -28,7 +24,9 @@ export const entityToTableItem = <T extends DynaRecord>(
 
         // If the attribute has a custom serializer, serialize it
         const value =
-          serializers === undefined ? val : serializers.toTableAttribute(val);
+          serializers === undefined || val === null
+            ? val
+            : serializers.toTableAttribute(val);
 
         acc[alias] = value as NativeScalarAttributeValue;
       }
@@ -77,7 +75,7 @@ export const tableItemToEntity = <T extends DynaRecord>(
  */
 export const createInstance = <T extends DynaRecord>(
   EntityClass: new () => T,
-  attributes: EntityAttributes<T>
+  attributes: EntityAttributesOnly<T>
 ): T => {
   const entity = new EntityClass();
 
@@ -88,44 +86,6 @@ export const createInstance = <T extends DynaRecord>(
   });
 
   return entity;
-};
-
-/**
- * Serialize a dynamo table item response to a BelongsToLink
- * @param tableMeta - Table metadata
- * @param tableItem - Table item from dynamo response
- * @returns - { @link BelongsToLink }
- */
-export const tableItemToBelongsToLink = (
-  tableMeta: TableMetadata,
-  tableItem: BelongsToLinkDynamoItem
-): BelongsToLink => {
-  const link = new BelongsToLink();
-
-  const belongsToLinkAttrs: Record<string, AttributeMetadata> = {
-    ...{
-      [tableMeta.partitionKeyAttribute.alias]: tableMeta.partitionKeyAttribute
-    },
-    ...{ [tableMeta.sortKeyAttribute.alias]: tableMeta.sortKeyAttribute },
-    ...tableMeta.defaultTableAttributes
-  };
-
-  Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = belongsToLinkAttrs[attrName];
-
-    if (attrMeta !== undefined) {
-      const { name: entityKey, serializers } = attrMeta;
-      const rawVal = tableItem[attrName];
-      const val =
-        serializers?.toEntityAttribute === undefined
-          ? rawVal
-          : serializers?.toEntityAttribute(rawVal);
-
-      safeAssign(link, entityKey as keyof BelongsToLink, val);
-    }
-  });
-
-  return link;
 };
 
 /**
@@ -152,18 +112,6 @@ export const isKeyOfObject = <T>(
 };
 
 /**
- * Type guard to check if the DynamoTableItem is a BelongsToLink
- * @param res DynamoTableItem
- * @returns boolean
- */
-export const isBelongsToLinkDynamoItem = (
-  res: DynamoTableItem,
-  tableMeta: TableMetadata
-): res is BelongsToLinkDynamoItem => {
-  return res[tableMeta.defaultAttributes.type.alias] === BelongsToLink.name;
-};
-
-/**
  * Break an array into chunks
  * @param array
  * @param size
@@ -172,26 +120,6 @@ export const isBelongsToLinkDynamoItem = (
 export const chunkArray = <T>(array: T[], size: number): T[][] => {
   return Array.from({ length: Math.ceil(array.length / size) }, (_, index) =>
     array.slice(index * size, (index + 1) * size)
-  );
-};
-
-/**
- * Checks if a value is a valid property key (string, number, or symbol).
- *
- * @param value The value to be checked. This can be of any type.
- * @returns `true` if the value is a `string`, `number`, or `symbol` (i.e., a valid property key); otherwise, `false`.
- *
- * @example
- * Logger.log(isPropertyKey('test')); // true
- * Logger.log(isPropertyKey(123)); // true
- * Logger.log(isPropertyKey(Symbol('sym'))); // true
- * Logger.log(isPropertyKey({})); // false
- */
-export const isPropertyKey = (value: any): value is PropertyKey => {
-  return (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "symbol"
   );
 };
 
@@ -224,7 +152,7 @@ export const isString = (value: any): value is string => {
  * safeAssign(entity, "name", "Jane Doe");
  */
 export const safeAssign = <
-  TObject extends EntityAttributes<DynaRecord>,
+  TObject extends EntityAttributesOnly<DynaRecord>,
   TKey extends keyof TObject,
   TValue
 >(
@@ -233,4 +161,13 @@ export const safeAssign = <
   value: TValue
 ): void => {
   object[key] = value as TObject[TKey];
+};
+
+/**
+ * Type guard to check if a string is a Nullable<string>
+ * @param val
+ * @returns
+ */
+export const isNullableString = (val: unknown): val is Nullable<string> => {
+  return typeof val === "string" || val === null;
 };

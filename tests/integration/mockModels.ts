@@ -31,9 +31,7 @@ import type {
     id: { alias: "Id" },
     type: { alias: "Type" },
     createdAt: { alias: "CreatedAt" },
-    updatedAt: { alias: "UpdatedAt" },
-    foreignKey: { alias: "ForeignKey" },
-    foreignEntityType: { alias: "ForeignEntityType" }
+    updatedAt: { alias: "UpdatedAt" }
   }
 })
 abstract class MockTable extends DynaRecord {
@@ -319,7 +317,7 @@ class Organization extends MockTable {
 
 @Entity
 class Desk extends MockTable {
-  @NumberAttribute({ alias: "DeskNum" })
+  @NumberAttribute({ alias: "Num" })
   public readonly num: number;
 
   @HasOne(() => User, { foreignKey: "deskId" })
@@ -474,6 +472,7 @@ export {
   Organization,
   Website,
   UserWebsite,
+  Desk,
   // OtherTable exports
   OtherTable,
   Teacher,

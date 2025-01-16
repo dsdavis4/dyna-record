@@ -25,6 +25,9 @@ import type {
 class QueryBuilder {
   readonly #props: QueryCommandProps;
   readonly #tableMetadata: TableMetadata;
+  /**
+   * Attributes of the entity and any related entities that are possible to query on
+   */
   readonly #attributeMetadata: AttributeMetadataStorage;
   #attrCounter: number;
 
@@ -34,9 +37,17 @@ class QueryBuilder {
 
     const entityMetadata = Metadata.getEntity(props.entityClassName);
     this.#tableMetadata = Metadata.getTable(entityMetadata.tableClassName);
-    this.#attributeMetadata = Metadata.getEntityAttributes(
-      props.entityClassName
-    );
+
+    const relationshipsAttributesMeta = Object.values(
+      entityMetadata.relationships
+    ).map(relMeta => Metadata.getEntityAttributes(relMeta.target.name));
+
+    const entityAttrMeta = Metadata.getEntityAttributes(props.entityClassName);
+    const allAttrMeta = [...relationshipsAttributesMeta, entityAttrMeta];
+
+    this.#attributeMetadata = allAttrMeta.reduce((allAttrMeta, attrMeta) => {
+      return { ...allAttrMeta, ...attrMeta };
+    }, {});
   }
 
   /**

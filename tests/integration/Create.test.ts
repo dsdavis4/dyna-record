@@ -1,4 +1,7 @@
-import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  TransactGetCommand,
+  TransactWriteCommand
+} from "@aws-sdk/lib-dynamodb";
 import {
   ContactInformation,
   Customer,
@@ -7,10 +10,15 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
+  type Organization,
+  type PaymentMethod,
   PaymentMethodProvider,
   Person,
   Teacher,
-  User
+  User,
+  type Desk,
+  type Assignment,
+  type Student
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -24,10 +32,18 @@ import {
 } from "../../src/decorators";
 import type { NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
+import {
+  type MockTableEntityTableItem,
+  type OtherTableEntityTableItem
+} from "./utils";
+import Logger from "../../src/Logger";
 
 jest.mock("uuid");
 
+const mockTransactGetItems = jest.fn();
 const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
+const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+
 const mockSend = jest.fn();
 const mockedUuidv4 = jest.mocked(uuidv4);
 
@@ -51,7 +67,14 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         return {
           send: jest.fn().mockImplementation(async command => {
             mockSend(command);
-            return await Promise.resolve("mock");
+            if (command.name === "TransactWriteCommand") {
+              return await Promise.resolve(
+                "TransactWriteCommand-mock-response"
+              );
+            }
+            if (command.name === "TransactGetCommand") {
+              return await Promise.resolve(mockTransactGetItems());
+            }
           })
         };
       })
@@ -59,6 +82,9 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
     TransactWriteCommand: jest.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
+    }),
+    TransactGetCommand: jest.fn().mockImplementation(() => {
+      return { name: "TransactGetCommand" };
     })
   };
 });
@@ -128,7 +154,7 @@ describe("Create", () => {
   });
 
   it("will create an entity that has a custom id field", async () => {
-    expect.assertions(4);
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
@@ -149,6 +175,7 @@ describe("Create", () => {
     });
     expect(user).toBeInstanceOf(User);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
@@ -482,20 +509,53 @@ describe("Create", () => {
     }
   });
 
-  it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
-    expect.assertions(4);
+  it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and denormalizes links)", async () => {
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4
-      .mockReturnValueOnce("uuid1")
-      .mockReturnValueOnce("uuid2")
-      .mockReturnValueOnce("uuid3");
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const customer: MockTableEntityTableItem<Customer> = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Type: "Customer",
+      Name: "Mock Customer",
+      Address: "11 Some St",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+      PK: "PaymentMethod#456",
+      SK: "PaymentMethod",
+      Id: "456",
+      Type: "PaymentMethod",
+      LastFour: "1234",
+      CustomerId: customer.Id,
+      CreatedAt: "2024-02-01T00:00:00.000Z",
+      UpdatedAt: "2024-02-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: customer }, { Item: paymentMethod }]
+    });
 
     const order = await Order.create({
       customerId: "123",
       paymentMethodId: "456",
       orderDate: new Date("2024-01-01")
     });
+
+    const newOrderTableAttributes = {
+      Id: "uuid1",
+      Type: "Order",
+      CustomerId: "123",
+      OrderDate: "2024-01-01T00:00:00.000Z",
+      PaymentMethodId: "456",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z"
+    };
 
     expect(order).toEqual({
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
@@ -509,30 +569,48 @@ describe("Create", () => {
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(order).toBeInstanceOf(Order);
-    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Prefetch associated records to denormalize
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Customer#123", SK: "Customer" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "PaymentMethod#456", SK: "PaymentMethod" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
           TransactItems: [
-            // Create the Order if it does not already exist
             {
+              // Put the new Order
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Order#uuid1",
                   SK: "Order",
-                  Type: "Order",
-                  Id: "uuid1",
-                  CustomerId: "123",
-                  PaymentMethodId: "456",
-                  OrderDate: "2024-01-01T00:00:00.000Z",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                  ...newOrderTableAttributes
+                }
               }
             },
-            // Check that the Customer the Order BelongsTo exists
+            // Check that the associated Customer exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
@@ -540,49 +618,70 @@ describe("Create", () => {
                 TableName: "mock-table"
               }
             },
-            // Create the BelongsToLink to link Customer HasMany Order if the link does dot exist
+            // Denormalize the Order to the Customer partition
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Customer#123",
                   SK: "Order#uuid1",
-                  Id: "uuid2",
-                  ForeignKey: "uuid1",
-                  ForeignEntityType: "Order",
-                  Type: "BelongsToLink",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                  ...newOrderTableAttributes
+                }
               }
             },
-            // Check that the PaymentMethod the Order BelongsTo exists
+            // Check that the associated PaymentMethod exists
             {
               ConditionCheck: {
                 ConditionExpression: "attribute_exists(PK)",
-                Key: {
-                  PK: "PaymentMethod#456",
-                  SK: "PaymentMethod"
-                },
+                Key: { PK: "PaymentMethod#456", SK: "PaymentMethod" },
                 TableName: "mock-table"
               }
             },
-            // Create the BelongsToLink to link PaymentMethod HasMany Order if the link does dot exist
+            // Denormalize the Order to the PaymentMethod partition
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "PaymentMethod#456",
                   SK: "Order#uuid1",
-                  Id: "uuid3",
-                  ForeignKey: "uuid1",
-                  ForeignEntityType: "Order",
-                  Type: "BelongsToLink",
-                  CreatedAt: "2023-10-16T03:31:35.918Z",
-                  UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                  ...newOrderTableAttributes
+                }
+              }
+            },
+            // Denormalize the Customer to the Order partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Order#uuid1",
+                  SK: "Customer",
+                  Id: "123",
+                  Type: "Customer",
+                  Name: "Mock Customer",
+                  Address: "11 Some St",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
+            },
+            // Denormalize the PaymentMethod to the Order partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Order#uuid1",
+                  SK: "PaymentMethod",
+                  Id: "456",
+                  Type: "PaymentMethod",
+                  CustomerId: "123",
+                  LastFour: "1234",
+                  CreatedAt: "2024-02-01T00:00:00.000Z",
+                  UpdatedAt: "2024-02-02T00:00:00.000Z"
+                }
               }
             }
           ]
@@ -591,11 +690,25 @@ describe("Create", () => {
     ]);
   });
 
-  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates BelongsToLinks)", async () => {
-    expect.assertions(4);
+  it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates denormalizes records to partitions)", async () => {
+    expect.assertions(5);
 
     jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const org: MockTableEntityTableItem<Organization> = {
+      PK: "Organization#123",
+      SK: "Organization",
+      Id: "123",
+      Type: "Organization",
+      Name: "Mock Org",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: org }]
+    });
 
     const user = await User.create({
       name: "test-name",
@@ -615,49 +728,90 @@ describe("Create", () => {
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(user).toBeInstanceOf(User);
-    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Prefetch associated records to denormalize
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Organization#123", SK: "Organization" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
           TransactItems: [
             {
+              // Put the new User
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "User#email@email.com",
                   SK: "User",
-                  Type: "User",
                   Id: "email@email.com",
+                  Type: "User",
                   Email: "email@email.com",
                   Name: "test-name",
                   OrgId: "123",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
               }
             },
+            // Check that the associated Organization exists
             {
               ConditionCheck: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_exists(PK)",
-                Key: { PK: "Organization#123", SK: "Organization" },
-                TableName: "mock-table"
+                Key: {
+                  PK: "Organization#123",
+                  SK: "Organization"
+                }
               }
             },
+            // Denormalize the User to the User Organization
             {
               Put: {
+                TableName: "mock-table",
                 ConditionExpression: "attribute_not_exists(PK)",
                 Item: {
                   PK: "Organization#123",
                   SK: "User#email@email.com",
-                  Type: "BelongsToLink",
-                  Id: "uuid1",
-                  ForeignEntityType: "User",
-                  ForeignKey: "email@email.com",
+                  Id: "email@email.com",
+                  Type: "User",
+                  Email: "email@email.com",
+                  Name: "test-name",
+                  OrgId: "123",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
-                },
-                TableName: "mock-table"
+                }
+              }
+            },
+            // Denormalize the Organization to the User partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "User#email@email.com",
+                  SK: "Organization",
+                  Id: "123",
+                  Type: "Organization",
+                  Name: "Mock Org",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
               }
             }
           ]
@@ -668,10 +822,25 @@ describe("Create", () => {
 
   describe("entity BelongsTo an entity who HasOne of it", () => {
     it("will create the entity if the parent is not already associated to an entity of this type", async () => {
-      expect.assertions(4);
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#123",
+        SK: "PaymentMethod",
+        Id: "123",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: "456",
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: paymentMethod }]
+      });
 
       const paymentMethodProvider = await PaymentMethodProvider.create({
         name: "provider-1",
@@ -690,51 +859,88 @@ describe("Create", () => {
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(paymentMethodProvider).toBeInstanceOf(PaymentMethodProvider);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
-              // Create the PaymentMethodProvider if it does not exist
               {
+                // Put the new PaymentMethodProvider
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "PaymentMethodProvider#uuid1",
                     SK: "PaymentMethodProvider",
-                    Type: "PaymentMethodProvider",
                     Id: "uuid1",
+                    Type: "PaymentMethodProvider",
                     Name: "provider-1",
                     PaymentMethodId: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
                 }
               },
-              // Check that the PaymentMethod the PaymentMethodProvider BelongsTo exists
+              // Check that the associated PaymentMethod exists
               {
                 ConditionCheck: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "PaymentMethod#123", SK: "PaymentMethod" },
-                  TableName: "mock-table"
+                  Key: {
+                    PK: "PaymentMethod#123",
+                    SK: "PaymentMethod"
+                  }
                 }
               },
-              // Create the BelongsToLink for PaymentMethod HasOne PaymentMethodProvider if it does not exist
+              // Denormalize the PaymentMethodProvider to the PaymentMethod partition
               {
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "PaymentMethod#123",
                     SK: "PaymentMethodProvider",
-                    Id: "uuid2",
-                    ForeignKey: "uuid1",
-                    ForeignEntityType: "PaymentMethodProvider",
-                    Type: "BelongsToLink",
+                    Id: "uuid1",
+                    Type: "PaymentMethodProvider",
+                    Name: "provider-1",
+                    PaymentMethodId: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
+                }
+              },
+              // Denormalize the PaymentMethod to the PaymentMethodProvider partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "PaymentMethodProvider#uuid1",
+                    SK: "PaymentMethod",
+                    Id: "123",
+                    Type: "PaymentMethod",
+                    CustomerId: "456",
+                    LastFour: "1234",
+                    CreatedAt: "2024-02-01T00:00:00.000Z",
+                    UpdatedAt: "2024-02-02T00:00:00.000Z"
+                  }
                 }
               }
             ]
@@ -744,10 +950,24 @@ describe("Create", () => {
     });
 
     it("with custom id field - will create the entity if the parent is not already associated to an entity of this type", async () => {
-      expect.assertions(4);
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const desk: MockTableEntityTableItem<Desk> = {
+        PK: "Desk#123",
+        SK: "Desk",
+        Id: "123",
+        Type: "Desk",
+        Num: 1,
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: desk }]
+      });
 
       const user = await User.create({
         email: "email@email.com",
@@ -767,47 +987,85 @@ describe("Create", () => {
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(user).toBeInstanceOf(User);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      // Prefetch associated records to denormalize
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Desk#123", SK: "Desk" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
+                // Put the new User
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "User#email@email.com",
                     SK: "User",
-                    Type: "User",
                     Id: "email@email.com",
+                    Type: "User",
+                    DeskId: "123",
                     Email: "email@email.com",
                     Name: "user-1",
-                    DeskId: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
                 }
               },
+              // Check that the associated Desk exists
               {
                 ConditionCheck: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Desk#123", SK: "Desk" },
-                  TableName: "mock-table"
+                  Key: { PK: "Desk#123", SK: "Desk" }
                 }
               },
+              // Denormalize the User to the Desk partition
               {
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "Desk#123",
                     SK: "User",
-                    Type: "BelongsToLink",
-                    ForeignEntityType: "User",
-                    ForeignKey: "email@email.com",
-                    Id: "uuid1",
+                    Id: "email@email.com",
+                    Type: "User",
+                    DeskId: "123",
+                    Email: "email@email.com",
+                    Name: "user-1",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize the Desk to the User partition
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Desk",
+                    Id: "123",
+                    Type: "Desk",
+                    Num: 1,
+                    CreatedAt: "2024-01-01T00:00:00.000Z",
+                    UpdatedAt: "2024-01-02T00:00:00.000Z"
                   },
                   TableName: "mock-table"
                 }
@@ -822,19 +1080,36 @@ describe("Create", () => {
       expect.assertions(2);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "ConditionalCheckFailed" }
-          ],
-          $metadata: {}
-        });
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#123",
+        SK: "PaymentMethod",
+        Id: "123",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: "456",
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: paymentMethod }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "None" },
+              { Code: "ConditionalCheckFailed" }
+            ],
+            $metadata: {}
+          });
+        });
 
       try {
         await PaymentMethodProvider.create({
@@ -853,14 +1128,36 @@ describe("Create", () => {
   });
 
   describe("entity BelongsTo an entity which HasOne of it and another entity HasMany of it", () => {
-    it("will create the entity and de-normalize the BelongsToLinks", async () => {
-      expect.assertions(4);
+    it("will create the entity and de-normalize the linked records", async () => {
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const assignment: OtherTableEntityTableItem<Assignment> = {
+        myPk: "Assignment|123",
+        mySk: "Assignment",
+        id: "123",
+        type: "Assignment",
+        title: "MockTitle",
+        courseId: "987",
+        createdAt: "2024-02-01T00:00:00.000Z",
+        updatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      const student: OtherTableEntityTableItem<Student> = {
+        myPk: "Student|456",
+        mySk: "Student",
+        id: "456",
+        type: "Student",
+        name: "MockName",
+        createdAt: "2024-03-01T00:00:00.000Z",
+        updatedAt: "2024-03-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: assignment }, { Item: student }]
+      });
 
       const grade = await Grade.create({
         gradeValue: "A+",
@@ -880,12 +1177,36 @@ describe("Create", () => {
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(grade).toBeInstanceOf(Grade);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Assignment|123", mySk: "Assignment" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "other-table",
+                  Key: { myPk: "Student|456", mySk: "Student" }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
+                // Put the new Grade
                 Put: {
                   TableName: "other-table",
                   ConditionExpression: "attribute_not_exists(myPk)",
@@ -902,13 +1223,18 @@ describe("Create", () => {
                   }
                 }
               },
+              // Check that the associated Assignment exists
               {
                 ConditionCheck: {
                   TableName: "other-table",
-                  Key: { myPk: "Assignment|123", mySk: "Assignment" },
-                  ConditionExpression: "attribute_exists(myPk)"
+                  ConditionExpression: "attribute_exists(myPk)",
+                  Key: {
+                    myPk: "Assignment|123",
+                    mySk: "Assignment"
+                  }
                 }
               },
+              // Denormalize the Grade to the Assignment partition
               {
                 Put: {
                   TableName: "other-table",
@@ -916,22 +1242,28 @@ describe("Create", () => {
                   Item: {
                     myPk: "Assignment|123",
                     mySk: "Grade",
-                    id: "uuid2",
-                    type: "BelongsToLink",
-                    foreignKey: "uuid1",
-                    foreignEntityType: "Grade",
+                    id: "uuid1",
+                    type: "Grade",
+                    LetterValue: "A+",
+                    assignmentId: "123",
+                    studentId: "456",
                     createdAt: "2023-10-16T03:31:35.918Z",
                     updatedAt: "2023-10-16T03:31:35.918Z"
                   }
                 }
               },
+              // Check that the associated Student exists
               {
                 ConditionCheck: {
                   TableName: "other-table",
                   ConditionExpression: "attribute_exists(myPk)",
-                  Key: { myPk: "Student|456", mySk: "Student" }
+                  Key: {
+                    myPk: "Student|456",
+                    mySk: "Student"
+                  }
                 }
               },
+              // Denormalize the Grade to the Student partition
               {
                 Put: {
                   TableName: "other-table",
@@ -939,12 +1271,46 @@ describe("Create", () => {
                   Item: {
                     myPk: "Student|456",
                     mySk: "Grade|uuid1",
-                    id: "uuid3",
-                    type: "BelongsToLink",
-                    foreignKey: "uuid1",
-                    foreignEntityType: "Grade",
+                    id: "uuid1",
+                    type: "Grade",
+                    LetterValue: "A+",
+                    assignmentId: "123",
+                    studentId: "456",
                     createdAt: "2023-10-16T03:31:35.918Z",
                     updatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              // Denormalize the Assignment to the Grade partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|uuid1",
+                    mySk: "Assignment",
+                    id: "123",
+                    type: "Assignment",
+                    courseId: "987",
+                    title: "MockTitle",
+                    createdAt: "2024-02-01T00:00:00.000Z",
+                    updatedAt: "2024-02-02T00:00:00.000Z"
+                  }
+                }
+              },
+              // Denormalize the Student to the Grade partition
+              {
+                Put: {
+                  TableName: "other-table",
+                  ConditionExpression: "attribute_not_exists(myPk)",
+                  Item: {
+                    myPk: "Grade|uuid1",
+                    mySk: "Student",
+                    id: "456",
+                    type: "Student",
+                    name: "MockName",
+                    createdAt: "2024-03-01T00:00:00.000Z",
+                    updatedAt: "2024-03-02T00:00:00.000Z"
                   }
                 }
               }
@@ -954,11 +1320,35 @@ describe("Create", () => {
       ]);
     });
 
-    it("with a custom id field - will create the entity and de-normalize the BelongsToLinks", async () => {
-      expect.assertions(4);
+    it("with a custom id field - will create the entity and de-normalize the linked records", async () => {
+      expect.assertions(5);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+
+      const org: MockTableEntityTableItem<Organization> = {
+        PK: "Organization#123",
+        SK: "Organization",
+        Id: "123",
+        Type: "Organization",
+        Name: "Mock Org",
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      const desk: MockTableEntityTableItem<Desk> = {
+        PK: "Desk#456",
+        SK: "Desk",
+        Id: "456",
+        Type: "Desk",
+        Num: 1,
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: org }, { Item: desk }]
+      });
 
       const user = await User.create({
         name: "test-name",
@@ -980,73 +1370,150 @@ describe("Create", () => {
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(user).toBeInstanceOf(User);
-      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactGetCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      // Prefetch associated records to denormalize
+      expect(mockTransactGetCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Organization#123",
+                    SK: "Organization"
+                  }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Desk#456",
+                    SK: "Desk"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([
         [
           {
             TransactItems: [
               {
+                // Put the new User
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "User#email@email.com",
                     SK: "User",
-                    Type: "User",
                     Id: "email@email.com",
+                    Type: "User",
+                    DeskId: "456",
                     Email: "email@email.com",
                     Name: "test-name",
                     OrgId: "123",
-                    DeskId: "456",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
                 }
               },
+              // Check that the associated Organization exists
               {
                 ConditionCheck: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Organization#123", SK: "Organization" },
-                  TableName: "mock-table"
+                  Key: {
+                    PK: "Organization#123",
+                    SK: "Organization"
+                  }
                 }
               },
+              // Denormalize the User to the Organization partition
               {
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "Organization#123",
                     SK: "User#email@email.com",
-                    Type: "BelongsToLink",
-                    ForeignEntityType: "User",
-                    ForeignKey: "email@email.com",
-                    Id: "uuid1",
+                    Id: "email@email.com",
+                    Type: "User",
+                    DeskId: "456",
+                    Email: "email@email.com",
+                    Name: "test-name",
+                    OrgId: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
                 }
               },
+              // Check that the associated Desk exists
               {
                 ConditionCheck: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Desk#456", SK: "Desk" },
-                  TableName: "mock-table"
+                  Key: {
+                    PK: "Desk#456",
+                    SK: "Desk"
+                  }
                 }
               },
+              // Denormalize the User to the Desk partition
               {
                 Put: {
+                  TableName: "mock-table",
                   ConditionExpression: "attribute_not_exists(PK)",
                   Item: {
                     PK: "Desk#456",
                     SK: "User",
-                    Type: "BelongsToLink",
-                    ForeignEntityType: "User",
-                    ForeignKey: "email@email.com",
-                    Id: "uuid2",
+                    Id: "email@email.com",
+                    Type: "User",
+                    DeskId: "456",
+                    Email: "email@email.com",
+                    Name: "test-name",
+                    OrgId: "123",
                     CreatedAt: "2023-10-16T03:31:35.918Z",
                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-                  },
-                  TableName: "mock-table"
+                  }
+                }
+              },
+              // Denormalize the Organization to the User partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Organization",
+                    Id: "123",
+                    Type: "Organization",
+                    Name: "Mock Org",
+                    CreatedAt: "2024-01-01T00:00:00.000Z",
+                    UpdatedAt: "2024-01-02T00:00:00.000Z"
+                  }
+                }
+              },
+              // Denormalize the Desk to the User partition
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "User#email@email.com",
+                    SK: "Desk",
+                    Id: "456",
+                    Type: "Desk",
+                    Num: 1,
+                    CreatedAt: "2024-02-01T00:00:00.000Z",
+                    UpdatedAt: "2024-02-02T00:00:00.000Z"
+                  }
                 }
               }
             ]
@@ -1059,24 +1526,48 @@ describe("Create", () => {
       expect.assertions(2);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
+      const assignment: OtherTableEntityTableItem<Assignment> = {
+        myPk: "Assignment|123",
+        mySk: "Assignment",
+        id: "123",
+        type: "Assignment",
+        title: "MockTitle",
+        courseId: "987",
+        createdAt: "2024-02-01T00:00:00.000Z",
+        updatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      const student: OtherTableEntityTableItem<Student> = {
+        myPk: "Student|456",
+        mySk: "Student",
+        id: "456",
+        type: "Student",
+        name: "MockName",
+        createdAt: "2024-03-01T00:00:00.000Z",
+        updatedAt: "2024-03-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: assignment }, { Item: student }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "None" },
+              { Code: "ConditionalCheckFailed" },
+              { Code: "ConditionalCheckFailed" },
+              { Code: "None" }
+            ],
+            $metadata: {}
+          });
+        });
 
       try {
         await Grade.create({
@@ -1183,24 +1674,49 @@ describe("Create", () => {
       expect.assertions(2);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "None" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#456",
+        SK: "PaymentMethod",
+        Id: "456",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: customer.Id,
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "ConditionalCheckFailed" },
+              { Code: "None" },
+              { Code: "None" },
+              { Code: "None" }
+            ],
+            $metadata: {}
+          });
+        });
 
       try {
         await Order.create({
@@ -1222,24 +1738,49 @@ describe("Create", () => {
       expect.assertions(2);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "None" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "None" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#456",
+        SK: "PaymentMethod",
+        Id: "456",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: customer.Id,
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "ConditionalCheckFailed" },
+              { Code: "None" },
+              { Code: "ConditionalCheckFailed" },
+              { Code: "None" }
+            ],
+            $metadata: {}
+          });
+        });
 
       try {
         await Order.create({
@@ -1264,24 +1805,49 @@ describe("Create", () => {
       expect.assertions(1);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new TransactionCanceledException({
-          message: "MockMessage",
-          CancellationReasons: [
-            { Code: "None" },
-            { Code: "None" },
-            { Code: "MockCode" },
-            { Code: "None" },
-            { Code: "None" }
-          ],
-          $metadata: {}
-        });
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#456",
+        SK: "PaymentMethod",
+        Id: "456",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: customer.Id,
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new TransactionCanceledException({
+            message: "MockMessage",
+            CancellationReasons: [
+              { Code: "None" },
+              { Code: "None" },
+              { Code: "MockCode" },
+              { Code: "None" },
+              { Code: "None" }
+            ],
+            $metadata: {}
+          });
+        });
 
       try {
         await Order.create({
@@ -1310,14 +1876,39 @@ describe("Create", () => {
       expect.assertions(1);
 
       jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4
-        .mockReturnValueOnce("uuid1")
-        .mockReturnValueOnce("uuid2")
-        .mockReturnValueOnce("uuid3");
+      mockedUuidv4.mockReturnValueOnce("uuid1");
 
-      mockSend.mockImplementationOnce(() => {
-        throw new Error("something bad");
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Type: "Customer",
+        Name: "Mock Customer",
+        Address: "11 Some St",
+        CreatedAt: "2024-01-01T00:00:00.000Z",
+        UpdatedAt: "2024-01-02T00:00:00.000Z"
+      };
+
+      const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "PaymentMethod#456",
+        SK: "PaymentMethod",
+        Id: "456",
+        Type: "PaymentMethod",
+        LastFour: "1234",
+        CustomerId: customer.Id,
+        CreatedAt: "2024-02-01T00:00:00.000Z",
+        UpdatedAt: "2024-02-02T00:00:00.000Z"
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: customer }, { Item: paymentMethod }]
       });
+
+      mockSend
+        .mockResolvedValueOnce("Prefetch data")
+        .mockImplementationOnce(() => {
+          throw new Error("something bad");
+        });
 
       try {
         await Order.create({
@@ -1332,6 +1923,13 @@ describe("Create", () => {
   });
 
   describe("types", () => {
+    beforeAll(() => {
+      // Mock return values as empty since it doesn't matter for type does
+      mockTransactGetItems.mockResolvedValue({
+        Responses: []
+      });
+    });
+
     it("will not accept relationship attributes on create", async () => {
       await Order.create({
         orderDate: new Date(),
@@ -1513,7 +2111,7 @@ describe("Create", () => {
       });
 
       // @ts-expect-error relationships are not part of return value
-      console.log(res.paymentMethod);
+      Logger.log(res.paymentMethod);
     });
   });
 });

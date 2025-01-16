@@ -26,14 +26,9 @@ export const expressionBuilder = (
   const setExpression = buildUpdateSetExpression(sorted.set);
   const removeExpression = buildUpdateRemoveExpression(sorted.remove);
 
-  const hasSetOperation =
-    Object.keys(setExpression.ExpressionAttributeValues).length > 0;
-
   return {
     // If the operation has only REMOVE actions, it will not have expression attribute values
-    ExpressionAttributeValues: hasSetOperation
-      ? setExpression.ExpressionAttributeValues
-      : undefined,
+    ExpressionAttributeValues: setExpression.ExpressionAttributeValues,
     ExpressionAttributeNames: {
       ...setExpression.ExpressionAttributeNames,
       ...removeExpression.ExpressionAttributeNames
