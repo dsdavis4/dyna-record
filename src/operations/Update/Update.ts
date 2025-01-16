@@ -393,7 +393,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             updatedEntity,
             relMeta,
             foreignKey,
-            // TODO I am passing this through alot of functions. Why dont I just pass newBelongsToEntityLookup[foreignKey]
             newBelongsToEntityLookup,
             "attribute_not_exists",
             `${this.EntityClass.name} already has an associated ${relMeta.target.name}`
