@@ -547,7 +547,6 @@ describe("Create", () => {
       orderDate: new Date("2024-01-01")
     });
 
-    // TODO update all the tests to make a variable for attributes like this and spread it in to help improve readability
     const newOrderTableAttributes = {
       Id: "uuid1",
       Type: "Order",
