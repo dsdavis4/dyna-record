@@ -190,15 +190,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     }, []);
   }
 
-  // TODO update typedoc for what it does with new param belongstorelmeta
   /**
    * Pre-fetches the target entity and any related entities from the database. This is done using a strong read operation to ensure consistency.
    *
    * **What it does:**
    * - Retrieves the main entity and all linked entities in the entity's partition.
+   * - Performs a TransactGetItem operation on entities linked bai foreign keys (BelongsTo) to support denormalizing copies to associated partitions
    * - Filters these entities to separate the main entity and its related link records.
    *
    * @param id - The unique identifier of the entity being fetched.
+   * @param belongsToRelFkAndMetas - BelongsTo relationship meta objects with foreign keys used for fetching associated records
    * @returns A promise that resolves to an object containing:
    *   - `entityPreUpdate`: The current state of the entity before updates.
    *   - `relatedEntities`: An array of related link entities.
