@@ -174,7 +174,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
       const rel = relationsLookup[entity.type];
 
       if (rel.type === "HasMany" || rel.type === "HasAndBelongsToMany") {
-        const entities = parentEntity[rel.propertyName] ?? [];
+        const entities = parentEntity[rel.propertyName];
 
         if (Array.isArray(entities)) entities.push(entity);
 
