@@ -29,15 +29,6 @@ export type EntityKeyConditions<T> = {
   [K in keyof T]?: KeyConditions;
 };
 
-// TODO for new types, condier moving to new location and typedoc
-// TODO I also need TYPE tests for all variations on included types include
-//   - has one
-//   - has many
-//   - optional
-//  - negative tests
-// All tests should be via return types on query method
-// TODO also need to assert on actual types returns (not type tests)
-
 /**
  * Asserts that a given type `E` extends `DynaRecord`. If `E` does not extend `DynaRecord`, it resolves to `never`.
  *

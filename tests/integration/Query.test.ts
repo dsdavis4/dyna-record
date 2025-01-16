@@ -3,7 +3,9 @@ import {
   Course,
   Customer,
   Order,
-  PaymentMethod
+  PaymentMethod,
+  PaymentMethodProvider,
+  Student
 } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { BelongsToLink } from "../../src/relationships";
@@ -924,11 +926,7 @@ describe("Query", () => {
 
         const paymentMethod = result[0];
 
-        if (
-          paymentMethod !== undefined &&
-          !(paymentMethod instanceof BelongsToLink)
-        ) {
-          // TODO make sure there are no console logs in tests and use this instead..
+        if (paymentMethod !== undefined) {
           // @ts-expect-error: Query does not include HasOne or BelongsTo associations
           Logger.log(paymentMethod.customer);
 
@@ -939,7 +937,6 @@ describe("Query", () => {
     });
   });
 
-  // TODO add a type test that the return type can be the entity or anything of a relationship...
   describe("queryByEntity specific test", () => {
     describe("types", () => {
       it("does not serialize relationships", async () => {
