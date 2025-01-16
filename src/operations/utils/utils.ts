@@ -62,8 +62,14 @@ export const extractForeignKeyFromEntity = <
     : undefined;
 };
 
-// TODO these props easier to user. Two groups of related
-// TODO typedoc - creates the PK and SK for the table using the aliases
+/**
+ * Creates the PK and SK (key) for a table item that BelongsTo another as HasMany or HasOne
+ * @param entityClass
+ * @param entityId
+ * @param relMeta
+ * @param foreignKey
+ * @returns
+ */
 export const buildBelongsToLinkKey = (
   entityClass: EntityClass<DynaRecord>,
   entityId: string,
