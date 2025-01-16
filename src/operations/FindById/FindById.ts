@@ -200,8 +200,6 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     relationsLookup: RelationshipLookup
   ): void {
     Object.values(relationsLookup).forEach(rel => {
-      if (!isKeyOfEntity(parentEntity, rel.propertyName)) return;
-
       if (
         isHasManyRelationship(rel) ||
         isHasAndBelongsToManyRelationship(rel)
