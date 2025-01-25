@@ -5,7 +5,8 @@ type RelationshipType =
   | "HasMany"
   | "BelongsTo"
   | "HasOne"
-  | "HasAndBelongsToMany";
+  | "HasAndBelongsToMany"
+  | "OwnedBy";
 
 /**
  * Serves as the base class for defining metadata related to various types of relationships within the ORM system, such as "HasMany", "BelongsTo", "HasOne", and "HasAndBelongsToMany". This abstract class provides a common structure for relationship metadata, encapsulating the relationship type, target entity, and property name.

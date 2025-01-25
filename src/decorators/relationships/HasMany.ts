@@ -5,6 +5,14 @@ import { type ForeignEntityAttribute } from "../types";
 
 interface HasManyProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T>;
+
+  /**
+   * Specifies whether the relationship is unidirectional. When set to `true`, the relationship supports access patterns in only one direction, reducing denormalized data.
+   * This is useful when bidirectional access patterns are unnecessary.
+   *
+   * @default false
+   */
+  uniDirectional?: boolean;
 }
 
 /**
@@ -40,11 +48,23 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
     if (context.kind === "field") {
       context.addInitializer(function (this: K) {
+        const target = getTarget();
+
+        if (props.uniDirectional === true) {
+          Metadata.addEntityRelationship(target.name, {
+            type: "OwnedBy",
+            propertyName: props.foreignKey as keyof DynaRecord, // TODO
+            // TODO can I make a typeguard instead of casting?
+            target: this.constructor as EntityClass<K>
+          });
+        }
+
         Metadata.addEntityRelationship(this.constructor.name, {
           type: "HasMany",
           propertyName: context.name as keyof DynaRecord,
-          target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyProperty
+          target,
+          foreignKey: props.foreignKey as ForeignKeyProperty,
+          uniDirectional: props.uniDirectional
         });
       });
     }
