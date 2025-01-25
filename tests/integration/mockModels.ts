@@ -313,6 +313,12 @@ class Organization extends MockTable {
 
   @HasMany(() => User, { foreignKey: "orgId" })
   public readonly users: User[];
+
+  @HasMany(() => Employee, {
+    foreignKey: "organizationId",
+    uniDirectional: true
+  })
+  public readonly employees: Employee[];
 }
 
 @Entity
@@ -339,6 +345,15 @@ class Website extends MockTable {
 class UserWebsite extends JoinTable<User, Website> {
   public readonly userId: ForeignKey;
   public readonly websiteId: ForeignKey;
+}
+
+@Entity
+class Employee extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute({ alias: "OrganizationId" })
+  public readonly organizationId: ForeignKey;
 }
 
 @Table({ name: "other-table", delimiter: "|" })
@@ -473,6 +488,7 @@ export {
   Website,
   UserWebsite,
   Desk,
+  Employee,
   // OtherTable exports
   OtherTable,
   Teacher,

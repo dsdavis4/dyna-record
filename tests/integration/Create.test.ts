@@ -18,7 +18,8 @@ import {
   User,
   type Desk,
   type Assignment,
-  type Student
+  type Student,
+  Employee
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -106,6 +107,7 @@ describe("Create", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    mockedUuidv4.mockReset();
   });
 
   it("will create an entity and without relationship transactions if none are needed", async () => {
@@ -1583,6 +1585,189 @@ describe("Create", () => {
           ),
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Student with ID '456' does not exist"
+          )
+        ]);
+      }
+    });
+  });
+
+  describe("when the entity is owned by a uniDirectional HasMany relationships", () => {
+    it("will create the entity, ensure the referenced entity exists and create a reference link", async () => {
+      expect.assertions(4);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      const employee = await Employee.create({
+        name: "MockName",
+        organizationId: "123"
+      });
+
+      expect(employee).toEqual({
+        pk: "Employee#uuid1",
+        sk: "Employee",
+        type: "Employee",
+        id: "uuid1",
+        name: "MockName",
+        organizationId: "123",
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(employee).toBeInstanceOf(Employee);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                // create the employee
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Employee#uuid1",
+                    SK: "Employee",
+                    Type: "Employee",
+                    Id: "uuid1",
+                    Name: "MockName",
+                    OrganizationId: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Check that the org exists
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Organization#123",
+                    SK: "Organization"
+                  }
+                }
+              },
+              {
+                // Denormalize the Employee to the Organization partition
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Organization#123",
+                    SK: "Employee#uuid1",
+                    Type: "Employee",
+                    Id: "uuid1",
+                    Name: "MockName",
+                    OrganizationId: "123",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("will throw an error if the entity being created already exists", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Employee.create({
+          name: "MockName",
+          organizationId: "123"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Employee with id: uuid1 already exists"
+          )
+        ]);
+      }
+    });
+
+    it("will throw an error if the referenced entity does not exist", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Employee.create({
+          name: "MockName",
+          organizationId: "123"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Organization with ID '123' does not exist"
+          )
+        ]);
+      }
+    });
+
+    it("will throw an error if the reference link already exists", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await Employee.create({
+          name: "MockName",
+          organizationId: "123"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Organization with id: 123 already has an associated Employee"
           )
         ]);
       }
