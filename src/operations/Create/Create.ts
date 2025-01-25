@@ -16,7 +16,10 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { isBelongsToRelationship } from "../../metadata/utils";
-import Metadata, { type BelongsToRelationship } from "../../metadata";
+import Metadata, {
+  OwnedByRelationship,
+  type BelongsToRelationship
+} from "../../metadata";
 
 /**
  * Represents an operation to create a new entity record in DynamoDB, including all necessary
@@ -177,7 +180,14 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const tableName = this.tableMetadata.name;
 
-    for (const relMeta of this.entityMetadata.belongsToRelationships) {
+    // TODO rename this function to support the owned by
+
+    const relMetas = [
+      ...this.entityMetadata.belongsToRelationships,
+      ...this.entityMetadata.ownedByRelationships
+    ];
+
+    for (const relMeta of relMetas) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);
 
       if (foreignKey !== undefined) {
@@ -262,7 +272,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private buildRelationshipExistsConditionTransaction(
-    rel: BelongsToRelationship,
+    rel: BelongsToRelationship | OwnedByRelationship,
     relationshipId: string
   ): void {
     const { name: tableName } = this.tableMetadata;

@@ -3,6 +3,9 @@ import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyProperty } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
+// TODO I should make it so that when uniDirectional is true, then it links to a type different then ForeignKey
+// that way, one could not also define a belongs to rel with a uni directional...
+
 interface HasManyProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T>;
 
@@ -54,6 +57,7 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
           Metadata.addEntityRelationship(target.name, {
             type: "OwnedBy",
             propertyName: props.foreignKey as keyof DynaRecord, // TODO
+            foreignKey: props.foreignKey as ForeignKeyProperty,
             // TODO can I make a typeguard instead of casting?
             target: this.constructor as EntityClass<K>
           });

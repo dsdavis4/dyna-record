@@ -1,3 +1,4 @@
+import type { ForeignKeyProperty } from "../../types";
 import RelationshipMetadata from "./RelationshipMetadata";
 
 /**
@@ -5,11 +6,13 @@ import RelationshipMetadata from "./RelationshipMetadata";
  *
  * @extends {RelationshipMetadata} Inherits the base functionality and properties of `RelationshipMetadata`.
  * @property {"OwnedBy"} type - The type of the relationship, statically set to "OwnedBy" to signify a one-directional relationship where the current entity is owned by another entity.
+ * @property {ForeignKeyProperty} foreignKey - The attribute representing the foreign key in the relationship. This specifies the field in the current entity that links to the owning entity, enabling relationship queries and operations.
  *
  * @param {RelationshipMetadata} item - The initial relationship metadata to be copied into this "Owned By" relationship instance. This facilitates the creation and setup of relationship metadata based on existing configurations.
  */
 class OwnedByRelationship extends RelationshipMetadata {
   type: "OwnedBy" = "OwnedBy";
+  foreignKey: ForeignKeyProperty; // TODO is this needed?
 
   constructor(item: RelationshipMetadata) {
     super();

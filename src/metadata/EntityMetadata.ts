@@ -5,7 +5,8 @@ import type {
   AttributeMetadata,
   AttributeMetadataStorage,
   RelationshipMetadataStorage,
-  RelationshipMetadata
+  RelationshipMetadata,
+  OwnedByRelationship
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
@@ -15,7 +16,8 @@ import {
   isBelongsToRelationship,
   isHasAndBelongsToManyRelationship,
   isHasManyRelationship,
-  isHasOneRelationship
+  isHasOneRelationship,
+  isOwnedByRelationship
 } from "./utils";
 
 type EntityClass = new (...args: any) => DynaRecord;
@@ -174,6 +176,16 @@ class EntityMetadata {
         isHasOneRelationship(relMeta) ||
         isHasManyRelationship(relMeta) ||
         isHasAndBelongsToManyRelationship(relMeta)
+    );
+  }
+
+  // TODO check usage of this, if its always combined with belongsToRelationships then dry it up
+  /**
+   * Returns the owned by relationships for an entity
+   */
+  public get ownedByRelationships(): OwnedByRelationship[] {
+    return Object.values(this.relationships).filter(relMeta =>
+      isOwnedByRelationship(relMeta)
     );
   }
 }
