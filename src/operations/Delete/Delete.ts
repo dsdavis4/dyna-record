@@ -314,13 +314,15 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       if (isKeyOfObject(self, ownedByRelMeta.foreignKey)) {
         const fkValue = self[ownedByRelMeta.foreignKey];
 
-        const keys = {
-          [this.#partitionKeyField]:
-            ownedByRelMeta.target.partitionKeyValue(fkValue),
-          [this.#sortKeyField]: this.EntityClass.partitionKeyValue(self.id)
-        };
-        this.buildDeleteEntityTransaction(keys, {
-          // TODO is this error message, specifically keys, consistent?
+        const keys = buildBelongsToLinkKey(
+          this.EntityClass,
+          self.id,
+          ownedByRelMeta,
+          fkValue
+        );
+
+        // TODO is this error message consistent?
+        this.buildDeleteItemTransaction(keys, {
           errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
             keys
           )}`
