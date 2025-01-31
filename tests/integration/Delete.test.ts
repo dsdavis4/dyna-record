@@ -886,6 +886,13 @@ describe("Delete", () => {
     ]);
   });
 
+  describe("in a unidirectional has many relationship", () => {
+    // TODO it can delete the owning entity and nullify the foreign keys on the associated entity if they are nullable
+    // TODO it will throw an error if it attempts to delete the owning entity by the associated entity has non-nullable foreign keys
+    // TODO It can delete an entity that is owned by a has many uni directional relationship
+    // TODO it will throw an error if it encounters a transaction error when deleting the denormalized link from the owning entities partition
+  });
+
   describe("error handling", () => {
     it("will throw an error if the entity being deleted does not exist", async () => {
       expect.assertions(6);
