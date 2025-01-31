@@ -6,7 +6,8 @@ import {
 } from "../../dynamo-utils";
 import type {
   BelongsToRelationship,
-  HasAndBelongsToManyRelationship
+  HasAndBelongsToManyRelationship,
+  OwnedByRelationship
 } from "../../metadata";
 import {
   entityToTableItem,
@@ -29,6 +30,20 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { NotFoundError } from "../../errors";
+import { isBelongsToRelationship } from "../../metadata/utils";
+
+// TODO start here.. this morning I made is so that it iterate belongs to or owned by
+// On my first test it seemed to wrok but I need to to test
+//    adding a FK
+//     updating dk
+//     removing dk
+// I also need to dry up stuff that is duplicated from Create and Update
+//      - BelongsToRelationship | OwnedByRelationship test
+//      - Making an array of the types like below
+// const relMetas = [
+//   ...this.entityMetadata.belongsToRelationships,
+//   ...this.entityMetadata.ownedByRelationships
+// ];
 
 type Entity = EntityAttributesInstance<DynaRecord>;
 
@@ -353,6 +368,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
+  // TODO update for typedoc
   /**
    * Builds all necessary transactions to handle "BelongsTo" relationships when updating the entity.
    *
@@ -374,7 +390,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const entityId = entityPreUpdate.id;
 
-    for (const relMeta of this.entityMetadata.belongsToRelationships) {
+    // TODO I did this same thing in create... I think I need to make a propety on entity metadata to get these
+    // TODO rename this function to support the owned by
+    const relMetas = [
+      ...this.entityMetadata.belongsToRelationships,
+      ...this.entityMetadata.ownedByRelationships
+    ];
+
+    for (const relMeta of relMetas) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, updatedEntity);
 
       const isUpdatingRelationshipId = foreignKey !== undefined;
@@ -434,7 +457,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildUpdateBelongsToLinkedRecords(
     entityId: string,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship,
     foreignKey: string,
     updateExpression: UpdateExpression
   ): void {
@@ -468,7 +491,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildPutBelongsToLinkedRecords(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship,
     foreignKey: string,
     newBelongsToEntityLookup: BelongsToEntityLookup,
     persistToSelfCondition: "attribute_not_exists" | "attribute_exists",
@@ -484,15 +507,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       foreignKey
     );
 
-    // Add denormalized record for new entity to self
-    this.buildAddForeignEntityToSelfTransaction(
-      updatedEntity,
-      relMeta,
-      foreignKey,
-      newBelongsToEntityLookup,
-      persistToSelfCondition,
-      persistToSelfConditionErrMessage
-    );
+    if (isBelongsToRelationship(relMeta)) {
+      // Add denormalized record for new entity to self
+      this.buildAddForeignEntityToSelfTransaction(
+        updatedEntity,
+        relMeta,
+        foreignKey,
+        newBelongsToEntityLookup,
+        persistToSelfCondition,
+        persistToSelfConditionErrMessage
+      );
+    }
   }
 
   /**
@@ -501,7 +526,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param foreignKey
    */
   private buildEntityExistsCondition(
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship, // TODO I am repeating this discriminated union, DRY it up with a type
     foreignKey: string
   ): void {
     const errMsg = `${relMeta.target.name} with ID '${foreignKey}' does not exist`;
@@ -526,7 +551,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildLinkToForeignEntityTransaction(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship,
     foreignKey: string
   ): void {
     const key = buildBelongsToLinkKey(
@@ -605,7 +630,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private removeForeignKeysTransactions(
     entityId: string,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship,
     oldForeignKey: string
   ): void {
     // Keys to delete the denormalized record from entities own partition
@@ -649,7 +674,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private updateForeignKeyTransactions(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToRelationship | OwnedByRelationship,
     newForeignKey: string,
     oldForeignKey: string,
     newBelongsToEntityLookup: BelongsToEntityLookup

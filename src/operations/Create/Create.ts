@@ -181,7 +181,6 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableName = this.tableMetadata.name;
 
     // TODO rename this function to support the owned by
-
     const relMetas = [
       ...this.entityMetadata.belongsToRelationships,
       ...this.entityMetadata.ownedByRelationships
