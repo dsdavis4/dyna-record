@@ -14,7 +14,6 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
-  Organization,
   type Person,
   Pet,
   PhoneBook,
