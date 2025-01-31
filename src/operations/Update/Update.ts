@@ -368,12 +368,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
   }
 
-  // TODO update for typedoc
   /**
-   * Builds all necessary transactions to handle "BelongsTo" relationships when updating the entity.
+   * Builds all necessary transactions to handle "BelongsTo" or uni-directional "OwnedBy" relationships when updating the entity.
    *
    * **What it does:**
-   * - Checks if any foreign keys for "BelongsTo" relationships have changed.
+   * - Checks if any foreign keys for "BelongsTo" or uni-directional "OwnedBy" relationships have changed.
    * - If so, updates or creates new denormalized link records in the related partitions.
    * - Removes old link records that are no longer valid due to foreign key changes.
    *
