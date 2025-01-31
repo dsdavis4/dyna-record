@@ -4223,10 +4223,7 @@ describe("Update", () => {
     });
   });
 
-  // TODO everything in this block needs to be updated
-  // TODO here... everything in here is copy paste but need to evaluate each case
-  // also create the mock relationships, use the one from create
-  describe.only("an entity which BelongsTo an entity who HasMany of it in a unidirectional relationships", () => {
+  describe("an entity which BelongsTo an entity who HasMany of it in a unidirectional relationships", () => {
     describe("when the entity does not already belong to another entity", () => {
       const employee: MockTableEntityTableItem<Employee> = {
         PK: "Employee#123",
