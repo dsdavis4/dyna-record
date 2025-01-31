@@ -15,7 +15,7 @@ import type {
   EntityClass,
   RelationshipLookup
 } from "../../types";
-import { isKeyOfObject } from "../../utils";
+import { isKeyOfEntity, isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import type { QueryResults, QueryResult } from "../Query";
 import { UpdateDryRun } from "../Update";
@@ -100,6 +100,12 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       });
       this.buildDeleteJoinTableLinkTransaction(item);
     });
+
+    // TODO move to method
+    // TODO unit test delete
+    // TODO unit test error case
+    // TODO also unit test both directionseven though I did nt change anything in one direction
+    this.buildDeleteOwnedByRelationships(preFetchRes.self);
 
     await Promise.all(
       preFetchRes.linkedEntitiesWithFkRef.map(async entity => {
@@ -300,6 +306,27 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         )}`
       });
     }
+  }
+
+  // TODO typedoc
+  private buildDeleteOwnedByRelationships(self: Entity): void {
+    this.entityMetadata.ownedByRelationships.forEach(ownedByRelMeta => {
+      if (isKeyOfObject(self, ownedByRelMeta.foreignKey)) {
+        const fkValue = self[ownedByRelMeta.foreignKey];
+
+        const keys = {
+          [this.#partitionKeyField]:
+            ownedByRelMeta.target.partitionKeyValue(fkValue),
+          [this.#sortKeyField]: this.EntityClass.partitionKeyValue(self.id)
+        };
+        this.buildDeleteEntityTransaction(keys, {
+          // TODO is this error message, specifically keys, consistent?
+          errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
+            keys
+          )}`
+        });
+      }
+    });
   }
 
   /**
