@@ -5299,127 +5299,117 @@ describe("Update", () => {
         });
       });
 
-      //     describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
-      //       const dbOperationAssertions = (): void => {
-      //         expect(mockSend.mock.calls).toEqual([
-      //           [{ name: "QueryCommand" }],
-      //           [{ name: "TransactWriteCommand" }]
-      //         ]);
-      //         expect(mockedQueryCommand.mock.calls).toEqual([
-      //           [
-      //             {
-      //               TableName: "mock-table",
-      //               KeyConditionExpression: "#PK = :PK2",
-      //               ExpressionAttributeNames: {
-      //                 "#PK": "PK",
-      //                 "#Type": "Type"
-      //               },
-      //               ExpressionAttributeValues: {
-      //                 ":PK2": "Pet#123",
-      //                 ":Type1": "Pet"
-      //               },
-      //               FilterExpression: "#Type IN (:Type1)"
-      //             }
-      //           ]
-      //         ]);
-      //         // Don't get customer because its being deleted
-      //         expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      //         expect(mockTransactWriteCommand.mock.calls).toEqual([
-      //           [
-      //             {
-      //               TransactItems: [
-      //                 // Update the Pet and remove the foreign key
-      //                 {
-      //                   Update: {
-      //                     TableName: "mock-table",
-      //                     Key: {
-      //                       PK: "Pet#123",
-      //                       SK: "Pet"
-      //                     },
-      //                     UpdateExpression:
-      //                       "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId",
-      //                     ConditionExpression: "attribute_exists(PK)",
-      //                     ExpressionAttributeNames: {
-      //                       "#Name": "Name",
-      //                       "#OwnerId": "OwnerId",
-      //                       "#UpdatedAt": "UpdatedAt"
-      //                     },
-      //                     ExpressionAttributeValues: {
-      //                       ":Name": "New Name",
-      //                       ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-      //                     }
-      //                   }
-      //                 },
-      //                 // Delete the denormalized record to Person from the Pet partition
-      //                 {
-      //                   Delete: {
-      //                     TableName: "mock-table",
-      //                     Key: {
-      //                       PK: "Pet#123",
-      //                       SK: "Person"
-      //                     }
-      //                   }
-      //                 },
-      //                 // Delete the denormalized record to Pet from the Person partition
-      //                 {
-      //                   Delete: {
-      //                     TableName: "mock-table",
-      //                     Key: {
-      //                       PK: "Person#001",
-      //                       SK: "Pet#123"
-      //                     }
-      //                   }
-      //                 }
-      //               ]
-      //             }
-      //           ]
-      //         ]);
-      //       };
+      describe("will remove a nullable foreign key and delete the denormalized records for the associated entity", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Employee#123",
+                  ":Type1": "Employee"
+                },
+                FilterExpression: "#Type IN (:Type1)"
+              }
+            ]
+          ]);
+          // Don't get customer because its being deleted
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  // Update the Employee and remove the foreign key
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Employee#123",
+                        SK: "Employee"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OrganizationId",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#OrganizationId": "OrganizationId",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "New Name",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  // Delete the denormalized record to Employee from the Organization partition
+                  {
+                    Delete: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Organization#001",
+                        SK: "Employee#123"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
 
-      //       test.skip("static method", async () => {
-      //         expect.assertions(5);
+        test("static method", async () => {
+          expect.assertions(5);
 
-      //         expect(
-      //           // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-      //           await Pet.update("123", {
-      //             name: "New Name",
-      //             ownerId: null
-      //           })
-      //         ).toBeUndefined();
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Employee.update("123", {
+              name: "New Name",
+              organizationId: null
+            })
+          ).toBeUndefined();
 
-      //         dbOperationAssertions();
-      //       });
+          dbOperationAssertions();
+        });
 
-      //       test.skip("instance method", async () => {
-      //         expect.assertions(7);
+        test("instance method", async () => {
+          expect.assertions(7);
 
-      //         const updatedInstance = await instance.update({
-      //           name: "New Name",
-      //           ownerId: null
-      //         });
+          const updatedInstance = await instance.update({
+            name: "New Name",
+            organizationId: null
+          });
 
-      //         expect(updatedInstance).toEqual({
-      //           ...instance,
-      //           name: "New Name",
-      //           ownerId: undefined,
-      //           updatedAt: new Date("2023-10-16T03:31:35.918Z")
-      //         });
-      //         expect(updatedInstance).toBeInstanceOf(Pet);
-      //         // Original instance is not mutated
-      //         expect(instance).toEqual({
-      //           pk: pet.PK,
-      //           sk: pet.SK,
-      //           id: pet.Id,
-      //           type: pet.Type,
-      //           name: pet.Name,
-      //           ownerId: pet.OwnerId,
-      //           createdAt: new Date(pet.CreatedAt),
-      //           updatedAt: new Date(pet.UpdatedAt)
-      //         });
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "New Name",
+            organizationId: undefined,
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Employee);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: employee.PK,
+            sk: employee.SK,
+            id: employee.Id,
+            type: employee.Type,
+            name: employee.Name,
+            organizationId: employee.OrganizationId,
+            createdAt: new Date(employee.CreatedAt),
+            updatedAt: new Date(employee.UpdatedAt)
+          });
 
-      //         dbOperationAssertions();
-      //       });
-      //     });
+          dbOperationAssertions();
+        });
+      });
 
       //     describe("will throw an error if it fails to delete the old denormalized records", () => {
       //       beforeEach(() => {
