@@ -352,8 +352,8 @@ class Employee extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @ForeignKeyAttribute({ alias: "OrganizationId" })
-  public readonly organizationId: ForeignKey;
+  @ForeignKeyAttribute({ alias: "OrganizationId", nullable: true })
+  public readonly organizationId: NullableForeignKey;
 }
 
 @Table({ name: "other-table", delimiter: "|" })
