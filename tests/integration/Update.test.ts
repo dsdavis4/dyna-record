@@ -5062,65 +5062,63 @@ describe("Update", () => {
           });
         });
 
-        //     describe("will throw an error if the entity being updated does not exist at preFetch", () => {
-        //       const operationSharedAssertions = (e: any): void => {
-        //         expect(e).toEqual(new NotFoundError("Pet does not exist: 123"));
-        //         expect(mockSend.mock.calls).toEqual([
-        //           [{ name: "TransactGetCommand" }],
-        //           [{ name: "QueryCommand" }]
-        //         ]);
-        //       };
+        describe("will throw an error if the entity being updated does not exist at preFetch", () => {
+          const operationSharedAssertions = (e: any): void => {
+            expect(e).toEqual(
+              new NotFoundError("Employee does not exist: 123")
+            );
+            expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+          };
 
-        //       beforeEach(() => {
-        //         mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
+          beforeEach(() => {
+            mockQuery.mockResolvedValueOnce({ Items: [] }); // Entity does not exist but will fail in transaction
 
-        //         mockSend
-        //           // TransactGet
-        //           .mockResolvedValueOnce(undefined)
-        //           // Query
-        //           .mockResolvedValueOnce(undefined)
-        //           // TransactWrite
-        //           .mockImplementationOnce(() => {
-        //             throw new TransactionCanceledException({
-        //               message: "MockMessage",
-        //               CancellationReasons: [
-        //                 { Code: "ConditionalCheckFailed" },
-        //                 { Code: "None" },
-        //                 { Code: "None" },
-        //                 { Code: "None" },
-        //                 { Code: "None" }
-        //               ],
-        //               $metadata: {}
-        //             });
-        //           });
-        //       });
+            mockSend
+              // TransactGet
+              .mockResolvedValueOnce(undefined)
+              // Query
+              .mockResolvedValueOnce(undefined)
+              // TransactWrite
+              .mockImplementationOnce(() => {
+                throw new TransactionCanceledException({
+                  message: "MockMessage",
+                  CancellationReasons: [
+                    { Code: "ConditionalCheckFailed" },
+                    { Code: "None" },
+                    { Code: "None" },
+                    { Code: "None" }
+                  ],
+                  $metadata: {}
+                });
+              });
+          });
 
-        //       test.skip("static method", async () => {
-        //         expect.assertions(2);
+          test("static method", async () => {
+            expect.assertions(2);
 
-        //         try {
-        //           await Pet.update("123", {
-        //             name: "Fido",
-        //             ownerId: "456"
-        //           });
-        //         } catch (e: any) {
-        //           operationSharedAssertions(e);
-        //         }
-        //       });
+            try {
+              await Employee.update("123", {
+                name: "Testing",
+                organizationId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
 
-        //       test.skip("instance method", async () => {
-        //         expect.assertions(2);
+          test("instance method", async () => {
+            expect.assertions(2);
 
-        //         try {
-        //           await instance.update({
-        //             name: "Fido",
-        //             ownerId: "456"
-        //           });
-        //         } catch (e: any) {
-        //           operationSharedAssertions(e);
-        //         }
-        //       });
-        //     });
+            try {
+              await instance.update({
+                name: "Testing",
+                organizationId: "456"
+              });
+            } catch (e: any) {
+              operationSharedAssertions(e);
+            }
+          });
+        });
 
         //     describe("will throw an error if the entity being updated existed at preFetch but was deleted before the transaction was committed", () => {
         //       const operationSharedAssertions = (e: any): void => {
