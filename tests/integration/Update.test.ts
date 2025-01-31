@@ -5411,68 +5411,63 @@ describe("Update", () => {
         });
       });
 
-      //     describe("will throw an error if it fails to delete the old denormalized records", () => {
-      //       beforeEach(() => {
-      //         mockSend
-      //           // Query
-      //           .mockResolvedValueOnce(undefined)
-      //           // TransactWrite
-      //           .mockImplementationOnce(() => {
-      //             throw new TransactionCanceledException({
-      //               message: "MockMessage",
-      //               CancellationReasons: [
-      //                 { Code: "None" },
-      //                 { Code: "ConditionalCheckFailed" },
-      //                 { Code: "ConditionalCheckFailed" }
-      //               ],
-      //               $metadata: {}
-      //             });
-      //           });
-      //       });
+      describe("will throw an error if it fails to delete the old denormalized records", () => {
+        beforeEach(() => {
+          mockSend
+            // Query
+            .mockResolvedValueOnce(undefined)
+            // TransactWrite
+            .mockImplementationOnce(() => {
+              throw new TransactionCanceledException({
+                message: "MockMessage",
+                CancellationReasons: [
+                  { Code: "None" },
+                  { Code: "ConditionalCheckFailed" }
+                ],
+                $metadata: {}
+              });
+            });
+        });
 
-      //       const operationSharedAssertions = (e: any): void => {
-      //         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-      //         expect(e.errors).toEqual([
-      //           new ConditionalCheckFailedError(
-      //             'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Pet#123","SK":"Person"}'
-      //           ),
-      //           new ConditionalCheckFailedError(
-      //             'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Person#001","SK":"Pet#123"}'
-      //           )
-      //         ]);
-      //         expect(mockSend.mock.calls).toEqual([
-      //           [{ name: "QueryCommand" }],
-      //           [{ name: "TransactWriteCommand" }]
-      //         ]);
-      //       };
+        const operationSharedAssertions = (e: any): void => {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Organization#001","SK":"Employee#123"}'
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+        };
 
-      //       test.skip("static method", async () => {
-      //         expect.assertions(3);
+        test("static method", async () => {
+          expect.assertions(3);
 
-      //         try {
-      //           await Pet.update("123", {
-      //             name: "New Name",
-      //             ownerId: null
-      //           });
-      //         } catch (e) {
-      //           operationSharedAssertions(e);
-      //         }
-      //       });
+          try {
+            await Employee.update("123", {
+              name: "New Name",
+              organizationId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
+        });
 
-      //       test.skip("instance method", async () => {
-      //         expect.assertions(3);
+        test("instance method", async () => {
+          expect.assertions(3);
 
-      //         try {
-      //           await instance.update({
-      //             name: "New Name",
-      //             ownerId: null
-      //           });
-      //         } catch (e) {
-      //           operationSharedAssertions(e);
-      //         }
-      //       });
-      //     });
-      //   });
+          try {
+            await instance.update({
+              name: "New Name",
+              organizationId: null
+            });
+          } catch (e) {
+            operationSharedAssertions(e);
+          }
+        });
+      });
     });
   });
 
