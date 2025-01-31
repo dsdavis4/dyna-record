@@ -5495,7 +5495,6 @@ describe("Update", () => {
       });
     });
 
-    // TODO I ran this just as unit tests, need to run for real
     describe("will update the entity but not any denormalized links on the uni directional relationship", () => {
       const dbOperationAssertions = (): void => {
         expect(mockSend.mock.calls).toEqual([
