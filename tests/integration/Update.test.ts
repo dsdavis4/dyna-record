@@ -4802,123 +4802,123 @@ describe("Update", () => {
         mockTransactGetItems.mockReset();
       });
 
-      //   describe("will update the entity and its denormalized records", () => {
-      //     const dbOperationAssertions = (): void => {
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "QueryCommand" }],
-      //         [{ name: "TransactWriteCommand" }]
-      //       ]);
-      //       expect(mockedQueryCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TableName: "mock-table",
-      //             KeyConditionExpression: "#PK = :PK2",
-      //             ExpressionAttributeNames: {
-      //               "#PK": "PK",
-      //               "#Type": "Type"
-      //             },
-      //             ExpressionAttributeValues: {
-      //               ":PK2": "Pet#123",
-      //               ":Type1": "Pet"
-      //             },
-      //             FilterExpression: "#Type IN (:Type1)"
-      //           }
-      //         ]
-      //       ]);
-      //       expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      //       expect(mockTransactWriteCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TransactItems: [
-      //               {
-      //                 // Update the Pet
-      //                 Update: {
-      //                   TableName: "mock-table",
-      //                   Key: {
-      //                     PK: "Pet#123",
-      //                     SK: "Pet"
-      //                   },
-      //                   ConditionExpression: "attribute_exists(PK)",
-      //                   ExpressionAttributeNames: {
-      //                     "#Name": "Name",
-      //                     "#UpdatedAt": "UpdatedAt"
-      //                   },
-      //                   ExpressionAttributeValues: {
-      //                     ":Name": "Fido",
-      //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-      //                   },
-      //                   UpdateExpression:
-      //                     "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
-      //                 }
-      //               },
-      //               {
-      //                 // Update the Pet's denormalized records in associated partition
-      //                 Update: {
-      //                   TableName: "mock-table",
-      //                   Key: {
-      //                     PK: "Person#001",
-      //                     SK: "Pet#123"
-      //                   },
-      //                   ConditionExpression: "attribute_exists(PK)",
-      //                   ExpressionAttributeNames: {
-      //                     "#Name": "Name",
-      //                     "#UpdatedAt": "UpdatedAt"
-      //                   },
-      //                   ExpressionAttributeValues: {
-      //                     ":Name": "Fido",
-      //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-      //                   },
-      //                   UpdateExpression:
-      //                     "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
-      //                 }
-      //               }
-      //             ]
-      //           }
-      //         ]
-      //       ]);
-      //     };
+      describe("will update the entity and its denormalized records", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Employee#123",
+                  ":Type1": "Employee"
+                },
+                FilterExpression: "#Type IN (:Type1)"
+              }
+            ]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    // Update the Employee
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Employee#123",
+                        SK: "Employee"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "Testing",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
+                    }
+                  },
+                  {
+                    // Update the Employee's denormalized records in associated partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Organization#001",
+                        SK: "Employee#123"
+                      },
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Name": "Name",
+                        "#UpdatedAt": "UpdatedAt"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Name": "Testing",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      },
+                      UpdateExpression:
+                        "SET #Name = :Name, #UpdatedAt = :UpdatedAt"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(5);
+        test("static method", async () => {
+          expect.assertions(5);
 
-      //       expect(
-      //         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-      //         await Pet.update("123", {
-      //           name: "Fido"
-      //         })
-      //       ).toBeUndefined();
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Employee.update("123", {
+              name: "Testing"
+            })
+          ).toBeUndefined();
 
-      //       dbOperationAssertions();
-      //     });
+          dbOperationAssertions();
+        });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(7);
+        test("instance method", async () => {
+          expect.assertions(7);
 
-      //       const updatedInstance = await instance.update({
-      //         name: "Fido"
-      //       });
+          const updatedInstance = await instance.update({
+            name: "Testing"
+          });
 
-      //       expect(updatedInstance).toEqual({
-      //         ...instance,
-      //         name: "Fido",
-      //         updatedAt: new Date("2023-10-16T03:31:35.918Z")
-      //       });
-      //       expect(updatedInstance).toBeInstanceOf(Pet);
-      //       // Original instance is not mutated
-      //       expect(instance).toEqual({
-      //         pk: pet.PK,
-      //         sk: pet.SK,
-      //         id: pet.Id,
-      //         type: pet.Type,
-      //         name: pet.Name,
-      //         ownerId: "001",
-      //         createdAt: new Date(pet.CreatedAt),
-      //         updatedAt: new Date(pet.UpdatedAt)
-      //       });
+          expect(updatedInstance).toEqual({
+            ...instance,
+            name: "Testing",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(Employee);
+          // Original instance is not mutated
+          expect(instance).toEqual({
+            pk: employee.PK,
+            sk: employee.SK,
+            id: employee.Id,
+            type: employee.Type,
+            name: employee.Name,
+            organizationId: "001",
+            createdAt: new Date(employee.CreatedAt),
+            updatedAt: new Date(employee.UpdatedAt)
+          });
 
-      //       dbOperationAssertions();
-      //     });
-      //   });
+          dbOperationAssertions();
+        });
+      });
 
       //   describe("when a foreign key is updated", () => {
       //     describe("will update the foreign key, delete the old denormalized link and create a new one if the entity being associated with exists", () => {
