@@ -4375,506 +4375,476 @@ describe("Update", () => {
         });
       });
 
-      // describe("when a foreign key is updated", () => {
-      //   describe("will update the foreign key if the entity being associated with exists", () => {
-      //     const dbOperationAssertions = (): void => {
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "TransactGetCommand" }],
-      //         [{ name: "QueryCommand" }],
-      //         [{ name: "TransactWriteCommand" }]
-      //       ]);
-      //       expect(mockedQueryCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TableName: "mock-table",
-      //             KeyConditionExpression: "#PK = :PK2",
-      //             ExpressionAttributeNames: {
-      //               "#PK": "PK",
-      //               "#Type": "Type"
-      //             },
-      //             ExpressionAttributeValues: {
-      //               ":PK2": "Pet#123",
-      //               ":Type1": "Pet"
-      //             },
-      //             FilterExpression: "#Type IN (:Type1)"
-      //           }
-      //         ]
-      //       ]);
-      //       expect(mockTransactGetCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TransactItems: [
-      //               {
-      //                 Get: {
-      //                   TableName: "mock-table",
-      //                   Key: { PK: "Person#456", SK: "Person" }
-      //                 }
-      //               }
-      //             ]
-      //           }
-      //         ]
-      //       ]);
-      //       expect(mockTransactWriteCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TransactItems: [
-      //               // Update the pet and add owner id
-      //               {
-      //                 Update: {
-      //                   TableName: "mock-table",
-      //                   Key: {
-      //                     PK: "Pet#123",
-      //                     SK: "Pet"
-      //                   },
-      //                   UpdateExpression:
-      //                     "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
-      //                   ConditionExpression: "attribute_exists(PK)",
-      //                   ExpressionAttributeNames: {
-      //                     "#Name": "Name",
-      //                     "#OwnerId": "OwnerId",
-      //                     "#UpdatedAt": "UpdatedAt"
-      //                   },
-      //                   ExpressionAttributeValues: {
-      //                     ":Name": "Fido",
-      //                     ":OwnerId": "456",
-      //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-      //                   }
-      //                 }
-      //               },
-      //               // Check that the Person (owner) entity exists
-      //               {
-      //                 ConditionCheck: {
-      //                   TableName: "mock-table",
-      //                   ConditionExpression: "attribute_exists(PK)",
-      //                   Key: {
-      //                     PK: "Person#456",
-      //                     SK: "Person"
-      //                   }
-      //                 }
-      //               },
-      //               // Denormalize the Pet to Person partition
-      //               {
-      //                 Put: {
-      //                   TableName: "mock-table",
-      //                   ConditionExpression: "attribute_not_exists(PK)",
-      //                   Item: {
-      //                     PK: "Person#456",
-      //                     SK: "Pet#123",
-      //                     Id: "123",
-      //                     Type: "Pet",
-      //                     AdoptedDate: undefined,
-      //                     Name: "Fido",
-      //                     OwnerId: "456",
-      //                     CreatedAt: "2023-01-01T00:00:00.000Z",
-      //                     UpdatedAt: "2023-10-16T03:31:35.918Z"
-      //                   }
-      //                 }
-      //               },
-      //               // Denormalize the Person to Pet partition
-      //               {
-      //                 Put: {
-      //                   TableName: "mock-table",
-      //                   ConditionExpression: "attribute_not_exists(PK)",
-      //                   Item: {
-      //                     PK: "Pet#123",
-      //                     SK: "Person",
-      //                     Id: "456",
-      //                     Type: "Person",
-      //                     Name: "Mock Person",
-      //                     CreatedAt: "2023-01-01T00:00:00.000Z",
-      //                     UpdatedAt: "2023-01-02T00:00:00.000Z"
-      //                   }
-      //                 }
-      //               }
-      //             ]
-      //           }
-      //         ]
-      //       ]);
-      //     };
+      describe("when a foreign key is updated", () => {
+        describe("will update the foreign key if the entity being associated with exists", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Employee#123",
+                    ":Type1": "Employee"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    // Update the Employee and add owner id
+                    {
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Employee#123",
+                          SK: "Employee"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #OrganizationId = :OrganizationId, #UpdatedAt = :UpdatedAt",
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OrganizationId": "OrganizationId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "Testing",
+                          ":OrganizationId": "456",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    },
+                    // Check that the Organization (owner) entity exists
+                    {
+                      ConditionCheck: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_exists(PK)",
+                        Key: {
+                          PK: "Organization#456",
+                          SK: "Organization"
+                        }
+                      }
+                    },
+                    // Denormalize the Employee to Organization partition
+                    {
+                      Put: {
+                        TableName: "mock-table",
+                        ConditionExpression: "attribute_not_exists(PK)",
+                        Item: {
+                          PK: "Organization#456",
+                          SK: "Employee#123",
+                          Id: "123",
+                          Type: "Employee",
+                          AdoptedDate: undefined,
+                          Name: "Testing",
+                          OrganizationId: "456",
+                          CreatedAt: "2023-01-01T00:00:00.000Z",
+                          UpdatedAt: "2023-10-16T03:31:35.918Z"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(5);
+          test("static method", async () => {
+            expect.assertions(5);
 
-      //       expect(
-      //         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-      //         await Pet.update("123", {
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         })
-      //       ).toBeUndefined();
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Employee.update("123", {
+                name: "Testing",
+                organizationId: "456"
+              })
+            ).toBeUndefined();
 
-      //       dbOperationAssertions();
-      //     });
+            dbOperationAssertions();
+          });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(7);
+          test("instance method", async () => {
+            expect.assertions(7);
 
-      //       const updatedInstance = await instance.update({
-      //         name: "Fido",
-      //         ownerId: "456"
-      //       });
+            const updatedInstance = await instance.update({
+              name: "Testing",
+              organizationId: "456"
+            });
 
-      //       expect(updatedInstance).toEqual({
-      //         ...instance,
-      //         name: "Fido",
-      //         ownerId: "456",
-      //         updatedAt: new Date("2023-10-16T03:31:35.918Z")
-      //       });
-      //       expect(updatedInstance).toBeInstanceOf(Pet);
-      //       // Original instance is not mutated
-      //       expect(instance).toEqual({
-      //         pk: pet.PK,
-      //         sk: pet.SK,
-      //         id: pet.Id,
-      //         type: pet.Type,
-      //         name: pet.Name,
-      //         ownerId: undefined,
-      //         createdAt: new Date(pet.CreatedAt),
-      //         updatedAt: new Date(pet.UpdatedAt)
-      //       });
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "Testing",
+              organizationId: "456",
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Employee);
+            // Original instance is not mutated
+            expect(instance).toEqual({
+              pk: employee.PK,
+              sk: employee.SK,
+              id: employee.Id,
+              type: employee.Type,
+              name: employee.Name,
+              ownerId: undefined,
+              createdAt: new Date(employee.CreatedAt),
+              updatedAt: new Date(employee.UpdatedAt)
+            });
 
-      //       dbOperationAssertions();
-      //     });
-      //   });
+            dbOperationAssertions();
+          });
+        });
 
-      //   describe("will throw an error if the entity being updated does not exist at pre fetch", () => {
-      //     const operationSharedAssertions = (e: any): void => {
-      //       expect(e).toEqual(new NotFoundError("Pet does not exist: 123"));
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "TransactGetCommand" }],
-      //         [{ name: "QueryCommand" }]
-      //       ]);
-      //     };
+        //   describe("will throw an error if the entity being updated does not exist at pre fetch", () => {
+        //     const operationSharedAssertions = (e: any): void => {
+        //       expect(e).toEqual(new NotFoundError("Pet does not exist: 123"));
+        //       expect(mockSend.mock.calls).toEqual([
+        //         [{ name: "TransactGetCommand" }],
+        //         [{ name: "QueryCommand" }]
+        //       ]);
+        //     };
 
-      //     beforeEach(() => {
-      //       mockQuery.mockResolvedValueOnce({ Items: [] });
-      //       mockSend
-      //         // TransactGet
-      //         .mockResolvedValueOnce(undefined)
-      //         // Query
-      //         .mockResolvedValueOnce(undefined)
-      //         // TransactWrite
-      //         .mockImplementationOnce(() => {
-      //           throw new TransactionCanceledException({
-      //             message: "MockMessage",
-      //             CancellationReasons: [
-      //               { Code: "ConditionalCheckFailed" },
-      //               { Code: "None" },
-      //               { Code: "None" },
-      //               { Code: "None" }
-      //             ],
-      //             $metadata: {}
-      //           });
-      //         });
-      //     });
+        //     beforeEach(() => {
+        //       mockQuery.mockResolvedValueOnce({ Items: [] });
+        //       mockSend
+        //         // TransactGet
+        //         .mockResolvedValueOnce(undefined)
+        //         // Query
+        //         .mockResolvedValueOnce(undefined)
+        //         // TransactWrite
+        //         .mockImplementationOnce(() => {
+        //           throw new TransactionCanceledException({
+        //             message: "MockMessage",
+        //             CancellationReasons: [
+        //               { Code: "ConditionalCheckFailed" },
+        //               { Code: "None" },
+        //               { Code: "None" },
+        //               { Code: "None" }
+        //             ],
+        //             $metadata: {}
+        //           });
+        //         });
+        //     });
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(2);
+        //     test.skip("static method", async () => {
+        //       expect.assertions(2);
 
-      //       try {
-      //         await Pet.update("123", {
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
+        //       try {
+        //         await Pet.update("123", {
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(2);
+        //     test.skip("instance method", async () => {
+        //       expect.assertions(2);
 
-      //       try {
-      //         await instance.update({
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
-      //   });
+        //       try {
+        //         await instance.update({
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
+        //   });
 
-      //   describe("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", () => {
-      //     const operationSharedAssertions = (e: any): void => {
-      //       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-      //       expect(e.errors).toEqual([
-      //         new ConditionalCheckFailedError(
-      //           "ConditionalCheckFailed: Pet with ID '123' does not exist"
-      //         )
-      //       ]);
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "TransactGetCommand" }],
-      //         [{ name: "QueryCommand" }],
-      //         [{ name: "TransactWriteCommand" }]
-      //       ]);
-      //     };
+        //   describe("will throw an error if the entity being updated existed at pre fetch but was deleted before the transaction was committed", () => {
+        //     const operationSharedAssertions = (e: any): void => {
+        //       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        //       expect(e.errors).toEqual([
+        //         new ConditionalCheckFailedError(
+        //           "ConditionalCheckFailed: Pet with ID '123' does not exist"
+        //         )
+        //       ]);
+        //       expect(mockSend.mock.calls).toEqual([
+        //         [{ name: "TransactGetCommand" }],
+        //         [{ name: "QueryCommand" }],
+        //         [{ name: "TransactWriteCommand" }]
+        //       ]);
+        //     };
 
-      //     beforeEach(() => {
-      //       mockSend
-      //         // TransactGet
-      //         .mockResolvedValueOnce(undefined)
-      //         // Query
-      //         .mockResolvedValueOnce(undefined)
-      //         // TransactWrite
-      //         .mockImplementationOnce(() => {
-      //           throw new TransactionCanceledException({
-      //             message: "MockMessage",
-      //             CancellationReasons: [
-      //               { Code: "ConditionalCheckFailed" },
-      //               { Code: "None" },
-      //               { Code: "None" },
-      //               { Code: "None" }
-      //             ],
-      //             $metadata: {}
-      //           });
-      //         });
-      //     });
+        //     beforeEach(() => {
+        //       mockSend
+        //         // TransactGet
+        //         .mockResolvedValueOnce(undefined)
+        //         // Query
+        //         .mockResolvedValueOnce(undefined)
+        //         // TransactWrite
+        //         .mockImplementationOnce(() => {
+        //           throw new TransactionCanceledException({
+        //             message: "MockMessage",
+        //             CancellationReasons: [
+        //               { Code: "ConditionalCheckFailed" },
+        //               { Code: "None" },
+        //               { Code: "None" },
+        //               { Code: "None" }
+        //             ],
+        //             $metadata: {}
+        //           });
+        //         });
+        //     });
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(3);
+        //     test.skip("static method", async () => {
+        //       expect.assertions(3);
 
-      //       try {
-      //         await Pet.update("123", {
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
+        //       try {
+        //         await Pet.update("123", {
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(3);
+        //     test.skip("instance method", async () => {
+        //       expect.assertions(3);
 
-      //       try {
-      //         await instance.update({
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
-      //   });
+        //       try {
+        //         await instance.update({
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
+        //   });
 
-      //   describe("will throw an error if the entity being associated with does not exist at pre fetch", () => {
-      //     const operationSharedAssertions = (e: any): void => {
-      //       expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "TransactGetCommand" }],
-      //         [{ name: "QueryCommand" }]
-      //       ]);
-      //     };
+        //   describe("will throw an error if the entity being associated with does not exist at pre fetch", () => {
+        //     const operationSharedAssertions = (e: any): void => {
+        //       expect(e).toEqual(new NotFoundError("Person does not exist: 456"));
+        //       expect(mockSend.mock.calls).toEqual([
+        //         [{ name: "TransactGetCommand" }],
+        //         [{ name: "QueryCommand" }]
+        //       ]);
+        //     };
 
-      //     beforeEach(() => {
-      //       mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist at pre fetch
+        //     beforeEach(() => {
+        //       mockTransactGetItems.mockResolvedValueOnce({ Responses: [] }); // Entity does not exist at pre fetch
 
-      //       mockSend
-      //         .mockResolvedValueOnce(undefined)
-      //         .mockReturnValueOnce(undefined)
-      //         .mockImplementationOnce(() => {
-      //           throw new TransactionCanceledException({
-      //             message: "MockMessage",
-      //             CancellationReasons: [
-      //               { Code: "None" },
-      //               { Code: "ConditionalCheckFailed" },
-      //               { Code: "None" },
-      //               { Code: "None" }
-      //             ],
-      //             $metadata: {}
-      //           });
-      //         });
-      //     });
+        //       mockSend
+        //         .mockResolvedValueOnce(undefined)
+        //         .mockReturnValueOnce(undefined)
+        //         .mockImplementationOnce(() => {
+        //           throw new TransactionCanceledException({
+        //             message: "MockMessage",
+        //             CancellationReasons: [
+        //               { Code: "None" },
+        //               { Code: "ConditionalCheckFailed" },
+        //               { Code: "None" },
+        //               { Code: "None" }
+        //             ],
+        //             $metadata: {}
+        //           });
+        //         });
+        //     });
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(2);
+        //     test.skip("static method", async () => {
+        //       expect.assertions(2);
 
-      //       try {
-      //         await Pet.update("123", {
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
+        //       try {
+        //         await Pet.update("123", {
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(2);
+        //     test.skip("instance method", async () => {
+        //       expect.assertions(2);
 
-      //       try {
-      //         await instance.update({
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
-      //   });
+        //       try {
+        //         await instance.update({
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
+        //   });
 
-      //   describe("will throw an error if the entity being associated with existed when preFetched but was deleted before the transaction was committed (causing transaction error)", () => {
-      //     const operationSharedAssertions = (e: any): void => {
-      //       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-      //       expect(e.errors).toEqual([
-      //         new ConditionalCheckFailedError(
-      //           "ConditionalCheckFailed: Person with ID '456' does not exist"
-      //         )
-      //       ]);
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "TransactGetCommand" }],
-      //         [{ name: "QueryCommand" }],
-      //         [{ name: "TransactWriteCommand" }]
-      //       ]);
-      //     };
+        //   describe("will throw an error if the entity being associated with existed when preFetched but was deleted before the transaction was committed (causing transaction error)", () => {
+        //     const operationSharedAssertions = (e: any): void => {
+        //       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        //       expect(e.errors).toEqual([
+        //         new ConditionalCheckFailedError(
+        //           "ConditionalCheckFailed: Person with ID '456' does not exist"
+        //         )
+        //       ]);
+        //       expect(mockSend.mock.calls).toEqual([
+        //         [{ name: "TransactGetCommand" }],
+        //         [{ name: "QueryCommand" }],
+        //         [{ name: "TransactWriteCommand" }]
+        //       ]);
+        //     };
 
-      //     beforeEach(() => {
-      //       mockSend
-      //         .mockResolvedValueOnce(undefined)
-      //         .mockReturnValueOnce(undefined)
-      //         .mockImplementationOnce(() => {
-      //           throw new TransactionCanceledException({
-      //             message: "MockMessage",
-      //             CancellationReasons: [
-      //               { Code: "None" },
-      //               { Code: "ConditionalCheckFailed" },
-      //               { Code: "None" },
-      //               { Code: "None" }
-      //             ],
-      //             $metadata: {}
-      //           });
-      //         });
-      //     });
+        //     beforeEach(() => {
+        //       mockSend
+        //         .mockResolvedValueOnce(undefined)
+        //         .mockReturnValueOnce(undefined)
+        //         .mockImplementationOnce(() => {
+        //           throw new TransactionCanceledException({
+        //             message: "MockMessage",
+        //             CancellationReasons: [
+        //               { Code: "None" },
+        //               { Code: "ConditionalCheckFailed" },
+        //               { Code: "None" },
+        //               { Code: "None" }
+        //             ],
+        //             $metadata: {}
+        //           });
+        //         });
+        //     });
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(3);
+        //     test.skip("static method", async () => {
+        //       expect.assertions(3);
 
-      //       try {
-      //         await Pet.update("123", {
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
+        //       try {
+        //         await Pet.update("123", {
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(3);
+        //     test.skip("instance method", async () => {
+        //       expect.assertions(3);
 
-      //       try {
-      //         await instance.update({
-      //           name: "Fido",
-      //           ownerId: "456"
-      //         });
-      //       } catch (e: any) {
-      //         operationSharedAssertions(e);
-      //       }
-      //     });
-      //   });
+        //       try {
+        //         await instance.update({
+        //           name: "Fido",
+        //           ownerId: "456"
+        //         });
+        //       } catch (e: any) {
+        //         operationSharedAssertions(e);
+        //       }
+        //     });
+        //   });
 
-      //   describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
-      //     const dbOperationAssertions = (): void => {
-      //       expect(mockSend.mock.calls).toEqual([
-      //         [{ name: "QueryCommand" }],
-      //         [{ name: "TransactWriteCommand" }]
-      //       ]);
-      //       expect(mockedQueryCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TableName: "mock-table",
-      //             KeyConditionExpression: "#PK = :PK2",
-      //             ExpressionAttributeNames: {
-      //               "#PK": "PK",
-      //               "#Type": "Type"
-      //             },
-      //             ExpressionAttributeValues: {
-      //               ":PK2": "Pet#123",
-      //               ":Type1": "Pet"
-      //             },
-      //             FilterExpression: "#Type IN (:Type1)"
-      //           }
-      //         ]
-      //       ]);
-      //       // Don't get owner (Person) because its being deleted
-      //       expect(mockTransactGetCommand.mock.calls).toEqual([]);
-      //       // Does not include removing a denormalized link because it doesn't exist
-      //       expect(mockTransactWriteCommand.mock.calls).toEqual([
-      //         [
-      //           {
-      //             TransactItems: [
-      //               {
-      //                 Update: {
-      //                   TableName: "mock-table",
-      //                   Key: {
-      //                     PK: "Pet#123",
-      //                     SK: "Pet"
-      //                   },
-      //                   ConditionExpression: "attribute_exists(PK)",
-      //                   ExpressionAttributeNames: {
-      //                     "#Name": "Name",
-      //                     "#OwnerId": "OwnerId",
-      //                     "#UpdatedAt": "UpdatedAt"
-      //                   },
-      //                   ExpressionAttributeValues: {
-      //                     ":Name": "New Name",
-      //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-      //                   },
-      //                   UpdateExpression:
-      //                     "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-      //                 }
-      //               }
-      //             ]
-      //           }
-      //         ]
-      //       ]);
-      //     };
+        //   describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
+        //     const dbOperationAssertions = (): void => {
+        //       expect(mockSend.mock.calls).toEqual([
+        //         [{ name: "QueryCommand" }],
+        //         [{ name: "TransactWriteCommand" }]
+        //       ]);
+        //       expect(mockedQueryCommand.mock.calls).toEqual([
+        //         [
+        //           {
+        //             TableName: "mock-table",
+        //             KeyConditionExpression: "#PK = :PK2",
+        //             ExpressionAttributeNames: {
+        //               "#PK": "PK",
+        //               "#Type": "Type"
+        //             },
+        //             ExpressionAttributeValues: {
+        //               ":PK2": "Pet#123",
+        //               ":Type1": "Pet"
+        //             },
+        //             FilterExpression: "#Type IN (:Type1)"
+        //           }
+        //         ]
+        //       ]);
+        //       // Don't get owner (Person) because its being deleted
+        //       expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        //       // Does not include removing a denormalized link because it doesn't exist
+        //       expect(mockTransactWriteCommand.mock.calls).toEqual([
+        //         [
+        //           {
+        //             TransactItems: [
+        //               {
+        //                 Update: {
+        //                   TableName: "mock-table",
+        //                   Key: {
+        //                     PK: "Pet#123",
+        //                     SK: "Pet"
+        //                   },
+        //                   ConditionExpression: "attribute_exists(PK)",
+        //                   ExpressionAttributeNames: {
+        //                     "#Name": "Name",
+        //                     "#OwnerId": "OwnerId",
+        //                     "#UpdatedAt": "UpdatedAt"
+        //                   },
+        //                   ExpressionAttributeValues: {
+        //                     ":Name": "New Name",
+        //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+        //                   },
+        //                   UpdateExpression:
+        //                     "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
+        //                 }
+        //               }
+        //             ]
+        //           }
+        //         ]
+        //       ]);
+        //     };
 
-      //     test.skip("static method", async () => {
-      //       expect.assertions(5);
+        //     test.skip("static method", async () => {
+        //       expect.assertions(5);
 
-      //       expect(
-      //         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-      //         await Pet.update("123", {
-      //           name: "New Name",
-      //           ownerId: null
-      //         })
-      //       ).toBeUndefined();
+        //       expect(
+        //         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        //         await Pet.update("123", {
+        //           name: "New Name",
+        //           ownerId: null
+        //         })
+        //       ).toBeUndefined();
 
-      //       dbOperationAssertions();
-      //     });
+        //       dbOperationAssertions();
+        //     });
 
-      //     test.skip("instance method", async () => {
-      //       expect.assertions(7);
+        //     test.skip("instance method", async () => {
+        //       expect.assertions(7);
 
-      //       const updatedInstance = await instance.update({
-      //         name: "New Name",
-      //         ownerId: null
-      //       });
+        //       const updatedInstance = await instance.update({
+        //         name: "New Name",
+        //         ownerId: null
+        //       });
 
-      //       expect(updatedInstance).toEqual({
-      //         ...instance,
-      //         name: "New Name",
-      //         ownerId: undefined,
-      //         updatedAt: new Date("2023-10-16T03:31:35.918Z")
-      //       });
-      //       expect(updatedInstance).toBeInstanceOf(Pet);
-      //       expect(instance).toEqual({
-      //         pk: pet.PK,
-      //         sk: pet.SK,
-      //         id: pet.Id,
-      //         type: pet.Type,
-      //         name: pet.Name,
-      //         ownerId: undefined,
-      //         createdAt: new Date(pet.CreatedAt),
-      //         updatedAt: new Date(pet.UpdatedAt)
-      //       });
+        //       expect(updatedInstance).toEqual({
+        //         ...instance,
+        //         name: "New Name",
+        //         ownerId: undefined,
+        //         updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        //       });
+        //       expect(updatedInstance).toBeInstanceOf(Pet);
+        //       expect(instance).toEqual({
+        //         pk: pet.PK,
+        //         sk: pet.SK,
+        //         id: pet.Id,
+        //         type: pet.Type,
+        //         name: pet.Name,
+        //         ownerId: undefined,
+        //         createdAt: new Date(pet.CreatedAt),
+        //         updatedAt: new Date(pet.UpdatedAt)
+        //       });
 
-      //       dbOperationAssertions();
-      //     });
-      //   });
-      // });
+        //       dbOperationAssertions();
+        //     });
+        //   });
+      });
     });
 
     // describe("when the entity belongs to another another entity (Adds delete transaction for deleting denormalized records from previous related entities partition)", () => {
