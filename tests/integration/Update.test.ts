@@ -4677,106 +4677,106 @@ describe("Update", () => {
           });
         });
 
-        //   describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
-        //     const dbOperationAssertions = (): void => {
-        //       expect(mockSend.mock.calls).toEqual([
-        //         [{ name: "QueryCommand" }],
-        //         [{ name: "TransactWriteCommand" }]
-        //       ]);
-        //       expect(mockedQueryCommand.mock.calls).toEqual([
-        //         [
-        //           {
-        //             TableName: "mock-table",
-        //             KeyConditionExpression: "#PK = :PK2",
-        //             ExpressionAttributeNames: {
-        //               "#PK": "PK",
-        //               "#Type": "Type"
-        //             },
-        //             ExpressionAttributeValues: {
-        //               ":PK2": "Pet#123",
-        //               ":Type1": "Pet"
-        //             },
-        //             FilterExpression: "#Type IN (:Type1)"
-        //           }
-        //         ]
-        //       ]);
-        //       // Don't get owner (Person) because its being deleted
-        //       expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        //       // Does not include removing a denormalized link because it doesn't exist
-        //       expect(mockTransactWriteCommand.mock.calls).toEqual([
-        //         [
-        //           {
-        //             TransactItems: [
-        //               {
-        //                 Update: {
-        //                   TableName: "mock-table",
-        //                   Key: {
-        //                     PK: "Pet#123",
-        //                     SK: "Pet"
-        //                   },
-        //                   ConditionExpression: "attribute_exists(PK)",
-        //                   ExpressionAttributeNames: {
-        //                     "#Name": "Name",
-        //                     "#OwnerId": "OwnerId",
-        //                     "#UpdatedAt": "UpdatedAt"
-        //                   },
-        //                   ExpressionAttributeValues: {
-        //                     ":Name": "New Name",
-        //                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-        //                   },
-        //                   UpdateExpression:
-        //                     "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OwnerId"
-        //                 }
-        //               }
-        //             ]
-        //           }
-        //         ]
-        //       ]);
-        //     };
+        describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
+          const dbOperationAssertions = (): void => {
+            expect(mockSend.mock.calls).toEqual([
+              [{ name: "QueryCommand" }],
+              [{ name: "TransactWriteCommand" }]
+            ]);
+            expect(mockedQueryCommand.mock.calls).toEqual([
+              [
+                {
+                  TableName: "mock-table",
+                  KeyConditionExpression: "#PK = :PK2",
+                  ExpressionAttributeNames: {
+                    "#PK": "PK",
+                    "#Type": "Type"
+                  },
+                  ExpressionAttributeValues: {
+                    ":PK2": "Employee#123",
+                    ":Type1": "Employee"
+                  },
+                  FilterExpression: "#Type IN (:Type1)"
+                }
+              ]
+            ]);
+            // Don't get owner (Organization) because its a unidirectional relationship
+            expect(mockTransactGetCommand.mock.calls).toEqual([]);
+            // Does not include removing a denormalized link because it doesn't exist
+            expect(mockTransactWriteCommand.mock.calls).toEqual([
+              [
+                {
+                  TransactItems: [
+                    {
+                      Update: {
+                        TableName: "mock-table",
+                        Key: {
+                          PK: "Employee#123",
+                          SK: "Employee"
+                        },
+                        ConditionExpression: "attribute_exists(PK)",
+                        ExpressionAttributeNames: {
+                          "#Name": "Name",
+                          "#OrganizationId": "OrganizationId",
+                          "#UpdatedAt": "UpdatedAt"
+                        },
+                        ExpressionAttributeValues: {
+                          ":Name": "New Name",
+                          ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                        },
+                        UpdateExpression:
+                          "SET #Name = :Name, #UpdatedAt = :UpdatedAt REMOVE #OrganizationId"
+                      }
+                    }
+                  ]
+                }
+              ]
+            ]);
+          };
 
-        //     test.skip("static method", async () => {
-        //       expect.assertions(5);
+          test("static method", async () => {
+            expect.assertions(5);
 
-        //       expect(
-        //         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-        //         await Pet.update("123", {
-        //           name: "New Name",
-        //           ownerId: null
-        //         })
-        //       ).toBeUndefined();
+            expect(
+              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+              await Employee.update("123", {
+                name: "New Name",
+                organizationId: null
+              })
+            ).toBeUndefined();
 
-        //       dbOperationAssertions();
-        //     });
+            dbOperationAssertions();
+          });
 
-        //     test.skip("instance method", async () => {
-        //       expect.assertions(7);
+          test("instance method", async () => {
+            expect.assertions(7);
 
-        //       const updatedInstance = await instance.update({
-        //         name: "New Name",
-        //         ownerId: null
-        //       });
+            const updatedInstance = await instance.update({
+              name: "New Name",
+              organizationId: null
+            });
 
-        //       expect(updatedInstance).toEqual({
-        //         ...instance,
-        //         name: "New Name",
-        //         ownerId: undefined,
-        //         updatedAt: new Date("2023-10-16T03:31:35.918Z")
-        //       });
-        //       expect(updatedInstance).toBeInstanceOf(Pet);
-        //       expect(instance).toEqual({
-        //         pk: pet.PK,
-        //         sk: pet.SK,
-        //         id: pet.Id,
-        //         type: pet.Type,
-        //         name: pet.Name,
-        //         ownerId: undefined,
-        //         createdAt: new Date(pet.CreatedAt),
-        //         updatedAt: new Date(pet.UpdatedAt)
-        //       });
+            expect(updatedInstance).toEqual({
+              ...instance,
+              name: "New Name",
+              organizationId: undefined,
+              updatedAt: new Date("2023-10-16T03:31:35.918Z")
+            });
+            expect(updatedInstance).toBeInstanceOf(Employee);
+            expect(instance).toEqual({
+              pk: employee.PK,
+              sk: employee.SK,
+              id: employee.Id,
+              type: employee.Type,
+              name: employee.Name,
+              ownerId: undefined,
+              createdAt: new Date(employee.CreatedAt),
+              updatedAt: new Date(employee.UpdatedAt)
+            });
 
-        //       dbOperationAssertions();
-        //     });
-        //   });
+            dbOperationAssertions();
+          });
+        });
       });
     });
 
