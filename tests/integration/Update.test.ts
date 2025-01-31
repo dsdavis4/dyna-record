@@ -4251,24 +4251,9 @@ describe("Update", () => {
       });
 
       beforeEach(() => {
-        // TODO delete if not used
-        // const person: MockTableEntityTableItem<Person> = {
-        //   PK: "Person#456",
-        //   SK: "Person",
-        //   Id: "456",
-        //   Type: "Person",
-        //   Name: "Mock Person",
-        //   CreatedAt: "2023-01-01T00:00:00.000Z",
-        //   UpdatedAt: "2023-01-02T00:00:00.000Z"
-        // };
-
         mockQuery.mockResolvedValue({
           Items: [employee]
         });
-        // TODO delete if not used
-        // mockTransactGetItems.mockResolvedValue({
-        //   Responses: [{ Item: person }]
-        // });
 
         jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
