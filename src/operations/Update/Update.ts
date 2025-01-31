@@ -508,6 +508,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
 
     if (isBelongsToRelationship(relMeta)) {
+      // TODO make sure there is a unit test for this not being called in unidrectional
       // Add denormalized record for new entity to self
       this.buildAddForeignEntityToSelfTransaction(
         updatedEntity,
@@ -647,13 +648,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       oldForeignKey
     );
 
-    this.transactionBuilder.addDelete(
-      {
-        TableName: this.tableMetadata.name,
-        Key: oldKeysToSelf
-      },
-      `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToSelf)}`
-    );
+    // OwnedByRelationships do not have a record to delete from  their own partition because its unidirectional
+    if (isBelongsToRelationship(relMeta)) {
+      // TODO make sure there is a unit test for this not being called in unidirectional
+      this.transactionBuilder.addDelete(
+        {
+          TableName: this.tableMetadata.name,
+          Key: oldKeysToSelf
+        },
+        `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToSelf)}`
+      );
+    }
 
     this.transactionBuilder.addDelete(
       {
