@@ -16,9 +16,9 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { isBelongsToRelationship } from "../../metadata/utils";
-import Metadata, {
+import type {
   OwnedByRelationship,
-  type BelongsToRelationship
+  BelongsToRelationship
 } from "../../metadata";
 
 /**
