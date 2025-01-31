@@ -30,7 +30,10 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { NotFoundError } from "../../errors";
-import { isBelongsToRelationship } from "../../metadata/utils";
+import {
+  isBelongsToRelationship,
+  isHasManyRelationship
+} from "../../metadata/utils";
 
 // TODO start here.. this morning I made is so that it iterate belongs to or owned by
 // On my first test it seemed to wrok but I need to to test
@@ -225,7 +228,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     belongsToRelFkAndMetas: BelongsToRelMetaAndKey[]
   ): Promise<Entity[]> {
-    const hasRelMetas = this.entityMetadata.hasRelationships;
+    const hasRelMetas = this.entityMetadata.hasRelationships.filter(
+      rel => !isHasManyRelationship(rel) || rel.uniDirectional !== true
+    );
 
     const { name: tableName } = this.tableMetadata;
     const transactionBuilder = new TransactGetBuilder();

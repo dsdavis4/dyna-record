@@ -14,6 +14,7 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
+  Organization,
   type Person,
   Pet,
   PhoneBook,
@@ -5463,6 +5464,129 @@ describe("Update", () => {
             operationSharedAssertions(e);
           }
         });
+      });
+    });
+  });
+
+  describe("an entity which has many of a uni directional relationship is updated", () => {
+    const organization: MockTableEntityTableItem<Organization> = {
+      PK: "Organization#123",
+      SK: "Organization",
+      Id: "123",
+      Type: "Organization",
+      Name: "Mock Organization",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Organization, {
+      pk: organization.PK as PartitionKey,
+      sk: organization.SK as SortKey,
+      id: organization.Id,
+      type: organization.Type,
+      name: organization.Name,
+      createdAt: new Date(organization.CreatedAt),
+      updatedAt: new Date(organization.UpdatedAt)
+    });
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [organization]
+      });
+    });
+
+    // TODO I ran this just as unit tests, need to run for real
+    describe("will update the entity but not any denormalized links on the uni directional relationship", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        // Does not prefetch unidirectional relationships
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Organization#123",
+                ":Type1": "Organization",
+                ":Type2": "User"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)"
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        // Does not update uni-directional relationships
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Organization#123", SK: "Organization" },
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "New Name",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Organization.update("123", {
+            name: "New Name"
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          name: "New Name"
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          name: "New Name",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Organization);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
       });
     });
   });
