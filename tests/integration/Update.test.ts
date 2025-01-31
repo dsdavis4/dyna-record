@@ -4677,66 +4677,6 @@ describe("Update", () => {
           });
         });
 
-        //   describe("will throw an error if the entity being associated with existed when preFetched but was deleted before the transaction was committed (causing transaction error)", () => {
-        //     const operationSharedAssertions = (e: any): void => {
-        //       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
-        //       expect(e.errors).toEqual([
-        //         new ConditionalCheckFailedError(
-        //           "ConditionalCheckFailed: Person with ID '456' does not exist"
-        //         )
-        //       ]);
-        //       expect(mockSend.mock.calls).toEqual([
-        //         [{ name: "TransactGetCommand" }],
-        //         [{ name: "QueryCommand" }],
-        //         [{ name: "TransactWriteCommand" }]
-        //       ]);
-        //     };
-
-        //     beforeEach(() => {
-        //       mockSend
-        //         .mockResolvedValueOnce(undefined)
-        //         .mockReturnValueOnce(undefined)
-        //         .mockImplementationOnce(() => {
-        //           throw new TransactionCanceledException({
-        //             message: "MockMessage",
-        //             CancellationReasons: [
-        //               { Code: "None" },
-        //               { Code: "ConditionalCheckFailed" },
-        //               { Code: "None" },
-        //               { Code: "None" }
-        //             ],
-        //             $metadata: {}
-        //           });
-        //         });
-        //     });
-
-        //     test.skip("static method", async () => {
-        //       expect.assertions(3);
-
-        //       try {
-        //         await Pet.update("123", {
-        //           name: "Fido",
-        //           ownerId: "456"
-        //         });
-        //       } catch (e: any) {
-        //         operationSharedAssertions(e);
-        //       }
-        //     });
-
-        //     test.skip("instance method", async () => {
-        //       expect.assertions(3);
-
-        //       try {
-        //         await instance.update({
-        //           name: "Fido",
-        //           ownerId: "456"
-        //         });
-        //       } catch (e: any) {
-        //         operationSharedAssertions(e);
-        //       }
-        //     });
-        //   });
-
         //   describe("will remove a nullable foreign key and delete the links for the associated entity", () => {
         //     const dbOperationAssertions = (): void => {
         //       expect(mockSend.mock.calls).toEqual([
