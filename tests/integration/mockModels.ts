@@ -319,6 +319,21 @@ class Organization extends MockTable {
     uniDirectional: true
   })
   public readonly employees: Employee[];
+
+  @HasMany(() => Founder, {
+    foreignKey: "organizationId",
+    uniDirectional: true
+  })
+  public readonly founders: Founder[];
+}
+
+@Entity
+class Founder extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute({ alias: "OrganizationId" })
+  public readonly organizationId: ForeignKey;
 }
 
 @Entity
@@ -489,6 +504,7 @@ export {
   UserWebsite,
   Desk,
   Employee,
+  Founder,
   // OtherTable exports
   OtherTable,
   Teacher,

@@ -11,7 +11,8 @@ import {
   type Website,
   type Address,
   Organization,
-  Employee
+  Employee,
+  Founder
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -890,16 +891,18 @@ describe("Delete", () => {
 
   describe("in a unidirectional has many relationship", () => {
     describe("deleting the owning entity", () => {
-      beforeEach(() => {
-        const organization: MockTableEntityTableItem<Organization> = {
-          PK: "Organization#123",
-          SK: "Organization",
-          Id: "123",
-          Type: "Organization",
-          Name: "Mock Org",
-          CreatedAt: "2021-10-14T08:31:15.148Z",
-          UpdatedAt: "2022-10-15T08:31:15.148Z"
-        };
+      const organization: MockTableEntityTableItem<Organization> = {
+        PK: "Organization#123",
+        SK: "Organization",
+        Id: "123",
+        Type: "Organization",
+        Name: "Mock Org",
+        CreatedAt: "2021-10-14T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      it("can delete the owning entity and nullify the foreign keys on the associated entity if they are nullable", async () => {
+        expect.assertions(6);
 
         const organizationEmployeeLink: MockTableEntityTableItem<Employee> = {
           PK: organization.PK,
@@ -925,10 +928,6 @@ describe("Delete", () => {
 
         // Get the employee with denormalized records
         mockQuery.mockResolvedValueOnce({ Items: [employee] });
-      });
-
-      it("can delete the owning entity and nullify the foreign keys on the associated entity if they are nullable", async () => {
-        expect.assertions(6);
 
         // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         const res = await Organization.delete("123");
@@ -1018,7 +1017,50 @@ describe("Delete", () => {
         ]);
       });
 
-      // TODO it will throw an error if it attempts to delete the owning entity by the associated entity has non-nullable foreign keys
+      it("will throw an error if it attempts to delete the owning entity by the associated entity has non-nullable foreign keys", async () => {
+        expect.assertions(7);
+
+        const organizationFounderLink: MockTableEntityTableItem<Founder> = {
+          PK: organization.PK,
+          SK: "Founder#001",
+          Id: "001",
+          Type: "Founder",
+          Name: "Founder-1",
+          OrganizationId: organization.Id,
+          CreatedAt: "2021-10-16T09:31:15.148Z",
+          UpdatedAt: "2022-10-17T09:31:15.148Z"
+        };
+
+        // Initial pre-fetch
+        mockQuery.mockResolvedValueOnce({
+          Items: [organization, organizationFounderLink]
+        });
+
+        try {
+          await Organization.delete("123");
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new NullConstraintViolationError(
+              `Cannot set Founder with id: '001' attribute 'organizationId' to null`
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+          expect(mockQuery.mock.calls).toEqual([[]]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK1",
+                ExpressionAttributeNames: { "#PK": "PK" },
+                ExpressionAttributeValues: { ":PK1": "Organization#123" }
+              }
+            ]
+          ]);
+          expect(mockTransact.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        }
+      });
     });
 
     describe("deleting the entity owned by a uni directional has many", () => {
