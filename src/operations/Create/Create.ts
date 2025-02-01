@@ -177,9 +177,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const tableName = this.tableMetadata.name;
 
-    const relMetas = this.entityMetadata.belongsToOrOwnedByRelationships;
+    const relMetadata = this.entityMetadata.belongsToOrOwnedByRelationships;
 
-    for (const relMeta of relMetas) {
+    for (const relMeta of relMetadata) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);
 
       if (foreignKey !== undefined) {
