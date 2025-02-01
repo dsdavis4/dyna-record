@@ -512,7 +512,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param foreignKey
    */
   private buildEntityExistsCondition(
-    relMeta: BelongsToOrOwnedByRelationship, // TODO I am repeating this discriminated union, DRY it up with a type
+    relMeta: BelongsToOrOwnedByRelationship,
     foreignKey: string
   ): void {
     const errMsg = `${relMeta.target.name} with ID '${foreignKey}' does not exist`;
