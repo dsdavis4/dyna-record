@@ -1064,8 +1064,103 @@ describe("Delete", () => {
     });
 
     describe("deleting the entity owned by a uni directional has many", () => {
-      // TODO It can delete an entity that is owned by a has many uni directional relationship
-      // TODO it will throw an error if it encounters a transaction error when deleting the denormalized link from the owning entities partition
+      beforeEach(() => {
+        const employee: MockTableEntityTableItem<Employee> = {
+          PK: "Employee#123",
+          SK: "Employee",
+          Id: "123",
+          Type: "Employee",
+          Name: "Mock Employee",
+          OrganizationId: "456",
+          CreatedAt: "2022-09-02T23:31:21.148Z",
+          UpdatedAt: "2022-09-03T23:31:21.148Z"
+        };
+
+        mockQuery.mockResolvedValueOnce({
+          Items: [employee]
+        });
+      });
+
+      it(" can delete an entity that is owned by a has many uni directional relationship", async () => {
+        expect.assertions(6);
+
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        const res = await Employee.delete("123");
+
+        expect(res).toEqual(undefined);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockQuery.mock.calls).toEqual([[]]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK1",
+              ExpressionAttributeNames: { "#PK": "PK" },
+              ExpressionAttributeValues: { ":PK1": "Employee#123" }
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Employee#123",
+                      SK: "Employee"
+                    }
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Organization#456",
+                      SK: "Employee#123"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("will throw an error if it encounters a transaction error when deleting the denormalized link from the owning entities partition", async () => {
+        expect.assertions(2);
+
+        mockSend
+          .mockReturnValueOnce(undefined) // Query
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            mockTransact();
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+
+        try {
+          await Employee.delete("123");
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Organization#456","SK":"Employee#123"}'
+            )
+          ]);
+        }
+      });
     });
   });
 
