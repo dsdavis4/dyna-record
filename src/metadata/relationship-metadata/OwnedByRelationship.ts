@@ -12,7 +12,7 @@ import RelationshipMetadata from "./RelationshipMetadata";
  */
 class OwnedByRelationship extends RelationshipMetadata {
   type: "OwnedBy" = "OwnedBy";
-  foreignKey: ForeignKeyProperty; // TODO is this needed?
+  foreignKey: ForeignKeyProperty;
 
   constructor(item: RelationshipMetadata) {
     super();
