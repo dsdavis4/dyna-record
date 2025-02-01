@@ -101,10 +101,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       this.buildDeleteJoinTableLinkTransaction(item);
     });
 
-    // TODO move to method
-    // TODO unit test delete
-    // TODO unit test error case
-    // TODO also unit test both directionseven though I did nt change anything in one direction
     this.buildDeleteOwnedByRelationships(preFetchRes.self);
 
     await Promise.all(
@@ -308,7 +304,10 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     }
   }
 
-  // TODO typedoc
+  /**
+   * If the entity being deleted is owned by another entity via a unidirectional relationship, delete the denormalized records
+   * @param self - The entity being deleted
+   */
   private buildDeleteOwnedByRelationships(self: Entity): void {
     this.entityMetadata.ownedByRelationships.forEach(ownedByRelMeta => {
       if (isKeyOfObject(self, ownedByRelMeta.foreignKey)) {
