@@ -264,6 +264,27 @@ class Course extends MyTable {
 }
 ```
 
+By default, a HasMany relationship is bi-directional—records are denormalized into both the parent and child entity partitions. This setup supports access patterns that allow each entity to retrieve its associated records. However, updating a HasMany entity requires updating its denormalized record in every associated partition, which can lead to issues given DynamoDB's 100-item transaction limit.
+
+To mitigate this, you can specify uniDirectional in the HasMany decorator and remove the BelongsTo relationship from the child entity. With this configuration, only the parent-to-child access pattern is supported.
+
+```typescript
+import { Entity, NullableForeignKey, BelongsTo, HasMany } from "dyna-record";
+
+@Entity
+class Teacher extends MyTable {
+  // 'teacherId' must be defined on associated model
+  @HasMany(() => Course, { foreignKey: "teacherId", uniDirectional: true })
+  public readonly courses: Course[];
+}
+
+@Entity
+class Course extends MyTable {
+  @ForeignKeyAttribute({ nullable: true })
+  public readonly teacherId?: NullableForeignKey; // Mark as optional
+}
+```
+
 ### HasAndBelongsToMany
 
 [Docs](https://dyna-record.com/functions/HasAndBelongsToMany.html)
