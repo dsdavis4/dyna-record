@@ -1,5 +1,6 @@
 import type DynaRecord from "../../DynaRecord";
 import type {
+  BelongsToOrOwnedByRelationship,
   BelongsToRelationship,
   OwnedByRelationship,
   RelationshipMetadata
@@ -74,7 +75,7 @@ export const extractForeignKeyFromEntity = <
 export const buildBelongsToLinkKey = (
   entityClass: EntityClass<DynaRecord>,
   entityId: string,
-  relMeta: BelongsToRelationship | OwnedByRelationship,
+  relMeta: BelongsToOrOwnedByRelationship,
   foreignKey: string
 ): DynamoTableItem => {
   const tableMeta = Metadata.getEntityTable(entityClass.name);

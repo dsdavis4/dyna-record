@@ -18,7 +18,8 @@ import {
 import { isBelongsToRelationship } from "../../metadata/utils";
 import type {
   OwnedByRelationship,
-  BelongsToRelationship
+  BelongsToRelationship,
+  BelongsToOrOwnedByRelationship
 } from "../../metadata";
 
 /**
@@ -271,7 +272,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * @private
    */
   private buildRelationshipExistsConditionTransaction(
-    rel: BelongsToRelationship | OwnedByRelationship,
+    rel: BelongsToOrOwnedByRelationship,
     relationshipId: string
   ): void {
     const { name: tableName } = this.tableMetadata;

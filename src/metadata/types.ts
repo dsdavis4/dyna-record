@@ -1,8 +1,10 @@
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import type {
   AttributeMetadata,
+  BelongsToRelationship,
   EntityMetadata,
   JoinTableMetadata,
+  OwnedByRelationship,
   RelationshipMetadata,
   TableMetadata
 } from ".";
@@ -120,3 +122,10 @@ export interface AttributeMetadataOptions {
   nullable?: boolean;
   serializers?: Serializers;
 }
+
+/**
+ * A relationship that is either BelongsTo (bi-directional to parent) or OwnedBy (uni directional to parent)
+ */
+export type BelongsToOrOwnedByRelationship =
+  | BelongsToRelationship
+  | OwnedByRelationship;

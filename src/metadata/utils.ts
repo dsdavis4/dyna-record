@@ -8,7 +8,10 @@ import type {
   OwnedByRelationship
 } from ".";
 import type DynaRecord from "../DynaRecord";
-import type { RelationshipMetadataWithForeignKey } from "./types";
+import type {
+  BelongsToOrOwnedByRelationship,
+  RelationshipMetadataWithForeignKey
+} from "./types";
 import type { EntityClass } from "../types";
 
 /**
@@ -75,8 +78,7 @@ export const isRelationshipMetadataWithForeignKey = (
  */
 export const doesEntityBelongToRelAsHasOne = <T extends DynaRecord>(
   Entity: EntityClass<T>,
-  // TODO should I make a type to group these?
-  rel: BelongsToRelationship | OwnedByRelationship
+  rel: BelongsToOrOwnedByRelationship
 ): boolean => {
   const relMetadata = Metadata.getEntity(rel.target.name);
 
@@ -94,7 +96,7 @@ export const doesEntityBelongToRelAsHasOne = <T extends DynaRecord>(
  */
 export const doesEntityBelongToRelAsHasMany = <T extends DynaRecord>(
   Entity: EntityClass<T>,
-  rel: BelongsToRelationship | OwnedByRelationship
+  rel: BelongsToOrOwnedByRelationship
 ): boolean => {
   const relMetadata = Metadata.getEntity(rel.target.name);
 
