@@ -7,8 +7,7 @@ import {
 import type {
   BelongsToOrOwnedByRelationship,
   BelongsToRelationship,
-  HasAndBelongsToManyRelationship,
-  OwnedByRelationship
+  HasAndBelongsToManyRelationship
 } from "../../metadata";
 import {
   entityToTableItem,
@@ -395,12 +394,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const entityId = entityPreUpdate.id;
 
-    // TODO I did this same thing in create... I think I need to make a propety on entity metadata to get these
-    // TODO rename this function to support the owned by
-    const relMetas = [
-      ...this.entityMetadata.belongsToRelationships,
-      ...this.entityMetadata.ownedByRelationships
-    ];
+    const relMetas = this.entityMetadata.belongsToOrOwnedByRelationships;
 
     for (const relMeta of relMetas) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, updatedEntity);

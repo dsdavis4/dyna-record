@@ -181,11 +181,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const tableName = this.tableMetadata.name;
 
-    // TODO rename this function to support the owned by
-    const relMetas = [
-      ...this.entityMetadata.belongsToRelationships,
-      ...this.entityMetadata.ownedByRelationships
-    ];
+    const relMetas = this.entityMetadata.belongsToOrOwnedByRelationships;
 
     for (const relMeta of relMetas) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);

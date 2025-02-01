@@ -6,7 +6,8 @@ import type {
   AttributeMetadataStorage,
   RelationshipMetadataStorage,
   RelationshipMetadata,
-  OwnedByRelationship
+  OwnedByRelationship,
+  BelongsToOrOwnedByRelationship
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
@@ -159,12 +160,28 @@ class EntityMetadata {
   }
 
   /**
-   * Returns the BelongsToRelationship metadata for the entity
+   * Returns the BelongsToRelationship  (bidirectional to parent) metadata for the entity
    */
   public get belongsToRelationships(): BelongsToRelationship[] {
     return Object.values(this.relationships).filter(rel =>
       isBelongsToRelationship(rel)
     );
+  }
+
+  /**
+   * Returns the OwnedByRelationship (unidirectional to parent) relationship metadata for an entity
+   */
+  public get ownedByRelationships(): OwnedByRelationship[] {
+    return Object.values(this.relationships).filter(relMeta =>
+      isOwnedByRelationship(relMeta)
+    );
+  }
+
+  /**
+   * Returns the BelongsToRelationship and OwnedByRelationship metadata objects for an entity
+   */
+  public get belongsToOrOwnedByRelationships(): BelongsToOrOwnedByRelationship[] {
+    return [...this.belongsToRelationships, ...this.ownedByRelationships];
   }
 
   /**
@@ -176,16 +193,6 @@ class EntityMetadata {
         isHasOneRelationship(relMeta) ||
         isHasManyRelationship(relMeta) ||
         isHasAndBelongsToManyRelationship(relMeta)
-    );
-  }
-
-  // TODO check usage of this, if its always combined with belongsToRelationships then dry it up
-  /**
-   * Returns the owned by relationships for an entity
-   */
-  public get ownedByRelationships(): OwnedByRelationship[] {
-    return Object.values(this.relationships).filter(relMeta =>
-      isOwnedByRelationship(relMeta)
     );
   }
 }
