@@ -2,7 +2,7 @@ import type { ForeignKeyProperty } from "../../types";
 import RelationshipMetadata from "./RelationshipMetadata";
 
 /**
- * Represents a "Belongs To" relationship metadata within the ORM system.
+ * Represents a "Belongs To" relationship metadata within the ORM system. These are bidirectional relationships to the parent.
  *
  * @extends {RelationshipMetadata} Inherits the base functionality and properties of `RelationshipMetadata`.
  * @property {"BelongsTo"} type - The type of the relationship, statically set to "BelongsTo" to signify the nature of the relationship.

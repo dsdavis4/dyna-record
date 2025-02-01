@@ -2,7 +2,7 @@ import type { ForeignKeyProperty } from "../../types";
 import RelationshipMetadata from "./RelationshipMetadata";
 
 /**
- * Represents an "Owned By" relationship metadata within the ORM system.
+ * Represents an "Owned By" relationship metadata within the ORM system. These are uni-directional relationships to the parent
  *
  * @extends {RelationshipMetadata} Inherits the base functionality and properties of `RelationshipMetadata`.
  * @property {"OwnedBy"} type - The type of the relationship, statically set to "OwnedBy" to signify a one-directional relationship where the current entity is owned by another entity.
