@@ -12,7 +12,7 @@ import type OwnedByRelationship from "./OwnedByRelationship";
  * - `BelongsToRelationship`: Represents a "BelongsTo" relationship, indicating that the entity has a foreign key pointing to another entity.
  * - `HasManyRelationship`: Represents a "HasMany" relationship, indicating that the entity can be associated with multiple instances of another entity.
  * - `HasOneRelationship`: Represents a "HasOne" relationship, indicating that the entity is associated with at most one instance of another entity.
- * - `OwnedByRelationship`: Represents an "OwnedBy" relationship, indicating a one-directional relationship where the current entity is owned by another entity. This relationship focuses on linking the entity to its owner without requiring reverse associations.
+ * - `OwnedByRelationship`: Represents an "OwnedBy" relationship, indicating a unidirectional relationship where the current entity is owned by another entity. This relationship focuses on linking the entity to its owner without requiring reverse associations.
  */
 export type RelationshipMetadata =
   | BelongsToRelationship
