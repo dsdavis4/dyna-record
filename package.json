@@ -10,7 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "eslint": "npx eslint . --ext .ts",
-    "eslint-fix": "npx eslint . --ext .ts --fix",
+    "eslint:fix": "npx eslint . --ext .ts --fix",
     "prettier": "npx prettier . --write",
     "docs": "npx typedoc"
   },

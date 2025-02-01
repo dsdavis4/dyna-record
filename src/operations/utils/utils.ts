@@ -1,8 +1,6 @@
 import type DynaRecord from "../../DynaRecord";
 import type {
   BelongsToOrOwnedByRelationship,
-  BelongsToRelationship,
-  OwnedByRelationship,
   RelationshipMetadata
 } from "../../metadata";
 import Metadata from "../../metadata";
