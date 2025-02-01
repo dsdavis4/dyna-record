@@ -56,9 +56,8 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
         if (props.uniDirectional === true) {
           Metadata.addEntityRelationship(target.name, {
             type: "OwnedBy",
-            propertyName: props.foreignKey as keyof DynaRecord, // TODO
+            propertyName: props.foreignKey as keyof DynaRecord,
             foreignKey: props.foreignKey as ForeignKeyProperty,
-            // TODO can I make a typeguard instead of casting?
             target: this.constructor as EntityClass<K>
           });
         }
