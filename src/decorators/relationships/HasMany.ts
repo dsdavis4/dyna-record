@@ -3,9 +3,6 @@ import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyProperty } from "../../types";
 import { type ForeignEntityAttribute } from "../types";
 
-// TODO I should make it so that when uniDirectional is true, then it links to a type different then ForeignKey
-// that way, one could not also define a belongs to rel with a uni directional...
-
 interface HasManyProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T>;
 
