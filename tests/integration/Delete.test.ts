@@ -12,7 +12,7 @@ import {
   type Address,
   Organization,
   Employee,
-  Founder
+  type Founder
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";

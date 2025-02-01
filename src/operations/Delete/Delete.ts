@@ -15,7 +15,7 @@ import type {
   EntityClass,
   RelationshipLookup
 } from "../../types";
-import { isKeyOfEntity, isKeyOfObject } from "../../utils";
+import { isKeyOfObject } from "../../utils";
 import OperationBase from "../OperationBase";
 import type { QueryResults, QueryResult } from "../Query";
 import { UpdateDryRun } from "../Update";
@@ -321,7 +321,6 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
           fkValue
         );
 
-        // TODO is this error message consistent?
         this.buildDeleteItemTransaction(keys, {
           errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
             keys
