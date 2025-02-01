@@ -35,19 +35,6 @@ import {
   isHasManyRelationship
 } from "../../metadata/utils";
 
-// TODO start here.. this morning I made is so that it iterate belongs to or owned by
-// On my first test it seemed to wrok but I need to to test
-//    adding a FK
-//     updating dk
-//     removing dk
-// I also need to dry up stuff that is duplicated from Create and Update
-//      - BelongsToOrOwnedByRelationship test
-//      - Making an array of the types like below
-// const relMetas = [
-//   ...this.entityMetadata.belongsToRelationships,
-//   ...this.entityMetadata.ownedByRelationships
-// ];
-
 type Entity = EntityAttributesInstance<DynaRecord>;
 
 type PartialEntityWithId = WithRequired<

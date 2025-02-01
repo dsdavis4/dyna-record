@@ -16,11 +16,7 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { isBelongsToRelationship } from "../../metadata/utils";
-import type {
-  OwnedByRelationship,
-  BelongsToRelationship,
-  BelongsToOrOwnedByRelationship
-} from "../../metadata";
+import type { BelongsToOrOwnedByRelationship } from "../../metadata";
 
 /**
  * Represents an operation to create a new entity record in DynamoDB, including all necessary
