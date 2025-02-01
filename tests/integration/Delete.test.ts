@@ -9,7 +9,10 @@ import {
   User,
   type Author,
   type Website,
-  type Address
+  type Address,
+  Organization,
+  Employee,
+  type Founder
 } from "./mockModels";
 import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
@@ -287,7 +290,7 @@ describe("Delete", () => {
     ]);
   });
 
-  describe("when the entity bring deleted relationships or HasMany or HasOne (needs to nullify foreign keys on the entities that belong to it)", () => {
+  describe("when the entity being deleted has relationships of HasMany or HasOne (needs to nullify foreign keys on the entities that belong to it)", () => {
     const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([
         [{ name: "QueryCommand" }], // Initial prefetch
@@ -884,6 +887,281 @@ describe("Delete", () => {
         }
       ]
     ]);
+  });
+
+  describe("in a unidirectional has many relationship", () => {
+    describe("deleting the owning entity", () => {
+      const organization: MockTableEntityTableItem<Organization> = {
+        PK: "Organization#123",
+        SK: "Organization",
+        Id: "123",
+        Type: "Organization",
+        Name: "Mock Org",
+        CreatedAt: "2021-10-14T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z"
+      };
+
+      it("can delete the owning entity and nullify the foreign keys on the associated entity if they are nullable", async () => {
+        expect.assertions(6);
+
+        const organizationEmployeeLink: MockTableEntityTableItem<Employee> = {
+          PK: organization.PK,
+          SK: "Employee#001",
+          Id: "001",
+          Type: "Employee",
+          Name: "Employee-1",
+          OrganizationId: organization.Id,
+          CreatedAt: "2021-10-16T09:31:15.148Z",
+          UpdatedAt: "2022-10-17T09:31:15.148Z"
+        };
+
+        // Initial pre-fetch
+        mockQuery.mockResolvedValueOnce({
+          Items: [organization, organizationEmployeeLink]
+        });
+
+        // Begin get Employee
+        const employee: MockTableEntityTableItem<Employee> = {
+          ...organizationEmployeeLink,
+          PK: `Employee#${organizationEmployeeLink.Id}`
+        };
+
+        // Get the employee with denormalized records
+        mockQuery.mockResolvedValueOnce({ Items: [employee] });
+
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        const res = await Organization.delete("123");
+
+        expect(res).toEqual(undefined);
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }], // Initial prefetch
+          [{ name: "QueryCommand" }], // Getting records for which foreign key nullification must be denormalized
+          [{ name: "TransactWriteCommand" }] // Save everything
+        ]);
+        expect(mockQuery.mock.calls).toEqual([[], []]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK1",
+              ExpressionAttributeNames: {
+                "#PK": "PK"
+              },
+              ExpressionAttributeValues: {
+                ":PK1": "Organization#123"
+              }
+            }
+          ],
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK2",
+              FilterExpression: "#Type IN (:Type1)",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK2": "Employee#001",
+                ":Type1": "Employee"
+              }
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Organization#123",
+                      SK: "Organization"
+                    }
+                  }
+                },
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Employee#001",
+                      SK: "Employee"
+                    },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#OrganizationId": "OrganizationId",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt REMOVE #OrganizationId"
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Organization#123",
+                      SK: "Employee#001"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("will throw an error if it attempts to delete the owning entity by the associated entity has non-nullable foreign keys", async () => {
+        expect.assertions(7);
+
+        const organizationFounderLink: MockTableEntityTableItem<Founder> = {
+          PK: organization.PK,
+          SK: "Founder#001",
+          Id: "001",
+          Type: "Founder",
+          Name: "Founder-1",
+          OrganizationId: organization.Id,
+          CreatedAt: "2021-10-16T09:31:15.148Z",
+          UpdatedAt: "2022-10-17T09:31:15.148Z"
+        };
+
+        // Initial pre-fetch
+        mockQuery.mockResolvedValueOnce({
+          Items: [organization, organizationFounderLink]
+        });
+
+        try {
+          await Organization.delete("123");
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new NullConstraintViolationError(
+              `Cannot set Founder with id: '001' attribute 'organizationId' to null`
+            )
+          ]);
+          expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+          expect(mockQuery.mock.calls).toEqual([[]]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK1",
+                ExpressionAttributeNames: { "#PK": "PK" },
+                ExpressionAttributeValues: { ":PK1": "Organization#123" }
+              }
+            ]
+          ]);
+          expect(mockTransact.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        }
+      });
+    });
+
+    describe("deleting the entity owned by a uni directional has many", () => {
+      beforeEach(() => {
+        const employee: MockTableEntityTableItem<Employee> = {
+          PK: "Employee#123",
+          SK: "Employee",
+          Id: "123",
+          Type: "Employee",
+          Name: "Mock Employee",
+          OrganizationId: "456",
+          CreatedAt: "2022-09-02T23:31:21.148Z",
+          UpdatedAt: "2022-09-03T23:31:21.148Z"
+        };
+
+        mockQuery.mockResolvedValueOnce({
+          Items: [employee]
+        });
+      });
+
+      it(" can delete an entity that is owned by a has many uni directional relationship", async () => {
+        expect.assertions(6);
+
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        const res = await Employee.delete("123");
+
+        expect(res).toEqual(undefined);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockQuery.mock.calls).toEqual([[]]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK1",
+              ExpressionAttributeNames: { "#PK": "PK" },
+              ExpressionAttributeValues: { ":PK1": "Employee#123" }
+            }
+          ]
+        ]);
+        expect(mockTransact.mock.calls).toEqual([[]]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Employee#123",
+                      SK: "Employee"
+                    }
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Organization#456",
+                      SK: "Employee#123"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("will throw an error if it encounters a transaction error when deleting the denormalized link from the owning entities partition", async () => {
+        expect.assertions(2);
+
+        mockSend
+          .mockReturnValueOnce(undefined) // Query
+          // TransactWrite
+          .mockImplementationOnce(() => {
+            mockTransact();
+            throw new TransactionCanceledException({
+              message: "MockMessage",
+              CancellationReasons: [
+                { Code: "None" },
+                { Code: "ConditionalCheckFailed" }
+              ],
+              $metadata: {}
+            });
+          });
+
+        try {
+          await Employee.delete("123");
+        } catch (e: any) {
+          expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              'ConditionalCheckFailed: Failed to delete denormalized record with keys: {"PK":"Organization#456","SK":"Employee#123"}'
+            )
+          ]);
+        }
+      });
+    });
   });
 
   describe("error handling", () => {

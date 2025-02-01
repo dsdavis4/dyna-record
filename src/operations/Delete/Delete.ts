@@ -101,6 +101,8 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       this.buildDeleteJoinTableLinkTransaction(item);
     });
 
+    this.buildDeleteOwnedByRelationships(preFetchRes.self);
+
     await Promise.all(
       preFetchRes.linkedEntitiesWithFkRef.map(async entity => {
         await this.buildNullifyForeignKeyTransaction(entity);
@@ -300,6 +302,31 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
         )}`
       });
     }
+  }
+
+  /**
+   * If the entity being deleted is owned by another entity via a unidirectional relationship, delete the denormalized records
+   * @param self - The entity being deleted
+   */
+  private buildDeleteOwnedByRelationships(self: Entity): void {
+    this.entityMetadata.ownedByRelationships.forEach(ownedByRelMeta => {
+      if (isKeyOfObject(self, ownedByRelMeta.foreignKey)) {
+        const fkValue = self[ownedByRelMeta.foreignKey];
+
+        const keys = buildBelongsToLinkKey(
+          this.EntityClass,
+          self.id,
+          ownedByRelMeta,
+          fkValue
+        );
+
+        this.buildDeleteItemTransaction(keys, {
+          errorMessage: `Failed to delete denormalized record with keys: ${JSON.stringify(
+            keys
+          )}`
+        });
+      }
+    });
   }
 
   /**

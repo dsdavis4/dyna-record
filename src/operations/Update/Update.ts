@@ -5,6 +5,7 @@ import {
   TransactWriteBuilder
 } from "../../dynamo-utils";
 import type {
+  BelongsToOrOwnedByRelationship,
   BelongsToRelationship,
   HasAndBelongsToManyRelationship
 } from "../../metadata";
@@ -29,6 +30,10 @@ import {
   type EntityAttributesOnly
 } from "../types";
 import { NotFoundError } from "../../errors";
+import {
+  isBelongsToRelationship,
+  isHasManyRelationship
+} from "../../metadata/utils";
 
 type Entity = EntityAttributesInstance<DynaRecord>;
 
@@ -210,7 +215,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     belongsToRelFkAndMetas: BelongsToRelMetaAndKey[]
   ): Promise<Entity[]> {
-    const hasRelMetas = this.entityMetadata.hasRelationships;
+    const hasRelMetas = this.entityMetadata.hasRelationships.filter(
+      rel => !isHasManyRelationship(rel) || rel.uniDirectional !== true
+    );
 
     const { name: tableName } = this.tableMetadata;
     const transactionBuilder = new TransactGetBuilder();
@@ -354,10 +361,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Builds all necessary transactions to handle "BelongsTo" relationships when updating the entity.
+   * Builds all necessary transactions to handle "BelongsTo" or uni-directional "OwnedBy" relationships when updating the entity.
    *
    * **What it does:**
-   * - Checks if any foreign keys for "BelongsTo" relationships have changed.
+   * - Checks if any foreign keys for "BelongsTo" or uni-directional "OwnedBy" relationships have changed.
    * - If so, updates or creates new denormalized link records in the related partitions.
    * - Removes old link records that are no longer valid due to foreign key changes.
    *
@@ -374,7 +381,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ): void {
     const entityId = entityPreUpdate.id;
 
-    for (const relMeta of this.entityMetadata.belongsToRelationships) {
+    const relMetas = this.entityMetadata.belongsToOrOwnedByRelationships;
+
+    for (const relMeta of relMetas) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, updatedEntity);
 
       const isUpdatingRelationshipId = foreignKey !== undefined;
@@ -434,7 +443,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildUpdateBelongsToLinkedRecords(
     entityId: string,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     foreignKey: string,
     updateExpression: UpdateExpression
   ): void {
@@ -468,7 +477,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildPutBelongsToLinkedRecords(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     foreignKey: string,
     newBelongsToEntityLookup: BelongsToEntityLookup,
     persistToSelfCondition: "attribute_not_exists" | "attribute_exists",
@@ -484,15 +493,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       foreignKey
     );
 
-    // Add denormalized record for new entity to self
-    this.buildAddForeignEntityToSelfTransaction(
-      updatedEntity,
-      relMeta,
-      foreignKey,
-      newBelongsToEntityLookup,
-      persistToSelfCondition,
-      persistToSelfConditionErrMessage
-    );
+    if (isBelongsToRelationship(relMeta)) {
+      // Add denormalized record for new entity to self
+      this.buildAddForeignEntityToSelfTransaction(
+        updatedEntity,
+        relMeta,
+        foreignKey,
+        newBelongsToEntityLookup,
+        persistToSelfCondition,
+        persistToSelfConditionErrMessage
+      );
+    }
   }
 
   /**
@@ -501,7 +512,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param foreignKey
    */
   private buildEntityExistsCondition(
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     foreignKey: string
   ): void {
     const errMsg = `${relMeta.target.name} with ID '${foreignKey}' does not exist`;
@@ -526,7 +537,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private buildLinkToForeignEntityTransaction(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     foreignKey: string
   ): void {
     const key = buildBelongsToLinkKey(
@@ -605,7 +616,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private removeForeignKeysTransactions(
     entityId: string,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     oldForeignKey: string
   ): void {
     // Keys to delete the denormalized record from entities own partition
@@ -622,13 +633,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       oldForeignKey
     );
 
-    this.transactionBuilder.addDelete(
-      {
-        TableName: this.tableMetadata.name,
-        Key: oldKeysToSelf
-      },
-      `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToSelf)}`
-    );
+    // OwnedByRelationships do not have a record to delete from  their own partition because its unidirectional
+    if (isBelongsToRelationship(relMeta)) {
+      this.transactionBuilder.addDelete(
+        {
+          TableName: this.tableMetadata.name,
+          Key: oldKeysToSelf
+        },
+        `Failed to delete denormalized record with keys: ${JSON.stringify(oldKeysToSelf)}`
+      );
+    }
 
     this.transactionBuilder.addDelete(
       {
@@ -649,7 +663,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   private updateForeignKeyTransactions(
     updatedEntity: PartialEntityWithId,
-    relMeta: BelongsToRelationship,
+    relMeta: BelongsToOrOwnedByRelationship,
     newForeignKey: string,
     oldForeignKey: string,
     newBelongsToEntityLookup: BelongsToEntityLookup
