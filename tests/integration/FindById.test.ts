@@ -1117,12 +1117,29 @@ describe("FindById", () => {
           Logger.log(result.update);
         }
       });
+
+      it("will accept consistentRead as a boolean true", async () => {
+        // @ts-expect-no-error: consistentRead can be true
+        await PaymentMethod.findById("789", { consistentRead: true });
+      });
+
+      it("will accept consistentRead as a boolean false", async () => {
+        // @ts-expect-no-error: consistentRead can be false
+        await PaymentMethod.findById("789", { consistentRead: false });
+      });
+
+      it("will not consistentRead as a non-boolean", async () => {
+        // @ts-expect-error: consistentRead must be a boolean
+        await PaymentMethod.findById("789", { consistentRead: "not-boolean" });
+      });
     });
 
-    describe("findById without includes", () => {
-      it("results have entity functions", async () => {
+    describe("findById with includes", () => {
+      beforeEach(() => {
         mockQuery.mockResolvedValueOnce({ Items: [] });
+      });
 
+      it("results have entity functions", async () => {
         const result = await Customer.findById("123", {
           include: [{ association: "contactInformation" }]
         });
@@ -1131,6 +1148,30 @@ describe("FindById", () => {
           // @ts-expect-no-error: Functions are allowed
           Logger.log(result.update);
         }
+      });
+
+      it("will accept consistentRead as a boolean true", async () => {
+        // @ts-expect-no-error: consistentRead can be true
+        await Customer.findById("123", {
+          consistentRead: true,
+          include: [{ association: "contactInformation" }]
+        });
+      });
+
+      it("will accept consistentRead as a boolean false", async () => {
+        // @ts-expect-no-error: consistentRead can be false
+        await Customer.findById("123", {
+          consistentRead: false,
+          include: [{ association: "contactInformation" }]
+        });
+      });
+
+      it("will not consistentRead as a non-boolean", async () => {
+        // @ts-expect-error: consistentRead must be a boolean
+        await Customer.findById("123", {
+          consistentRead: "non-boolean",
+          include: [{ association: "contactInformation" }]
+        });
       });
     });
 

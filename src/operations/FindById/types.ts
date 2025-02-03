@@ -24,7 +24,6 @@ export interface FindByIdOptions<
   Inc extends IncludedAssociations<T> = []
 > {
   include?: Inc;
-  // TODO add type tests for this on both variations of findById
   /**
    * Whether to use consistent reads for the operation. Defaults to false.
    * @default false
