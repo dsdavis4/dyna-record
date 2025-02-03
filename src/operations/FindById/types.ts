@@ -7,24 +7,30 @@ import type {
 import { type QueryResult, type QueryResults } from "../Query";
 
 /**
- * Defines options for the `FindById` operation, allowing specification of additional associations to include in the query result.
- *
- * @template T - The type of the entity being queried, extending `DynaRecord`.
- *
- * @property {Array<{ association: RelationshipAttributeNames<T> }>} [include] - An array of association names to be included in the result of the query. Each association name must be a valid relationship attribute name for the entity `T`.
+ * An array of objects each describing an entity relationship association to include.
  */
-export interface FindByIdOptions<T extends DynaRecord> {
-  include?: Array<{ association: RelationshipAttributeNames<T> }>;
-}
+export type IncludedAssociations<T extends DynaRecord> = Array<{
+  association: RelationshipAttributeNames<T>;
+}>;
 
 /**
- * Represents a list of associations to be included in the query result, derived from the `FindByIdOptions`.
+ * Options for the FindById operation.
  *
- * @template T - The type of the entity being queried, extending `DynaRecord`.
+ * @template T - The type of the entity.
+ * @template Inc - The entity relationships to include in the results
  */
-export type IncludedAssociations<T extends DynaRecord> = NonNullable<
-  FindByIdOptions<T>["include"]
->;
+export interface FindByIdOptions<
+  T extends DynaRecord,
+  Inc extends IncludedAssociations<T> = []
+> {
+  include?: Inc;
+  // TODO add type tests for this on both variations of findById
+  /**
+   * Whether to use consistent reads for the operation. Defaults to false.
+   * @default false
+   */
+  consistentRead?: boolean;
+}
 
 /**
  * Describes the structure of query results, sorting them into the main entity item and any associated items. Used during processing
@@ -38,21 +44,16 @@ export interface SortedQueryResults {
 }
 
 /**
- * Derives the keys of included associations from `FindByIdOptions`, representing the names of relationships specified to be included in the query result.
- *
- * @template T - The type of the entity being queried, extending `DynaRecord`.
- * @template Opts - The options for the `FindById` operation.
+ * Extract the association keys from the include array.
  */
-type IncludedKeys<T extends DynaRecord, Opts extends FindByIdOptions<T>> =
-  Opts extends Required<FindByIdOptions<T>>
-    ? [...NonNullable<Opts>["include"]][number]["association"]
-    : never;
+type IncludedKeys<
+  T extends DynaRecord,
+  Inc extends IncludedAssociations<T> = []
+> = Inc[number]["association"];
 
 /**
- * Describes the entity attributes, extending them with any specified included associations for comprehensive query results.
- *
- * @template T - The type of the entity being queried, extending `DynaRecord`.
- * @template P - The properties of the entity `T`.
+ * Given an entity type T and a set of keys, produce the output type that augments the
+ * entity attributes with included associations.
  */
 type EntityKeysWithIncludedAssociations<
   T extends DynaRecord,
@@ -66,15 +67,15 @@ type EntityKeysWithIncludedAssociations<
 };
 
 /**
- * Represents the result of a `FindById` operation, including the main entity and any specified associated entities.
+ * The result type for a FindById operation that includes associations.
  *
- * @template T - The type of the main entity, extending `DynaRecord`.
- * @template Opts - The options for the `FindById` operation, specifying included associations.
+ * @template T - The type of the entity.
+ * @template Inc - The entities relationships of the include array.
  */
 export type FindByIdIncludesRes<
   T extends DynaRecord,
-  Opts extends FindByIdOptions<T>
+  Inc extends IncludedAssociations<T> = []
 > = EntityKeysWithIncludedAssociations<
   T,
-  keyof EntityAttributesOnly<T> | IncludedKeys<T, Opts> | FunctionFields<T>
+  keyof EntityAttributesOnly<T> | IncludedKeys<T, Inc> | FunctionFields<T>
 >;

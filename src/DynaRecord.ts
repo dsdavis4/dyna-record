@@ -15,7 +15,8 @@ import {
   type UpdateOptions,
   Delete,
   type EntityAttributesOnly,
-  type EntityAttributesInstance
+  type EntityAttributesInstance,
+  type IncludedAssociations
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -98,30 +99,32 @@ abstract class DynaRecord implements DynaRecordBase {
    * const user = await User.findById("userId", { include: [{ association: "profile" }] });
    * ```
    */
+  // Overload when no options are provided.
   public static async findById<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
     options?: undefined
   ): Promise<Optional<EntityAttributesInstance<T>>>;
 
+  // Overload when options (including a potential `include` array) are provided.
   public static async findById<
     T extends DynaRecord,
-    Opts extends FindByIdOptions<T>
+    Inc extends IncludedAssociations<T> = []
   >(
     this: EntityClass<T>,
     id: string,
-    options?: Opts
-  ): Promise<Optional<FindByIdIncludesRes<T, Opts>>>;
+    options: FindByIdOptions<T, Inc>
+  ): Promise<Optional<FindByIdIncludesRes<T, Inc>>>;
 
   public static async findById<
     T extends DynaRecord,
-    Opts extends FindByIdOptions<T>
+    Inc extends IncludedAssociations<T> = []
   >(
     this: EntityClass<T>,
     id: string,
-    options?: Opts
+    options?: FindByIdOptions<T, Inc>
   ): Promise<
-    Optional<EntityAttributesInstance<T> | FindByIdIncludesRes<T, Opts>>
+    Optional<EntityAttributesInstance<T> | FindByIdIncludesRes<T, Inc>>
   > {
     const op = new FindById<T>(this);
     return await op.run(id, options);

@@ -41,10 +41,10 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param {string} options.include[].association - The name of the association to include. Must be defined on the model
    * @returns An entity with optional included associations serialized
    */
-  public async run(
+  public async run<Inc extends IncludedAssociations<T> = []>(
     id: string,
-    options?: FindByIdOptions<T>
-  ): Promise<Optional<T | FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
+    options?: FindByIdOptions<T, Inc>
+  ): Promise<Optional<T | FindByIdIncludesRes<T, Inc>>> {
     if (options?.include === undefined) {
       return await this.findByIdOnly(id);
     } else {
@@ -83,10 +83,10 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param {string} includedAssociations[].association - The name of the association to include. Must be defined on the model
    * @returns An entity with included associations serialized
    */
-  private async findByIdWithIncludes(
+  private async findByIdWithIncludes<Inc extends IncludedAssociations<T> = []>(
     id: string,
-    includedAssociations: IncludedAssociations<T>
-  ): Promise<Optional<FindByIdIncludesRes<T, FindByIdOptions<T>>>> {
+    includedAssociations: Inc
+  ): Promise<Optional<FindByIdIncludesRes<T, Inc>>> {
     const includedRelMeta = this.getIncludedRelationships(includedAssociations);
 
     const includedTypesFilter = includedRelationshipsFilter(
@@ -140,11 +140,11 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param includedAssociations
    * @returns
    */
-  private getIncludedRelationships(
-    includedAssociations: IncludedAssociations<T>
+  private getIncludedRelationships<Inc extends IncludedAssociations<T>>(
+    includedAssociations: Inc
   ): RelationshipMetadata[] {
     return includedAssociations.reduce<RelationshipMetadata[]>(
-      (acc, includedRel) => {
+      (acc, includedRel: IncludedAssociations<T>[number]) => {
         const key = includedRel.association as string;
         const included = this.entityMetadata.relationships[key];
         if (included !== undefined) acc.push(included);
@@ -161,11 +161,13 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param includedRelMeta
    * @returns
    */
-  private resolveFindByIdIncludesResults(
+  private resolveFindByIdIncludesResults<
+    Inc extends IncludedAssociations<T> = []
+  >(
     parentEntity: QueryResult<DynaRecord>,
     relatedEntities: QueryResults<DynaRecord>,
     includedRelMeta: RelationshipMetadata[]
-  ): FindByIdIncludesRes<T, FindByIdOptions<T>> {
+  ): FindByIdIncludesRes<T, Inc> {
     const { relationsLookup } = buildEntityRelationshipMetaObj(includedRelMeta);
 
     this.setIncludedRelationshipDefaults(parentEntity, relationsLookup);
@@ -184,7 +186,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
       }
     });
 
-    return parentEntity as FindByIdIncludesRes<T, FindByIdOptions<T>>;
+    return parentEntity as FindByIdIncludesRes<T, Inc>;
   }
 
   /**
