@@ -15,6 +15,8 @@ import type {
   QueryResults
 } from "./types";
 
+// TODO add support for consistent read choice
+
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
  *

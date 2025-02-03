@@ -18,6 +18,8 @@ import {
   isHasManyRelationship
 } from "../../metadata/utils";
 
+// TODO start here - I ended by fixing types to support consistent read. Now implement
+
 /**
  * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.
  *
@@ -26,6 +28,7 @@ import {
  * @template T - The type of the entity being retrieved, extending `DynaRecord`.
  */
 class FindById<T extends DynaRecord> extends OperationBase<T> {
+  // TODO why is this not needed anymore?
   readonly #transactionBuilder: TransactGetBuilder;
 
   constructor(Entity: EntityClass<T>) {
@@ -46,7 +49,9 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     options?: FindByIdOptions<T, Inc>
   ): Promise<Optional<T | FindByIdIncludesRes<T, Inc>>> {
     if (options?.include === undefined) {
-      return await this.findByIdOnly(id);
+      return await this.findByIdOnly(id, {
+        consistentRead: options?.consistentRead
+      });
     } else {
       return await this.findByIdWithIncludes(id, options.include);
     }
@@ -57,7 +62,10 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param {string} id - Entity Id
    * @returns An entity object or undefined
    */
-  private async findByIdOnly(id: string): Promise<Optional<T>> {
+  private async findByIdOnly(
+    id: string,
+    options: Pick<FindByIdOptions<T>, "consistentRead">
+  ): Promise<Optional<T>> {
     const { name: tableName } = this.tableMetadata;
 
     const res = await DynamoClient.getItem({
@@ -66,7 +74,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
         [this.sortKeyAlias]: this.EntityClass.name
       },
-      ConsistentRead: true
+      ConsistentRead: options.consistentRead ?? false
     });
 
     if (res === undefined) {
@@ -94,6 +102,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
       includedRelMeta
     );
 
+    // TODO add support for consistent read choice
     const queryResults = await this.EntityClass.query<DynaRecord>(id, {
       filter: includedTypesFilter
     });

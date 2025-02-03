@@ -121,6 +121,46 @@ describe("FindById", () => {
           {
             TableName: "mock-table",
             Key: { PK: "Customer#123", SK: "Customer" },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
+    });
+
+    it("consistentRead - will find an Entity by id and serialize it to the model", async () => {
+      expect.assertions(5);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "Customer#123",
+          SK: "Customer",
+          Id: "123",
+          Name: "Some Customer",
+          Address: "11 Some St",
+          Type: "Customer",
+          UpdatedAt: "2023-09-15T04:26:31.148Z"
+        }
+      });
+
+      const result = await Customer.findById("123", { consistentRead: true });
+
+      expect(result).toBeInstanceOf(Customer);
+      expect(result).toEqual({
+        type: "Customer",
+        pk: "Customer#123",
+        sk: "Customer",
+        id: "123",
+        name: "Some Customer",
+        address: "11 Some St",
+        updatedAt: new Date("2023-09-15T04:26:31.148Z")
+      });
+      expect(result?.mockCustomInstanceMethod()).toEqual("Some Customer-123");
+      expect(mockedGetCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            Key: { PK: "Customer#123", SK: "Customer" },
             ConsistentRead: true
           }
         ]
@@ -183,7 +223,7 @@ describe("FindById", () => {
           {
             TableName: "mock-table",
             Key: { PK: "Pet#123", SK: "Pet" },
-            ConsistentRead: true
+            ConsistentRead: false
           }
         ]
       ]);
@@ -203,7 +243,7 @@ describe("FindById", () => {
           {
             TableName: "mock-table",
             Key: { PK: "Customer#123", SK: "Customer" },
-            ConsistentRead: true
+            ConsistentRead: false
           }
         ]
       ]);
