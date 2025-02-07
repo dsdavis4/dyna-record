@@ -16,7 +16,10 @@ import {
   Delete,
   type EntityAttributesOnly,
   type EntityAttributesInstance,
-  type IncludedAssociations
+  type IncludedAssociations,
+  KeyConditions,
+  OptionsWithoutIndex,
+  OptionsWithIndex
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -130,112 +133,30 @@ abstract class DynaRecord implements DynaRecordBase {
     return await op.run(id, options);
   }
 
-  /**
-   * Query by PartitionKey and optional SortKey/Filter/Index conditions
-   * @param {Object} key - PartitionKey value and optional SortKey condition. Keys must be attributes defined on the model
-   * @param {Object=} options - QueryBuilderOptions
-   *
-   * @example By partition key only
-   * ```typescript
-   * const user = await User.query({ pk: "User#123" });
-   * ```
-   *
-   * @example By partition key and sort key exact match
-   * ```typescript
-   * const user = await User.query({ pk: "User#123", sk: "Profile#123" });
-   * ```
-   *
-   * @example By partition key and sort key begins with
-   * ```typescript
-   * const user = await User.query({ pk: "User#123", sk: { $beginsWith: "Profile" } });
-   * ```
-   *
-   * @example With filter (arbitrary example)
-   * ```typescript
-   * const result = await User.query(
-   *  {
-   *    myPk: "User|123"
-   *  },
-   *  {
-   *    filter: {
-   *      type: ["Profile", "Preferences"],
-   *      createdAt: { $beginsWith: "2023" },
-   *      $or: [
-   *        {
-   *         name: "John",
-   *         email: { $beginsWith: "testing }
-   *        },
-   *        {
-   *          name: "Jane",
-   *          updatedAt: { $beginsWith: "2024" },
-   *        },
-   *       {
-   *         id: "123"
-   *       }
-   *      ]
-   *    }
-   * }
-   *);
-   * ```
-   *
-   * @example On index
-   * ```typescript
-   *  const result = await User.query(
-   *    {
-   *      pk: "User#123",
-   *      sk: { $beginsWith: "Profile" }
-   *    },
-   *    { indexName: "myIndex" }
-   *  );
-   * ```
-   */
+  // TODO fix typedoc for all of these
+  // Make sure there are examples for each like there were before
+  public static async query<T extends DynaRecord>(
+    this: EntityClass<T>,
+    key: string,
+    options?: OptionsWithoutIndex
+  ): Promise<QueryResults<T>>;
+
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
-    options?: QueryBuilderOptions
-  ): Promise<QueryResults<T>>;
-
-  /**
-   * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
-   * QueryByIndex not supported. Use Query with keys if indexName is needed
-   * @param {string} id - Entity Id
-   * @param {Object=} options - QueryOptions. Supports filter and skCondition. indexName is not supported
-   *
-   * @example By partition key only
-   * ```typescript
-   * const user = await User.query("123");
-   * ```
-   *
-   * @example By partition key and sort key exact match
-   * ```typescript
-   * const user = await User.query("123", { skCondition: "Profile#111" });
-   * ```
-   *
-   * @example By partition key and sort key begins with
-   * ```typescript
-   * const user = await User.query("123", { skCondition: { $beginsWith: "Profile" } })
-   * ```
-   *
-   * @example With filter (arbitrary example)
-   * ```typescript
-   * const user = await User.query("123", {
-   *   filter: {
-   *     type: "Profile",
-   *     createdAt: "2023-11-21T12:31:21.148Z"
-   *    }
-   * });
-   * ```
-   */
-  public static async query<T extends DynaRecord>(
-    this: EntityClass<T>,
-    id: string,
-    options?: Omit<QueryOptions, "indexName">
+    options?: OptionsWithoutIndex
   ): Promise<QueryResults<T>>;
 
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
-    key: string | EntityKeyConditions<T>,
-    options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
+    key: KeyConditions<T>,
+    options: OptionsWithIndex
+  ): Promise<QueryResults<T>>;
+
+  public static async query<T extends DynaRecord>(
+    this: EntityClass<T>,
+    key: string | EntityKeyConditions<T> | KeyConditions<T>,
+    options?: OptionsWithoutIndex | OptionsWithIndex
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);

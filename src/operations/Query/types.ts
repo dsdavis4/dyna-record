@@ -1,9 +1,11 @@
 import type DynaRecord from "../../DynaRecord";
 import type {
-  KeyConditions,
+  KeyConditions as QueryKeyConditions,
   QueryOptions as QueryBuilderOptions,
-  SortKeyCondition
+  SortKeyCondition,
+  BeginsWithFilter
 } from "../../query-utils";
+import type { PartitionKey, SortKey } from "../../types";
 import type { EntityAttributesInstance } from "../types";
 
 /**
@@ -19,16 +21,38 @@ export type QueryOptions = QueryBuilderOptions & {
   skCondition?: SortKeyCondition;
 };
 
-// TODO update this to only accept actual keys... it currently accepts any value
-//     I should be able to do a map type for PartitionKeyValue or SortKeyValue
+// TODO typedoc
+export type OptionsWithoutIndex = Omit<QueryOptions, "indexName">;
+
+// TODO typedoc
+export type OptionsWithIndex = QueryBuilderOptions & {
+  indexName: string;
+  // If indexName is provided, consistentRead is not allowed (or must be false)
+  consistentRead?: false;
+};
+
 /**
- * Defines partition key conditions for querying entities based on their keys. This type is used to specify the conditions under which an entity or a set of entities can be queried from the database.
+ * Defines key conditions for querying entities based on their keys.
+ *
+ * PartitionKey is required, SortKey is optional.
  *
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  * @property {KeyConditions} - Conditions applied to entity keys. Each key in the entity can have conditions such as equality, range conditions, or begins with conditions.
  */
 export type EntityKeyConditions<T> = {
-  [K in keyof T]?: KeyConditions;
+  // TODO can I use the built in generics instead of this: Required<>
+  // For each key in T that is a PartitionKey, make it required.
+  [K in keyof T as T[K] extends PartitionKey ? K : never]-?: string;
+} & {
+  // For each key in T that is a SortKey, make it optional.
+  [K in keyof T as T[K] extends SortKey ? K : never]?:
+    | string
+    | BeginsWithFilter;
+};
+
+// TODO typedoc
+export type KeyConditions<T> = {
+  [K in keyof T]?: QueryKeyConditions;
 };
 
 /**
