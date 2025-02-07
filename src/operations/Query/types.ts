@@ -12,13 +12,15 @@ import type { EntityAttributesInstance } from "../types";
  * @extends QueryBuilderOptions - Base query options provided by the query utilities.
  * @property {SortKeyCondition?} skCondition - An optional condition for the sort key to further refine the query. This can be an exact match condition or a condition specifying a range or beginning match for the sort key.
  */
-export interface QueryOptions extends QueryBuilderOptions {
+export type QueryOptions = QueryBuilderOptions & {
   /**
    * Condition to query sort key by
    */
   skCondition?: SortKeyCondition;
-}
+};
 
+// TODO update this to only accept actual keys... it currently accepts any value
+//     I should be able to do a map type for PartitionKeyValue or SortKeyValue
 /**
  * Defines partition key conditions for querying entities based on their keys. This type is used to specify the conditions under which an entity or a set of entities can be queried from the database.
  *
