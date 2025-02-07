@@ -18,8 +18,6 @@ import {
   isHasManyRelationship
 } from "../../metadata/utils";
 
-// TODO start here - I ended by fixing types to support consistent read. Now implement
-
 /**
  * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.
  *
