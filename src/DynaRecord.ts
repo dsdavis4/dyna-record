@@ -133,20 +133,124 @@ abstract class DynaRecord implements DynaRecordBase {
     return await op.run(id, options);
   }
 
-  // TODO fix typedoc for all of these
-  // Make sure there are examples for each like there were before
+  /**
+   * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
+   * QueryByIndex not supported. Use Query with keys if indexName is needed
+   * @param {string} id - Entity Id
+   * @param {Object=} options - QueryOptions. Supports filter, consistentRead and skCondition. indexName is not supported
+   *
+   * @example By partition key only
+   * ```typescript
+   * const user = await User.query("123");
+   * ```
+   *
+   * @example By partition key and sort key exact match
+   * ```typescript
+   * const user = await User.query("123", { skCondition: "Profile#111" });
+   * ```
+   *
+   * @example By partition key and sort key begins with
+   * ```typescript
+   * const user = await User.query("123", { skCondition: { $beginsWith: "Profile" } })
+   * ```
+   *
+   * @example With filter (arbitrary example)
+   * ```typescript
+   * const user = await User.query("123", {
+   *   filter: {
+   *     type: "Profile",
+   *     createdAt: "2023-11-21T12:31:21.148Z"
+   *    }
+   * });
+   *
+   * @example Query as consistent read
+   * ```typescript
+   * const user = await User.query("123", { consistentRead: true })
+   * ```
+   * ```
+   */
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: string,
     options?: OptionsWithoutIndex
   ): Promise<QueryResults<T>>;
 
+  /**
+   * Query by PartitionKey and optional SortKey/Filter/Index conditions without and index
+   * When querying without an index the key conditions must be the PartitionKey and SortKey defined on the entity
+   * @param {Object} key - PartitionKey value and optional SortKey condition. Keys must be attributes defined on the model
+   * @param {Object=} options - QueryBuilderOptions
+   *
+   * @example By partition key only
+   * ```typescript
+   * const user = await User.query({ pk: "User#123" });
+   * ```
+   *
+   * @example By partition key and sort key exact match
+   * ```typescript
+   * const user = await User.query({ pk: "User#123", sk: "Profile#123" });
+   * ```
+   *
+   * @example By partition key and sort key begins with
+   * ```typescript
+   * const user = await User.query({ pk: "User#123", sk: { $beginsWith: "Profile" } });
+   * ```
+   *
+   * @example With filter (arbitrary example)
+   * ```typescript
+   * const result = await User.query(
+   *  {
+   *    myPk: "User|123"
+   *  },
+   *  {
+   *    filter: {
+   *      type: ["Profile", "Preferences"],
+   *      createdAt: { $beginsWith: "2023" },
+   *      $or: [
+   *        {
+   *         name: "John",
+   *         email: { $beginsWith: "testing }
+   *        },
+   *        {
+   *          name: "Jane",
+   *          updatedAt: { $beginsWith: "2024" },
+   *        },
+   *       {
+   *         id: "123"
+   *       }
+   *      ]
+   *    }
+   * }
+   *);
+   * ```
+   *
+   * @example With a consistent read
+   * ```typescript
+   * const user = await User.query({ pk: "User#123", consistentRead: true });
+   * ```
+   */
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
     options?: OptionsWithoutIndex
   ): Promise<QueryResults<T>>;
 
+  /**
+   * Query by PartitionKey and optional SortKey/Filter/Index conditions with an index
+   * When querying on an index, any of the entities attributes can be part of the key condition
+   * @param {Object} key - Any attribute defined on the entity that is part of an index's keys
+   * @param {Object=} options - QueryBuilderOptions
+   *
+   * @example On index
+   * ```typescript
+   *  const result = await User.query(
+   *    {
+   *      name: "SomeName" // An attribute that is part of the key condition on an iondex
+   *    },
+   *    { indexName: "myIndex" }
+   *  );
+   * ```
+   */
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: KeyConditions<T>,
