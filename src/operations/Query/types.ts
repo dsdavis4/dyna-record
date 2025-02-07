@@ -40,7 +40,6 @@ export type OptionsWithIndex = QueryBuilderOptions & {
  * @property {KeyConditions} - Conditions applied to entity keys. Each key in the entity can have conditions such as equality, range conditions, or begins with conditions.
  */
 export type EntityKeyConditions<T> = {
-  // TODO can I use the built in generics instead of this: Required<>
   // For each key in T that is a PartitionKey, make it required.
   [K in keyof T as T[K] extends PartitionKey ? K : never]-?: string;
 } & {
