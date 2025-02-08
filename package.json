@@ -1,7 +1,7 @@
 {
   "name": "dyna-record",
   "version": "0.2.5",
-  "description": "Typescript Object Relational Mapper (ORM) for Dynamo",
+  "description": "Typescript Data Modeler and ORM for Dynamo",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
