@@ -16,6 +16,7 @@ import type {
   OrFilter,
   QueryCommandProps
 } from "./types";
+import { consistentReadVal } from "../operations/utils";
 
 /**
  * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
@@ -73,7 +74,8 @@ class QueryBuilder {
       ExpressionAttributeValues: this.expressionAttributeValueParams(
         keyFilter,
         filterParams
-      )
+      ),
+      ConsistentRead: consistentReadVal(this.#props.options?.consistentRead)
     };
   }
 

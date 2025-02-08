@@ -166,7 +166,8 @@ describe("Update", () => {
               ":Type3": "PaymentMethod",
               ":Type4": "ContactInformation"
             },
-            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)",
+            ConsistentRead: true
           }
         ]
       ]);
@@ -294,7 +295,8 @@ describe("Update", () => {
               ":Type3": "PaymentMethod",
               ":Type4": "ContactInformation"
             },
-            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)"
+            FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)",
+            ConsistentRead: true
           }
         ]
       ]);
@@ -699,7 +701,8 @@ describe("Update", () => {
               ":PK2": "ContactInformation#123",
               ":Type1": "ContactInformation"
             },
-            FilterExpression: "#Type IN (:Type1)"
+            FilterExpression: "#Type IN (:Type1)",
+            ConsistentRead: true
           }
         ]
       ]);
@@ -1303,7 +1306,8 @@ describe("Update", () => {
                   ":Type1": "ContactInformation"
                 },
 
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -1402,7 +1406,8 @@ describe("Update", () => {
                     ":PK2": "ContactInformation#123",
                     ":Type1": "ContactInformation"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -1808,7 +1813,8 @@ describe("Update", () => {
                     ":PK2": "ContactInformation#123",
                     ":Type1": "ContactInformation"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -1964,7 +1970,8 @@ describe("Update", () => {
                   ":Type1": "ContactInformation"
                 },
 
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -2086,7 +2093,8 @@ describe("Update", () => {
                     ":PK2": "ContactInformation#123",
                     ":Type1": "ContactInformation"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -2573,7 +2581,8 @@ describe("Update", () => {
                     ":PK2": "ContactInformation#123",
                     ":Type1": "ContactInformation"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -2805,7 +2814,8 @@ describe("Update", () => {
                   ":PK2": "Pet#123",
                   ":Type1": "Pet"
                 },
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -2903,7 +2913,8 @@ describe("Update", () => {
                     ":PK2": "Pet#123",
                     ":Type1": "Pet"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -3300,7 +3311,8 @@ describe("Update", () => {
                     ":PK2": "Pet#123",
                     ":Type1": "Pet"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -3453,7 +3465,8 @@ describe("Update", () => {
                   ":PK2": "Pet#123",
                   ":Type1": "Pet"
                 },
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -3573,7 +3586,8 @@ describe("Update", () => {
                     ":PK2": "Pet#123",
                     ":Type1": "Pet"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -4055,7 +4069,8 @@ describe("Update", () => {
                     ":PK2": "Pet#123",
                     ":Type1": "Pet"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -4280,7 +4295,8 @@ describe("Update", () => {
                   ":PK2": "Employee#123",
                   ":Type1": "Employee"
                 },
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -4377,7 +4393,8 @@ describe("Update", () => {
                     ":PK2": "Employee#123",
                     ":Type1": "Employee"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -4678,7 +4695,8 @@ describe("Update", () => {
                     ":PK2": "Employee#123",
                     ":Type1": "Employee"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -4818,7 +4836,8 @@ describe("Update", () => {
                   ":PK2": "Employee#123",
                   ":Type1": "Employee"
                 },
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -4937,7 +4956,8 @@ describe("Update", () => {
                     ":PK2": "Employee#123",
                     ":Type1": "Employee"
                   },
-                  FilterExpression: "#Type IN (:Type1)"
+                  FilterExpression: "#Type IN (:Type1)",
+                  ConsistentRead: true
                 }
               ]
             ]);
@@ -5315,7 +5335,8 @@ describe("Update", () => {
                   ":PK2": "Employee#123",
                   ":Type1": "Employee"
                 },
-                FilterExpression: "#Type IN (:Type1)"
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
               }
             ]
           ]);
@@ -5516,7 +5537,8 @@ describe("Update", () => {
                 ":Type1": "Organization",
                 ":Type2": "User"
               },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
+              FilterExpression: "#Type IN (:Type1,:Type2)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -5657,7 +5679,8 @@ describe("Update", () => {
                 ":PK2": "Model3#123",
                 ":Type1": "Model3"
               },
-              FilterExpression: "#Type IN (:Type1)"
+              FilterExpression: "#Type IN (:Type1)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -5928,7 +5951,8 @@ describe("Update", () => {
                 ":PK2": "Model3#123",
                 ":Type1": "Model3"
               },
-              FilterExpression: "#Type IN (:Type1)"
+              FilterExpression: "#Type IN (:Type1)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -6212,7 +6236,8 @@ describe("Update", () => {
                 ":myPk2": "Grade|123",
                 ":type1": "Grade"
               },
-              FilterExpression: "#type IN (:type1)"
+              FilterExpression: "#type IN (:type1)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -6558,7 +6583,8 @@ describe("Update", () => {
                 ":Type1": "PhoneBook",
                 ":Type2": "Address"
               },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
+              FilterExpression: "#Type IN (:Type1,:Type2)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -6797,7 +6823,8 @@ describe("Update", () => {
                 ":Type1": "Desk",
                 ":Type2": "User"
               },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
+              FilterExpression: "#Type IN (:Type1,:Type2)",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -7017,7 +7044,8 @@ describe("Update", () => {
                 ":Type1": "Website",
                 ":Type2": "User"
               },
-              FilterExpression: "#Type IN (:Type1,:Type2)"
+              FilterExpression: "#Type IN (:Type1,:Type2)",
+              ConsistentRead: true
             }
           ]
         ]);

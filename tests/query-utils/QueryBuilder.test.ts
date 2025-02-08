@@ -82,7 +82,8 @@ describe("QueryBuilder", () => {
         ":Name4": "Process2",
         ":PK5": "Scale#123",
         ":Type1": "Process"
-      }
+      },
+      ConsistentRead: false
     });
   });
 
@@ -115,7 +116,8 @@ describe("QueryBuilder", () => {
         ":PK5": "Room#123",
         ":Type1": "Room",
         ":Type2": "Scale"
-      }
+      },
+      ConsistentRead: false
     });
   });
 
@@ -152,7 +154,46 @@ describe("QueryBuilder", () => {
         ":PK6": "Scale#123",
         ":Type1": "Room",
         ":Type3": "Process"
+      },
+      ConsistentRead: false
+    });
+  });
+
+  it("can query with a consistent read", () => {
+    expect.assertions(1);
+
+    const queryBuilder = new QueryBuilder({
+      entityClassName: "Scale",
+      key: { pk: "Scale#123" },
+      options: {
+        filter: {
+          type: "Process",
+          createdAt: { $beginsWith: "2021-09-05" },
+          name: ["Process1", "Process2"]
+        },
+        consistentRead: true
       }
+    });
+
+    expect(queryBuilder.build()).toEqual({
+      TableName: "mock-table",
+      KeyConditionExpression: "#PK = :PK5",
+      FilterExpression:
+        "#Type = :Type1 AND begins_with(#CreatedAt, :CreatedAt2) AND #Name IN (:Name3,:Name4)",
+      ExpressionAttributeNames: {
+        "#CreatedAt": "CreatedAt",
+        "#Name": "Name",
+        "#PK": "PK",
+        "#Type": "Type"
+      },
+      ExpressionAttributeValues: {
+        ":CreatedAt2": "2021-09-05",
+        ":Name3": "Process1",
+        ":Name4": "Process2",
+        ":PK5": "Scale#123",
+        ":Type1": "Process"
+      },
+      ConsistentRead: true
     });
   });
 });

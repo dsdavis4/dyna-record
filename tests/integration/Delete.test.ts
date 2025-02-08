@@ -147,7 +147,8 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "MockModel#123" }
+          ExpressionAttributeValues: { ":PK1": "MockModel#123" },
+          ConsistentRead: true
         }
       ]
     ]);
@@ -201,7 +202,8 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Pet#123" }
+          ExpressionAttributeValues: { ":PK1": "Pet#123" },
+          ConsistentRead: true
         }
       ]
     ]);
@@ -262,7 +264,8 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Home#123" }
+          ExpressionAttributeValues: { ":PK1": "Home#123" },
+          ConsistentRead: true
         }
       ]
     ]);
@@ -309,7 +312,8 @@ describe("Delete", () => {
             },
             ExpressionAttributeValues: {
               ":PK1": "Person#123"
-            }
+            },
+            ConsistentRead: true
           }
         ],
         [
@@ -324,7 +328,8 @@ describe("Delete", () => {
             ExpressionAttributeValues: {
               ":PK2": "Pet#001",
               ":Type1": "Pet"
-            }
+            },
+            ConsistentRead: true
           }
         ],
         [
@@ -340,7 +345,8 @@ describe("Delete", () => {
               ":PK3": "Home#002",
               ":Type1": "Home",
               ":Type2": "Address"
-            }
+            },
+            ConsistentRead: true
           }
         ]
       ]);
@@ -672,7 +678,8 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Book#123" }
+          ExpressionAttributeValues: { ":PK1": "Book#123" },
+          ConsistentRead: true
         }
       ]
     ]);
@@ -763,7 +770,8 @@ describe("Delete", () => {
           TableName: "mock-table",
           KeyConditionExpression: "#PK = :PK1",
           ExpressionAttributeNames: { "#PK": "PK" },
-          ExpressionAttributeValues: { ":PK1": "Book#123" }
+          ExpressionAttributeValues: { ":PK1": "Book#123" },
+          ConsistentRead: true
         }
       ]
     ]);
@@ -856,7 +864,8 @@ describe("Delete", () => {
           ExpressionAttributeValues: { ":PK1": "User#email@email.com" },
           ExpressionAttributeNames: { "#PK": "PK" },
           KeyConditionExpression: "#PK = :PK1",
-          TableName: "mock-table"
+          TableName: "mock-table",
+          ConsistentRead: true
         }
       ]
     ]);
@@ -950,7 +959,8 @@ describe("Delete", () => {
               },
               ExpressionAttributeValues: {
                 ":PK1": "Organization#123"
-              }
+              },
+              ConsistentRead: true
             }
           ],
           [
@@ -965,7 +975,8 @@ describe("Delete", () => {
               ExpressionAttributeValues: {
                 ":PK2": "Employee#001",
                 ":Type1": "Employee"
-              }
+              },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1053,7 +1064,8 @@ describe("Delete", () => {
                 TableName: "mock-table",
                 KeyConditionExpression: "#PK = :PK1",
                 ExpressionAttributeNames: { "#PK": "PK" },
-                ExpressionAttributeValues: { ":PK1": "Organization#123" }
+                ExpressionAttributeValues: { ":PK1": "Organization#123" },
+                ConsistentRead: true
               }
             ]
           ]);
@@ -1099,7 +1111,8 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "Employee#123" }
+              ExpressionAttributeValues: { ":PK1": "Employee#123" },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1184,7 +1197,8 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "Person#123" }
+              ExpressionAttributeValues: { ":PK1": "Person#123" },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1240,7 +1254,8 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "MockModel#123" }
+              ExpressionAttributeValues: { ":PK1": "MockModel#123" },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1325,7 +1340,8 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "Pet#123" }
+              ExpressionAttributeValues: { ":PK1": "Pet#123" },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1425,7 +1441,8 @@ describe("Delete", () => {
               TableName: "mock-table",
               KeyConditionExpression: "#PK = :PK1",
               ExpressionAttributeNames: { "#PK": "PK" },
-              ExpressionAttributeValues: { ":PK1": "Home#123" }
+              ExpressionAttributeValues: { ":PK1": "Home#123" },
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1531,7 +1548,8 @@ describe("Delete", () => {
                 ":PK1": "PhoneBook#123"
               },
               KeyConditionExpression: "#PK = :PK1",
-              TableName: "mock-table"
+              TableName: "mock-table",
+              ConsistentRead: true
             }
           ]
         ]);
@@ -1594,7 +1612,8 @@ describe("Delete", () => {
                 ":PK1": "Home#123"
               },
               KeyConditionExpression: "#PK = :PK1",
-              TableName: "mock-table"
+              TableName: "mock-table",
+              ConsistentRead: true
             }
           ]
         ]);

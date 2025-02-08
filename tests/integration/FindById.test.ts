@@ -274,7 +274,8 @@ describe("FindById", () => {
             },
             FilterExpression: "(#Type IN (:Type1,:Type2))",
             KeyConditionExpression: "#PK = :PK3",
-            TableName: "mock-table"
+            TableName: "mock-table",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -456,7 +457,8 @@ describe("FindById", () => {
               ":Type2": "Order",
               ":Type3": "PaymentMethod"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))"
+            FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -534,7 +536,8 @@ describe("FindById", () => {
               ":Type1": "Customer",
               ":Type2": "ContactInformation"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -614,7 +617,8 @@ describe("FindById", () => {
               ":Type1": "ContactInformation",
               ":Type2": "Customer"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -731,7 +735,8 @@ describe("FindById", () => {
               ":Type1": "Book",
               ":Type2": "Author"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -889,7 +894,8 @@ describe("FindById", () => {
               ":type3": "Assignment",
               ":type4": "Student"
             },
-            FilterExpression: "(#type IN (:type1,:type2,:type3,:type4))"
+            FilterExpression: "(#type IN (:type1,:type2,:type3,:type4))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -945,7 +951,8 @@ describe("FindById", () => {
               ":Type2": "Order",
               ":Type3": "PaymentMethod"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))"
+            FilterExpression: "(#Type IN (:Type1,:Type2,:Type3))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -999,7 +1006,8 @@ describe("FindById", () => {
               ":Type1": "Book",
               ":Type2": "Author"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -1053,7 +1061,8 @@ describe("FindById", () => {
               ":Type1": "PaymentMethod",
               ":Type2": "PaymentMethodProvider"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -1109,7 +1118,168 @@ describe("FindById", () => {
               ":Type1": "ContactInformation",
               ":Type2": "Customer"
             },
-            FilterExpression: "(#Type IN (:Type1,:Type2))"
+            FilterExpression: "(#Type IN (:Type1,:Type2))",
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("will findById with includes using consistent reads", async () => {
+      expect.assertions(7);
+
+      // BelongsTo -  Teacher entities denormalized to Course partition via associations
+      const teacher: OtherTableEntityTableItem<Teacher> = {
+        myPk: "Course|123",
+        mySk: "Teacher",
+        id: "004",
+        type: "Teacher",
+        name: "Teacher-1",
+        createdAt: "2023-02-20T08:31:15.148Z",
+        updatedAt: "2023-02-21T08:31:15.148Z"
+      };
+
+      // Entity being queried for
+      const course: OtherTableEntityTableItem<Course> = {
+        myPk: "Course|123",
+        mySk: "Course",
+        id: "123",
+        type: "Course",
+        name: "Math",
+        teacherId: teacher.id,
+        createdAt: "2023-01-15T12:12:18.123Z",
+        updatedAt: "2023-02-15T08:31:15.148Z"
+      };
+
+      // HasAndBelongsToMany -  Student entities denormalized to Course partition via associations
+      const students: Array<OtherTableEntityTableItem<Student>> = [
+        {
+          myPk: "Course|123",
+          mySk: "Student|001",
+          id: "001",
+          type: "Student",
+          name: "Student-1",
+          createdAt: "2023-01-15T12:12:18.123Z",
+          updatedAt: "2023-02-15T08:31:15.148Z"
+        },
+        {
+          myPk: "Course|123",
+          mySk: "Student|002",
+          id: "002",
+          type: "Student",
+          name: "Student-2",
+          createdAt: "2023-01-16T12:12:18.123Z",
+          updatedAt: "2023-02-17T08:31:15.148Z"
+        }
+      ];
+
+      // HasMany -  Assignment entities denormalized to Course partition via associations
+      const assignments: Array<OtherTableEntityTableItem<Assignment>> = [
+        {
+          myPk: "Course|123",
+          mySk: "Assignment|003",
+          id: "003",
+          type: "Assignment",
+          title: "Assignment-1",
+          courseId: course.id,
+          createdAt: "2023-01-18T12:12:18.123Z",
+          updatedAt: "2023-02-19T08:31:15.148Z"
+        }
+      ];
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [course, ...students, ...assignments, teacher]
+      });
+
+      const result = await Course.findById("123", {
+        consistentRead: true,
+        include: [
+          { association: "teacher" },
+          { association: "assignments" },
+          { association: "students" }
+        ]
+      });
+
+      expect(result).toEqual({
+        myPk: "Course|123",
+        mySk: "Course",
+        id: "123",
+        type: "Course",
+        name: "Math",
+        teacherId: "004",
+        createdAt: new Date("2023-01-15T12:12:18.123Z"),
+        updatedAt: new Date("2023-02-15T08:31:15.148Z"),
+        assignments: [
+          {
+            myPk: "Course|123",
+            mySk: "Assignment|003",
+            id: "003",
+            type: "Assignment",
+            courseId: "123",
+            title: "Assignment-1",
+            createdAt: new Date("2023-01-18T12:12:18.123Z"),
+            updatedAt: new Date("2023-02-19T08:31:15.148Z")
+          }
+        ],
+        students: [
+          {
+            myPk: "Course|123",
+            mySk: "Student|001",
+            id: "001",
+            type: "Student",
+            name: "Student-1",
+            createdAt: new Date("2023-01-15T12:12:18.123Z"),
+            updatedAt: new Date("2023-02-15T08:31:15.148Z")
+          },
+          {
+            myPk: "Course|123",
+            mySk: "Student|002",
+            id: "002",
+            type: "Student",
+            name: "Student-2",
+            createdAt: new Date("2023-01-16T12:12:18.123Z"),
+            updatedAt: new Date("2023-02-17T08:31:15.148Z")
+          }
+        ],
+        teacher: {
+          myPk: "Course|123",
+          mySk: "Teacher",
+          id: "004",
+          type: "Teacher",
+          name: "Teacher-1",
+          createdAt: new Date("2023-02-20T08:31:15.148Z"),
+          updatedAt: new Date("2023-02-21T08:31:15.148Z")
+        }
+      });
+      expect(result).toBeInstanceOf(Course);
+      expect(result?.teacher).toBeInstanceOf(Teacher);
+      expect(
+        result?.assignments.every(
+          assignment => assignment instanceof Assignment
+        )
+      ).toEqual(true);
+      expect(
+        result?.students.every(student => student instanceof Student)
+      ).toEqual(true);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "other-table",
+            KeyConditionExpression: "#myPk = :myPk5",
+            ExpressionAttributeNames: {
+              "#myPk": "myPk",
+              "#type": "type"
+            },
+            ExpressionAttributeValues: {
+              ":myPk5": "Course|123",
+              ":type1": "Course",
+              ":type2": "Teacher",
+              ":type3": "Assignment",
+              ":type4": "Student"
+            },
+            FilterExpression: "(#type IN (:type1,:type2,:type3,:type4))",
+            ConsistentRead: true
           }
         ]
       ]);

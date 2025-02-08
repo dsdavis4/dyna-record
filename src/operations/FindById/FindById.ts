@@ -11,7 +11,7 @@ import type {
   IncludedAssociations,
   SortedQueryResults
 } from "./types";
-import { buildEntityRelationshipMetaObj } from "../utils";
+import { buildEntityRelationshipMetaObj, consistentReadVal } from "../utils";
 import { type QueryResult, type QueryResults } from "../Query";
 import {
   isHasAndBelongsToManyRelationship,
@@ -51,7 +51,10 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         consistentRead: options?.consistentRead
       });
     } else {
-      return await this.findByIdWithIncludes(id, options.include);
+      return await this.findByIdWithIncludes(id, {
+        includedAssociations: options.include,
+        consistentRead: options?.consistentRead
+      });
     }
   }
 
@@ -72,7 +75,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
         [this.sortKeyAlias]: this.EntityClass.name
       },
-      ConsistentRead: options.consistentRead ?? false
+      ConsistentRead: consistentReadVal(options.consistentRead)
     });
 
     if (res === undefined) {
@@ -91,9 +94,13 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    */
   private async findByIdWithIncludes<Inc extends IncludedAssociations<T> = []>(
     id: string,
-    includedAssociations: Inc
+    options: Pick<FindByIdOptions<T>, "consistentRead"> & {
+      includedAssociations: Inc;
+    }
   ): Promise<Optional<FindByIdIncludesRes<T, Inc>>> {
-    const includedRelMeta = this.getIncludedRelationships(includedAssociations);
+    const includedRelMeta = this.getIncludedRelationships(
+      options.includedAssociations
+    );
 
     const includedTypesFilter = includedRelationshipsFilter(
       this.EntityClass.name,
@@ -102,7 +109,8 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
 
     // TODO add support for consistent read choice
     const queryResults = await this.EntityClass.query<DynaRecord>(id, {
-      filter: includedTypesFilter
+      filter: includedTypesFilter,
+      consistentRead: consistentReadVal(options.consistentRead)
     });
 
     if (queryResults.length === 0) return undefined;

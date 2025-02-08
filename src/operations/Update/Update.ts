@@ -244,6 +244,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const [transactionResults, selfAndLinkedEntities] = await Promise.all([
       transactionBuilder.executeTransaction(),
       this.EntityClass.query<DynaRecord>(id, {
+        consistentRead: true,
         filter: {
           type: [
             this.EntityClass.name,
