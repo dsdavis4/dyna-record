@@ -35,8 +35,6 @@ import {
   isHasManyRelationship
 } from "../../metadata/utils";
 
-// TODO any pre fetch query, or transact get should be consistent
-
 type Entity = EntityAttributesInstance<DynaRecord>;
 
 type PartialEntityWithId = WithRequired<

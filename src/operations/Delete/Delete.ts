@@ -25,8 +25,6 @@ import {
 } from "../utils";
 import type { DeleteOptions } from "./types";
 
-// TODO any pre fetch query, or transact get should be consistent
-
 type Entity = QueryResult<DynaRecord>;
 
 interface PreFetchResult {

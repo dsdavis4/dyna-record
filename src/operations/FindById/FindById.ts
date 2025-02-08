@@ -107,7 +107,6 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
       includedRelMeta
     );
 
-    // TODO add support for consistent read choice
     const queryResults = await this.EntityClass.query<DynaRecord>(id, {
       filter: includedTypesFilter,
       consistentRead: consistentReadVal(options.consistentRead)

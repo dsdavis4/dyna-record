@@ -84,7 +84,6 @@ export type AndOrFilter = FilterParams & OrFilter;
  */
 export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
 
-// TODO add type tests for consistentRead not being allowed when indexName is provided
 /**
  * Specifies additional options for querying items, including optional consistent read, index name and filter conditions.
  *

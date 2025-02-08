@@ -18,8 +18,6 @@ import {
 import { isBelongsToRelationship } from "../../metadata/utils";
 import type { BelongsToOrOwnedByRelationship } from "../../metadata";
 
-// TODO any pre fetch query, or transact get should be consistent
-
 /**
  * Represents an operation to create a new entity record in DynamoDB, including all necessary
  * denormalized relationship records. This ensures that "BelongsTo" and "HasMany" relationships
