@@ -1,12 +1,10 @@
 import Metadata, { tableDefaultFields } from "./metadata";
-import { type QueryOptions as QueryBuilderOptions } from "./query-utils";
 import { DateAttribute, StringAttribute } from "./decorators";
 import {
   FindById,
   type FindByIdOptions,
   type FindByIdIncludesRes,
   Query,
-  type QueryOptions,
   type EntityKeyConditions,
   type QueryResults,
   Create,
@@ -17,9 +15,9 @@ import {
   type EntityAttributesOnly,
   type EntityAttributesInstance,
   type IncludedAssociations,
-  KeyConditions,
-  OptionsWithoutIndex,
-  OptionsWithIndex
+  type KeyConditions,
+  type OptionsWithoutIndex,
+  type OptionsWithIndex
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
