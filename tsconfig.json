@@ -5,6 +5,7 @@
     "declaration": true,
     "declarationMap": true,
     "strictNullChecks": true,
+    "strict": true,
     "target": "ES2022",
     "noImplicitOverride": true,
     "strictPropertyInitialization": false,

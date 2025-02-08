@@ -125,7 +125,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @returns - The item and its associated links denormalized
    */
   private async preFetch(id: string): Promise<Required<PreFetchResult>> {
-    const items = await this.EntityClass.query<DynaRecord>(id);
+    const items = await this.EntityClass.query<DynaRecord>(id, {
+      consistentRead: true
+    });
 
     const prefetchResult = items.reduce<PreFetchResult>(
       (acc, item) => {

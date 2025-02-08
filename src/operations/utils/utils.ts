@@ -97,3 +97,11 @@ export const buildBelongsToLinkKey = (
 
   throw new Error("Failed to build BelongsTo key for linked record");
 };
+
+/**
+ * Consistent read value.
+ * @default false
+ */
+export const consistentReadVal = (val?: boolean): boolean => {
+  return val ?? false;
+};

@@ -9,7 +9,7 @@ import type { DynamoTableItem } from "../../types";
 import { isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import type {
-  EntityKeyConditions,
+  EntityQueryKeyConditions,
   QueryOptions,
   QueryResult,
   QueryResults
@@ -30,7 +30,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
    * @returns Array of Entity or denormalized records
    */
   public async run(
-    key: string | EntityKeyConditions<T>,
+    key: string | EntityQueryKeyConditions<T>,
     options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">
   ): Promise<QueryResults<T>> {
     if (typeof key === "string") {
@@ -48,7 +48,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
    * @param {string=} options.indexName - The name of the index to filter on
    */
   private async queryByKey(
-    key: EntityKeyConditions<T>,
+    key: EntityQueryKeyConditions<T>,
     options?: QueryBuilderOptions
   ): Promise<QueryResults<T>> {
     const params = new QueryBuilder({

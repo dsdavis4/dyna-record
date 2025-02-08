@@ -11,6 +11,7 @@ import {
   type MockTableEntityTableItem
 } from "./utils";
 import { type QueryResults } from "../../src/operations";
+import Logger from "../../src/Logger";
 
 const mockSend = jest.fn();
 const mockQuery = jest.fn();
@@ -133,7 +134,8 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK1",
             ExpressionAttributeNames: { "#PK": "PK" },
-            ExpressionAttributeValues: { ":PK1": "Customer#123" }
+            ExpressionAttributeValues: { ":PK1": "Customer#123" },
+            ConsistentRead: false
           }
         ]
       ]);
@@ -272,7 +274,8 @@ describe("Query", () => {
             ExpressionAttributeValues: {
               ":PK1": "Customer#123",
               ":SK2": "Order#001"
-            }
+            },
+            ConsistentRead: false
           }
         ]
       ]);
@@ -372,7 +375,8 @@ describe("Query", () => {
             ExpressionAttributeValues: {
               ":PK1": "Customer#123",
               ":SK2": "Order"
-            }
+            },
+            ConsistentRead: false
           }
         ]
       ]);
@@ -482,7 +486,8 @@ describe("Query", () => {
             },
             FilterExpression: "#Type = :Type1 AND #LastFour = :LastFour2",
             KeyConditionExpression: "#PK = :PK3",
-            TableName: "mock-table"
+            TableName: "mock-table",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -581,7 +586,8 @@ describe("Query", () => {
               ":CreatedAt3": "2021-09-15T"
             },
             FilterExpression:
-              "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)"
+              "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -704,7 +710,8 @@ describe("Query", () => {
               ":updatedAt2": "2023-02-15"
             },
             FilterExpression:
-              "((#name = :name1 AND begins_with(#updatedAt, :updatedAt2)) OR (#title IN (:title3,:title4) AND begins_with(#createdAt, :createdAt5) AND #type = :type6) OR #id = :id7) AND (#type IN (:type8,:type9) AND begins_with(#createdAt, :createdAt10))"
+              "((#name = :name1 AND begins_with(#updatedAt, :updatedAt2)) OR (#title IN (:title3,:title4) AND begins_with(#createdAt, :createdAt5) AND #type = :type6) OR #id = :id7) AND (#type IN (:type8,:type9) AND begins_with(#createdAt, :createdAt10))",
+            ConsistentRead: false
           }
         ]
       ]);
@@ -795,6 +802,205 @@ describe("Query", () => {
           ]
         }
       });
+
+      operationSharedAssertions(result);
+    });
+  });
+
+  describe("can query with consistent reads", () => {
+    const operationSharedAssertions = (
+      result: QueryResults<Customer>
+    ): void => {
+      expect(result).toEqual([
+        {
+          pk: "Customer#123",
+          sk: "Customer",
+          id: "123",
+          type: "Customer",
+          address: "11 Some St",
+          name: "Some Customer",
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "Order#001",
+          id: "001",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-17T09:31:15.148Z"),
+          paymentMethodId: "987",
+          createdAt: new Date("2021-10-15T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-16T09:31:15.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "Order#002",
+          id: "002",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-10-30T09:31:15.148Z"),
+          paymentMethodId: "654",
+          createdAt: new Date("2021-10-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-10-22T09:31:15.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "Order#003",
+          id: "003",
+          type: "Order",
+          customerId: "123",
+          orderDate: new Date("2022-11-30T09:31:15.148Z"),
+          paymentMethodId: "321",
+          createdAt: new Date("2021-11-21T09:31:15.148Z"),
+          updatedAt: new Date("2022-11-22T09:31:15.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "PaymentMethod#004",
+          id: "004",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "9876",
+          createdAt: new Date("2021-10-01T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-02T12:31:21.148Z")
+        },
+        {
+          pk: "Customer#123",
+          sk: "PaymentMethod#005",
+          id: "005",
+          type: "PaymentMethod",
+          customerId: "123",
+          lastFour: "6543",
+          createdAt: new Date("2021-10-04T12:31:21.148Z"),
+          updatedAt: new Date("2022-10-05T12:31:21.148Z")
+        }
+      ]);
+
+      result.forEach((res, index) => {
+        if (res.type === "Customer") expect(res).toBeInstanceOf(Customer);
+        else if (res.type === "Order") expect(res).toBeInstanceOf(Order);
+        else if (res.type === "PaymentMethod")
+          expect(res).toBeInstanceOf(PaymentMethod);
+        else throw new Error("Unexpected test type");
+      });
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK1",
+            ExpressionAttributeNames: { "#PK": "PK" },
+            ExpressionAttributeValues: { ":PK1": "Customer#123" },
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    };
+
+    beforeEach(() => {
+      const customer: MockTableEntityTableItem<Customer> = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2021-09-15T04:26:31.148Z",
+        UpdatedAt: "2022-09-15T04:26:31.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order1: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#001",
+        Id: "001",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "987",
+        OrderDate: "2022-10-17T09:31:15.148Z",
+        CreatedAt: "2021-10-15T09:31:15.148Z",
+        UpdatedAt: "2022-10-16T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order2: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#002",
+        Id: "002",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "654",
+        OrderDate: "2022-10-30T09:31:15.148Z",
+        CreatedAt: "2021-10-21T09:31:15.148Z",
+        UpdatedAt: "2022-10-22T09:31:15.148Z"
+      };
+
+      // Denormalized Order in Customer Partition
+      const order3: MockTableEntityTableItem<Order> = {
+        PK: "Customer#123",
+        SK: "Order#003",
+        Id: "003",
+        Type: "Order",
+        CustomerId: customer.Id,
+        PaymentMethodId: "321",
+        OrderDate: "2022-11-30T09:31:15.148Z",
+        CreatedAt: "2021-11-21T09:31:15.148Z",
+        UpdatedAt: "2022-11-22T09:31:15.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod1: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#004",
+        Id: "004",
+        Type: "PaymentMethod",
+        LastFour: "9876",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-01T12:31:21.148Z",
+        UpdatedAt: "2022-10-02T12:31:21.148Z"
+      };
+
+      // Denormalized PaymentMethod in Customer Partition
+      const paymentMethod2: MockTableEntityTableItem<PaymentMethod> = {
+        PK: "Customer#123",
+        SK: "PaymentMethod#005",
+        Id: "005",
+        Type: "PaymentMethod",
+        LastFour: "6543",
+        CustomerId: customer.Id,
+        CreatedAt: "2021-10-04T12:31:21.148Z",
+        UpdatedAt: "2022-10-05T12:31:21.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          customer,
+          order1,
+          order2,
+          order3,
+          paymentMethod1,
+          paymentMethod2
+        ]
+      });
+    });
+
+    it("queryByKeys", async () => {
+      expect.assertions(9);
+
+      const result = await Customer.query(
+        { pk: "Customer#123" },
+        { consistentRead: true }
+      );
+
+      operationSharedAssertions(result);
+    });
+
+    it("queryByEntity", async () => {
+      expect.assertions(9);
+
+      const result = await Customer.query("123", { consistentRead: true });
 
       operationSharedAssertions(result);
     });
@@ -904,7 +1110,8 @@ describe("Query", () => {
             ExpressionAttributeValues: {
               ":PK1": "Customer#123",
               ":SK2": "Order"
-            }
+            },
+            ConsistentRead: false
           }
         ]
       ]);
@@ -912,11 +1119,13 @@ describe("Query", () => {
     });
 
     describe("types", () => {
-      it("does not serialize relationships", async () => {
+      beforeEach(() => {
         mockQuery.mockResolvedValueOnce({
           Items: []
         });
+      });
 
+      it("does not serialize relationships", async () => {
         const result = await PaymentMethod.query({
           pk: "PaymentMethod#123"
         });
@@ -931,16 +1140,109 @@ describe("Query", () => {
           Logger.log(paymentMethod.orders);
         }
       });
+
+      it("allows query to be on both partition key and sort key", async () => {
+        // @ts-expect-no-error: Can query on both partition key and sort key
+        await Customer.query({ pk: "123", sk: "SomeVal" });
+      });
+
+      it("allows query to be on both partition key and sort key with a beginsWithCondition", async () => {
+        // @ts-expect-no-error: Can query on both partition key and sort key
+        await Customer.query({ pk: "123", sk: { $beginsWith: "Order" } });
+      });
+
+      it("does not allow the partition key value if its the wrong type", async () => {
+        // @ts-expect-error: PartitionKey value must be a string
+        await Customer.query({ pk: 123, sk: "SomeVal" });
+      });
+
+      it("does not allow the sort key value if its the wrong type", async () => {
+        // @ts-expect-error: PartitionKey value must be a string
+        await Customer.query({ pk: "123", sk: 456 });
+      });
+
+      it("sort key is optional", async () => {
+        // @ts-expect-no-error: SortKey is optional
+        await Customer.query({ pk: "123" });
+      });
+
+      it("PartitionKey is required (Can't query on sort key only)", async () => {
+        // @ts-expect-error: SortKey is optional
+        await Customer.query({ sk: "123" });
+      });
+
+      it("key condition can only include key values", async () => {
+        // @ts-expect-error: Can only query on keys for key condition
+        await Customer.query({ pk: "123", name: "Testing" });
+      });
+
+      it("key condition can include non-key values if querying on an index", async () => {
+        // @ts-expect-no-error: Key condition can include non key values if querying on an index
+        await Customer.query({ name: "Testing" }, { indexName: "MyIndex" });
+      });
+
+      it("when querying on an index the attribute must exist on the entity", async () => {
+        // @ts-expect-error: Key condition attributes must exist on the entity
+        await Customer.query(
+          { someVal: "Testing" },
+          { indexName: "MyIndex" }
+        ).catch(_e => {
+          // Swallow error
+        });
+      });
+
+      describe("consistentRead", () => {
+        it("consistentRead can be true", async () => {
+          // @ts-expect-no-error: Can set consistentRead to true
+          await Customer.query({ pk: "123" }, { consistentRead: true });
+        });
+
+        it("consistentRead can be false", async () => {
+          // @ts-expect-no-error: Can set consistentRead to false
+          await Customer.query({ pk: "123" }, { consistentRead: false });
+        });
+
+        it("consistentRead can be undefined", async () => {
+          // @ts-expect-no-error: Can set consistentRead to undefined
+          await Customer.query({ pk: "123" }, { consistentRead: undefined });
+        });
+
+        it("consistentRead cannot be true when indexName is present", async () => {
+          // @ts-expect-error: consistentRead cannot be true when indexName is present
+          await Customer.query(
+            { pk: "123" },
+            { consistentRead: true, indexName: "MyIndex" }
+          );
+        });
+
+        it("consistentRead cannot be false when indexName is present", async () => {
+          // @ts-expect-error: consistentRead cannot be false when indexName is present
+          await Customer.query(
+            { pk: "123" },
+            { consistentRead: false, indexName: "MyIndex" }
+          );
+        });
+
+        it("consistentRead can be undefined when indexName is present", async () => {
+          // @ts-expect-no-error: consistentRead can be undefined when indexName is present
+          await Customer.query(
+            { pk: "123" },
+            { consistentRead: undefined, indexName: "MyIndex" }
+          );
+        });
+      });
     });
   });
 
   describe("queryByEntity specific test", () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({
+        Items: []
+      });
+    });
+
     describe("types", () => {
       it("does not serialize relationships", async () => {
-        mockQuery.mockResolvedValueOnce({
-          Items: []
-        });
-
         const result = await PaymentMethod.query("123");
 
         const paymentMethod = result[0];
@@ -955,13 +1257,50 @@ describe("Query", () => {
       });
 
       it("does not allow to query by index", async () => {
-        mockQuery.mockResolvedValueOnce({
-          Items: []
-        });
-
         // @ts-expect-error: Cannot query by index when using query by entity ID
         await PaymentMethod.query("123", {
           indexName: "123"
+        });
+      });
+
+      it("allows query with sort", async () => {
+        // @ts-expect-no-error: Can query with sort
+        await Customer.query("123", {
+          skCondition: "SomeVal"
+        });
+      });
+
+      it("allows query on sort key with a condition", async () => {
+        // @ts-expect-no-error: Can query on sort key with a condition
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "SomeVal" }
+        });
+      });
+
+      it("can query with no options", async () => {
+        // @ts-expect-no-error: can query with no options
+        await PaymentMethod.query("123");
+      });
+
+      it("id must be a string", async () => {
+        // @ts-expect-error: id must be a string
+        await PaymentMethod.query(123);
+      });
+
+      describe("consistentRead", () => {
+        it("consistentRead can be true", async () => {
+          // @ts-expect-no-error: Can set consistentRead to true
+          await Customer.query("123", { consistentRead: true });
+        });
+
+        it("consistentRead can be false", async () => {
+          // @ts-expect-no-error: Can set consistentRead to false
+          await Customer.query("123", { consistentRead: false });
+        });
+
+        it("consistentRead can be undefined", async () => {
+          // @ts-expect-no-error: Can set consistentRead to undefined
+          await Customer.query("123", { consistentRead: undefined });
         });
       });
     });

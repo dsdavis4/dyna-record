@@ -1,9 +1,11 @@
 import type DynaRecord from "../../DynaRecord";
 import type {
-  KeyConditions,
+  KeyConditions as QueryKeyConditions,
   QueryOptions as QueryBuilderOptions,
-  SortKeyCondition
+  SortKeyCondition,
+  BeginsWithFilter
 } from "../../query-utils";
+import type { PartitionKey, SortKey } from "../../types";
 import type { EntityAttributesInstance } from "../types";
 
 /**
@@ -12,21 +14,50 @@ import type { EntityAttributesInstance } from "../types";
  * @extends QueryBuilderOptions - Base query options provided by the query utilities.
  * @property {SortKeyCondition?} skCondition - An optional condition for the sort key to further refine the query. This can be an exact match condition or a condition specifying a range or beginning match for the sort key.
  */
-export interface QueryOptions extends QueryBuilderOptions {
+export type QueryOptions = QueryBuilderOptions & {
   /**
    * Condition to query sort key by
    */
   skCondition?: SortKeyCondition;
-}
+};
 
 /**
- * Defines partition key conditions for querying entities based on their keys. This type is used to specify the conditions under which an entity or a set of entities can be queried from the database.
+ * Options for querying without an index
+ */
+export type OptionsWithoutIndex = Omit<QueryOptions, "indexName">;
+
+/**
+ *  Options for querying on an index. Consistent reads are not allowed
+ */
+export type OptionsWithIndex = QueryBuilderOptions & {
+  indexName: string;
+  // If indexName is provided, consistentRead is not allowed (or must be false)
+  consistentRead?: false;
+};
+
+/**
+ * Defines key conditions for querying entities based on their keys.
+ *
+ * PartitionKey is required, SortKey is optional.
  *
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  * @property {KeyConditions} - Conditions applied to entity keys. Each key in the entity can have conditions such as equality, range conditions, or begins with conditions.
  */
 export type EntityKeyConditions<T> = {
-  [K in keyof T]?: KeyConditions;
+  // For each key in T that is a PartitionKey, make it required.
+  [K in keyof T as T[K] extends PartitionKey ? K : never]-?: string;
+} & {
+  // For each key in T that is a SortKey, make it optional.
+  [K in keyof T as T[K] extends SortKey ? K : never]?:
+    | string
+    | BeginsWithFilter;
+};
+
+/**
+ * Key conditions when querying on an index. Can be any attribute on the entity but must be the keys of the given index
+ */
+export type IndexKeyConditions<T> = {
+  [K in keyof T]?: QueryKeyConditions;
 };
 
 /**
@@ -94,3 +125,12 @@ export type QueryResults<T extends DynaRecord> = Array<
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  */
 export type QueryResult<T extends DynaRecord> = QueryResults<T>[number];
+
+/**
+ * Key conditions when querying an entity.
+ * When querying the main table this will enforce that the keys are the PartitionKey and SortKey from the table
+ * When querying an index, this can be any key on the table, but must be the keys for that index
+ */
+export type EntityQueryKeyConditions<T> =
+  | EntityKeyConditions<T>
+  | IndexKeyConditions<T>;

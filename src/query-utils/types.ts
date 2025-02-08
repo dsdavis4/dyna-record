@@ -85,15 +85,24 @@ export type AndOrFilter = FilterParams & OrFilter;
 export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
 
 /**
- * Specifies additional options for querying items, including optional index name and filter conditions.
+ * Specifies additional options for querying items, including optional consistent read, index name and filter conditions.
+ *
  *
  * @property {string?} indexName - Optional name of the secondary index to use in the query.
  * @property {FilterParams?} filter - Optional filter conditions to apply to the query.
+ * @property {boolean?} consistentRead - Whether to use consistent reads for the operation. Defaults to false. Cannot be used when indexName is provided ([Docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html#HowItWorks.ReadConsistency.Strongly))
  */
-export interface QueryOptions {
-  indexName?: string;
-  filter?: FilterParams;
-}
+export type QueryOptions =
+  | {
+      indexName: string;
+      filter?: FilterParams;
+      consistentRead?: never;
+    }
+  | {
+      indexName?: undefined;
+      filter?: FilterParams;
+      consistentRead?: boolean;
+    };
 
 /**
  * Combines key conditions and query options to define the properties for a query command.
