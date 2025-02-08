@@ -17,7 +17,8 @@ import {
   type IncludedAssociations,
   type KeyConditions,
   type OptionsWithoutIndex,
-  type OptionsWithIndex
+  type OptionsWithIndex,
+  type EntityQueryKeyConditions
 } from "./operations";
 import type { EntityClass, Optional } from "./types";
 import { createInstance } from "./utils";
@@ -257,7 +258,7 @@ abstract class DynaRecord implements DynaRecordBase {
 
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
-    key: string | EntityKeyConditions<T> | KeyConditions<T>,
+    key: string | EntityQueryKeyConditions<T>,
     options?: OptionsWithoutIndex | OptionsWithIndex
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);

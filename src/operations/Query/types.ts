@@ -119,3 +119,12 @@ export type QueryResults<T extends DynaRecord> = Array<
  * @template T - The type of the entity being queried, extending `DynaRecord`.
  */
 export type QueryResult<T extends DynaRecord> = QueryResults<T>[number];
+
+/**
+ * Key conditions when querying an entity.
+ * When querying the main table this will enforce that the keys are the PartitionKey and SortKey from the table
+ * When querying an index, this can be any key on the table, but must be the keys for that index
+ */
+export type EntityQueryKeyConditions<T> =
+  | EntityKeyConditions<T>
+  | KeyConditions<T>;
