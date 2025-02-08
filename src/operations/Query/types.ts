@@ -21,10 +21,14 @@ export type QueryOptions = QueryBuilderOptions & {
   skCondition?: SortKeyCondition;
 };
 
-// TODO typedoc
+/**
+ * Options for querying without an index
+ */
 export type OptionsWithoutIndex = Omit<QueryOptions, "indexName">;
 
-// TODO typedoc
+/**
+ *  Options for querying on an index. Consistent reads are not allowed
+ */
 export type OptionsWithIndex = QueryBuilderOptions & {
   indexName: string;
   // If indexName is provided, consistentRead is not allowed (or must be false)
@@ -49,8 +53,10 @@ export type EntityKeyConditions<T> = {
     | BeginsWithFilter;
 };
 
-// TODO typedoc
-export type KeyConditions<T> = {
+/**
+ * Key conditions when querying on an index. Can be any attribute on the entity but must be the keys of the given index
+ */
+export type IndexKeyConditions<T> = {
   [K in keyof T]?: QueryKeyConditions;
 };
 
@@ -127,4 +133,4 @@ export type QueryResult<T extends DynaRecord> = QueryResults<T>[number];
  */
 export type EntityQueryKeyConditions<T> =
   | EntityKeyConditions<T>
-  | KeyConditions<T>;
+  | IndexKeyConditions<T>;
