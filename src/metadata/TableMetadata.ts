@@ -30,7 +30,7 @@ export const tableDefaultFields: Record<
  * The metadata includes the partition and sort key attributes of the table, which are essential for database operations. It also provides a mechanism to include default attributes and their mappings, supporting common fields like `id`, `type`, `createdAt`, and `updatedAt`, along with their serialization strategies, particularly for date fields.
  *
  * @property {string} name - The name of the table.
- * @property {string} delimiter - A delimiter used in the table's composite keys.
+ * @property {string} delimiter - A delimiter used in the table's composite keys. Defaults to `#`
  * @property {Record<DefaultFields, AttributeMetadata>} defaultAttributes - A record of default attributes for the entity, keyed by entity field names.
  * @property {Record<string, AttributeMetadata>} defaultTableAttributes - A record of default attributes for the table, keyed by table field aliases.
  * @property {AttributeMetadata} partitionKeyAttribute - Metadata for the table's partition key attribute.
@@ -69,7 +69,7 @@ class TableMetadata {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
 
     this.name = options.name;
-    this.delimiter = options.delimiter;
+    this.delimiter = options.delimiter ?? "#";
     this.defaultAttributes = defaultAttrMeta.entityDefaults;
     this.defaultTableAttributes = defaultAttrMeta.tableDefaults;
     // Placeholders, these are set later

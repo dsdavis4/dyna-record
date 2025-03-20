@@ -13,7 +13,6 @@ import type { ForeignKey, PartitionKey, SortKey } from "../../src/types";
 
 @Table({
   name: "mock-table",
-  delimiter: "#",
   defaultFields: {
     id: { alias: "Id" },
     type: { alias: "Type" },

@@ -26,7 +26,6 @@ import type {
 
 @Table({
   name: "mock-table",
-  delimiter: "#",
   defaultFields: {
     id: { alias: "Id" },
     type: { alias: "Type" },

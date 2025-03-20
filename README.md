@@ -61,7 +61,7 @@ import DynaRecord, {
   SortKey
 } from "dyna-record";
 
-@Table({ name: "my-table", delimiter: "#" })
+@Table({ name: "my-table" })
 abstract class MyTable extends DynaRecord {
   @PartitionKeyAttribute({ alias: "PK" })
   public readonly pk: PartitionKey;
@@ -71,7 +71,7 @@ abstract class MyTable extends DynaRecord {
 }
 ```
 
-#### Customizing the default field table aliases
+#### Customizing the default field table aliases or delimiter
 
 ```typescript
 import DynaRecord, {
@@ -84,7 +84,7 @@ import DynaRecord, {
 
 @Table({
   name: "mock-table",
-  delimiter: "#",
+  delimiter: "|",
   defaultFields: {
     id: { alias: "Id" },
     type: { alias: "Type" },
