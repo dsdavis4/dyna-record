@@ -4,21 +4,21 @@ import { Table } from "../../src/decorators";
 
 describe("Table metadata", () => {
   describe("types", () => {
-    it("requires the name of the table and delimiter to be set", () => {
-      // @ts-expect-no-error: name and delimiter are required
-      @Table({ name: "other-table", delimiter: "|" })
+    it("requires the name of the table to be set", () => {
+      // @ts-expect-no-error: name is required
+      @Table({ name: "other-table" })
       abstract class SomeTable extends DynaRecord {}
     });
 
     it("has a type error if name is missing", () => {
       // @ts-expect-error: name field is required
-      @Table({ delimiter: "|" })
+      @Table({})
       abstract class SomeTable extends DynaRecord {}
     });
 
-    it("requires the name of the table and delimiter to be set", () => {
-      // @ts-expect-error: delimiter field is required
-      @Table({ name: "other-table" })
+    it("optionally allows delimiter to be set", () => {
+      // @ts-expect-no-error: delimiter field is required
+      @Table({ name: "other-table", delimiter: "|" })
       abstract class SomeTable extends DynaRecord {}
     });
 
@@ -26,7 +26,6 @@ describe("Table metadata", () => {
       // @ts-expect-no-error: defaultFields is optional
       @Table({
         name: "other-table",
-        delimiter: "|",
         defaultFields: {
           id: { alias: "Id" },
           type: { alias: "Type" },
@@ -40,7 +39,6 @@ describe("Table metadata", () => {
     it("only accepts valid default fields", () => {
       @Table({
         name: "other-table",
-        delimiter: "|",
         defaultFields: {
           id: { alias: "Id" },
           // @ts-expect-error: 'someField' is not a default field
@@ -51,10 +49,9 @@ describe("Table metadata", () => {
     });
 
     it("does not require all defaultFields to be set", () => {
-      // @ts-expect-no-error: defaultFields is optional
+      // @ts-expect-no-error: each defaultField is optional
       @Table({
         name: "other-table",
-        delimiter: "|",
         defaultFields: {
           id: { alias: "Id" }
         }

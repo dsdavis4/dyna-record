@@ -38,7 +38,7 @@ interface DynaRecordBase {
  * Entities extending `DynaRecord` can utilize these operations to interact with their corresponding records in the database, including handling relationships between different entities.
  * @example
  * ```typescript
- * @Table({ name: "my-table", delimiter: "#" })
+ * @Table({ name: "my-table" })
  * abstract class MyTable extends DynaRecord {
  *   @PartitionKeyAttribute()
  *   public readonly pk: PartitionKey;

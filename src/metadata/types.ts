@@ -69,10 +69,16 @@ export type TableDefaultFields = Record<
 
 /**
  * Options for configuring table metadata, including the table name, delimiter, and default fields.
+ *
+ * @remarks
+ * - **name**: The table name (required).
+ * - **delimiter**: An optional character used to separate fields in the table. If not provided, it defaults to `'#'`.
+ * - **defaultFields**: An optional mapping of default fields to their attribute metadata table aliases.
  */
-export type TableMetadataOptions = Pick<TableMetadata, "name" | "delimiter"> & {
-  defaultFields?: Partial<TableDefaultFields>;
-};
+export type TableMetadataOptions = Pick<TableMetadata, "name"> &
+  Partial<Pick<TableMetadata, "delimiter">> & {
+    defaultFields?: Partial<TableDefaultFields>;
+  };
 
 /**
  * Options for configuring keys in attribute metadata, making all properties except `nullable` optional, including `alias`.

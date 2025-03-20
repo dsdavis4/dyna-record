@@ -11,7 +11,7 @@ import type DynaRecord from "../DynaRecord";
  *
  * Usage example:
  * ```typescript
- * @Table({ name: 'my-table', delimiter: '"#",' })
+ * @Table({ name: 'my-table' })
  * class MyTable extends DynaRecord {
  *   // User entity implementation
  * }
