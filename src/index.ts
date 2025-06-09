@@ -14,3 +14,4 @@ export type {
   ForeignKey,
   NullableForeignKey
 } from "./types";
+export { tableItemToEntity } from "./utils";
