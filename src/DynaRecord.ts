@@ -385,7 +385,7 @@ abstract class DynaRecord implements DynaRecordBase {
   public static tableItemToEntity<T extends DynaRecord>(
     this: new () => T,
     tableItem: DynamoTableItem
-  ): T {
+  ): EntityAttributesInstance<T> {
     const tableMeta = Metadata.getEntityTable(this.name);
     const typeAlias = tableMeta.defaultAttributes.type.alias;
 
