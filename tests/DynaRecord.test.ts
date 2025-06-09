@@ -1,3 +1,4 @@
+import Logger from "../src/Logger";
 import { type DynamoTableItem } from "../src/types";
 import { Course, Customer } from "./integration/mockModels";
 
@@ -83,6 +84,54 @@ describe("DynaRecord", () => {
           new Error("Unable to convert dynamo item to entity. Invalid type")
         );
       }
+    });
+
+    describe("types", () => {
+      const tableItem: DynamoTableItem = {
+        PK: "Customer#123",
+        SK: "Customer",
+        Id: "123",
+        Name: "Some Customer",
+        Address: "11 Some St",
+        Type: "Customer",
+        CreatedAt: "2023-08-02T04:26:31.148Z",
+        UpdatedAt: "2023-09-15T04:26:31.148Z"
+      };
+
+      const customer = Customer.tableItemToEntity(tableItem);
+
+      it("entity attributes are allowed", () => {
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.pk);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.sk);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.type);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.id);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.name);
+        // @ts-expect-no-error: Entity Attributes are allowed
+        Logger.log(customer.address);
+      });
+
+      it("relationship attributes are not allowed", () => {
+        // @ts-expect-error: Relationship attributes are not allowed
+        Logger.log(customer.orders);
+        // @ts-expect-error: Relationship attributes are not allowed
+        Logger.log(customer.paymentMethods);
+        // @ts-expect-error: Relationship attributes are not allowed
+        Logger.log(customer.contactInformation);
+      });
+
+      it("instance methods are allowed", () => {
+        // @ts-expect-no-error: Instance methods are allowed
+        Logger.log(customer.mockCustomInstanceMethod);
+        // @ts-expect-no-error: Instance methods are allowed
+        Logger.log(customer.update);
+        // @ts-expect-no-error: Instance methods are allowed
+        Logger.log(customer.partitionKeyValue);
+      });
     });
   });
 });
