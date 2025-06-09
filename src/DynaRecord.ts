@@ -20,8 +20,8 @@ import {
   type OptionsWithIndex,
   type EntityQueryKeyConditions
 } from "./operations";
-import type { EntityClass, Optional } from "./types";
-import { createInstance } from "./utils";
+import type { DynamoTableItem, EntityClass, Optional } from "./types";
+import { createInstance, tableItemToEntity } from "./utils";
 
 interface DynaRecordBase {
   id: string;
@@ -379,6 +379,27 @@ abstract class DynaRecord implements DynaRecordBase {
     return `${this.name}${delimiter}${id}`;
   }
 
+  /**
+   * Takes a table item and serializes it to an entity instance
+   */
+  public static tableItemToEntity<T extends DynaRecord>(
+    this: new () => T,
+    tableItem: DynamoTableItem
+  ): T {
+    const tableMeta = Metadata.getEntityTable(this.name);
+    const typeAlias = tableMeta.defaultAttributes.type.alias;
+
+    if (tableItem[typeAlias] !== this.name) {
+      throw new Error("Unable to convert dynamo item to entity. Invalid type");
+    }
+
+    return tableItemToEntity(this, tableItem);
+  }
+
+  /**
+   * Get the partition key for an entity
+   * @returns The partition key of the entity
+   */
   public partitionKeyValue(): string {
     return (this.constructor as typeof DynaRecord).partitionKeyValue(this.id);
   }
