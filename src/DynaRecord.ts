@@ -327,7 +327,8 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public async update<T extends this>(
     attributes: UpdateOptions<T>
-  ): Promise<T> {
+    // TODO add test
+  ): Promise<EntityAttributesInstance<T>> {
     const InstanceClass = this.constructor as EntityClass<T>;
     const op = new Update<T>(InstanceClass);
     const updatedAttributes = await op.run(this.id, attributes);
