@@ -155,6 +155,52 @@ describe("Create", () => {
     ]);
   });
 
+  it("will discard optional attributes which are passed as undefined", async () => {
+    expect.assertions(4);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const home = await Home.create({ mlsNum: "123" });
+
+    expect(home).toEqual({
+      pk: "Home#uuid1",
+      sk: "Home",
+      type: "Home",
+      id: "uuid1",
+      mlsNum: "123",
+      neighborhood: undefined, // Explicity passed as undefined
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(home).toBeInstanceOf(Home);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Home#uuid1",
+                  SK: "Home",
+                  Type: "Home",
+                  Id: "uuid1",
+                  "MLS#": "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   it("will create an entity that has a custom id field", async () => {
     expect.assertions(5);
 
