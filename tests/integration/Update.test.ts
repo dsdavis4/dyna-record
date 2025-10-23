@@ -15,6 +15,7 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   Organization,
+  PaymentMethod,
   type Person,
   Pet,
   PhoneBook,
@@ -7550,6 +7551,51 @@ describe("Update", () => {
           // @ts-expect-no-error non-nullable fields can be removed (set to null)
           myAttribute: null
         });
+      });
+
+      it("will only infer attribute types and not included relationships on the returned object", async () => {
+        const instance = new PaymentMethod();
+
+        // We use .then() to test the type of the resolved value without needing runtime success
+        await instance
+          .update({ lastFour: "9999" })
+          .then(result => {
+            // @ts-expect-no-error: Attributes are allowed
+            Logger.log(result.id);
+
+            // @ts-expect-no-error: Attributes are allowed
+            Logger.log(result.lastFour);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.customer);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.orders);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.paymentMethodProvider);
+          })
+          .catch(() => {
+            // Runtime errors are expected with uninitialized instance, we're only testing types
+            Logger.log("Testing types");
+          });
+      });
+
+      it("results have entity functions", async () => {
+        const instance = new PaymentMethod();
+
+        // We use .then() to test the type of the resolved value without needing runtime success
+        await instance
+          .update({ lastFour: "9999" })
+          .then(result => {
+            // @ts-expect-no-error: Functions are allowed
+            const updateFn = result.update;
+            Logger.log(updateFn);
+          })
+          .catch(() => {
+            // Runtime errors are expected with uninitialized instance, we're only testing types
+            Logger.log("Testing types");
+          });
       });
     });
   });
