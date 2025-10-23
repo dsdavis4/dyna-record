@@ -163,6 +163,9 @@ class Home extends MockTable {
   @StringAttribute({ alias: "MLS#" })
   public readonly mlsNum: string;
 
+  @StringAttribute({ alias: "Neighborhood", nullable: true })
+  public readonly neighborhood?: string;
+
   @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
   public readonly personId?: NullableForeignKey;
 
