@@ -773,6 +773,19 @@ describe("Update", () => {
       dbOperationAssertions();
     });
 
+    it("static method - will discard optional properties passed as undefined", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await ContactInformation.update("123", {
+          email: "new@example.com",
+          phone: undefined
+        })
+      ).toBeUndefined();
+      dbOperationAssertions();
+    });
+
     it("instance method", async () => {
       expect.assertions(7);
 
@@ -790,6 +803,46 @@ describe("Update", () => {
       const updatedInstance = await instance.update({
         email: "new@example.com",
         phone: null
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        email: "new@example.com",
+        phone: undefined,
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(ContactInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: contactInformation.PK,
+        sk: contactInformation.SK,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+      dbOperationAssertions();
+    });
+
+    it("instance method - will discard optional properties passed as undefined", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        email: "new@example.com",
+        phone: undefined
       });
 
       expect(updatedInstance).toEqual({
