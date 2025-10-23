@@ -132,7 +132,17 @@ class EntityMetadata {
       this.#schemaPartial = z
         .object(this.#zodAttributes)
         .omit(tableMeta.reservedKeys)
-        .partial();
+        .partial()
+        .transform((data: Record<string, unknown>) => {
+          // Remove undefined values but keep null values
+          const result: Record<string, unknown> = {};
+          for (const key in data) {
+            if (data[key] !== undefined) {
+              result[key] = data[key];
+            }
+          }
+          return result;
+        });
     }
 
     try {

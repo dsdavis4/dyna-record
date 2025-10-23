@@ -15,6 +15,7 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   Organization,
+  PaymentMethod,
   type Person,
   Pet,
   PhoneBook,
@@ -738,6 +739,60 @@ describe("Update", () => {
       ]);
     };
 
+    const dbOperationAssertionsWithUndefinedOmitted = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK2": "ContactInformation#123",
+              ":Type1": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "ContactInformation#123",
+                    SK: "ContactInformation"
+                  },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
     let contactInformation: MockTableEntityTableItem<ContactInformation>;
 
     beforeEach(() => {
@@ -770,6 +825,19 @@ describe("Update", () => {
         })
       ).toBeUndefined();
       dbOperationAssertions();
+    });
+
+    it("static method - will discard optional properties passed as undefined", async () => {
+      expect.assertions(5);
+
+      expect(
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+        await ContactInformation.update("123", {
+          email: "new@example.com",
+          phone: undefined
+        })
+      ).toBeUndefined();
+      dbOperationAssertionsWithUndefinedOmitted();
     });
 
     it("instance method", async () => {
@@ -810,6 +878,46 @@ describe("Update", () => {
         updatedAt: new Date(contactInformation.UpdatedAt)
       });
       dbOperationAssertions();
+    });
+
+    it("instance method - will discard optional properties passed as undefined", async () => {
+      expect.assertions(7);
+
+      const instance = createInstance(ContactInformation, {
+        pk: contactInformation.PK as PartitionKey,
+        sk: contactInformation.SK as SortKey,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+
+      const updatedInstance = await instance.update({
+        email: "new@example.com",
+        phone: undefined
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        email: "new@example.com",
+        phone: "555-555-5555",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(updatedInstance).toBeInstanceOf(ContactInformation);
+      // Original instance is not mutated
+      expect(instance).toEqual({
+        pk: contactInformation.PK,
+        sk: contactInformation.SK,
+        id: contactInformation.Id,
+        type: contactInformation.Type,
+        email: contactInformation.Email,
+        phone: contactInformation.Phone,
+        createdAt: new Date(contactInformation.CreatedAt),
+        updatedAt: new Date(contactInformation.UpdatedAt)
+      });
+      dbOperationAssertionsWithUndefinedOmitted();
     });
   });
 
@@ -7550,6 +7658,51 @@ describe("Update", () => {
           // @ts-expect-no-error non-nullable fields can be removed (set to null)
           myAttribute: null
         });
+      });
+
+      it("will only infer attribute types and not included relationships on the returned object", async () => {
+        const instance = new PaymentMethod();
+
+        // We use .then() to test the type of the resolved value without needing runtime success
+        await instance
+          .update({ lastFour: "9999" })
+          .then(result => {
+            // @ts-expect-no-error: Attributes are allowed
+            Logger.log(result.id);
+
+            // @ts-expect-no-error: Attributes are allowed
+            Logger.log(result.lastFour);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.customer);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.orders);
+
+            // @ts-expect-error: Relationship properties are not allowed
+            Logger.log(result.paymentMethodProvider);
+          })
+          .catch(() => {
+            // Runtime errors are expected with uninitialized instance, we're only testing types
+            Logger.log("Testing types");
+          });
+      });
+
+      it("results have entity functions", async () => {
+        const instance = new PaymentMethod();
+
+        // We use .then() to test the type of the resolved value without needing runtime success
+        await instance
+          .update({ lastFour: "9999" })
+          .then(result => {
+            // @ts-expect-no-error: Functions are allowed
+            const updateFn = result.update;
+            Logger.log(updateFn);
+          })
+          .catch(() => {
+            // Runtime errors are expected with uninitialized instance, we're only testing types
+            Logger.log("Testing types");
+          });
       });
     });
   });
