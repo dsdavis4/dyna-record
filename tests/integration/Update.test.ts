@@ -739,6 +739,60 @@ describe("Update", () => {
       ]);
     };
 
+    const dbOperationAssertionsWithUndefinedOmitted = (): void => {
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":PK2": "ContactInformation#123",
+              ":Type1": "ContactInformation"
+            },
+            FilterExpression: "#Type IN (:Type1)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "ContactInformation#123",
+                    SK: "ContactInformation"
+                  },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    };
+
     let contactInformation: MockTableEntityTableItem<ContactInformation>;
 
     beforeEach(() => {
@@ -783,7 +837,7 @@ describe("Update", () => {
           phone: undefined
         })
       ).toBeUndefined();
-      dbOperationAssertions();
+      dbOperationAssertionsWithUndefinedOmitted();
     });
 
     it("instance method", async () => {
@@ -848,7 +902,7 @@ describe("Update", () => {
       expect(updatedInstance).toEqual({
         ...instance,
         email: "new@example.com",
-        phone: undefined,
+        phone: "555-555-5555",
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(updatedInstance).toBeInstanceOf(ContactInformation);
@@ -863,7 +917,7 @@ describe("Update", () => {
         createdAt: new Date(contactInformation.CreatedAt),
         updatedAt: new Date(contactInformation.UpdatedAt)
       });
-      dbOperationAssertions();
+      dbOperationAssertionsWithUndefinedOmitted();
     });
   });
 
