@@ -211,6 +211,7 @@ class EntityMetadata {
 
   /**
    * Returns attribute metadata for attributes that reference a foreign entity via {@link ForeignKeyAttribute}.
+   * The returned metadata guarantees a non-null {@link ForeignKeyAttributeMetadata.foreignKeyTarget}.
    */
   public get foreignKeyAttributes(): ForeignKeyAttributeMetadata[] {
     return Object.values(this.attributes).filter(isForeignKeyAttributeMetadata);
@@ -218,7 +219,7 @@ class EntityMetadata {
 
   /**
    * Returns foreign key attributes that are not linked through a relationship decorator.
-   * These require standalone referential integrity checks.
+   * These attributes rely on standalone referential integrity checks during create and update operations.
    */
   public get standaloneForeignKeyAttributes(): ForeignKeyAttributeMetadata[] {
     const associatedForeignKeys = new Set<string>(

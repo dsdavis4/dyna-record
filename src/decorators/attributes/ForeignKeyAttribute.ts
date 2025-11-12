@@ -11,6 +11,8 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types";
  *
  * Does not allow property to be optional.
  *
+ * Supplying the target entity enables DynaRecord to enforce referential integrity for the foreign key even when no relationship decorators are defined (for example when a foreign key is used purely for validation without denormalising related records).
+ *
  * @template T The entity the decorator is applied to.
  * @template K The entity that the foreign key references.
  * @param getTarget A function returning the constructor for the entity referenced by the foreign key. This allows deferred resolution to avoid circular dependency issues.

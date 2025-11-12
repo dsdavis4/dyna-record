@@ -74,6 +74,7 @@ export const isRelationshipMetadataWithForeignKey = (
 
 /**
  * Type guard that checks whether attribute metadata represents a foreign key.
+ * Returns {@link ForeignKeyAttributeMetadata} with a guaranteed target entity.
  */
 export const isForeignKeyAttributeMetadata = (
   attr: AttributeMetadata

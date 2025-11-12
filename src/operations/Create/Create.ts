@@ -206,6 +206,12 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     }
   }
 
+  /**
+   * Adds DynamoDB condition checks for foreign keys that are not associated with a relationship decorator.
+   * Ensures referenced entities exist even when denormalised access patterns are not defined.
+   *
+   * @param entityData - Attributes being persisted for the new entity.
+   */
   private buildStandaloneForeignKeyConditionChecks(
     entityData: EntityAttributesOnly<DynaRecord>
   ): void {

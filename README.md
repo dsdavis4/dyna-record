@@ -172,6 +172,8 @@ Define foreign keys in order to support [@BelongsTo](https://dyna-record.com/fun
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable foreign key attributes as optional for optimal type safety
 - Attempting to remove an entity from a non-nullable foreign key will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
+- Always provide the referenced entity class to `@ForeignKeyAttribute` (for example `@ForeignKeyAttribute(() => Customer)`); this allows DynaRecord to enforce referential integrity even when no relationship decorator is defined.
+- `Create` and `Update` automatically add DynamoDB condition checks for standalone foreign keys (those without a relationship decorator) to ensure the referenced entity exists, enabling referential integrity even when no denormalised access pattern is required.
 
 ```typescript
 import {

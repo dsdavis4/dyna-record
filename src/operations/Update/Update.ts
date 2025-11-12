@@ -196,6 +196,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     }, []);
   }
 
+  /**
+   * Adds condition checks for standalone foreign keys present in the update payload to ensure the referenced records exist.
+   *
+   * @param attributes - Partial entity attributes supplied to the update call.
+   */
   private addStandaloneForeignKeyConditionChecks(
     attributes: Partial<EntityAttributesOnly<DynaRecord>>
   ): void {

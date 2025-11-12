@@ -143,6 +143,7 @@ export type BelongsToOrOwnedByRelationship =
 
 /**
  * Attribute metadata for foreign key attributes where {@link AttributeMetadata.foreignKeyTarget} is guaranteed.
+ * Provides the target entity class so operations can enforce referential integrity even when no relationship metadata exists.
  */
 export interface ForeignKeyAttributeMetadata extends AttributeMetadata {
   foreignKeyTarget: NonNullable<AttributeMetadata["foreignKeyTarget"]>;
