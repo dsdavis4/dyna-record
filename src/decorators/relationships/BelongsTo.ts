@@ -1,9 +1,8 @@
 import Metadata from "../../metadata";
 import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyProperty } from "../../types";
-import type { BelongsToField, BelongsToProps } from "./types";
-
-// TODO make sure that the branded FK matches target via type system
+import type { BelongsToField, BelongsToProps, BelongsToTarget } from "./types";
+import type { ForeignEntityAttribute } from "../types";
 
 /**
  * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using DynaRecord. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.
@@ -33,19 +32,19 @@ import type { BelongsToField, BelongsToProps } from "./types";
  * ```
  * In this example, `@BelongsTo` decorates the `user` field of the `Order` entity, establishing a "BelongsTo" relationship with the `User` entity via the `userId` foreign key. This decoration signifies that each `Order` instance is related to a specific `User` instance.
  */
-function BelongsTo<T extends DynaRecord, K extends DynaRecord>(
-  getTarget: () => EntityClass<K>,
-  props: BelongsToProps<T>
+function BelongsTo<
+  Source extends DynaRecord,
+  FK extends ForeignEntityAttribute<Source>
+>(
+  getTarget: () => EntityClass<BelongsToTarget<Source, FK>>,
+  props: BelongsToProps<Source, FK>
 ) {
   return function (
     _value: undefined,
-    context: ClassFieldDecoratorContext<
-      T,
-      BelongsToField<T, K, typeof props.foreignKey>
-    >
+    context: ClassFieldDecoratorContext<Source, BelongsToField<Source, FK>>
   ) {
     if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
+      context.addInitializer(function (this: Source) {
         Metadata.addEntityRelationship(this.constructor.name, {
           type: "BelongsTo",
           propertyName: context.name as keyof DynaRecord,

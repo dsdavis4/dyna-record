@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Entity,
   ForeignKeyAttribute,
@@ -118,6 +119,48 @@ describe("BelongsTo", () => {
         @HasMany(() => ModelOne, { foreignKey: "key1" })
         public modelOneRels: ModelOne[];
       }
+    });
+
+    it("enforces the foreign key target to match the BelongsTo target", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
+        public key1: ForeignKey<ModelTwo>;
+
+        // @ts-expect-error: foreign key target must match the BelongsTo target
+        @BelongsTo(() => ModelThree, { foreignKey: "key1" })
+        public modelThreeRel: ModelThree;
+      }
+
+      @Entity
+      class ModelTwo extends MockTable {
+        @StringAttribute({ alias: "OnlyOnTwo" })
+        public readonly onlyOnTwo: string;
+      }
+
+      @Entity
+      class ModelThree extends MockTable {}
+    });
+
+    it("enforces the foreign key target to match the BelongsTo target when nullable", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1", nullable: true })
+        public key1?: NullableForeignKey<ModelTwo>;
+
+        // @ts-expect-error: foreign key target must match the BelongsTo target
+        @BelongsTo(() => ModelThree, { foreignKey: "key1" })
+        public modelThreeRel?: ModelThree;
+      }
+
+      @Entity
+      class ModelTwo extends MockTable {
+        @StringAttribute({ alias: "OnlyOnTwo" })
+        public readonly onlyOnTwo: string;
+      }
+
+      @Entity
+      class ModelThree extends MockTable {}
     });
 
     it("does not all the foreign key attribute to be defined on the associated model", () => {
