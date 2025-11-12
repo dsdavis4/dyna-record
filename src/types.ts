@@ -17,6 +17,7 @@ export type SortKey = Brand<string, "SortKey">;
  */
 export type PartitionKey = Brand<string, "PartitionKey">;
 
+// TODO remove default in generic
 /**
  * A branded string type to represent foreign keys in DynamoDB tables.
  *
