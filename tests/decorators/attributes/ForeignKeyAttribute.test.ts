@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, ForeignKeyAttribute } from "../../../src/decorators";
+import {
+  Entity,
+  ForeignKeyAttribute,
+  StringAttribute
+} from "../../../src/decorators";
 import type { NullableForeignKey, ForeignKey } from "../../../src/types";
 import {
   MockTable,
@@ -142,6 +146,7 @@ describe("ForeignKeyAttribute", () => {
       }
     });
 
+    // TODO
     it("ForeignKey target must be of type DynaRecord", () => {
       interface TargetTest1 {
         someThing: string;
@@ -156,7 +161,28 @@ describe("ForeignKeyAttribute", () => {
       }
     });
 
-    it("ForeignKey target must be of type DynaRecord", () => {
+    it("ForeignKey target match decorator target", () => {
+      @Entity
+      class OtherModel1 extends MockTable {
+        @StringAttribute({ alias: "TheKey1" })
+        public theKey1: string;
+      }
+
+      @Entity
+      class OtherModel2 extends MockTable {
+        @StringAttribute({ alias: "TheKey2" })
+        public theKey2: string;
+      }
+
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-error: target match decorator target
+        @ForeignKeyAttribute(() => OtherModel1, { alias: "Key1" })
+        public key1: ForeignKey<OtherModel2>;
+      }
+    });
+
+    it("NullableForeignKey target must be of type DynaRecord", () => {
       interface TargetTest2 {
         someThing: string;
       }
@@ -170,6 +196,30 @@ describe("ForeignKeyAttribute", () => {
         })
         // @ts-expect-error: Target must be of type DynaRecord"
         public key1?: NullableForeignKey<TargetTest2>;
+      }
+    });
+
+    it("NullableForeignKey target match decorator target", () => {
+      @Entity
+      class OtherModel1 extends MockTable {
+        @StringAttribute({ alias: "TheKey1" })
+        public theKey1: string;
+      }
+
+      @Entity
+      class OtherModel2 extends MockTable {
+        @StringAttribute({ alias: "TheKey2" })
+        public theKey2: string;
+      }
+
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-error: target match decorator target
+        @ForeignKeyAttribute(() => OtherModel1, {
+          alias: "Key1",
+          nullable: true
+        })
+        public key1: NullableForeignKey<OtherModel2>;
       }
     });
   });
