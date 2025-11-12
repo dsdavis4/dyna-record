@@ -5,7 +5,8 @@ import type {
   BelongsToRelationship,
   HasOneRelationship,
   HasAndBelongsToManyRelationship,
-  OwnedByRelationship
+  OwnedByRelationship,
+  ForeignKeyAttributeMetadata
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import type {
@@ -13,6 +14,7 @@ import type {
   RelationshipMetadataWithForeignKey
 } from "./types";
 import type { EntityClass } from "../types";
+import type AttributeMetadata from "./AttributeMetadata";
 
 /**
  * Type guard to check if the relationship is a HasMany
@@ -68,6 +70,15 @@ export const isRelationshipMetadataWithForeignKey = (
   rel: RelationshipMetadata
 ): rel is RelationshipMetadataWithForeignKey => {
   return "foreignKey" in rel;
+};
+
+/**
+ * Type guard that checks whether attribute metadata represents a foreign key.
+ */
+export const isForeignKeyAttributeMetadata = (
+  attr: AttributeMetadata
+): attr is ForeignKeyAttributeMetadata => {
+  return attr.foreignKeyTarget !== undefined;
 };
 
 /**

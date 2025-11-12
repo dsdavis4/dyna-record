@@ -74,6 +74,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(entityData, tableItem);
+    this.buildStandaloneForeignKeyConditionChecks(entityData);
 
     // Attempt to fetch all belongs-to entities to properly create reverse denormalization links
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
@@ -202,6 +203,36 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
           `${relMeta.target.name} with id: ${foreignKey} already has an associated ${this.EntityClass.name}`
         );
       }
+    }
+  }
+
+  private buildStandaloneForeignKeyConditionChecks(
+    entityData: EntityAttributesOnly<DynaRecord>
+  ): void {
+    const standaloneForeignKeys =
+      this.entityMetadata.standaloneForeignKeyAttributes;
+
+    for (const attrMeta of standaloneForeignKeys) {
+      const target = attrMeta.foreignKeyTarget;
+
+      const foreignKeyValue =
+        entityData[attrMeta.name as keyof typeof entityData];
+
+      if (foreignKeyValue === undefined) continue;
+
+      const foreignKey = foreignKeyValue as unknown as string;
+      const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
+
+      const conditionCheck: ConditionCheck = {
+        TableName: this.tableMetadata.name,
+        Key: {
+          [this.partitionKeyAlias]: target.partitionKeyValue(foreignKey),
+          [this.sortKeyAlias]: target.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+      };
+
+      this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
     }
   }
 

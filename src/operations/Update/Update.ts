@@ -135,6 +135,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
+    this.addStandaloneForeignKeyConditionChecks(entityAttrs);
+
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     this.buildUpdateItemTransaction(id, expression);
 
@@ -193,6 +195,38 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       if (foreignKeyVal !== undefined) acc.push({ meta, foreignKeyVal });
       return acc;
     }, []);
+  }
+
+  private addStandaloneForeignKeyConditionChecks(
+    attributes: Partial<EntityAttributesOnly<DynaRecord>>
+  ): void {
+    const standaloneForeignKeys =
+      this.entityMetadata.standaloneForeignKeyAttributes;
+
+    for (const attrMeta of standaloneForeignKeys) {
+      const target = attrMeta.foreignKeyTarget;
+
+      if (!(attrMeta.name in attributes)) continue;
+
+      const foreignKeyValue =
+        attributes[attrMeta.name as keyof typeof attributes];
+
+      if (foreignKeyValue === undefined || foreignKeyValue === null) continue;
+
+      const foreignKey = foreignKeyValue as unknown as string;
+      const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
+
+      const conditionCheck: ConditionCheck = {
+        TableName: this.tableMetadata.name,
+        Key: {
+          [this.partitionKeyAlias]: target.partitionKeyValue(foreignKey),
+          [this.sortKeyAlias]: target.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+      };
+
+      this.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
+    }
   }
 
   /**

@@ -435,6 +435,20 @@ describe("Update", () => {
           {
             TransactItems: [
               {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#1111", SK: "Customer" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#22222", SK: "Customer" },
+                  TableName: "mock-table"
+                }
+              },
+              {
                 Update: {
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
@@ -588,6 +602,88 @@ describe("Update", () => {
         updatedAt: new Date("2023-10-02")
       });
       dbOperationAssertions();
+    });
+
+    test("ensures standalone foreign key references exist", async () => {
+      expect.assertions(3);
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "ConditionalCheckFailed" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await MyClassWithAllAttributeTypes.update("123", {
+          foreignKeyAttribute: "missing-customer",
+          nullableForeignKeyAttribute: "missing-optional-customer"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'missing-customer' does not exist"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'missing-optional-customer' does not exist"
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: { PK: "Customer#missing-customer", SK: "Customer" },
+                    TableName: "mock-table"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Customer#missing-optional-customer",
+                      SK: "Customer"
+                    },
+                    TableName: "mock-table"
+                  }
+                },
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#foreignKeyAttribute": "foreignKeyAttribute",
+                      "#nullableForeignKeyAttribute":
+                        "nullableForeignKeyAttribute"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":foreignKeyAttribute": "missing-customer",
+                      ":nullableForeignKeyAttribute":
+                        "missing-optional-customer"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #UpdatedAt = :UpdatedAt"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      }
     });
   });
 

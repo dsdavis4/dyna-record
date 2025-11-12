@@ -7,7 +7,8 @@ import type {
   RelationshipMetadataStorage,
   RelationshipMetadata,
   OwnedByRelationship,
-  BelongsToOrOwnedByRelationship
+  BelongsToOrOwnedByRelationship,
+  ForeignKeyAttributeMetadata
 } from ".";
 import type DynaRecord from "../DynaRecord";
 import { ValidationError } from "../errors";
@@ -18,7 +19,9 @@ import {
   isHasAndBelongsToManyRelationship,
   isHasManyRelationship,
   isHasOneRelationship,
-  isOwnedByRelationship
+  isOwnedByRelationship,
+  isRelationshipMetadataWithForeignKey,
+  isForeignKeyAttributeMetadata
 } from "./utils";
 
 type EntityClass = new (...args: any) => DynaRecord;
@@ -203,6 +206,29 @@ class EntityMetadata {
         isHasOneRelationship(relMeta) ||
         isHasManyRelationship(relMeta) ||
         isHasAndBelongsToManyRelationship(relMeta)
+    );
+  }
+
+  /**
+   * Returns attribute metadata for attributes that reference a foreign entity via {@link ForeignKeyAttribute}.
+   */
+  public get foreignKeyAttributes(): ForeignKeyAttributeMetadata[] {
+    return Object.values(this.attributes).filter(isForeignKeyAttributeMetadata);
+  }
+
+  /**
+   * Returns foreign key attributes that are not linked through a relationship decorator.
+   * These require standalone referential integrity checks.
+   */
+  public get standaloneForeignKeyAttributes(): ForeignKeyAttributeMetadata[] {
+    const associatedForeignKeys = new Set<string>(
+      Object.values(this.relationships)
+        .filter(isRelationshipMetadataWithForeignKey)
+        .map(rel => rel.foreignKey.toString())
+    );
+
+    return this.foreignKeyAttributes.filter(
+      attr => !associatedForeignKeys.has(attr.name)
     );
   }
 }

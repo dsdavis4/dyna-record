@@ -323,6 +323,20 @@ describe("Create", () => {
                 },
                 TableName: "mock-table"
               }
+            },
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Customer#1111", SK: "Customer" },
+                TableName: "mock-table"
+              }
+            },
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Customer#22222", SK: "Customer" },
+                TableName: "mock-table"
+              }
             }
           ]
         }
@@ -440,6 +454,93 @@ describe("Create", () => {
       ]);
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will ensure standalone foreign key references exist", async () => {
+    expect.assertions(3);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    mockSend.mockImplementationOnce(() => {
+      throw new TransactionCanceledException({
+        message: "MockMessage",
+        CancellationReasons: [
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" },
+          { Code: "ConditionalCheckFailed" }
+        ],
+        $metadata: {}
+      });
+    });
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "missing-customer",
+        nullableForeignKeyAttribute: "missing-optional-customer",
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-1"
+      });
+    } catch (e: any) {
+      expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Customer with ID 'missing-customer' does not exist"
+        ),
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Customer with ID 'missing-optional-customer' does not exist"
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    Id: "uuid1",
+                    PK: "MyClassWithAllAttributeTypes#uuid1",
+                    SK: "MyClassWithAllAttributeTypes",
+                    Type: "MyClassWithAllAttributeTypes",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z",
+                    boolAttribute: true,
+                    dateAttribute: "2023-10-16T03:31:35.918Z",
+                    enumAttribute: "val-1",
+                    foreignKeyAttribute: "missing-customer",
+                    nullableForeignKeyAttribute: "missing-optional-customer",
+                    numberAttribute: 9,
+                    stringAttribute: "1"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#missing-customer", SK: "Customer" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Customer#missing-optional-customer",
+                    SK: "Customer"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     }
   });
 

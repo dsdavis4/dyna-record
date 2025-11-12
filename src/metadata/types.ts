@@ -140,3 +140,10 @@ export interface AttributeMetadataOptions {
 export type BelongsToOrOwnedByRelationship =
   | BelongsToRelationship
   | OwnedByRelationship;
+
+/**
+ * Attribute metadata for foreign key attributes where {@link AttributeMetadata.foreignKeyTarget} is guaranteed.
+ */
+export interface ForeignKeyAttributeMetadata extends AttributeMetadata {
+  foreignKeyTarget: NonNullable<AttributeMetadata["foreignKeyTarget"]>;
+}
