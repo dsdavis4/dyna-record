@@ -4,6 +4,10 @@ import Metadata from "../../metadata";
 import type { ForeignKey, NullableForeignKey } from "../../types";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 
+// TODO here
+// Decorator should have target property like relationship classes
+// when a belongs to relationship is defined, the target property should be the target entity class
+
 /**
  * A decorator for annotating class fields as foreign keys within the context of a single-table design entity, aimed at establishing and managing relationships between different entities in a relational manner. This decorator enables the clear and explicit declaration of foreign key relationships, contributing to the ORM's ability to navigate and resolve these associations efficiently.
  *
