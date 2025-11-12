@@ -6,7 +6,7 @@ import {
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils";
-import { entityToTableItem, tableItemToEntity } from "../../utils";
+import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils";
 import type { CreateOptions } from "./types";
@@ -218,9 +218,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       const foreignKeyValue =
         entityData[attrMeta.name as keyof typeof entityData];
 
-      if (foreignKeyValue === undefined) continue;
+      if (!isString(foreignKeyValue)) continue;
 
-      const foreignKey = foreignKeyValue as unknown as string;
+      const foreignKey = foreignKeyValue;
       const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
 
       const conditionCheck: ConditionCheck = {

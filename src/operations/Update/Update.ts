@@ -211,9 +211,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       const foreignKeyValue =
         attributes[attrMeta.name as keyof typeof attributes];
 
-      if (foreignKeyValue === undefined || foreignKeyValue === null) continue;
+      if (!isString(foreignKeyValue)) continue;
 
-      const foreignKey = foreignKeyValue as unknown as string;
+      const foreignKey = foreignKeyValue;
       const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
 
       const conditionCheck: ConditionCheck = {
