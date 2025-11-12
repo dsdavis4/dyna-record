@@ -135,10 +135,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    this.addStandaloneForeignKeyConditionChecks(entityAttrs);
-
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     this.buildUpdateItemTransaction(id, expression);
+    this.addStandaloneForeignKeyConditionChecks(entityAttrs);
 
     // Only need to prefetch if the entity has relationships
     if (entityMeta.allRelationships.length > 0) {

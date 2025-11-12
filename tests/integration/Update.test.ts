@@ -435,20 +435,6 @@ describe("Update", () => {
           {
             TransactItems: [
               {
-                ConditionCheck: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Customer#1111", SK: "Customer" },
-                  TableName: "mock-table"
-                }
-              },
-              {
-                ConditionCheck: {
-                  ConditionExpression: "attribute_exists(PK)",
-                  Key: { PK: "Customer#22222", SK: "Customer" },
-                  TableName: "mock-table"
-                }
-              },
-              {
                 Update: {
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
@@ -489,6 +475,20 @@ describe("Update", () => {
                   TableName: "mock-table",
                   UpdateExpression:
                     "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#1111", SK: "Customer" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#22222", SK: "Customer" },
+                  TableName: "mock-table"
                 }
               }
             ]
@@ -611,9 +611,9 @@ describe("Update", () => {
         throw new TransactionCanceledException({
           message: "MockMessage",
           CancellationReasons: [
+            { Code: "None" },
             { Code: "ConditionalCheckFailed" },
-            { Code: "ConditionalCheckFailed" },
-            { Code: "None" }
+            { Code: "ConditionalCheckFailed" }
           ],
           $metadata: {}
         });
@@ -639,23 +639,6 @@ describe("Update", () => {
             {
               TransactItems: [
                 {
-                  ConditionCheck: {
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: { PK: "Customer#missing-customer", SK: "Customer" },
-                    TableName: "mock-table"
-                  }
-                },
-                {
-                  ConditionCheck: {
-                    ConditionExpression: "attribute_exists(PK)",
-                    Key: {
-                      PK: "Customer#missing-optional-customer",
-                      SK: "Customer"
-                    },
-                    TableName: "mock-table"
-                  }
-                },
-                {
                   Update: {
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
@@ -677,6 +660,23 @@ describe("Update", () => {
                     TableName: "mock-table",
                     UpdateExpression:
                       "SET #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #UpdatedAt = :UpdatedAt"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: { PK: "Customer#missing-customer", SK: "Customer" },
+                    TableName: "mock-table"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Customer#missing-optional-customer",
+                      SK: "Customer"
+                    },
+                    TableName: "mock-table"
                   }
                 }
               ]
