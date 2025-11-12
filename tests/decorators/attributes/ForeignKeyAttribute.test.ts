@@ -146,7 +146,6 @@ describe("ForeignKeyAttribute", () => {
       }
     });
 
-    // TODO
     it("ForeignKey target must be of type DynaRecord", () => {
       interface TargetTest1 {
         someThing: string;
