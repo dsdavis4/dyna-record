@@ -5,7 +5,9 @@ import {
   MockTable,
   Order,
   Assignment,
-  MyClassWithAllAttributeTypes
+  MyClassWithAllAttributeTypes,
+  Customer,
+  Course
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 import { ZodNullable, ZodString } from "zod";
@@ -18,6 +20,7 @@ describe("ForeignKeyAttribute", () => {
       name: "customerId",
       alias: "CustomerId",
       nullable: false,
+      foreignKeyTarget: Customer,
       type: expect.any(ZodString)
     });
   });
@@ -29,6 +32,7 @@ describe("ForeignKeyAttribute", () => {
       name: "courseId",
       alias: "courseId",
       nullable: false,
+      foreignKeyTarget: Course,
       type: expect.any(ZodString)
     });
   });
@@ -43,6 +47,7 @@ describe("ForeignKeyAttribute", () => {
       name: "nullableForeignKeyAttribute",
       alias: "nullableForeignKeyAttribute",
       nullable: true,
+      foreignKeyTarget: Customer,
       type: expect.any(ZodNullable<ZodString>)
     });
   });
@@ -52,8 +57,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-no-error: Attribute can be applied to an attribute of type ForeignKey
-        @ForeignKeyAttribute({ alias: "Key1" })
-        public key1: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
+        public key1: ForeignKey<Customer>;
       }
     });
 
@@ -61,8 +66,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
-        @ForeignKeyAttribute({ alias: "Key1" })
-        public key1: NullableForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
+        public key1: NullableForeignKey<Customer>;
       }
     });
 
@@ -70,8 +75,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
-        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
-        public key1: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: true })
+        public key1: ForeignKey<Customer>;
       }
     });
 
@@ -79,7 +84,7 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute can not be applied to an attribute of type string
-        @ForeignKeyAttribute({ alias: "Key1" })
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1: string;
       }
     });
@@ -88,8 +93,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-error: Attribute cannot be applied to an optional property
-        @ForeignKeyAttribute({ alias: "Key1" })
-        public key1?: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
+        public key1?: ForeignKey<Customer>;
       }
     });
 
@@ -97,8 +102,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-no-error: 'alias' is optional
-        @ForeignKeyAttribute()
-        public key1: ForeignKey;
+        @ForeignKeyAttribute(() => Customer)
+        public key1: ForeignKey<Customer>;
       }
     });
 
@@ -106,12 +111,12 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class SomeModel extends MockTable {
         // @ts-expect-no-error: Nullable properties are required
-        @ForeignKeyAttribute({ alias: "Key1", nullable: false })
-        public key1: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: false })
+        public key1: ForeignKey<Customer>;
 
         // @ts-expect-error: Nullable properties are required
-        @ForeignKeyAttribute({ alias: "Key2", nullable: false })
-        public key2?: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key2", nullable: false })
+        public key2?: ForeignKey<Customer>;
       }
     });
 
@@ -119,12 +124,12 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class SomeModel extends MockTable {
         // @ts-expect-no-error: Nullable properties are required
-        @ForeignKeyAttribute({ alias: "Key1" })
-        public key1: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
+        public key1: ForeignKey<Customer>;
 
         // @ts-expect-error: Nullable properties are required
-        @ForeignKeyAttribute({ alias: "Key2" })
-        public key2?: ForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key2" })
+        public key2?: ForeignKey<Customer>;
       }
     });
 
@@ -132,8 +137,8 @@ describe("ForeignKeyAttribute", () => {
       @Entity
       class SomeModel extends MockTable {
         // @ts-expect-no-error: Nullable properties are optional
-        @ForeignKeyAttribute({ alias: "Key1", nullable: true })
-        public key1?: NullableForeignKey;
+        @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: true })
+        public key1?: NullableForeignKey<Customer>;
       }
     });
   });

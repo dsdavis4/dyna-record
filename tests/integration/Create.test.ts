@@ -2248,8 +2248,11 @@ describe("Create", () => {
         @StringAttribute({ alias: "Phone" })
         public phone: string;
 
-        @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })
-        public customerId?: NullableForeignKey;
+        @ForeignKeyAttribute(() => CustomerLocal, {
+          alias: "CustomerId",
+          nullable: true
+        })
+        public customerId?: NullableForeignKey<CustomerLocal>;
 
         @BelongsTo(() => CustomerLocal, { foreignKey: "customerId" })
         public customer: CustomerLocal;

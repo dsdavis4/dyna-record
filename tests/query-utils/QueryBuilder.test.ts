@@ -34,8 +34,8 @@ class Scale extends MockTable {
   @StringAttribute({ alias: "Name" })
   public name: string;
 
-  @ForeignKeyAttribute({ alias: "RoomId" })
-  public readonly roomId: ForeignKey;
+  @ForeignKeyAttribute(() => Room, { alias: "RoomId" })
+  public readonly roomId: ForeignKey<Room>;
 }
 
 @Entity

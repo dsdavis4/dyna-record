@@ -3,6 +3,8 @@ import type DynaRecord from "../../DynaRecord";
 import type { EntityClass, ForeignKeyProperty } from "../../types";
 import type { BelongsToField, BelongsToProps } from "./types";
 
+// TODO make sure that the branded FK matches target via type system
+
 /**
  * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using DynaRecord. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.
  *

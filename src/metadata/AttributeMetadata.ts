@@ -1,5 +1,9 @@
 import { type ZodType } from "zod";
+import type DynaRecord from "../DynaRecord";
 import type { AttributeMetadataOptions, Serializers } from "./types";
+import type { EntityClass } from "../types";
+
+// TODO was this the right place to add FK stuff?
 
 /**
  * Represents the metadata for an attribute of an entity, including its name, alias (if any), nullability, and serialization strategies.
@@ -11,6 +15,7 @@ import type { AttributeMetadataOptions, Serializers } from "./types";
  * @property {boolean} nullable - Indicates whether the attribute can be `null`, defining the attribute's nullability constraint within the database.
  * @property {Serializers | undefined} serializers - Optional serialization strategies for converting the attribute between its database representation and its entity representation. This is particularly useful for custom data types not natively supported by DynamoDB.
  * @property {ZodType} type - Zod validator to run on the attribute
+ * @property {EntityClass | undefined} foreignKeyTarget - When present, identifies the entity referenced by a foreign key attribute, enabling referential integrity enforcement.
  *
  * @param {AttributeMetadataOptions} options - Configuration options for the attribute metadata, including the attribute's name, optional alias, nullability, and serialization strategies.
  */
@@ -20,12 +25,14 @@ class AttributeMetadata {
   public readonly nullable: boolean;
   public readonly serializers?: Serializers;
   public readonly type: ZodType;
+  public readonly foreignKeyTarget?: EntityClass<DynaRecord>;
 
   constructor(options: AttributeMetadataOptions) {
     this.name = options.attributeName;
     this.alias = options.alias ?? options.attributeName;
     this.nullable = options.nullable ?? false;
     this.serializers = options.serializers;
+    this.foreignKeyTarget = options.foreignKeyTarget;
 
     if (options.nullable === true) {
       this.type = options.type.optional().nullable();

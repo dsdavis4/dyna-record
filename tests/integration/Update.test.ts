@@ -5744,11 +5744,11 @@ describe("Update", () => {
       @StringAttribute({ alias: "Name" })
       public name: string;
 
-      @ForeignKeyAttribute({ alias: "Model1Id", nullable: true })
-      public model1Id?: NullableForeignKey;
+      @ForeignKeyAttribute(() => Model1, { alias: "Model1Id", nullable: true })
+      public model1Id?: NullableForeignKey<Model1>;
 
-      @ForeignKeyAttribute({ alias: "Model2Id", nullable: true })
-      public model2Id?: NullableForeignKey;
+      @ForeignKeyAttribute(() => Model2, { alias: "Model2Id", nullable: true })
+      public model2Id?: NullableForeignKey<Model2>;
 
       @BelongsTo(() => Model1, { foreignKey: "model1Id" })
       public model1: Model1;

@@ -18,14 +18,23 @@ export type SortKey = Brand<string, "SortKey">;
 export type PartitionKey = Brand<string, "PartitionKey">;
 
 /**
- * A branded string type to represent foreign keys in DynamoDB tables
+ * A branded string type to represent foreign keys in DynamoDB tables.
+ *
+ * @typeParam T - The entity that the foreign key references. Defaults to {@link DynaRecord}.
  */
-export type ForeignKey = Brand<string, "ForeignKey">;
+export type ForeignKey<T extends DynaRecord = DynaRecord> = Brand<
+  string,
+  { kind: "ForeignKey"; entity: T }
+>;
 
 /**
  * A branded string type to represent nullable foreign keys in DynamoDB tables, which can also be undefined.
+ *
+ * @typeParam T - The entity that the foreign key references. Defaults to {@link DynaRecord}.
  */
-export type NullableForeignKey = Optional<Brand<string, "NullableForeignKey">>;
+export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
+  Brand<string, { kind: "NullableForeignKey"; entity: T }>
+>;
 
 /**
  * Represents a foreign key property on an entity within a DynaRecord model
