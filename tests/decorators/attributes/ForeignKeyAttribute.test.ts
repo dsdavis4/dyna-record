@@ -141,5 +141,36 @@ describe("ForeignKeyAttribute", () => {
         public key1?: NullableForeignKey<Customer>;
       }
     });
+
+    it("ForeignKey target must be of type DynaRecord", () => {
+      interface TargetTest {
+        someThing: string;
+      }
+
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-error: Target must be of type DynaRecord"
+        @ForeignKeyAttribute(() => TargetTest, { alias: "Key1" })
+        // @ts-expect-error: Target must be of type DynaRecord"
+        public key1: ForeignKey<TargetTest>;
+      }
+    });
+
+    it("ForeignKey target must be of type DynaRecord", () => {
+      interface TargetTest {
+        someThing: string;
+      }
+
+      @Entity
+      class SomeModel extends MockTable {
+        // @ts-expect-error: Target must be of type DynaRecord"
+        @ForeignKeyAttribute(() => TargetTest, {
+          alias: "Key1",
+          nullable: true
+        })
+        // @ts-expect-error: Target must be of type DynaRecord"
+        public key1?: NullableForeignKey<TargetTest>;
+      }
+    });
   });
 });
