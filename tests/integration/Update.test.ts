@@ -522,8 +522,8 @@ describe("Update", () => {
         nullableStringAttribute: "old-2",
         dateAttribute: new Date("2023-01-02"),
         nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "old-1111" as ForeignKey,
-        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey,
+        foreignKeyAttribute: "old-1111" as ForeignKey<Customer>,
+        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey<Customer>,
         boolAttribute: false,
         nullableBoolAttribute: true,
         numberAttribute: 9,
@@ -1161,7 +1161,7 @@ describe("Update", () => {
         type: "MyClassWithAllAttributeTypes",
         stringAttribute: "1",
         dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
+        foreignKeyAttribute: "11111" as ForeignKey<Customer>,
         boolAttribute: true,
         numberAttribute: 9,
         enumAttribute: "val-2",
@@ -2024,7 +2024,8 @@ describe("Update", () => {
         sk: contactInformation.SK as SortKey,
         id: contactInformation.Id,
         type: contactInformation.Type,
-        customerId: contactInformation.CustomerId as NullableForeignKey,
+        customerId:
+          contactInformation.CustomerId as NullableForeignKey<Customer>,
         email: contactInformation.Email,
         phone: contactInformation.Phone,
         createdAt: new Date(contactInformation.CreatedAt),
@@ -3522,7 +3523,7 @@ describe("Update", () => {
         id: "123",
         type: "Pet",
         name: "Mock Pet",
-        ownerId: pet.OwnerId as NullableForeignKey,
+        ownerId: pet.OwnerId as NullableForeignKey<Person>,
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02")
       });
@@ -4365,7 +4366,8 @@ describe("Update", () => {
         id: employee.Id,
         type: employee.Type,
         name: employee.Name,
-        organizationId: employee.OrganizationId as NullableForeignKey,
+        organizationId:
+          employee.OrganizationId as NullableForeignKey<Organization>,
         createdAt: new Date(employee.CreatedAt),
         updatedAt: new Date(employee.UpdatedAt)
       });
@@ -4906,7 +4908,8 @@ describe("Update", () => {
         id: employee.Id,
         type: employee.Type,
         name: employee.Name,
-        organizationId: employee.OrganizationId as NullableForeignKey,
+        organizationId:
+          employee.OrganizationId as NullableForeignKey<Organization>,
         createdAt: new Date(employee.CreatedAt),
         updatedAt: new Date(employee.UpdatedAt)
       });
@@ -6241,8 +6244,8 @@ describe("Update", () => {
         id: "123",
         type: "Model3",
         name: "originalName",
-        model1Id: "001" as NullableForeignKey, // Already has an associated entity
-        model2Id: "002" as NullableForeignKey, // Already has an associated entity
+        model1Id: "001" as NullableForeignKey<Model1>, // Already has an associated entity
+        model2Id: "002" as NullableForeignKey<Model2>, // Already has an associated entity
         createdAt: new Date("2023-01-01T00:00:00.000Z"),
         updatedAt: new Date("2023-01-02T00:00:00.000Z")
       });
@@ -6533,8 +6536,8 @@ describe("Update", () => {
         id: "123",
         type: "Grade",
         gradeValue: "A+",
-        assignmentId: "001" as ForeignKey, // Already has an associated entity
-        studentId: "002" as ForeignKey, // Already has an associated entity
+        assignmentId: "001" as ForeignKey<Assignment>, // Already has an associated entity
+        studentId: "002" as ForeignKey<Student>, // Already has an associated entity
         createdAt: new Date("2023-10-01T03:31:35.918Z"),
         updatedAt: new Date("2023-10-02T03:31:35.918Z")
       });
