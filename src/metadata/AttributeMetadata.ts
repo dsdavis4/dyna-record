@@ -3,8 +3,6 @@ import type DynaRecord from "../DynaRecord";
 import type { AttributeMetadataOptions, Serializers } from "./types";
 import type { EntityClass } from "../types";
 
-// TODO was this the right place to add FK stuff?
-
 /**
  * Represents the metadata for an attribute of an entity, including its name, alias (if any), nullability, and serialization strategies.
  *
