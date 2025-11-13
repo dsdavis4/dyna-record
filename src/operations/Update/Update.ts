@@ -11,6 +11,7 @@ import type {
 } from "../../metadata";
 import {
   entityToTableItem,
+  isKeyOfObject,
   isNullableString,
   isString,
   tableItemToEntity
@@ -210,7 +211,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     for (const attrMeta of standaloneForeignKeys) {
       const target = attrMeta.foreignKeyTarget;
 
-      if (!(attrMeta.name in attributes)) continue;
+      if (!isKeyOfObject(attributes, attrMeta.name)) continue;
 
       const foreignKeyValue =
         attributes[attrMeta.name as keyof typeof attributes];
