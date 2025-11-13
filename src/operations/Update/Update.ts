@@ -11,6 +11,7 @@ import type {
 } from "../../metadata";
 import {
   entityToTableItem,
+  isKeyOfObject,
   isNullableString,
   isString,
   tableItemToEntity
@@ -137,6 +138,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     this.buildUpdateItemTransaction(id, expression);
+    this.addStandaloneForeignKeyConditionChecks(entityAttrs);
 
     // Only need to prefetch if the entity has relationships
     if (entityMeta.allRelationships.length > 0) {
@@ -193,6 +195,43 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       if (foreignKeyVal !== undefined) acc.push({ meta, foreignKeyVal });
       return acc;
     }, []);
+  }
+
+  /**
+   * Adds condition checks for standalone foreign keys present in the update payload to ensure the referenced records exist.
+   *
+   * @param attributes - Partial entity attributes supplied to the update call.
+   */
+  private addStandaloneForeignKeyConditionChecks(
+    attributes: Partial<EntityAttributesOnly<DynaRecord>>
+  ): void {
+    const standaloneForeignKeys =
+      this.entityMetadata.standaloneForeignKeyAttributes;
+
+    for (const attrMeta of standaloneForeignKeys) {
+      const target = attrMeta.foreignKeyTarget;
+
+      if (!isKeyOfObject(attributes, attrMeta.name)) continue;
+
+      const foreignKeyValue =
+        attributes[attrMeta.name as keyof typeof attributes];
+
+      if (!isString(foreignKeyValue)) continue;
+
+      const foreignKey = foreignKeyValue;
+      const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
+
+      const conditionCheck: ConditionCheck = {
+        TableName: this.tableMetadata.name,
+        Key: {
+          [this.partitionKeyAlias]: target.partitionKeyValue(foreignKey),
+          [this.sortKeyAlias]: target.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+      };
+
+      this.transactionBuilder.addConditionCheck(conditionCheck, errMsg);
+    }
   }
 
   /**

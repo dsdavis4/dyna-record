@@ -9,7 +9,7 @@ import type {
   TableMetadata
 } from ".";
 import type DynaRecord from "../DynaRecord";
-import type { MakeOptional } from "../types";
+import type { EntityClass, MakeOptional } from "../types";
 import type { ZodType } from "zod";
 
 /**
@@ -127,6 +127,11 @@ export interface AttributeMetadataOptions {
   alias?: string;
   nullable?: boolean;
   serializers?: Serializers;
+  /**
+   * When the attribute represents a foreign key, this references the target entity class.
+   * Used to enforce referential integrity even when a relationship decorator is not present.
+   */
+  foreignKeyTarget?: EntityClass<DynaRecord>;
 }
 
 /**
@@ -135,3 +140,11 @@ export interface AttributeMetadataOptions {
 export type BelongsToOrOwnedByRelationship =
   | BelongsToRelationship
   | OwnedByRelationship;
+
+/**
+ * Attribute metadata for foreign key attributes where {@link AttributeMetadata.foreignKeyTarget} is guaranteed.
+ * Provides the target entity class so operations can enforce referential integrity even when no relationship metadata exists.
+ */
+export interface ForeignKeyAttributeMetadata extends AttributeMetadata {
+  foreignKeyTarget: NonNullable<AttributeMetadata["foreignKeyTarget"]>;
+}

@@ -43,11 +43,11 @@ abstract class MockTable extends DynaRecord {
 
 @Entity
 class Order extends MockTable {
-  @ForeignKeyAttribute({ alias: "CustomerId" })
-  public readonly customerId: ForeignKey;
+  @ForeignKeyAttribute(() => Customer, { alias: "CustomerId" })
+  public readonly customerId: ForeignKey<Customer>;
 
-  @ForeignKeyAttribute({ alias: "PaymentMethodId" })
-  public readonly paymentMethodId: ForeignKey;
+  @ForeignKeyAttribute(() => PaymentMethod, { alias: "PaymentMethodId" })
+  public readonly paymentMethodId: ForeignKey<PaymentMethod>;
 
   @DateAttribute({ alias: "OrderDate" })
   public readonly orderDate: Date;
@@ -64,8 +64,8 @@ class PaymentMethodProvider extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @ForeignKeyAttribute({ alias: "PaymentMethodId" })
-  public readonly paymentMethodId: ForeignKey;
+  @ForeignKeyAttribute(() => PaymentMethod, { alias: "PaymentMethodId" })
+  public readonly paymentMethodId: ForeignKey<PaymentMethod>;
 
   @BelongsTo(() => PaymentMethod, { foreignKey: "paymentMethodId" })
   public readonly paymentMethod: PaymentMethod;
@@ -76,8 +76,8 @@ class PaymentMethod extends MockTable {
   @StringAttribute({ alias: "LastFour" })
   public readonly lastFour: string;
 
-  @ForeignKeyAttribute({ alias: "CustomerId" })
-  public readonly customerId: ForeignKey;
+  @ForeignKeyAttribute(() => Customer, { alias: "CustomerId" })
+  public readonly customerId: ForeignKey<Customer>;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public readonly customer: Customer;
@@ -121,8 +121,8 @@ class ContactInformation extends MockTable {
   @StringAttribute({ alias: "Phone", nullable: true })
   public readonly phone?: string;
 
-  @ForeignKeyAttribute({ alias: "CustomerId", nullable: true })
-  public readonly customerId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Customer, { alias: "CustomerId", nullable: true })
+  public readonly customerId?: NullableForeignKey<Customer>;
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public readonly customer?: Customer;
@@ -148,8 +148,8 @@ class Pet extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @ForeignKeyAttribute({ alias: "OwnerId", nullable: true })
-  public readonly ownerId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Person, { alias: "OwnerId", nullable: true })
+  public readonly ownerId?: NullableForeignKey<Person>;
 
   @BelongsTo(() => Person, { foreignKey: "ownerId" })
   public readonly owner?: Person;
@@ -166,8 +166,8 @@ class Home extends MockTable {
   @StringAttribute({ alias: "Neighborhood", nullable: true })
   public readonly neighborhood?: string;
 
-  @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
-  public readonly personId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Person, { alias: "PersonId", nullable: true })
+  public readonly personId?: NullableForeignKey<Person>;
 
   @BelongsTo(() => Person, { foreignKey: "personId" })
   public readonly person: Person;
@@ -181,14 +181,14 @@ class Address extends MockTable {
   @StringAttribute({ alias: "State" })
   public readonly state: string;
 
-  @ForeignKeyAttribute({ alias: "HomeId" })
-  public readonly homeId: ForeignKey;
+  @ForeignKeyAttribute(() => Home, { alias: "HomeId" })
+  public readonly homeId: ForeignKey<Home>;
 
   @BelongsTo(() => Home, { foreignKey: "homeId" })
   public readonly home: Home;
 
-  @ForeignKeyAttribute({ alias: "PhoneBookId" })
-  public readonly phoneBookId: ForeignKey;
+  @ForeignKeyAttribute(() => PhoneBook, { alias: "PhoneBookId" })
+  public readonly phoneBookId: ForeignKey<PhoneBook>;
 
   @BelongsTo(() => PhoneBook, { foreignKey: "phoneBookId" })
   public readonly phoneBook: PhoneBook;
@@ -211,8 +211,8 @@ class Book extends MockTable {
   @NumberAttribute({ alias: "NumPages" })
   public readonly numPages: number;
 
-  @ForeignKeyAttribute({ alias: "PersonId", nullable: true })
-  public readonly ownerId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Person, { alias: "PersonId", nullable: true })
+  public readonly ownerId?: NullableForeignKey<Person>;
 
   @HasAndBelongsToMany(() => Author, {
     targetKey: "books",
@@ -267,11 +267,11 @@ class MyClassWithAllAttributeTypes extends MockTable {
   @NumberAttribute({ nullable: true })
   public nullableNumberAttribute?: number;
 
-  @ForeignKeyAttribute()
-  public foreignKeyAttribute: ForeignKey;
+  @ForeignKeyAttribute(() => Customer)
+  public foreignKeyAttribute: ForeignKey<Customer>;
 
-  @ForeignKeyAttribute({ nullable: true })
-  public nullableForeignKeyAttribute?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Customer, { nullable: true })
+  public nullableForeignKeyAttribute?: NullableForeignKey<Customer>;
 
   @EnumAttribute({ values: ["val-1", "val-2"] })
   public enumAttribute: "val-1" | "val-2";
@@ -292,14 +292,17 @@ class User extends MockTable {
   @BelongsTo(() => Organization, { foreignKey: "orgId" })
   public readonly org: Organization;
 
-  @ForeignKeyAttribute({ alias: "OrgId", nullable: true })
-  public readonly orgId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Organization, {
+    alias: "OrgId",
+    nullable: true
+  })
+  public readonly orgId?: NullableForeignKey<Organization>;
 
   @BelongsTo(() => Desk, { foreignKey: "deskId" })
   public readonly desk: Desk;
 
-  @ForeignKeyAttribute({ alias: "DeskId", nullable: true })
-  public readonly deskId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Desk, { alias: "DeskId", nullable: true })
+  public readonly deskId?: NullableForeignKey<Desk>;
 
   @HasAndBelongsToMany(() => Website, {
     targetKey: "users",
@@ -334,8 +337,8 @@ class Founder extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @ForeignKeyAttribute({ alias: "OrganizationId" })
-  public readonly organizationId: ForeignKey;
+  @ForeignKeyAttribute(() => Organization, { alias: "OrganizationId" })
+  public readonly organizationId: ForeignKey<Organization>;
 }
 
 @Entity
@@ -369,8 +372,11 @@ class Employee extends MockTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
-  @ForeignKeyAttribute({ alias: "OrganizationId", nullable: true })
-  public readonly organizationId: NullableForeignKey;
+  @ForeignKeyAttribute(() => Organization, {
+    alias: "OrganizationId",
+    nullable: true
+  })
+  public readonly organizationId: NullableForeignKey<Organization>;
 }
 
 @Table({ name: "other-table", delimiter: "|" })
@@ -417,8 +423,8 @@ class Course extends OtherTable {
   @StringAttribute()
   public readonly name: string;
 
-  @ForeignKeyAttribute({ nullable: true })
-  public readonly teacherId?: NullableForeignKey;
+  @ForeignKeyAttribute(() => Teacher, { nullable: true })
+  public readonly teacherId?: NullableForeignKey<Teacher>;
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
   public readonly teacher?: Teacher;
@@ -438,8 +444,8 @@ class Assignment extends OtherTable {
   @StringAttribute()
   public readonly title: string;
 
-  @ForeignKeyAttribute()
-  public readonly courseId: ForeignKey;
+  @ForeignKeyAttribute(() => Course)
+  public readonly courseId: ForeignKey<Course>;
 
   @BelongsTo(() => Course, { foreignKey: "courseId" })
   public readonly course: Course;
@@ -453,14 +459,14 @@ class Grade extends OtherTable {
   @StringAttribute({ alias: "LetterValue" })
   public readonly gradeValue: string;
 
-  @ForeignKeyAttribute()
-  public readonly assignmentId: ForeignKey;
+  @ForeignKeyAttribute(() => Assignment)
+  public readonly assignmentId: ForeignKey<Assignment>;
 
   @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
   public readonly assignment: Assignment;
 
-  @ForeignKeyAttribute()
-  public readonly studentId: ForeignKey;
+  @ForeignKeyAttribute(() => Student)
+  public readonly studentId: ForeignKey<Student>;
 
   @BelongsTo(() => Student, { foreignKey: "studentId" })
   public readonly student: Student;
@@ -471,8 +477,8 @@ class Profile extends OtherTable {
   @DateAttribute()
   public readonly lastLogin: Date;
 
-  @ForeignKeyAttribute()
-  public readonly userId: ForeignKey;
+  @ForeignKeyAttribute(() => Student)
+  public readonly userId: ForeignKey<Student>;
 
   @StringAttribute({ nullable: true })
   public readonly alternateEmail?: string;

@@ -6,7 +6,7 @@ import {
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils";
-import { entityToTableItem, tableItemToEntity } from "../../utils";
+import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils";
 import type { CreateOptions } from "./types";
@@ -74,6 +74,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(entityData, tableItem);
+    this.buildStandaloneForeignKeyConditionChecks(entityData);
 
     // Attempt to fetch all belongs-to entities to properly create reverse denormalization links
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
@@ -202,6 +203,42 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
           `${relMeta.target.name} with id: ${foreignKey} already has an associated ${this.EntityClass.name}`
         );
       }
+    }
+  }
+
+  /**
+   * Adds DynamoDB condition checks for foreign keys that are not associated with a relationship decorator.
+   * Ensures referenced entities exist even when denormalised access patterns are not defined.
+   *
+   * @param entityData - Attributes being persisted for the new entity.
+   */
+  private buildStandaloneForeignKeyConditionChecks(
+    entityData: EntityAttributesOnly<DynaRecord>
+  ): void {
+    const standaloneForeignKeys =
+      this.entityMetadata.standaloneForeignKeyAttributes;
+
+    for (const attrMeta of standaloneForeignKeys) {
+      const target = attrMeta.foreignKeyTarget;
+
+      const foreignKeyValue =
+        entityData[attrMeta.name as keyof typeof entityData];
+
+      if (!isString(foreignKeyValue)) continue;
+
+      const foreignKey = foreignKeyValue;
+      const errMsg = `${target.name} with ID '${foreignKey}' does not exist`;
+
+      const conditionCheck: ConditionCheck = {
+        TableName: this.tableMetadata.name,
+        Key: {
+          [this.partitionKeyAlias]: target.partitionKeyValue(foreignKey),
+          [this.sortKeyAlias]: target.name
+        },
+        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+      };
+
+      this.#transactionBuilder.addConditionCheck(conditionCheck, errMsg);
     }
   }
 

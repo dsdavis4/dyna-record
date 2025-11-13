@@ -172,6 +172,8 @@ Define foreign keys in order to support [@BelongsTo](https://dyna-record.com/fun
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable foreign key attributes as optional for optimal type safety
 - Attempting to remove an entity from a non-nullable foreign key will result in a [NullConstrainViolationError](https://dyna-record.com/classes/NullConstraintViolationError.html)
+- Always provide the referenced entity class to `@ForeignKeyAttribute` (for example `@ForeignKeyAttribute(() => Customer)`); this allows DynaRecord to enforce referential integrity even when no relationship decorator is defined.
+- `Create` and `Update` automatically add DynamoDB condition checks for standalone foreign keys (those without a relationship decorator) to ensure the referenced entity exists, enabling referential integrity even when no denormalised access pattern is required.
 
 ```typescript
 import {
@@ -184,8 +186,8 @@ import {
 
 @Entity
 class Assignment extends MyTable {
-  @ForeignKeyAttribute()
-  public readonly courseId: ForeignKey;
+  @ForeignKeyAttribute(() => Course)
+  public readonly courseId: ForeignKey<Course>;
 
   @BelongsTo(() => Course, { foreignKey: "courseId" })
   public readonly course: Course;
@@ -193,8 +195,8 @@ class Assignment extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  @ForeignKeyAttribute({ nullable: true })
-  public readonly teacherId?: NullableForeignKey; // Set as optional
+  @ForeignKeyAttribute(() => Teacher, { nullable: true })
+  public readonly teacherId?: NullableForeignKey<Teacher>; // Set as optional
 
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
   public readonly teacher?: Teacher; // Set as optional because its linked through NullableForeignKey
@@ -232,8 +234,8 @@ class Assignment extends MyTable {
 
 @Entity
 class Grade extends MyTable {
-  @ForeignKeyAttribute()
-  public readonly assignmentId: ForeignKey;
+  @ForeignKeyAttribute(() => Assignment)
+  public readonly assignmentId: ForeignKey<Assignment>;
 
   // 'assignmentId' Must be defined on self as ForeignKey or NullableForeignKey
   @BelongsTo(() => Assignment, { foreignKey: "assignmentId" })
@@ -257,8 +259,8 @@ class Teacher extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  @ForeignKeyAttribute({ nullable: true })
-  public readonly teacherId?: NullableForeignKey; // Mark as optional
+  @ForeignKeyAttribute(() => Teacher, { nullable: true })
+  public readonly teacherId?: NullableForeignKey<Teacher>; // Mark as optional
 
   // 'teacherId' Must be defined on self as ForeignKey or NullableForeignKey
   @BelongsTo(() => Teacher, { foreignKey: "teacherId" })
@@ -282,8 +284,8 @@ class Teacher extends MyTable {
 
 @Entity
 class Course extends MyTable {
-  @ForeignKeyAttribute({ nullable: true })
-  public readonly teacherId?: NullableForeignKey; // Mark as optional
+  @ForeignKeyAttribute(() => Teacher, { nullable: true })
+  public readonly teacherId?: NullableForeignKey<Teacher>; // Mark as optional
 }
 ```
 

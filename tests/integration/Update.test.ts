@@ -476,6 +476,20 @@ describe("Update", () => {
                   UpdateExpression:
                     "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
                 }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#1111", SK: "Customer" },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: { PK: "Customer#22222", SK: "Customer" },
+                  TableName: "mock-table"
+                }
               }
             ]
           }
@@ -522,8 +536,8 @@ describe("Update", () => {
         nullableStringAttribute: "old-2",
         dateAttribute: new Date("2023-01-02"),
         nullableDateAttribute: new Date(),
-        foreignKeyAttribute: "old-1111" as ForeignKey,
-        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey,
+        foreignKeyAttribute: "old-1111" as ForeignKey<Customer>,
+        nullableForeignKeyAttribute: "old-2222" as NullableForeignKey<Customer>,
         boolAttribute: false,
         nullableBoolAttribute: true,
         numberAttribute: 9,
@@ -588,6 +602,88 @@ describe("Update", () => {
         updatedAt: new Date("2023-10-02")
       });
       dbOperationAssertions();
+    });
+
+    test("ensures standalone foreign key references exist", async () => {
+      expect.assertions(3);
+
+      mockSend.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "ConditionalCheckFailed" }
+          ],
+          $metadata: {}
+        });
+      });
+
+      try {
+        await MyClassWithAllAttributeTypes.update("123", {
+          foreignKeyAttribute: "missing-customer",
+          nullableForeignKeyAttribute: "missing-optional-customer"
+        });
+      } catch (e: any) {
+        expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'missing-customer' does not exist"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Customer with ID 'missing-optional-customer' does not exist"
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#foreignKeyAttribute": "foreignKeyAttribute",
+                      "#nullableForeignKeyAttribute":
+                        "nullableForeignKeyAttribute"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":foreignKeyAttribute": "missing-customer",
+                      ":nullableForeignKeyAttribute":
+                        "missing-optional-customer"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #UpdatedAt = :UpdatedAt"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: { PK: "Customer#missing-customer", SK: "Customer" },
+                    TableName: "mock-table"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    Key: {
+                      PK: "Customer#missing-optional-customer",
+                      SK: "Customer"
+                    },
+                    TableName: "mock-table"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      }
     });
   });
 
@@ -1161,7 +1257,7 @@ describe("Update", () => {
         type: "MyClassWithAllAttributeTypes",
         stringAttribute: "1",
         dateAttribute: new Date(),
-        foreignKeyAttribute: "11111" as ForeignKey,
+        foreignKeyAttribute: "11111" as ForeignKey<Customer>,
         boolAttribute: true,
         numberAttribute: 9,
         enumAttribute: "val-2",
@@ -2024,7 +2120,8 @@ describe("Update", () => {
         sk: contactInformation.SK as SortKey,
         id: contactInformation.Id,
         type: contactInformation.Type,
-        customerId: contactInformation.CustomerId as NullableForeignKey,
+        customerId:
+          contactInformation.CustomerId as NullableForeignKey<Customer>,
         email: contactInformation.Email,
         phone: contactInformation.Phone,
         createdAt: new Date(contactInformation.CreatedAt),
@@ -3522,7 +3619,7 @@ describe("Update", () => {
         id: "123",
         type: "Pet",
         name: "Mock Pet",
-        ownerId: pet.OwnerId as NullableForeignKey,
+        ownerId: pet.OwnerId as NullableForeignKey<Person>,
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02")
       });
@@ -4365,7 +4462,8 @@ describe("Update", () => {
         id: employee.Id,
         type: employee.Type,
         name: employee.Name,
-        organizationId: employee.OrganizationId as NullableForeignKey,
+        organizationId:
+          employee.OrganizationId as NullableForeignKey<Organization>,
         createdAt: new Date(employee.CreatedAt),
         updatedAt: new Date(employee.UpdatedAt)
       });
@@ -4906,7 +5004,8 @@ describe("Update", () => {
         id: employee.Id,
         type: employee.Type,
         name: employee.Name,
-        organizationId: employee.OrganizationId as NullableForeignKey,
+        organizationId:
+          employee.OrganizationId as NullableForeignKey<Organization>,
         createdAt: new Date(employee.CreatedAt),
         updatedAt: new Date(employee.UpdatedAt)
       });
@@ -5744,11 +5843,11 @@ describe("Update", () => {
       @StringAttribute({ alias: "Name" })
       public name: string;
 
-      @ForeignKeyAttribute({ alias: "Model1Id", nullable: true })
-      public model1Id?: NullableForeignKey;
+      @ForeignKeyAttribute(() => Model1, { alias: "Model1Id", nullable: true })
+      public model1Id?: NullableForeignKey<Model1>;
 
-      @ForeignKeyAttribute({ alias: "Model2Id", nullable: true })
-      public model2Id?: NullableForeignKey;
+      @ForeignKeyAttribute(() => Model2, { alias: "Model2Id", nullable: true })
+      public model2Id?: NullableForeignKey<Model2>;
 
       @BelongsTo(() => Model1, { foreignKey: "model1Id" })
       public model1: Model1;
@@ -6241,8 +6340,8 @@ describe("Update", () => {
         id: "123",
         type: "Model3",
         name: "originalName",
-        model1Id: "001" as NullableForeignKey, // Already has an associated entity
-        model2Id: "002" as NullableForeignKey, // Already has an associated entity
+        model1Id: "001" as NullableForeignKey<Model1>, // Already has an associated entity
+        model2Id: "002" as NullableForeignKey<Model2>, // Already has an associated entity
         createdAt: new Date("2023-01-01T00:00:00.000Z"),
         updatedAt: new Date("2023-01-02T00:00:00.000Z")
       });
@@ -6533,8 +6632,8 @@ describe("Update", () => {
         id: "123",
         type: "Grade",
         gradeValue: "A+",
-        assignmentId: "001" as ForeignKey, // Already has an associated entity
-        studentId: "002" as ForeignKey, // Already has an associated entity
+        assignmentId: "001" as ForeignKey<Assignment>, // Already has an associated entity
+        studentId: "002" as ForeignKey<Student>, // Already has an associated entity
         createdAt: new Date("2023-10-01T03:31:35.918Z"),
         updatedAt: new Date("2023-10-02T03:31:35.918Z")
       });
