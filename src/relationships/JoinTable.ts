@@ -41,6 +41,19 @@ interface JoinedKeys {
 }
 
 /**
+ * Options for JoinTable operations
+ */
+interface JoinTableOptions {
+  /**
+   * Whether to perform referential integrity checks for foreign key references.
+   * When `true` (default), condition checks are added to verify that referenced entities exist.
+   * When `false`, these condition checks are skipped, allowing updates even if foreign key references don't exist.
+   * @default true
+   */
+  referentialIntegrityCheck?: boolean;
+}
+
+/**
  * Common props for building transactions
  */
 interface TransactionProps {
@@ -74,6 +87,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * Adds denormalized copy of the related entity to each associated Entity's partition
    * @param this
    * @param keys
+   * @param options - Optional operation options including referentialIntegrityCheck flag
    */
   public static async create<
     ThisClass extends JoinTable<T, K>,
@@ -81,8 +95,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     K extends DynaRecord
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
-    keys: ForeignKeyProperties<ThisClass>
+    keys: ForeignKeyProperties<ThisClass>,
+    options?: JoinTableOptions
   ): Promise<void> {
+    const referentialIntegrityCheck =
+      options?.referentialIntegrityCheck ?? true;
     const transactionBuilder = new TransactionBuilder();
 
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
@@ -94,14 +111,16 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       keys,
       rel1,
       rel2,
-      lookupTableItem[transactionProps.ids.linkedEntityId]
+      lookupTableItem[transactionProps.ids.linkedEntityId],
+      referentialIntegrityCheck
     );
     JoinTable.denormalizeLinkRecord(
       transactionBuilder,
       keys,
       rel2,
       rel1,
-      lookupTableItem[transactionProps.ids.parentId]
+      lookupTableItem[transactionProps.ids.parentId],
+      referentialIntegrityCheck
     );
 
     await transactionBuilder.executeTransaction();
@@ -190,13 +209,17 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param keys
    * @param parentEntityMeta
    * @param linkedEntityMeta
+   * @param linkedRecord
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
+   * @private
    */
   private static denormalizeLinkRecord(
     transactionBuilder: TransactionBuilder,
     keys: ForeignKeyProperties<JoinTable<DynaRecord, DynaRecord>>,
     parentEntityMeta: JoinTableMetadata,
     linkedEntityMeta: JoinTableMetadata,
-    linkedRecord: DynamoTableItem
+    linkedRecord: DynamoTableItem,
+    referentialIntegrityCheck: boolean
   ): void {
     const { tableProps, entities, ids } = this.transactionProps(
       keys,
@@ -220,18 +243,20 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       `${parentEntity.name} with ID ${linkedEntityId} is already linked to ${linkedEntity.name} with ID ${parentId}`
     );
 
-    transactionBuilder.addConditionCheck(
-      {
-        TableName: tableName,
-        Key: this.buildForeignEntityKey(
-          tableProps,
-          parentEntity,
-          linkedEntityId
-        ),
-        ConditionExpression: `attribute_exists(${partitionKeyAlias})`
-      },
-      `${parentEntity.name} with ID ${linkedEntityId} does not exist`
-    );
+    if (referentialIntegrityCheck) {
+      transactionBuilder.addConditionCheck(
+        {
+          TableName: tableName,
+          Key: this.buildForeignEntityKey(
+            tableProps,
+            parentEntity,
+            linkedEntityId
+          ),
+          ConditionExpression: `attribute_exists(${partitionKeyAlias})`
+        },
+        `${parentEntity.name} with ID ${linkedEntityId} does not exist`
+      );
+    }
   }
 
   /**

@@ -2254,6 +2254,314 @@ describe("Create", () => {
     });
   });
 
+  describe("referentialIntegrityCheck option", () => {
+    describe("with referentialIntegrityCheck: false", () => {
+      it("can create an entity with all attribute types without condition checks", async () => {
+        expect.assertions(4);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        const instance = await MyClassWithAllAttributeTypes.create(
+          {
+            stringAttribute: "1",
+            nullableStringAttribute: "2",
+            dateAttribute: new Date(),
+            nullableDateAttribute: new Date(),
+            foreignKeyAttribute: "1111",
+            nullableForeignKeyAttribute: "22222",
+            boolAttribute: true,
+            nullableBoolAttribute: false,
+            numberAttribute: 9,
+            nullableNumberAttribute: 10,
+            enumAttribute: "val-1",
+            nullableEnumAttribute: "val-2"
+          },
+          { referentialIntegrityCheck: false }
+        );
+
+        expect(instance).toEqual({
+          pk: "MyClassWithAllAttributeTypes#uuid1",
+          sk: "MyClassWithAllAttributeTypes",
+          type: "MyClassWithAllAttributeTypes",
+          id: "uuid1",
+          stringAttribute: "1",
+          nullableStringAttribute: "2",
+          dateAttribute: new Date(),
+          nullableDateAttribute: new Date(),
+          foreignKeyAttribute: "1111",
+          nullableForeignKeyAttribute: "22222",
+          boolAttribute: true,
+          nullableBoolAttribute: false,
+          numberAttribute: 9,
+          nullableNumberAttribute: 10,
+          enumAttribute: "val-1",
+          nullableEnumAttribute: "val-2",
+          createdAt: new Date("2023-10-16T03:31:35.918Z"),
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(instance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Put: {
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      CreatedAt: "2023-10-16T03:31:35.918Z",
+                      Id: "uuid1",
+                      PK: "MyClassWithAllAttributeTypes#uuid1",
+                      SK: "MyClassWithAllAttributeTypes",
+                      Type: "MyClassWithAllAttributeTypes",
+                      UpdatedAt: "2023-10-16T03:31:35.918Z",
+                      boolAttribute: true,
+                      dateAttribute: "2023-10-16T03:31:35.918Z",
+                      enumAttribute: "val-1",
+                      foreignKeyAttribute: "1111",
+                      nullableBoolAttribute: false,
+                      nullableDateAttribute: "2023-10-16T03:31:35.918Z",
+                      nullableEnumAttribute: "val-2",
+                      nullableForeignKeyAttribute: "22222",
+                      nullableNumberAttribute: 10,
+                      nullableStringAttribute: "2",
+                      numberAttribute: 9,
+                      stringAttribute: "1"
+                    },
+                    TableName: "mock-table"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("will create an entity that BelongsTo an entity who HasMany of it without condition checks", async () => {
+        expect.assertions(5);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        const customer: MockTableEntityTableItem<Customer> = {
+          PK: "Customer#123",
+          SK: "Customer",
+          Id: "123",
+          Type: "Customer",
+          Name: "Mock Customer",
+          Address: "11 Some St",
+          CreatedAt: "2024-01-01T00:00:00.000Z",
+          UpdatedAt: "2024-01-02T00:00:00.000Z"
+        };
+
+        const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
+          PK: "PaymentMethod#456",
+          SK: "PaymentMethod",
+          Id: "456",
+          Type: "PaymentMethod",
+          LastFour: "1234",
+          CustomerId: customer.Id,
+          CreatedAt: "2024-02-01T00:00:00.000Z",
+          UpdatedAt: "2024-02-02T00:00:00.000Z"
+        };
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: customer }, { Item: paymentMethod }]
+        });
+
+        const order = await Order.create(
+          {
+            customerId: "123",
+            paymentMethodId: "456",
+            orderDate: new Date("2024-01-01")
+          },
+          { referentialIntegrityCheck: false }
+        );
+
+        const newOrderTableAttributes = {
+          Id: "uuid1",
+          Type: "Order",
+          CustomerId: "123",
+          OrderDate: "2024-01-01T00:00:00.000Z",
+          PaymentMethodId: "456",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z"
+        };
+
+        expect(order).toEqual({
+          createdAt: new Date("2023-10-16T03:31:35.918Z"),
+          customerId: "123",
+          id: "uuid1",
+          orderDate: new Date("2024-01-01T00:00:00.000Z"),
+          paymentMethodId: "456",
+          pk: "Order#uuid1",
+          sk: "Order",
+          type: "Order",
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(order).toBeInstanceOf(Order);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        // Prefetch associated records to denormalize
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Customer#123", SK: "Customer" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "PaymentMethod#456", SK: "PaymentMethod" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  // Put the new Order
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Order#uuid1",
+                      SK: "Order",
+                      ...newOrderTableAttributes
+                    }
+                  }
+                },
+                // Denormalize the Order to the Customer partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Customer#123",
+                      SK: "Order#uuid1",
+                      ...newOrderTableAttributes
+                    }
+                  }
+                },
+                // Denormalize the Order to the PaymentMethod partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "PaymentMethod#456",
+                      SK: "Order#uuid1",
+                      ...newOrderTableAttributes
+                    }
+                  }
+                },
+                // Denormalize the Customer to the Order partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Order#uuid1",
+                      SK: "Customer",
+                      Id: "123",
+                      Type: "Customer",
+                      Name: "Mock Customer",
+                      Address: "11 Some St",
+                      CreatedAt: "2024-01-01T00:00:00.000Z",
+                      UpdatedAt: "2024-01-02T00:00:00.000Z"
+                    }
+                  }
+                },
+                // Denormalize the PaymentMethod to the Order partition
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Order#uuid1",
+                      SK: "PaymentMethod",
+                      Id: "456",
+                      Type: "PaymentMethod",
+                      CustomerId: "123",
+                      LastFour: "1234",
+                      CreatedAt: "2024-02-01T00:00:00.000Z",
+                      UpdatedAt: "2024-02-02T00:00:00.000Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("will create an entity with standalone foreign keys even if referenced entities don't exist", async () => {
+        expect.assertions(3);
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("uuid1");
+
+        const instance = await MyClassWithAllAttributeTypes.create(
+          {
+            stringAttribute: "1",
+            dateAttribute: new Date(),
+            foreignKeyAttribute: "missing-customer",
+            nullableForeignKeyAttribute: "missing-optional-customer",
+            boolAttribute: true,
+            numberAttribute: 9,
+            enumAttribute: "val-1"
+          },
+          { referentialIntegrityCheck: false }
+        );
+
+        expect(instance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        // Verify no ConditionCheck items are present
+        expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual(
+          [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  Id: "uuid1",
+                  PK: "MyClassWithAllAttributeTypes#uuid1",
+                  SK: "MyClassWithAllAttributeTypes",
+                  Type: "MyClassWithAllAttributeTypes",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  boolAttribute: true,
+                  dateAttribute: "2023-10-16T03:31:35.918Z",
+                  enumAttribute: "val-1",
+                  foreignKeyAttribute: "missing-customer",
+                  nullableForeignKeyAttribute: "missing-optional-customer",
+                  numberAttribute: 9,
+                  stringAttribute: "1"
+                },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        );
+      });
+    });
+  });
+
   describe("types", () => {
     beforeAll(() => {
       // Mock return values as empty since it doesn't matter for type does
@@ -2447,6 +2755,51 @@ describe("Create", () => {
 
       // @ts-expect-error relationships are not part of return value
       Logger.log(res.paymentMethod);
+    });
+
+    it("will accept referentialIntegrityCheck option", async () => {
+      await Order.create(
+        {
+          orderDate: new Date(),
+          paymentMethodId: "123",
+          customerId: "456"
+        },
+        // @ts-expect-no-error referentialIntegrityCheck option is accepted
+        { referentialIntegrityCheck: false }
+      );
+
+      await Order.create(
+        {
+          orderDate: new Date(),
+          paymentMethodId: "123",
+          customerId: "456"
+        },
+        // @ts-expect-no-error referentialIntegrityCheck option is optional
+        { referentialIntegrityCheck: true }
+      );
+
+      await Order.create(
+        {
+          orderDate: new Date(),
+          paymentMethodId: "123",
+          customerId: "456"
+        }
+        // @ts-expect-no-error options parameter is optional
+      );
+    });
+
+    it("will not accept invalid options", async () => {
+      await Order.create(
+        {
+          orderDate: new Date(),
+          paymentMethodId: "123",
+          customerId: "456"
+        },
+        {
+          // @ts-expect-error invalid option property
+          invalidOption: true
+        }
+      );
     });
   });
 });
