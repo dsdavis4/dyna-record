@@ -7430,6 +7430,186 @@ describe("Update", () => {
     });
   });
 
+  describe("referentialIntegrityCheck option", () => {
+    describe("with referentialIntegrityCheck: false", () => {
+      describe("can update all attribute types", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([]);
+          expect(mockTransactGetCommand.mock.calls).toEqual([]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#UpdatedAt": "UpdatedAt",
+                        "#boolAttribute": "boolAttribute",
+                        "#dateAttribute": "dateAttribute",
+                        "#enumAttribute": "enumAttribute",
+                        "#foreignKeyAttribute": "foreignKeyAttribute",
+                        "#nullableBoolAttribute": "nullableBoolAttribute",
+                        "#nullableDateAttribute": "nullableDateAttribute",
+                        "#nullableEnumAttribute": "nullableEnumAttribute",
+                        "#nullableForeignKeyAttribute":
+                          "nullableForeignKeyAttribute",
+                        "#nullableNumberAttribute": "nullableNumberAttribute",
+                        "#nullableStringAttribute": "nullableStringAttribute",
+                        "#numberAttribute": "numberAttribute",
+                        "#stringAttribute": "stringAttribute"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                        ":boolAttribute": true,
+                        ":dateAttribute": "2023-10-16T03:31:35.918Z",
+                        ":enumAttribute": "val-1",
+                        ":foreignKeyAttribute": "1111",
+                        ":nullableBoolAttribute": false,
+                        ":nullableDateAttribute": "2023-10-16T03:31:35.918Z",
+                        ":nullableEnumAttribute": "val-2",
+                        ":nullableForeignKeyAttribute": "22222",
+                        ":nullableNumberAttribute": 10,
+                        ":nullableStringAttribute": "2",
+                        ":numberAttribute": 9,
+                        ":stringAttribute": "1"
+                      },
+                      Key: {
+                        PK: "MyClassWithAllAttributeTypes#123",
+                        SK: "MyClassWithAllAttributeTypes"
+                      },
+                      TableName: "mock-table",
+                      UpdateExpression:
+                        "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        beforeEach(() => {
+          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        });
+
+        test("static method", async () => {
+          expect.assertions(5);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              {
+                stringAttribute: "1",
+                nullableStringAttribute: "2",
+                dateAttribute: new Date(),
+                nullableDateAttribute: new Date(),
+                foreignKeyAttribute: "1111",
+                nullableForeignKeyAttribute: "22222",
+                boolAttribute: true,
+                nullableBoolAttribute: false,
+                numberAttribute: 9,
+                nullableNumberAttribute: 10,
+                enumAttribute: "val-1",
+                nullableEnumAttribute: "val-2"
+              },
+              { referentialIntegrityCheck: false }
+            )
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(7);
+
+          const instance = createInstance(MyClassWithAllAttributeTypes, {
+            pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+            sk: "MyClassWithAllAttributeTypes" as SortKey,
+            id: "123",
+            type: "MyClassWithAllAttributeTypes",
+            stringAttribute: "old-1",
+            nullableStringAttribute: "old-2",
+            dateAttribute: new Date("2023-01-02"),
+            nullableDateAttribute: new Date(),
+            foreignKeyAttribute: "old-1111" as ForeignKey<Customer>,
+            nullableForeignKeyAttribute:
+              "old-2222" as NullableForeignKey<Customer>,
+            boolAttribute: false,
+            nullableBoolAttribute: true,
+            numberAttribute: 9,
+            nullableNumberAttribute: 8,
+            enumAttribute: "val-2",
+            nullableEnumAttribute: "val-1",
+            createdAt: new Date("2023-10-01"),
+            updatedAt: new Date("2023-10-02")
+          });
+
+          const updatedInstance = await instance.update(
+            {
+              stringAttribute: "1",
+              nullableStringAttribute: "2",
+              dateAttribute: new Date(),
+              nullableDateAttribute: new Date(),
+              foreignKeyAttribute: "1111",
+              nullableForeignKeyAttribute: "22222",
+              boolAttribute: true,
+              nullableBoolAttribute: false,
+              numberAttribute: 9,
+              nullableNumberAttribute: 10,
+              enumAttribute: "val-1",
+              nullableEnumAttribute: "val-2"
+            },
+            { referentialIntegrityCheck: false }
+          );
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            stringAttribute: "1",
+            nullableStringAttribute: "2",
+            dateAttribute: new Date(),
+            nullableDateAttribute: new Date(),
+            foreignKeyAttribute: "1111",
+            nullableForeignKeyAttribute: "22222",
+            boolAttribute: true,
+            nullableBoolAttribute: false,
+            numberAttribute: 9,
+            nullableNumberAttribute: 10,
+            enumAttribute: "val-1",
+            nullableEnumAttribute: "val-2",
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+          // Assert original instance is not mutated
+          expect(instance).toEqual({
+            pk: "MyClassWithAllAttributeTypes#123",
+            sk: "MyClassWithAllAttributeTypes",
+            id: "123",
+            type: "MyClassWithAllAttributeTypes",
+            stringAttribute: "old-1",
+            nullableStringAttribute: "old-2",
+            dateAttribute: new Date("2023-01-02"),
+            nullableDateAttribute: new Date(),
+            foreignKeyAttribute: "old-1111",
+            nullableForeignKeyAttribute: "old-2222",
+            boolAttribute: false,
+            nullableBoolAttribute: true,
+            numberAttribute: 9,
+            nullableNumberAttribute: 8,
+            enumAttribute: "val-2",
+            nullableEnumAttribute: "val-1",
+            createdAt: new Date("2023-10-01"),
+            updatedAt: new Date("2023-10-02")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+  });
+
   describe("types", () => {
     beforeAll(() => {
       // For type tests mock the operations to nothing because we are just testing for the type interface
@@ -7582,6 +7762,63 @@ describe("Update", () => {
         await MyModelNullableAttribute.update("123", {
           // @ts-expect-no-error non-nullable fields can be removed (set to null)
           myAttribute: null
+        });
+      });
+
+      it("will accept referentialIntegrityCheck option", async () => {
+        await Order.update(
+          "123",
+          {
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456"
+          },
+          // @ts-expect-no-error referentialIntegrityCheck option is accepted
+          { referentialIntegrityCheck: false }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await Order.update(
+          "123",
+          {
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456"
+          },
+          // @ts-expect-no-error referentialIntegrityCheck option is optional
+          { referentialIntegrityCheck: true }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await Order.update(
+          "123",
+          {
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456"
+          }
+          // @ts-expect-no-error options parameter is optional
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("will not accept invalid options", async () => {
+        await Order.update(
+          "123",
+          {
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456"
+          },
+          {
+            // @ts-expect-error invalid option property
+            invalidOption: true
+          }
+        ).catch(() => {
+          Logger.log("Testing types");
         });
       });
     });
@@ -7800,6 +8037,69 @@ describe("Update", () => {
           })
           .catch(() => {
             // Runtime errors are expected with uninitialized instance, we're only testing types
+            Logger.log("Testing types");
+          });
+      });
+
+      it("will accept referentialIntegrityCheck option", async () => {
+        const instance = new Order();
+
+        await instance
+          .update(
+            {
+              orderDate: new Date(),
+              paymentMethodId: "123",
+              customerId: "456"
+            },
+            // @ts-expect-no-error referentialIntegrityCheck option is accepted
+            { referentialIntegrityCheck: false }
+          )
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+
+        await instance
+          .update(
+            {
+              orderDate: new Date(),
+              paymentMethodId: "123",
+              customerId: "456"
+            },
+            // @ts-expect-no-error referentialIntegrityCheck option is optional
+            { referentialIntegrityCheck: true }
+          )
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+
+        await instance
+          .update({
+            orderDate: new Date(),
+            paymentMethodId: "123",
+            customerId: "456"
+          })
+          // @ts-expect-no-error options parameter is optional
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("will not accept invalid options", async () => {
+        const instance = new Order();
+
+        await instance
+          .update(
+            {
+              orderDate: new Date(),
+              paymentMethodId: "123",
+              customerId: "456"
+            },
+            {
+              // @ts-expect-error invalid option property
+              invalidOption: true
+            }
+          )
+          .catch(() => {
             Logger.log("Testing types");
           });
       });

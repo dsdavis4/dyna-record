@@ -266,31 +266,42 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Create an entity. If foreign keys are included in the attributes then links will be demoralized accordingly
+   * Create an entity. If foreign keys are included in the attributes then links will be denormalized accordingly
    * @param attributes - Attributes of the model to create
+   * @param options - Optional operation options including referentialIntegrityCheck flag
    * @returns The new Entity
    *
+   * @example Basic usage
    * ```typescript
    * const newUser = await User.create({ name: "Alice", email: "alice@example.com", profileId: "123" });
+   * ```
+   *
+   * @example With referential integrity check disabled
+   * ```typescript
+   * const newUser = await User.create(
+   *   { name: "Alice", email: "alice@example.com", profileId: "123" },
+   *   { referentialIntegrityCheck: false }
+   * );
    * ```
    */
   public static async create<T extends DynaRecord>(
     this: EntityClass<T>,
-    attributes: CreateOptions<T>
+    attributes: CreateOptions<T>,
+    options?: { referentialIntegrityCheck?: boolean }
   ): Promise<ReturnType<Create<T>["run"]>> {
     const op = new Create<T>(this);
-    return await op.run(attributes);
+    return await op.run(attributes, options);
   }
 
   /**
-   * Update an entity. If foreign keys are included in the attribute then:
+   * Update an entity. If foreign keys are included in the attributes then:
    *   - Manages associated relationship links as needed
    *   - If the entity already had a foreign key relationship, then denormalized records will be deleted from each partition
    *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
    * @param attributes - Attributes to update
-   *
+   * @param options - Optional operation options including referentialIntegrityCheck flag
    *
    * @example Updating an entity.
    * ```typescript
@@ -301,19 +312,28 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * await User.update("userId", { email: "newemail@example.com", someKey: null });
    * ```
+   *
+   * @example With referential integrity check disabled
+   * ```typescript
+   * await User.update(
+   *   "userId",
+   *   { email: "newemail@example.com", profileId: 789 },
+   *   { referentialIntegrityCheck: false }
+   * );
+   * ```
    */
   public static async update<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
-    attributes: UpdateOptions<T>
+    attributes: UpdateOptions<T>,
+    options?: { referentialIntegrityCheck?: boolean }
   ): Promise<void> {
     const op = new Update<T>(this);
-    await op.run(id, attributes);
+    await op.run(id, attributes, options);
   }
 
   /**
    *  Same as the static `update` method but on an instance. Returns the full updated instance
-   *
    *
    * @example Updating an entity.
    * ```typescript
@@ -324,13 +344,22 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * const updatedInstance = await instance.update({ email: "newemail@example.com", someKey: null });
    * ```
+   *
+   * @example With referential integrity check disabled
+   * ```typescript
+   * const updatedInstance = await instance.update(
+   *   { email: "newemail@example.com", profileId: 789 },
+   *   { referentialIntegrityCheck: false }
+   * );
+   * ```
    */
   public async update<T extends this>(
-    attributes: UpdateOptions<T>
+    attributes: UpdateOptions<T>,
+    options?: { referentialIntegrityCheck?: boolean }
   ): Promise<EntityAttributesInstance<T>> {
     const InstanceClass = this.constructor as EntityClass<T>;
     const op = new Update<T>(InstanceClass);
-    const updatedAttributes = await op.run(this.id, attributes);
+    const updatedAttributes = await op.run(this.id, attributes, options);
 
     const clone = structuredClone(this);
 

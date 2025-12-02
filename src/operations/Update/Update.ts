@@ -23,7 +23,11 @@ import {
   extractForeignKeyFromEntity
 } from "../utils";
 import OperationBase from "../OperationBase";
-import type { UpdatedAttributes, UpdateOptions } from "./types";
+import type {
+  UpdatedAttributes,
+  UpdateOptions,
+  UpdateOperationOptions
+} from "./types";
 import type { DynamoTableItem, EntityClass, WithRequired } from "../../types";
 import Metadata from "../../metadata";
 import {
@@ -125,20 +129,28 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    *
    * @param id - The unique identifier of the entity being updated.
    * @param attributes - Partial set of entity attributes to update. Must be defined on the entity's model.
+   * @param options - Optional operation options including referentialIntegrityCheck flag.
    * @returns A promise that resolves to the set of updated attributes as applied to the entity.
    * @throws If the entity does not exist, an error is thrown.
    */
   public async run(
     id: string,
-    attributes: UpdateOptions<DynaRecord>
+    attributes: UpdateOptions<DynaRecord>,
+    options?: UpdateOperationOptions
   ): Promise<UpdatedAttributes<T>> {
+    const referentialIntegrityCheck =
+      options?.referentialIntegrityCheck ?? true;
+
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
     this.buildUpdateItemTransaction(id, expression);
-    this.addStandaloneForeignKeyConditionChecks(entityAttrs);
+    this.addStandaloneForeignKeyConditionChecks(
+      entityAttrs,
+      referentialIntegrityCheck
+    );
 
     // Only need to prefetch if the entity has relationships
     if (entityMeta.allRelationships.length > 0) {
@@ -167,7 +179,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         preFetch.entityPreUpdate,
         updatedEntity,
         expression,
-        preFetch.newBelongsToEntityLookup
+        preFetch.newBelongsToEntityLookup,
+        referentialIntegrityCheck
       );
     }
 
@@ -201,10 +214,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * Adds condition checks for standalone foreign keys present in the update payload to ensure the referenced records exist.
    *
    * @param attributes - Partial entity attributes supplied to the update call.
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
+   * @private
    */
   private addStandaloneForeignKeyConditionChecks(
-    attributes: Partial<EntityAttributesOnly<DynaRecord>>
+    attributes: Partial<EntityAttributesOnly<DynaRecord>>,
+    referentialIntegrityCheck: boolean
   ): void {
+    if (!referentialIntegrityCheck) {
+      return;
+    }
     const standaloneForeignKeys =
       this.entityMetadata.standaloneForeignKeyAttributes;
 
@@ -411,13 +430,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param entityPreUpdate - The state of the entity before the update.
    * @param updatedEntity - The entity state after proposed updates (partial attributes).
    * @param updateExpression - The DynamoDB update expression representing the attribute updates.
+   * @param newBelongsToEntityLookup - Lookup of new belongs-to entities.
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
    * @private
    */
   private buildBelongsToTransactions(
     entityPreUpdate: EntityAttributesOnly<DynaRecord>,
     updatedEntity: PartialEntityWithId,
     updateExpression: UpdateExpression,
-    newBelongsToEntityLookup: BelongsToEntityLookup
+    newBelongsToEntityLookup: BelongsToEntityLookup,
+    referentialIntegrityCheck: boolean
   ): void {
     const entityId = entityPreUpdate.id;
 
@@ -444,7 +466,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             foreignKey,
             newBelongsToEntityLookup,
             "attribute_not_exists",
-            `${this.EntityClass.name} already has an associated ${relMeta.target.name}`
+            `${this.EntityClass.name} already has an associated ${relMeta.target.name}`,
+            referentialIntegrityCheck
           );
         } else if (isRemovingForeignKey) {
           this.removeForeignKeysTransactions(entityId, relMeta, oldFk);
@@ -454,7 +477,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             relMeta,
             foreignKey,
             oldFk,
-            newBelongsToEntityLookup
+            newBelongsToEntityLookup,
+            referentialIntegrityCheck
           );
         } else if (foreignKey !== null) {
           this.buildUpdateBelongsToLinkedRecords(
@@ -514,6 +538,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param newBelongsToEntityLookup
    * @param persistToSelfCondition
    * @param persistToSelfConditionErrMessage
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
+   * @private
    */
   private buildPutBelongsToLinkedRecords(
     updatedEntity: PartialEntityWithId,
@@ -521,10 +547,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     foreignKey: string,
     newBelongsToEntityLookup: BelongsToEntityLookup,
     persistToSelfCondition: "attribute_not_exists" | "attribute_exists",
-    persistToSelfConditionErrMessage?: string
+    persistToSelfConditionErrMessage?: string,
+    referentialIntegrityCheck: boolean = true
   ): void {
     // Ensure that the new foreign key is valid and exists
-    this.buildEntityExistsCondition(relMeta, foreignKey);
+    if (referentialIntegrityCheck) {
+      this.buildEntityExistsCondition(relMeta, foreignKey);
+    }
 
     // Denormalize entity being updated to foreign partition
     this.buildLinkToForeignEntityTransaction(
@@ -700,13 +729,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * @param newForeignKey
    * @param oldForeignKey
    * @param newBelongsToEntityLookup
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
+   * @private
    */
   private updateForeignKeyTransactions(
     updatedEntity: PartialEntityWithId,
     relMeta: BelongsToOrOwnedByRelationship,
     newForeignKey: string,
     oldForeignKey: string,
-    newBelongsToEntityLookup: BelongsToEntityLookup
+    newBelongsToEntityLookup: BelongsToEntityLookup,
+    referentialIntegrityCheck: boolean
   ): void {
     // Keys to delete the linked record from the foreign entities partition
     const oldKeysToForeignEntity = buildBelongsToLinkKey(
@@ -726,7 +758,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       relMeta,
       newForeignKey,
       newBelongsToEntityLookup,
-      "attribute_exists"
+      "attribute_exists",
+      undefined,
+      referentialIntegrityCheck
     );
   }
 

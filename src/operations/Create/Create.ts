@@ -9,7 +9,7 @@ import {
 import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
 import OperationBase from "../OperationBase";
 import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils";
-import type { CreateOptions } from "./types";
+import type { CreateOptions, CreateOperationOptions } from "./types";
 import {
   type EntityDefinedAttributes,
   type EntityAttributeDefaultFields,
@@ -57,13 +57,18 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    *   partition (due to "BelongsTo" links), retrieves and inserts those link records.
    *
    * @param attributes - Attributes to initialize the new entity. Must be defined on the model and valid per schema constraints.
+   * @param options - Optional operation options including referentialIntegrityCheck flag.
    * @returns A promise that resolves to the newly created entity with all attributes, including automatically set fields.
    * @throws If the entity already exists, a uniqueness violation error is raised.
-   * @throws If a required foreign key does not correspond to an existing entity, an error is raised.
+   * @throws If a required foreign key does not correspond to an existing entity, an error is raised (unless referentialIntegrityCheck is false).
    */
   public async run(
-    attributes: CreateOptions<T>
+    attributes: CreateOptions<T>,
+    options?: CreateOperationOptions
   ): Promise<EntityAttributesOnly<T>> {
+    const referentialIntegrityCheck =
+      options?.referentialIntegrityCheck ?? true;
+
     const entityAttrs =
       this.entityMetadata.parseRawEntityDefinedAttributes(attributes);
 
@@ -73,8 +78,15 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
-    this.buildBelongsToTransactions(entityData, tableItem);
-    this.buildStandaloneForeignKeyConditionChecks(entityData);
+    this.buildBelongsToTransactions(
+      entityData,
+      tableItem,
+      referentialIntegrityCheck
+    );
+    this.buildStandaloneForeignKeyConditionChecks(
+      entityData,
+      referentialIntegrityCheck
+    );
 
     // Attempt to fetch all belongs-to entities to properly create reverse denormalization links
     const belongsToTableItems = await this.getBelongsToTableItems(entityData);
@@ -170,11 +182,13 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    *
    * @param entityData - The complete set of entity attributes for the new entity.
    * @param tableItem - The main entity's DynamoDB table item.
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
    * @private
    */
   private buildBelongsToTransactions(
     entityData: EntityAttributesOnly<DynaRecord>,
-    tableItem: DynamoTableItem
+    tableItem: DynamoTableItem,
+    referentialIntegrityCheck: boolean
   ): void {
     const tableName = this.tableMetadata.name;
 
@@ -185,7 +199,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
       if (foreignKey !== undefined) {
         // Ensure referenced entity exists before linking
-        this.buildRelationshipExistsConditionTransaction(relMeta, foreignKey);
+        if (referentialIntegrityCheck) {
+          this.buildRelationshipExistsConditionTransaction(relMeta, foreignKey);
+        }
 
         const key = buildBelongsToLinkKey(
           this.EntityClass,
@@ -211,10 +227,16 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * Ensures referenced entities exist even when denormalised access patterns are not defined.
    *
    * @param entityData - Attributes being persisted for the new entity.
+   * @param referentialIntegrityCheck - Whether to perform referential integrity checks.
+   * @private
    */
   private buildStandaloneForeignKeyConditionChecks(
-    entityData: EntityAttributesOnly<DynaRecord>
+    entityData: EntityAttributesOnly<DynaRecord>,
+    referentialIntegrityCheck: boolean
   ): void {
+    if (!referentialIntegrityCheck) {
+      return;
+    }
     const standaloneForeignKeys =
       this.entityMetadata.standaloneForeignKeyAttributes;
 

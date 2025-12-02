@@ -35,6 +35,19 @@ export type UpdateOptions<T extends DynaRecord> = Partial<
 >;
 
 /**
+ * Options for update operations
+ */
+export interface UpdateOperationOptions {
+  /**
+   * Whether to perform referential integrity checks for foreign key references.
+   * When `true` (default), condition checks are added to verify that referenced entities exist.
+   * When `false`, these condition checks are skipped, allowing updates even if foreign key references don't exist.
+   * @default true
+   */
+  referentialIntegrityCheck?: boolean;
+}
+
+/**
  * Attributes of an entity that were updated. Including the auto generated updatedAt date
  */
 export type UpdatedAttributes<T extends DynaRecord> = Pick<

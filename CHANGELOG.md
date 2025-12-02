@@ -1,3 +1,10 @@
+## 0.4.1 - 2025-12-01
+
+### Added
+
+- `referentialIntegrityCheck` option for `Create` and `Update` operations (defaults to `true`). When set to `false`, skips explicit condition checks that verify foreign key references exist before creating or updating entities. This can be beneficial in high-contention or high-throughput systems where the overhead of these checks might impact performance.
+- `referentialIntegrityCheck` option for `JoinTable.create()` method, allowing referential integrity checks to be skipped when creating join table entries.
+
 ## 0.4.0 - 2025-11-12
 
 ### Breaking Changes

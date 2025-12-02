@@ -785,6 +785,110 @@ describe("JoinTable", () => {
     });
   });
 
+  describe("referentialIntegrityCheck option", () => {
+    describe("with referentialIntegrityCheck: false", () => {
+      it("will create a join table entry without condition checks", async () => {
+        expect.assertions(4);
+
+        const author: MockTableEntityTableItem<Author> = {
+          PK: "Author#1",
+          SK: "Author",
+          Id: "1",
+          Type: "Author",
+          Name: "Author-1",
+          CreatedAt: "2024-02-27T03:19:52.667Z",
+          UpdatedAt: "2024-02-27T03:19:52.667Z"
+        };
+
+        const book: MockTableEntityTableItem<Book> = {
+          PK: "Book#2",
+          SK: "Book",
+          Id: "2",
+          Type: "Book",
+          Name: "Some Name",
+          NumPages: 100,
+          CreatedAt: "2021-10-15T08:31:15.148Z",
+          UpdatedAt: "2022-10-15T08:31:15.148Z"
+        };
+
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: author }, { Item: book }]
+        });
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await AuthorBook.create(
+            { authorId: "1", bookId: "2" },
+            { referentialIntegrityCheck: false }
+          )
+        ).toEqual(undefined);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Author#1", SK: "Author" }
+                  }
+                },
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Book#2", SK: "Book" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Put: {
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Author#1",
+                      SK: "Book#2",
+                      Id: "2",
+                      Type: "Book",
+                      Name: "Some Name",
+                      NumPages: 100,
+                      CreatedAt: "2021-10-15T08:31:15.148Z",
+                      UpdatedAt: "2022-10-15T08:31:15.148Z"
+                    },
+                    TableName: "mock-table"
+                  }
+                },
+                {
+                  Put: {
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Book#2",
+                      SK: "Author#1",
+                      Id: "1",
+                      Type: "Author",
+                      Name: "Author-1",
+                      CreatedAt: "2024-02-27T03:19:52.667Z",
+                      UpdatedAt: "2024-02-27T03:19:52.667Z"
+                    },
+                    TableName: "mock-table"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+  });
+
   describe("types", () => {
     describe("create", () => {
       it("will not have type errors when the signature includes one of the joined models and all foreign keys", async () => {
@@ -834,6 +938,41 @@ describe("JoinTable", () => {
 
         // @ts-expect-error: Invalid key value
         await AuthorBook.create({ authorId: null, bookId: "456" }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("will accept referentialIntegrityCheck option", async () => {
+        // @ts-expect-no-error referentialIntegrityCheck option is accepted
+        await AuthorBook.create(
+          { authorId: "123", bookId: "456" },
+          { referentialIntegrityCheck: false }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-no-error referentialIntegrityCheck option is optional
+        await AuthorBook.create(
+          { authorId: "123", bookId: "456" },
+          { referentialIntegrityCheck: true }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-no-error options parameter is optional
+        await AuthorBook.create({ authorId: "123", bookId: "456" }).catch(
+          () => {
+            Logger.log("Testing types");
+          }
+        );
+      });
+
+      it("will not accept invalid options", async () => {
+        await AuthorBook.create(
+          { authorId: "123", bookId: "456" },
+          // @ts-expect-error invalid option property
+          { invalidOption: true }
+        ).catch(() => {
           Logger.log("Testing types");
         });
       });

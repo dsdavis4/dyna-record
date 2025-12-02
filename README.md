@@ -357,6 +357,25 @@ const grade: Grade = await Grade.create({
 });
 ```
 
+#### Skipping Referential Integrity Checks
+
+By default, when creating entities with foreign key references, dyna-record performs condition checks to ensure that referenced entities exist. This prevents creating entities with invalid foreign key references. However, in high-contention or high-throughput systems where the same foreign key may be referenced in parallel operations, these condition checks can fail due to transaction conflicts. In scenarios such as bulk imports or when you've already verified the references, you may want to skip these checks to prevent such failures.
+
+To skip referential integrity checks, pass an options object as the second parameter with `referentialIntegrityCheck: false`:
+
+```typescript
+const grade: Grade = await Grade.create(
+  {
+    gradeValue: "A+",
+    assignmentId: "123",
+    studentId: "456"
+  },
+  { referentialIntegrityCheck: false }
+);
+```
+
+**Note:** When `referentialIntegrityCheck` is set to `false`, the condition checks that verify foreign key references exist are skipped. This means you can create entities even if the referenced entities don't exist, which may lead to data integrity issues. Use this option with caution.
+
 #### Error handling
 
 The method is designed to throw errors under various conditions, such as transaction cancellation due to failed conditional checks. For instance, if you attempt to create a `Grade` for an `Assignment` that already has one, the method throws a [TransactionWriteFailedError](https://dyna-record.com/classes/TransactionWriteFailedError.html).
@@ -548,6 +567,31 @@ const updatedInstance = await petInstance.update({
   ownerId: null
 });
 ```
+
+#### Skipping Referential Integrity Checks
+
+By default, when updating entities with foreign key references, dyna-record performs condition checks to ensure that referenced entities exist. This prevents updating entities with invalid foreign key references. However, in high-contention or high-throughput systems where the same foreign key may be referenced in parallel operations, these condition checks can fail due to transaction conflicts. In scenarios such as bulk updates or when you've already verified the references, you may want to skip these checks to prevent such failures.
+
+To skip referential integrity checks, pass an options object as the third parameter with `referentialIntegrityCheck: false`:
+
+```typescript
+await PaymentMethod.update(
+  "123",
+  { customerId: "456" },
+  { referentialIntegrityCheck: false }
+);
+```
+
+For instance methods:
+
+```typescript
+const updatedInstance = await paymentMethodInstance.update(
+  { customerId: "456" },
+  { referentialIntegrityCheck: false }
+);
+```
+
+**Note:** When `referentialIntegrityCheck` is set to `false`, the condition checks that verify foreign key references exist are skipped. This means you can update entities even if the referenced entities don't exist, which may lead to data integrity issues. Use this option with caution.
 
 ### Delete
 
