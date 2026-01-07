@@ -1,4 +1,4 @@
-import Metadata, { tableDefaultFields } from "./metadata";
+import Metadata, { tableDefaultFields, type TableMetadata } from "./metadata";
 import { DateAttribute, StringAttribute } from "./decorators";
 import {
   FindById,
@@ -431,6 +431,23 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public partitionKeyValue(): string {
     return (this.constructor as typeof DynaRecord).partitionKeyValue(this.id);
+  }
+
+  /**
+   * Returns serialized table metadata containing only serializable values.
+   * This method returns a plain object representation of the table metadata,
+   * with functions, class instances, and other non-serializable data converted
+   * to their string representations or omitted.
+   * @returns A plain object representation of the table metadata
+   *
+   * @example
+   * ```typescript
+   * const metadata = User.metadata();
+   * // Returns a serialized object with all metadata information
+   * ```
+   */
+  public static metadata(): ReturnType<TableMetadata["toJSON"]> {
+    return Metadata.getTable(this.name).toJSON();
   }
 }
 

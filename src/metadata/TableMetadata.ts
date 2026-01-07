@@ -6,8 +6,13 @@ import type {
   DefaultFields,
   TableDefaultFields,
   DefaultDateFields,
-  KeysAttributeMetadataOptions
+  KeysAttributeMetadataOptions,
+  EntityMetadataStorage
 } from "./types";
+import {
+  type SerializedTableMetadata,
+  TableMetadataTransform
+} from "./schemas";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
@@ -35,6 +40,7 @@ export const tableDefaultFields: Record<
  * @property {Record<string, AttributeMetadata>} defaultTableAttributes - A record of default attributes for the table, keyed by table field aliases.
  * @property {AttributeMetadata} partitionKeyAttribute - Metadata for the table's partition key attribute.
  * @property {AttributeMetadata} sortKeyAttribute - Metadata for the table's sort key attribute.
+ * @property {EntityMetadataStorage} entities - A record of entities that are mapped to the table, keyed by entity class name.
  *
  * @param {TableMetadataOptions} options - Configuration options for the table metadata.
  */
@@ -45,6 +51,7 @@ class TableMetadata {
   public readonly defaultTableAttributes: Record<string, AttributeMetadata>;
   public partitionKeyAttribute: AttributeMetadata;
   public sortKeyAttribute: AttributeMetadata;
+  public readonly entities: EntityMetadataStorage = {};
 
   /**
    * Represents the keys that should be excluded from schema validation.
@@ -150,6 +157,15 @@ class TableMetadata {
     this.sortKeyAttribute = new AttributeMetadata(opts);
     // Set the user defined primary key as reserved key so that its managed by dyna-record
     this.reservedKeys[options.attributeName] = true;
+  }
+
+  /**
+   * Serializes the table metadata to a plain object containing only serializable values.
+   * This removes functions, Zod types, serializers, and other non-serializable data.
+   * @returns A plain object representation of the metadata
+   */
+  public toJSON(): SerializedTableMetadata {
+    return TableMetadataTransform.parse(this);
   }
 }
 

@@ -122,10 +122,9 @@ class MetadataStorage {
     entityClass: EntityMetadata["EntityClass"],
     tableClassName: string
   ): void {
-    this.#entities[entityClass.name] = new EntityMetadata(
-      entityClass,
-      tableClassName
-    );
+    const entityMetadata = new EntityMetadata(entityClass, tableClassName);
+    this.#entities[entityClass.name] = entityMetadata;
+    this.#tables[tableClassName].entities[entityClass.name] = entityMetadata;
   }
 
   /**
