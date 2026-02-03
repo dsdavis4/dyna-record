@@ -52,5 +52,3 @@ jobs:
           prerelease: false
 
       - run: npm publish
-        env:
-            NODE_AUTH_TOKEN: ""  # Workaround for setup-node OIDC conflict
