@@ -70,6 +70,22 @@ class MetadataStorage {
   }
 
   /**
+   * Returns all entities that belong to a specific table
+   * @param {string} tableClassName - Name of the table class
+   * @returns Record of entity metadata keyed by entity class name
+   */
+  public getEntitiesForTable(tableClassName: string): EntityMetadataStorage {
+    this.init();
+    const entities: EntityMetadataStorage = {};
+    for (const [entityName, entityMetadata] of Object.entries(this.#entities)) {
+      if (entityMetadata.tableClassName === tableClassName) {
+        entities[entityName] = entityMetadata;
+      }
+    }
+    return entities;
+  }
+
+  /**
    * Returns attribute metadata for attributes defined keyed by entity key
    * @returns - {@link AttributeMetadataStorage}
    */
@@ -122,9 +138,10 @@ class MetadataStorage {
     entityClass: EntityMetadata["EntityClass"],
     tableClassName: string
   ): void {
-    const entityMetadata = new EntityMetadata(entityClass, tableClassName);
-    this.#entities[entityClass.name] = entityMetadata;
-    this.#tables[tableClassName].entities[entityClass.name] = entityMetadata;
+    this.#entities[entityClass.name] = new EntityMetadata(
+      entityClass,
+      tableClassName
+    );
   }
 
   /**

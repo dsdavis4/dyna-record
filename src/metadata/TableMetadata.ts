@@ -40,7 +40,6 @@ export const tableDefaultFields: Record<
  * @property {Record<string, AttributeMetadata>} defaultTableAttributes - A record of default attributes for the table, keyed by table field aliases.
  * @property {AttributeMetadata} partitionKeyAttribute - Metadata for the table's partition key attribute.
  * @property {AttributeMetadata} sortKeyAttribute - Metadata for the table's sort key attribute.
- * @property {EntityMetadataStorage} entities - A record of entities that are mapped to the table, keyed by entity class name.
  *
  * @param {TableMetadataOptions} options - Configuration options for the table metadata.
  */
@@ -51,7 +50,6 @@ class TableMetadata {
   public readonly defaultTableAttributes: Record<string, AttributeMetadata>;
   public partitionKeyAttribute: AttributeMetadata;
   public sortKeyAttribute: AttributeMetadata;
-  public readonly entities: EntityMetadataStorage = {};
 
   /**
    * Represents the keys that should be excluded from schema validation.
@@ -162,10 +160,14 @@ class TableMetadata {
   /**
    * Serializes the table metadata to a plain object containing only serializable values.
    * This removes functions, Zod types, serializers, and other non-serializable data.
+   * @param {EntityMetadataStorage} entities - Entities that belong to this table, keyed by entity class name
    * @returns A plain object representation of the metadata
    */
-  public toJSON(): SerializedTableMetadata {
-    return TableMetadataTransform.parse(this);
+  public toJSON(entities: EntityMetadataStorage): SerializedTableMetadata {
+    return TableMetadataTransform.parse({
+      ...this,
+      entities
+    });
   }
 }
 

@@ -447,7 +447,9 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```
    */
   public static metadata(): ReturnType<TableMetadata["toJSON"]> {
-    return Metadata.getTable(this.name).toJSON();
+    const tableMetadata = Metadata.getTable(this.name);
+    const entities = Metadata.getEntitiesForTable(this.name);
+    return tableMetadata.toJSON(entities);
   }
 }
 
