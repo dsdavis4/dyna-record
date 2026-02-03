@@ -26,10 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Setup .npmrc file to publish to npm
       - uses: actions/setup-node@v4
         with:
+          node-version: '22'  
           registry-url: "https://registry.npmjs.org"
+
+      - name: Update npm to latest
+        run: npm install -g npm@latest
 
       - run: npm ci
 
