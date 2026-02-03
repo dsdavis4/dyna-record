@@ -1,3 +1,9 @@
+## 0.4.2 - 2026-02-02
+
+### Added
+
+- `DynaRecord.metadata()` static method that returns serialized table metadata containing only serializable values. This method provides a plain object representation of the table metadata, with functions, class instances, and other non-serializable data converted to their string representations or omitted. Useful for introspection, debugging, and generating documentation.
+
 ## 0.4.1 - 2025-12-01
 
 ### Added
