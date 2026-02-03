@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: write # Clone repo and release
-  id-token: write # Upload to pages
+  id-token: write # Required for OIDC trusted publishing
 
 concurrency:
   group: "release"
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   if-merged:
-    name: Check if PR merged to mai nevent
+    name: Check if PR merged to main event
     if: github.event.pull_request.merged
     runs-on: ubuntu-latest
     steps:
@@ -52,5 +52,3 @@ jobs:
           prerelease: false
 
       - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
