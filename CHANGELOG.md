@@ -1,3 +1,9 @@
+## 0.4.7 - 2026-02-16
+
+### Fixed
+
+- **FindById include typing for single associations (HasOne/BelongsTo):** When `findById` was called with `include: [{ association: 'foo' }]` and `foo` was a single related entity (HasOne or BelongsTo), the included property was incorrectly typed as the parent entity’s attributes (`EntityAttributesOnly<Parent>`) instead of the related entity’s attributes. The result type now correctly uses `EntityAttributesOnly<Related>` for included HasOne/BelongsTo associations, so TypeScript infers the related entity’s attributes (e.g. `EntityAttributesOnly<RevenueCache>`) rather than the parent’s. HasMany and optional single associations are unchanged. This is a type-only fix; no runtime behavior changed.
+
 ## 0.4.2 - 2026-02-02
 
 ### Added
