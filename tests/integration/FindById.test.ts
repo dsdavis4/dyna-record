@@ -1458,6 +1458,22 @@ describe("FindById", () => {
       }
     });
 
+    it("(BelongsTo) - included single association is typed as related entity attributes, not parent", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      const paymentMethod = await PaymentMethod.findById("789", {
+        include: [{ association: "customer" }]
+      });
+
+      if (paymentMethod !== undefined) {
+        // Type assertions validated when running test/test:watch (tsconfig.dev.json type-checks test files).
+        // @ts-expect-no-error: Included BelongsTo has related entity (Customer) attributes
+        Logger.log(paymentMethod.customer.name);
+        // @ts-expect-error: Included BelongsTo does not have parent (PaymentMethod) attributes
+        Logger.log(paymentMethod.customer.lastFour);
+      }
+    });
+
     it("(BelongsTo HasOne) - results of a findById with include will not allow any types which were not included in the query", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
 
@@ -1509,6 +1525,22 @@ describe("FindById", () => {
         Logger.log(paymentMethod.orders);
         // @ts-expect-no-error: Included associations are allowed
         Logger.log(paymentMethod.paymentMethodProvider);
+      }
+    });
+
+    it("(HasOne) - included single association is typed as related entity attributes, not parent", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      const paymentMethod = await PaymentMethod.findById("789", {
+        include: [{ association: "paymentMethodProvider" }]
+      });
+
+      if (paymentMethod !== undefined) {
+        // Type assertions validated when running test/test:watch (tsconfig.dev.json type-checks test files).
+        // @ts-expect-no-error: Included HasOne has related entity (PaymentMethodProvider) attributes
+        Logger.log(paymentMethod.paymentMethodProvider.name);
+        // @ts-expect-error: Included HasOne does not have parent (PaymentMethod) attributes
+        Logger.log(paymentMethod.paymentMethodProvider.lastFour);
       }
     });
 
