@@ -1,13 +1,15 @@
 {
   "name": "dyna-record",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "description": "Typescript Data Modeler and ORM for Dynamo",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "test": "jest",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.dev.json --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.dev.json --noEmit",
+    "test": "tsc -p tsconfig.dev.json --noEmit && jest",
     "test:watch": "jest --watch",
     "eslint": "npx eslint . --ext .ts",
     "eslint:fix": "npx eslint . --ext .ts --fix",
