@@ -290,7 +290,7 @@ class User extends MockTable {
   public readonly name: string;
 
   @BelongsTo(() => Organization, { foreignKey: "orgId" })
-  public readonly org: Organization;
+  public readonly org?: Organization;
 
   @ForeignKeyAttribute(() => Organization, {
     alias: "OrgId",

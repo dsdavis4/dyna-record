@@ -13,7 +13,9 @@ import {
   ContactInformation,
   Pet,
   Address,
-  PhoneBook
+  PhoneBook,
+  Desk,
+  User
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -1458,7 +1460,7 @@ describe("FindById", () => {
       }
     });
 
-    it("(BelongsTo) - included single association is typed as related entity attributes, not parent", async () => {
+    it("(BelongsTo) - when relationship is required included single association is typed as related entity attributes, not parent", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
 
       const paymentMethod = await PaymentMethod.findById("789", {
@@ -1466,11 +1468,29 @@ describe("FindById", () => {
       });
 
       if (paymentMethod !== undefined) {
-        // Type assertions validated when running test/test:watch (tsconfig.dev.json type-checks test files).
         // @ts-expect-no-error: Included BelongsTo has related entity (Customer) attributes
         Logger.log(paymentMethod.customer.name);
         // @ts-expect-error: Included BelongsTo does not have parent (PaymentMethod) attributes
         Logger.log(paymentMethod.customer.lastFour);
+        // @ts-expect-error: Included BelongsTo does not include relationship attributes
+        Logger.log(paymentMethod.customer.orders);
+      }
+    });
+
+    it("(BelongsTo) - when relationship is optional included single association is typed as related entity attributes, not parent", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      const user = await User.findById("789", {
+        include: [{ association: "org" }]
+      });
+
+      if (user !== undefined) {
+        // @ts-expect-no-error: Included BelongsTo has related entity attributes
+        Logger.log(user.org?.name);
+        // @ts-expect-error: Included BelongsTo does not have parent attributes
+        Logger.log(user.org?.email);
+        // @ts-expect-error: Included BelongsTo does not include relationship attributes
+        Logger.log(user.org?.employees);
       }
     });
 
@@ -1528,7 +1548,7 @@ describe("FindById", () => {
       }
     });
 
-    it("(HasOne) - included single association is typed as related entity attributes, not parent", async () => {
+    it("(HasOne) - when relationship is required included single association is typed as related entity attributes, not parent", async () => {
       mockQuery.mockResolvedValueOnce({ Items: [] });
 
       const paymentMethod = await PaymentMethod.findById("789", {
@@ -1536,11 +1556,29 @@ describe("FindById", () => {
       });
 
       if (paymentMethod !== undefined) {
-        // Type assertions validated when running test/test:watch (tsconfig.dev.json type-checks test files).
         // @ts-expect-no-error: Included HasOne has related entity (PaymentMethodProvider) attributes
         Logger.log(paymentMethod.paymentMethodProvider.name);
         // @ts-expect-error: Included HasOne does not have parent (PaymentMethod) attributes
         Logger.log(paymentMethod.paymentMethodProvider.lastFour);
+        // @ts-expect-error: Included HasOne does not have relationship attributes
+        Logger.log(paymentMethod.paymentMethodProvider.paymentMethod);
+      }
+    });
+
+    it("(HasOne) - when relationship is optional included single association is typed as related entity attributes, not parent", async () => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      const desk = await Desk.findById("789", {
+        include: [{ association: "user" }]
+      });
+
+      if (desk !== undefined) {
+        // @ts-expect-no-error: Included HasOne has related entity attributes
+        Logger.log(desk.user?.email);
+        // @ts-expect-error: Included HasOne does not have parent attributes
+        Logger.log(desk.user?.num);
+        // @ts-expect-error: Included HasOne does not have relationship attributes
+        Logger.log(desk.user?.org);
       }
     });
 

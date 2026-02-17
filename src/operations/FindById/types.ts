@@ -62,7 +62,9 @@ type EntityKeysWithIncludedAssociations<
     ? EntityAttributesOnly<T[K]>
     : T[K] extends DynaRecord[]
       ? Array<EntityAttributesOnly<T[K][number]>>
-      : T[K];
+      : T[K] extends DynaRecord | undefined
+        ? EntityAttributesOnly<Exclude<T[K], undefined>> | undefined
+        : T[K];
 };
 
 /**
