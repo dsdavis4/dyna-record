@@ -1470,6 +1470,8 @@ describe("FindById", () => {
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Included BelongsTo has related entity (Customer) attributes
         Logger.log(paymentMethod.customer.name);
+        // @ts-expect-no-error: Included BelongsTo has instance methods
+        Logger.log(paymentMethod.customer.update);
         // @ts-expect-error: Included BelongsTo does not have parent (PaymentMethod) attributes
         Logger.log(paymentMethod.customer.lastFour);
         // @ts-expect-error: Included BelongsTo does not include relationship attributes
@@ -1487,6 +1489,8 @@ describe("FindById", () => {
       if (user !== undefined) {
         // @ts-expect-no-error: Included BelongsTo has related entity attributes
         Logger.log(user.org?.name);
+        // @ts-expect-no-error: Included BelongsTo has instance methods
+        Logger.log(user.org?.update);
         // @ts-expect-error: Included BelongsTo does not have parent attributes
         Logger.log(user.org?.email);
         // @ts-expect-error: Included BelongsTo does not include relationship attributes
@@ -1558,6 +1562,8 @@ describe("FindById", () => {
       if (paymentMethod !== undefined) {
         // @ts-expect-no-error: Included HasOne has related entity (PaymentMethodProvider) attributes
         Logger.log(paymentMethod.paymentMethodProvider.name);
+        // @ts-expect-no-error: Included HasOne has instance methods
+        Logger.log(paymentMethod.paymentMethodProvider.update);
         // @ts-expect-error: Included HasOne does not have parent (PaymentMethod) attributes
         Logger.log(paymentMethod.paymentMethodProvider.lastFour);
         // @ts-expect-error: Included HasOne does not have relationship attributes
@@ -1575,6 +1581,8 @@ describe("FindById", () => {
       if (desk !== undefined) {
         // @ts-expect-no-error: Included HasOne has related entity attributes
         Logger.log(desk.user?.email);
+        // @ts-expect-no-error: Included HasOne has instance methods
+        Logger.log(desk.user?.update);
         // @ts-expect-error: Included HasOne does not have parent attributes
         Logger.log(desk.user?.num);
         // @ts-expect-error: Included HasOne does not have relationship attributes
