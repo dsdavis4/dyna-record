@@ -1,3 +1,9 @@
+## 0.4.8 - 2026-02-16
+
+### Fixed
+
+- **FindById include typing for optional single associations:** When an included relationship was optional (single HasOne or BelongsTo that may be undefined), the included property was typed as the full related entity type union `undefined` instead of the serialized attribute type. The result type now correctly uses `EntityAttributesOnly<Related> | undefined` for optional included single associations, matching the serialized shape. Type-only fix; no runtime behavior changed.
+
 ## 0.4.7 - 2026-02-16
 
 ### Fixed
