@@ -1,3 +1,9 @@
+## 0.4.9 - 2026-02-16
+
+### Fixed
+
+- **FindById with HasOne includes now returns class instances with instance methods:** When `findById` was called with `include` for a HasOne association, the included related record was returned as a serialized plain object without instance methods. The included HasOne record is now returned as a class instance (with instance methods such as `update`), aligning with BelongsTo and collection associations. This is a runtime fix.
+
 ## 0.4.8 - 2026-02-16
 
 ### Fixed
