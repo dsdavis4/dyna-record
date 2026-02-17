@@ -1,5 +1,6 @@
 import type DynaRecord from "../../DynaRecord";
 import type {
+  EntityAttributesInstance,
   EntityAttributesOnly,
   FunctionFields,
   RelationshipAttributeNames
@@ -59,11 +60,11 @@ type EntityKeysWithIncludedAssociations<
   P extends keyof T
 > = {
   [K in P]: T[K] extends DynaRecord
-    ? EntityAttributesOnly<T[K]>
+    ? EntityAttributesInstance<T[K]>
     : T[K] extends DynaRecord[]
-      ? Array<EntityAttributesOnly<T[K][number]>>
+      ? Array<EntityAttributesInstance<T[K][number]>>
       : T[K] extends DynaRecord | undefined
-        ? EntityAttributesOnly<Exclude<T[K], undefined>> | undefined
+        ? EntityAttributesInstance<Exclude<T[K], undefined>> | undefined
         : T[K];
 };
 
