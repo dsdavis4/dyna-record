@@ -76,7 +76,27 @@ describe("ObjectAttribute", () => {
       count: { type: "number" }
     } as const satisfies ObjectSchema;
 
+    const testSchema2 = {
+      isCool: { type: "boolean" },
+      geo: {
+        type: "object",
+        fields: {
+          lat: { type: "number" },
+          lng: { type: "number" }
+        }
+      }
+    } as const satisfies ObjectSchema;
+
     it("can be applied to InferObjectSchema attributes", () => {
+      @Entity
+      class ModelOne extends MockTable {
+        // @ts-expect-error: type of attribute and schema are not the same
+        @ObjectAttribute({ alias: "Key1", schema: testSchema })
+        public key1: InferObjectSchema<typeof testSchema2>;
+      }
+    });
+
+    it("requires the schema and type to be the same", () => {
       @Entity
       class ModelOne extends MockTable {
         // @ts-expect-no-error: InferObjectSchema is a valid type

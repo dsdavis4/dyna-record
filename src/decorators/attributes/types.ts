@@ -5,6 +5,7 @@ export interface PrimitiveTypeMap {
   string: string;
   number: number;
   boolean: boolean;
+  // TODO a enum or string literal be allowed here?
 }
 
 /**
@@ -27,6 +28,7 @@ export interface ObjectFieldDef {
   // TODO update so this is "$type" that way it is clear if if type is an actual attribute on the object
   //    -- make a test for that
   //    -- Does this make it confusion that "fields" and "nullable" do not have the $?
+  //    -- this would have to be applied on the other types like this too such as PrimitiveFieldDef above
   type: "object";
   fields: ObjectSchema;
   nullable?: boolean;
