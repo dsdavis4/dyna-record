@@ -7,4 +7,13 @@ export { default as BooleanAttribute } from "./BooleanAttribute";
 export { default as NumberAttribute } from "./NumberAttribute";
 export { default as EnumAttribute } from "./EnumAttribute";
 export { default as IdAttribute } from "./IdAttribute";
+export { default as ObjectAttribute } from "./ObjectAttribute";
+export type { ObjectAttributeOptions } from "./ObjectAttribute";
 export * from "./serializers";
+export type {
+  ObjectSchema,
+  InferObjectSchema,
+  FieldDef,
+  PrimitiveFieldDef,
+  ObjectFieldDef
+} from "./types";

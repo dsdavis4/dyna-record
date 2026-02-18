@@ -14,8 +14,10 @@ import {
   BooleanAttribute,
   NumberAttribute,
   EnumAttribute,
-  IdAttribute
+  IdAttribute,
+  ObjectAttribute
 } from "../../src/decorators";
+import type { ObjectSchema, InferObjectSchema } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
   PartitionKey,
@@ -23,6 +25,24 @@ import type {
   ForeignKey,
   NullableForeignKey
 } from "../../src/types";
+
+const addressSchema = {
+  street: { type: "string" },
+  city: { type: "string" },
+  zip: { type: "number", nullable: true },
+  geo: {
+    type: "object",
+    fields: {
+      lat: { type: "number" },
+      lng: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+const contactSchema = {
+  name: { type: "string" },
+  email: { type: "string" }
+} as const satisfies ObjectSchema;
 
 @Table({
   name: "mock-table",
@@ -278,6 +298,12 @@ class MyClassWithAllAttributeTypes extends MockTable {
 
   @EnumAttribute({ values: ["val-1", "val-2"], nullable: true })
   public nullableEnumAttribute?: "val-1" | "val-2";
+
+  @ObjectAttribute({ schema: contactSchema })
+  public objectAttribute: InferObjectSchema<typeof contactSchema>;
+
+  @ObjectAttribute({ schema: addressSchema, nullable: true })
+  public nullableObjectAttribute?: InferObjectSchema<typeof addressSchema>;
 }
 
 @Entity
@@ -490,6 +516,9 @@ class StudentCourse extends JoinTable<Student, Course> {
 }
 
 export {
+  // Schemas
+  addressSchema,
+  contactSchema,
   // MockTable exports
   MockTable,
   Order,

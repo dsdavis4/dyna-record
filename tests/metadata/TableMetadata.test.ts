@@ -1159,6 +1159,16 @@ describe("TableMetadata", () => {
                 name: "nullableEnumAttribute",
                 alias: "nullableEnumAttribute",
                 nullable: true
+              },
+              objectAttribute: {
+                name: "objectAttribute",
+                alias: "objectAttribute",
+                nullable: false
+              },
+              nullableObjectAttribute: {
+                name: "nullableObjectAttribute",
+                alias: "nullableObjectAttribute",
+                nullable: true
               }
             },
             tableAttributes: {
@@ -1242,6 +1252,16 @@ describe("TableMetadata", () => {
               nullableEnumAttribute: {
                 name: "nullableEnumAttribute",
                 alias: "nullableEnumAttribute",
+                nullable: true
+              },
+              objectAttribute: {
+                name: "objectAttribute",
+                alias: "objectAttribute",
+                nullable: false
+              },
+              nullableObjectAttribute: {
+                name: "nullableObjectAttribute",
+                alias: "nullableObjectAttribute",
                 nullable: true
               }
             },

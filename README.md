@@ -144,6 +144,7 @@ Use the attribute decorators below to define attributes on a model. The decorato
   - [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html)
   - [@EnumAttribute](https://dyna-record.com/functions/EnumAttribute.html)
   - [@IdAttribute](https://dyna-record.com/functions/IdAttribute.html)
+  - [@ObjectAttribute](https://dyna-record.com/functions/ObjectAttribute.html)
 
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable attributes as optional for optimal type safety
@@ -164,6 +165,46 @@ class Student extends MyTable {
   public someAttribute?: number; // Mark as optional
 }
 ```
+
+#### @ObjectAttribute
+
+Use `@ObjectAttribute` to define structured, typed object attributes on an entity. Objects are validated at runtime and stored as JSON strings in DynamoDB.
+
+Define the shape using an `ObjectSchema` and derive the TypeScript type with `InferObjectSchema`:
+
+```typescript
+import { Entity, ObjectAttribute } from "dyna-record";
+import type { ObjectSchema, InferObjectSchema } from "dyna-record";
+
+const addressSchema = {
+  street: { type: "string" },
+  city: { type: "string" },
+  zip: { type: "number", nullable: true },
+  geo: {
+    type: "object",
+    fields: {
+      lat: { type: "number" },
+      lng: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Store extends MyTable {
+  @ObjectAttribute({ alias: "Address", schema: addressSchema })
+  public readonly address: InferObjectSchema<typeof addressSchema>;
+
+  @ObjectAttribute({ alias: "Metadata", schema: metaSchema, nullable: true })
+  public readonly metadata?: InferObjectSchema<typeof metaSchema>;
+}
+```
+
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, and nested `"object"` (via `fields`)
+- **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
+- **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
+- **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
+- **Storage:** Objects are stored as JSON strings in DynamoDB
+- **Updates:** Updates replace the entire object (not a partial merge)
 
 ### Foreign Keys
 

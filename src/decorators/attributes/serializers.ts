@@ -16,3 +16,22 @@ export const dateSerializer = {
   },
   toTableAttribute: (val?: Date) => val?.toISOString() ?? undefined
 };
+
+// TODO I dont think they have to be stored as strings. They can be stored as map or list types
+/**
+ * Provides serialization and deserialization functions for object attributes when interfacing with a DynamoDB table.
+ * Objects are stored as JSON strings in DynamoDB since DynamoDB does not natively support nested object types in a single-table design context.
+ *
+ * - `toEntityAttribute`: Parses a JSON string from DynamoDB into a JavaScript object.
+ * - `toTableAttribute`: Converts a JavaScript object to a JSON string for DynamoDB storage.
+ */
+export const objectSerializer = {
+  toEntityAttribute: (val: NativeScalarAttributeValue) => {
+    if (typeof val === "string") {
+      return JSON.parse(val);
+    }
+    return val;
+  },
+  toTableAttribute: (val?: Record<string, unknown>) =>
+    val == null ? val : JSON.stringify(val)
+};

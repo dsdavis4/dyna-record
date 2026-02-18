@@ -15,7 +15,8 @@ import {
   Address,
   PhoneBook,
   Desk,
-  User
+  User,
+  MyClassWithAllAttributeTypes
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -230,6 +231,43 @@ describe("FindById", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
+    });
+
+    it("will deserialize an entity with object attributes from JSON strings", async () => {
+      expect.assertions(3);
+
+      const objectVal = { name: "John", email: "john@example.com" };
+      const nullableObjectVal = {
+        street: "123 Main St",
+        city: "Springfield",
+        zip: 12345,
+        geo: { lat: 40.7128, lng: -74.006 }
+      };
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "MyClassWithAllAttributeTypes#123",
+          SK: "MyClassWithAllAttributeTypes",
+          Id: "123",
+          Type: "MyClassWithAllAttributeTypes",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          stringAttribute: "some-string",
+          dateAttribute: "2023-10-16T03:31:35.918Z",
+          boolAttribute: true,
+          numberAttribute: 9,
+          foreignKeyAttribute: "111",
+          enumAttribute: "val-1",
+          objectAttribute: JSON.stringify(objectVal),
+          nullableObjectAttribute: JSON.stringify(nullableObjectVal)
+        }
+      });
+
+      const result = await MyClassWithAllAttributeTypes.findById("123");
+
+      expect(result).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(result?.objectAttribute).toEqual(objectVal);
+      expect(result?.nullableObjectAttribute).toEqual(nullableObjectVal);
     });
 
     it("will return undefined if it doesn't find the record", async () => {

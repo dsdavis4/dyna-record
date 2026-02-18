@@ -38,9 +38,13 @@ export type MockTableEntityTableItem<T extends MockTable> = {
       ? string | undefined
       : T[K] extends Date
         ? string
-        : K extends "pk" | "sk"
-          ? string
-          : T[K];
+        : T[K] extends Record<string, unknown> | undefined
+          ? string | undefined
+          : T[K] extends Record<string, unknown>
+            ? string
+            : K extends "pk" | "sk"
+              ? string
+              : T[K];
 };
 
 /**
@@ -66,5 +70,9 @@ export type OtherTableEntityTableItem<T> = {
           ? string | undefined
           : T[K] extends Date
             ? string
-            : T[K];
+            : T[K] extends Record<string, unknown> | undefined
+              ? string | undefined
+              : T[K] extends Record<string, unknown>
+                ? string
+                : T[K];
 };

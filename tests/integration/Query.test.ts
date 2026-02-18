@@ -2,6 +2,7 @@ import {
   Assignment,
   Course,
   Customer,
+  MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod
 } from "./mockModels";
@@ -48,6 +49,59 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 describe("Query", () => {
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe("deserializes object attributes from JSON strings", () => {
+    it("will deserialize serialized attributes in query results", async () => {
+      expect.assertions(4);
+
+      const objectVal = { name: "John", email: "john@example.com" };
+      const nullableObjectVal = {
+        street: "123 Main St",
+        city: "Springfield",
+        zip: 12345,
+        geo: { lat: 40.7128, lng: -74.006 }
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes",
+            Id: "123",
+            Type: "MyClassWithAllAttributeTypes",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            stringAttribute: "some-string",
+            dateAttribute: "2023-10-16T03:31:35.918Z",
+            boolAttribute: true,
+            numberAttribute: 9,
+            foreignKeyAttribute: "111",
+            enumAttribute: "val-1",
+            objectAttribute: JSON.stringify(objectVal),
+            nullableObjectAttribute: JSON.stringify(nullableObjectVal)
+          }
+        ]
+      });
+
+      const results = await MyClassWithAllAttributeTypes.query("123");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(results[0]).toEqual(
+        // TODO do strict equal
+        expect.objectContaining({
+          objectAttribute: objectVal,
+          nullableObjectAttribute: nullableObjectVal,
+          dateAttribute: new Date("2023-10-16T03:31:35.918Z")
+        })
+      );
+      expect(results[0]).toEqual(
+        expect.not.objectContaining({
+          objectAttribute: JSON.stringify(objectVal)
+        })
+      );
+    });
   });
 
   describe("queries by PK only", () => {

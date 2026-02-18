@@ -135,6 +135,8 @@ class MockInformation extends MockTable {
   public someDate?: Date;
 }
 
+// TODO add or update tests for object attributes being denoramlzied to other partitions accordingly
+
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();
@@ -451,6 +453,7 @@ describe("Update", () => {
                     "#nullableNumberAttribute": "nullableNumberAttribute",
                     "#nullableStringAttribute": "nullableStringAttribute",
                     "#numberAttribute": "numberAttribute",
+                    "#objectAttribute": "objectAttribute",
                     "#stringAttribute": "stringAttribute"
                   },
                   ExpressionAttributeValues: {
@@ -466,6 +469,10 @@ describe("Update", () => {
                     ":nullableNumberAttribute": 10,
                     ":nullableStringAttribute": "2",
                     ":numberAttribute": 9,
+                    ":objectAttribute": JSON.stringify({
+                      name: "John",
+                      email: "john@example.com"
+                    }),
                     ":stringAttribute": "1"
                   },
                   Key: {
@@ -474,7 +481,7 @@ describe("Update", () => {
                   },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #objectAttribute = :objectAttribute, #UpdatedAt = :UpdatedAt"
                 }
               },
               {
@@ -518,7 +525,8 @@ describe("Update", () => {
           numberAttribute: 9,
           nullableNumberAttribute: 10,
           enumAttribute: "val-1",
-          nullableEnumAttribute: "val-2"
+          nullableEnumAttribute: "val-2",
+          objectAttribute: { name: "John", email: "john@example.com" }
         })
       ).toBeUndefined();
       dbOperationAssertions();
@@ -544,6 +552,7 @@ describe("Update", () => {
         nullableNumberAttribute: 8,
         enumAttribute: "val-2",
         nullableEnumAttribute: "val-1",
+        objectAttribute: { name: "Old", email: "old@example.com" },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -560,7 +569,8 @@ describe("Update", () => {
         numberAttribute: 9,
         nullableNumberAttribute: 10,
         enumAttribute: "val-1",
-        nullableEnumAttribute: "val-2"
+        nullableEnumAttribute: "val-2",
+        objectAttribute: { name: "John", email: "john@example.com" }
       });
 
       expect(updatedInstance).toEqual({
@@ -577,6 +587,7 @@ describe("Update", () => {
         nullableNumberAttribute: 10,
         enumAttribute: "val-1",
         nullableEnumAttribute: "val-2",
+        objectAttribute: { name: "John", email: "john@example.com" },
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
@@ -598,6 +609,7 @@ describe("Update", () => {
         nullableNumberAttribute: 8,
         enumAttribute: "val-2",
         nullableEnumAttribute: "val-1",
+        objectAttribute: { name: "Old", email: "old@example.com" },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1261,6 +1273,7 @@ describe("Update", () => {
         boolAttribute: true,
         numberAttribute: 9,
         enumAttribute: "val-2",
+        objectAttribute: { name: "John", email: "john@example.com" },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -7460,6 +7473,7 @@ describe("Update", () => {
                         "#nullableNumberAttribute": "nullableNumberAttribute",
                         "#nullableStringAttribute": "nullableStringAttribute",
                         "#numberAttribute": "numberAttribute",
+                        "#objectAttribute": "objectAttribute",
                         "#stringAttribute": "stringAttribute"
                       },
                       ExpressionAttributeValues: {
@@ -7475,6 +7489,10 @@ describe("Update", () => {
                         ":nullableNumberAttribute": 10,
                         ":nullableStringAttribute": "2",
                         ":numberAttribute": 9,
+                        ":objectAttribute": JSON.stringify({
+                          name: "John",
+                          email: "john@example.com"
+                        }),
                         ":stringAttribute": "1"
                       },
                       Key: {
@@ -7483,7 +7501,7 @@ describe("Update", () => {
                       },
                       TableName: "mock-table",
                       UpdateExpression:
-                        "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt"
+                        "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #objectAttribute = :objectAttribute, #UpdatedAt = :UpdatedAt"
                     }
                   }
                 ]
@@ -7515,7 +7533,8 @@ describe("Update", () => {
                 numberAttribute: 9,
                 nullableNumberAttribute: 10,
                 enumAttribute: "val-1",
-                nullableEnumAttribute: "val-2"
+                nullableEnumAttribute: "val-2",
+                objectAttribute: { name: "John", email: "john@example.com" }
               },
               { referentialIntegrityCheck: false }
             )
@@ -7544,6 +7563,7 @@ describe("Update", () => {
             nullableNumberAttribute: 8,
             enumAttribute: "val-2",
             nullableEnumAttribute: "val-1",
+            objectAttribute: { name: "Old", email: "old@example.com" },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
           });
@@ -7561,7 +7581,8 @@ describe("Update", () => {
               numberAttribute: 9,
               nullableNumberAttribute: 10,
               enumAttribute: "val-1",
-              nullableEnumAttribute: "val-2"
+              nullableEnumAttribute: "val-2",
+              objectAttribute: { name: "John", email: "john@example.com" }
             },
             { referentialIntegrityCheck: false }
           );
@@ -7580,6 +7601,7 @@ describe("Update", () => {
             nullableNumberAttribute: 10,
             enumAttribute: "val-1",
             nullableEnumAttribute: "val-2",
+            objectAttribute: { name: "John", email: "john@example.com" },
             updatedAt: new Date("2023-10-16T03:31:35.918Z")
           });
           expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
@@ -7601,6 +7623,7 @@ describe("Update", () => {
             nullableNumberAttribute: 8,
             enumAttribute: "val-2",
             nullableEnumAttribute: "val-1",
+            objectAttribute: { name: "Old", email: "old@example.com" },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
           });
