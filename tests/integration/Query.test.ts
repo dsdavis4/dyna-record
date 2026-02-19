@@ -18,6 +18,8 @@ const mockSend = jest.fn();
 const mockQuery = jest.fn();
 const mockedQueryCommand = jest.mocked(QueryCommand);
 
+// TODO add tests for object filtering
+
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
     DynamoDBClient: jest.fn().mockImplementation(() => {
