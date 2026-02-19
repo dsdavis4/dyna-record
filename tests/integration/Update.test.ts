@@ -138,6 +138,7 @@ class MockInformation extends MockTable {
 // TODO add or update tests for object attributes being denoramlzied to other partitions accordingly
 // TODO make sure there are tests for runtime validation of all object and list types
 // TODO make sure there is support for lists, that dont have to be nested in objects
+// TODO add type unit tests for replacing an object, and that on update even nullable fields are respected
 
 describe("Update", () => {
   beforeAll(() => {
