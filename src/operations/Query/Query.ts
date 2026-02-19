@@ -15,8 +15,6 @@ import type {
   QueryResults
 } from "./types";
 
-// TODO add ability to query on nested objects attribute
-
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.
  *

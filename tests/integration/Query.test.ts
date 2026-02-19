@@ -55,12 +55,17 @@ describe("Query", () => {
     it("will deserialize serialized attributes in query results", async () => {
       expect.assertions(4);
 
-      const objectVal = { name: "John", email: "john@example.com" };
+      const objectVal = {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      };
       const nullableObjectVal = {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
-        geo: { lat: 40.7128, lng: -74.006 }
+        geo: { lat: 40.7128, lng: -74.006 },
+        scores: [95, 87, 100]
       };
 
       mockQuery.mockResolvedValueOnce({
@@ -78,8 +83,8 @@ describe("Query", () => {
             numberAttribute: 9,
             foreignKeyAttribute: "111",
             enumAttribute: "val-1",
-            objectAttribute: JSON.stringify(objectVal),
-            nullableObjectAttribute: JSON.stringify(nullableObjectVal)
+            objectAttribute: objectVal,
+            nullableObjectAttribute: nullableObjectVal
           }
         ]
       });
@@ -96,11 +101,123 @@ describe("Query", () => {
           dateAttribute: new Date("2023-10-16T03:31:35.918Z")
         })
       );
-      expect(results[0]).toEqual(
-        expect.not.objectContaining({
-          objectAttribute: JSON.stringify(objectVal)
-        })
-      );
+      // Verify objects are stored/returned as native maps, not JSON strings
+      expect(typeof results[0].objectAttribute).not.toBe("string");
+    });
+  });
+
+  describe("filters on nested Map and List attributes", () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes",
+            Id: "123",
+            Type: "MyClassWithAllAttributeTypes",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            stringAttribute: "some-string",
+            boolAttribute: true,
+            numberAttribute: 9,
+            foreignKeyAttribute: "111",
+            enumAttribute: "val-1",
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"]
+            }
+          }
+        ]
+      });
+    });
+
+    it("can filter on a nested Map attribute using dot-path equality", async () => {
+      expect.assertions(2);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.name": "John"
+        }
+      });
+
+      expect(results).toHaveLength(1);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          expect.objectContaining({
+            FilterExpression: "#objectAttribute.#name = :objectAttributename1",
+            ExpressionAttributeNames: expect.objectContaining({
+              "#objectAttribute": "objectAttribute",
+              "#name": "name"
+            }),
+            ExpressionAttributeValues: expect.objectContaining({
+              ":objectAttributename1": "John"
+            })
+          })
+        ]
+      ]);
+    });
+
+    it("can filter using $contains on a nested List attribute", async () => {
+      expect.assertions(2);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.tags": { $contains: "vip" }
+        }
+      });
+
+      expect(results).toHaveLength(1);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          expect.objectContaining({
+            FilterExpression:
+              "contains(#objectAttribute.#tags, :objectAttributetags1)",
+            ExpressionAttributeNames: expect.objectContaining({
+              "#objectAttribute": "objectAttribute",
+              "#tags": "tags"
+            }),
+            ExpressionAttributeValues: expect.objectContaining({
+              ":objectAttributetags1": "vip"
+            })
+          })
+        ]
+      ]);
+    });
+
+    it("can combine dot-path and $contains filters with AND/OR", async () => {
+      expect.assertions(2);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.name": "John",
+          $or: [
+            { "objectAttribute.tags": { $contains: "work" } },
+            { "objectAttribute.email": { $beginsWith: "john" } }
+          ]
+        }
+      });
+
+      expect(results).toHaveLength(1);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          expect.objectContaining({
+            FilterExpression:
+              "(contains(#objectAttribute.#tags, :objectAttributetags1) OR begins_with(#objectAttribute.#email, :objectAttributeemail2)) AND (#objectAttribute.#name = :objectAttributename3)",
+            ExpressionAttributeNames: expect.objectContaining({
+              "#objectAttribute": "objectAttribute",
+              "#tags": "tags",
+              "#email": "email",
+              "#name": "name"
+            }),
+            ExpressionAttributeValues: expect.objectContaining({
+              ":objectAttributetags1": "work",
+              ":objectAttributeemail2": "john",
+              ":objectAttributename3": "John"
+            })
+          })
+        ]
+      ]);
     });
   });
 

@@ -1,5 +1,5 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
@@ -14,11 +14,11 @@ export type KeyConditions = Omit<
 /**
  * Defines the structure for a filter expression used in querying items, including the expression string and a record of values associated with the expression placeholders.
  *
- * @property {Record<string, NativeScalarAttributeValue>} values - A mapping of placeholder tokens in the filter expression to their actual values.
+ * @property {Record<string, NativeAttributeValue>} values - A mapping of placeholder tokens in the filter expression to their actual values.
  * @property {string} expression - The filter expression string, using DynamoDB's expression syntax.
  */
 export interface FilterExpression {
-  values: Record<string, NativeScalarAttributeValue>;
+  values: Record<string, NativeAttributeValue>;
   expression: string;
 }
 
@@ -27,20 +27,25 @@ export interface FilterExpression {
  *
  * @type {BeginsWithFilter} - A record with "$beginsWith" key pointing to the prefix value.
  */
-export type BeginsWithFilter = Record<
-  "$beginsWith",
-  NativeScalarAttributeValue
->;
+export type BeginsWithFilter = Record<"$beginsWith", NativeAttributeValue>;
 
 /**
- * Defines possible types of values that can be used in a filter condition, including begins with, exact value, or an array for "IN" conditions.
+ * Represents a filter condition specifying that a list contains a given element, or a string contains a given substring.
  *
- * @type {FilterTypes} - A union of `BeginsWithFilter`, a single scalar value, or an array of scalar values.
+ * @type {ContainsFilter} - A record with "$contains" key pointing to the value to check for.
+ */
+export type ContainsFilter = Record<"$contains", NativeAttributeValue>;
+
+/**
+ * Defines possible types of values that can be used in a filter condition, including begins with, contains, exact value, or an array for "IN" conditions.
+ *
+ * @type {FilterTypes} - A union of `BeginsWithFilter`, `ContainsFilter`, a single scalar value, or an array of scalar values.
  */
 export type FilterTypes =
   | BeginsWithFilter
-  | NativeScalarAttributeValue
-  | NativeScalarAttributeValue[];
+  | ContainsFilter
+  | NativeAttributeValue
+  | NativeAttributeValue[];
 
 /**
  * Represents a filter condition using an AND logical operator. All items in this record will be queried with "AND"
@@ -82,7 +87,7 @@ export type AndOrFilter = FilterParams & OrFilter;
  *
  * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
  */
-export type SortKeyCondition = BeginsWithFilter | NativeScalarAttributeValue;
+export type SortKeyCondition = BeginsWithFilter | NativeAttributeValue;
 
 /**
  * Specifies additional options for querying items, including optional consistent read, index name and filter conditions.

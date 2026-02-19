@@ -15,5 +15,6 @@ export type {
   InferObjectSchema,
   FieldDef,
   PrimitiveFieldDef,
-  ObjectFieldDef
+  ObjectFieldDef,
+  ArrayFieldDef
 } from "./types";

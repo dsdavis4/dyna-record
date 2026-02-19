@@ -39,6 +39,8 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
+// TODO make sure there are tests for runtime validation of all object and list types
+
 jest.mock("uuid");
 
 const mockTransactGetItems = jest.fn();
@@ -270,7 +272,11 @@ describe("Create", () => {
       nullableNumberAttribute: 10,
       enumAttribute: "val-1",
       nullableEnumAttribute: "val-2",
-      objectAttribute: { name: "John", email: "john@example.com" }
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      }
     });
 
     expect(instance).toEqual({
@@ -290,7 +296,11 @@ describe("Create", () => {
       nullableNumberAttribute: 10,
       enumAttribute: "val-1",
       nullableEnumAttribute: "val-2",
-      objectAttribute: { name: "John", email: "john@example.com" },
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      },
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
@@ -321,10 +331,11 @@ describe("Create", () => {
                   nullableNumberAttribute: 10,
                   nullableStringAttribute: "2",
                   numberAttribute: 9,
-                  objectAttribute: JSON.stringify({
+                  objectAttribute: {
                     name: "John",
-                    email: "john@example.com"
-                  }),
+                    email: "john@example.com",
+                    tags: ["work", "vip"]
+                  },
                   stringAttribute: "1"
                 },
                 TableName: "mock-table"
@@ -497,7 +508,11 @@ describe("Create", () => {
         boolAttribute: true,
         numberAttribute: 9,
         enumAttribute: "val-1",
-        objectAttribute: { name: "John", email: "john@example.com" }
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"]
+        }
       });
     } catch (e: any) {
       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
@@ -529,10 +544,11 @@ describe("Create", () => {
                     foreignKeyAttribute: "missing-customer",
                     nullableForeignKeyAttribute: "missing-optional-customer",
                     numberAttribute: 9,
-                    objectAttribute: JSON.stringify({
+                    objectAttribute: {
                       name: "John",
-                      email: "john@example.com"
-                    }),
+                      email: "john@example.com",
+                      tags: ["work", "vip"]
+                    },
                     stringAttribute: "1"
                   },
                   TableName: "mock-table"
@@ -2302,7 +2318,11 @@ describe("Create", () => {
             nullableNumberAttribute: 10,
             enumAttribute: "val-1",
             nullableEnumAttribute: "val-2",
-            objectAttribute: { name: "John", email: "john@example.com" }
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"]
+            }
           },
           { referentialIntegrityCheck: false }
         );
@@ -2324,7 +2344,11 @@ describe("Create", () => {
           nullableNumberAttribute: 10,
           enumAttribute: "val-1",
           nullableEnumAttribute: "val-2",
-          objectAttribute: { name: "John", email: "john@example.com" },
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work", "vip"]
+          },
           createdAt: new Date("2023-10-16T03:31:35.918Z"),
           updatedAt: new Date("2023-10-16T03:31:35.918Z")
         });
@@ -2357,10 +2381,11 @@ describe("Create", () => {
                       nullableNumberAttribute: 10,
                       nullableStringAttribute: "2",
                       numberAttribute: 9,
-                      objectAttribute: JSON.stringify({
+                      objectAttribute: {
                         name: "John",
-                        email: "john@example.com"
-                      }),
+                        email: "john@example.com",
+                        tags: ["work", "vip"]
+                      },
                       stringAttribute: "1"
                     },
                     TableName: "mock-table"
@@ -2555,7 +2580,11 @@ describe("Create", () => {
             boolAttribute: true,
             numberAttribute: 9,
             enumAttribute: "val-1",
-            objectAttribute: { name: "John", email: "john@example.com" }
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"]
+            }
           },
           { referentialIntegrityCheck: false }
         );
@@ -2583,10 +2612,11 @@ describe("Create", () => {
                   foreignKeyAttribute: "missing-customer",
                   nullableForeignKeyAttribute: "missing-optional-customer",
                   numberAttribute: 9,
-                  objectAttribute: JSON.stringify({
+                  objectAttribute: {
                     name: "John",
-                    email: "john@example.com"
-                  }),
+                    email: "john@example.com",
+                    tags: ["work", "vip"]
+                  },
                   stringAttribute: "1"
                 },
                 TableName: "mock-table"

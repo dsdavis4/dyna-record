@@ -168,7 +168,7 @@ class Student extends MyTable {
 
 #### @ObjectAttribute
 
-Use `@ObjectAttribute` to define structured, typed object attributes on an entity. Objects are validated at runtime and stored as JSON strings in DynamoDB.
+Use `@ObjectAttribute` to define structured, typed object attributes on an entity. Objects are validated at runtime and stored as native DynamoDB Map types.
 
 Define the shape using an `ObjectSchema` and derive the TypeScript type with `InferObjectSchema`:
 
@@ -180,6 +180,7 @@ const addressSchema = {
   street: { type: "string" },
   city: { type: "string" },
   zip: { type: "number", nullable: true },
+  tags: { type: "array", items: { type: "string" } },
   geo: {
     type: "object",
     fields: {
@@ -199,11 +200,11 @@ class Store extends MyTable {
 }
 ```
 
-- **Supported field types:** `"string"`, `"number"`, `"boolean"`, and nested `"object"` (via `fields`)
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, nested `"object"` (via `fields`), and `"array"` (via `items`)
 - **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
 - **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
-- **Storage:** Objects are stored as JSON strings in DynamoDB
+- **Storage:** Objects are stored as native DynamoDB Map types
 - **Updates:** Updates replace the entire object (not a partial merge)
 
 ### Foreign Keys

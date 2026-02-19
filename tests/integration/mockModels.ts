@@ -36,12 +36,14 @@ const addressSchema = {
       lat: { type: "number" },
       lng: { type: "number" }
     }
-  }
+  },
+  scores: { type: "array", items: { type: "number" } }
 } as const satisfies ObjectSchema;
 
 const contactSchema = {
   name: { type: "string" },
-  email: { type: "string" }
+  email: { type: "string" },
+  tags: { type: "array", items: { type: "string" } }
 } as const satisfies ObjectSchema;
 
 @Table({

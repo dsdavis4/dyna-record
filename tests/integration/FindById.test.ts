@@ -236,12 +236,17 @@ describe("FindById", () => {
     it("will deserialize an entity with object attributes from JSON strings", async () => {
       expect.assertions(3);
 
-      const objectVal = { name: "John", email: "john@example.com" };
+      const objectVal = {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      };
       const nullableObjectVal = {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
-        geo: { lat: 40.7128, lng: -74.006 }
+        geo: { lat: 40.7128, lng: -74.006 },
+        scores: [95, 87, 100]
       };
 
       mockGet.mockResolvedValueOnce({
@@ -258,8 +263,8 @@ describe("FindById", () => {
           numberAttribute: 9,
           foreignKeyAttribute: "111",
           enumAttribute: "val-1",
-          objectAttribute: JSON.stringify(objectVal),
-          nullableObjectAttribute: JSON.stringify(nullableObjectVal)
+          objectAttribute: objectVal,
+          nullableObjectAttribute: nullableObjectVal
         }
       });
 

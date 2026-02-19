@@ -136,6 +136,8 @@ class MockInformation extends MockTable {
 }
 
 // TODO add or update tests for object attributes being denoramlzied to other partitions accordingly
+// TODO make sure there are tests for runtime validation of all object and list types
+// TODO make sure there is support for lists, that dont have to be nested in objects
 
 describe("Update", () => {
   beforeAll(() => {
@@ -469,10 +471,11 @@ describe("Update", () => {
                     ":nullableNumberAttribute": 10,
                     ":nullableStringAttribute": "2",
                     ":numberAttribute": 9,
-                    ":objectAttribute": JSON.stringify({
+                    ":objectAttribute": {
                       name: "John",
-                      email: "john@example.com"
-                    }),
+                      email: "john@example.com",
+                      tags: ["work", "vip"]
+                    },
                     ":stringAttribute": "1"
                   },
                   Key: {
@@ -526,7 +529,11 @@ describe("Update", () => {
           nullableNumberAttribute: 10,
           enumAttribute: "val-1",
           nullableEnumAttribute: "val-2",
-          objectAttribute: { name: "John", email: "john@example.com" }
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work", "vip"]
+          }
         })
       ).toBeUndefined();
       dbOperationAssertions();
@@ -552,7 +559,11 @@ describe("Update", () => {
         nullableNumberAttribute: 8,
         enumAttribute: "val-2",
         nullableEnumAttribute: "val-1",
-        objectAttribute: { name: "Old", email: "old@example.com" },
+        objectAttribute: {
+          name: "Old",
+          email: "old@example.com",
+          tags: ["old-tag"]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -570,7 +581,11 @@ describe("Update", () => {
         nullableNumberAttribute: 10,
         enumAttribute: "val-1",
         nullableEnumAttribute: "val-2",
-        objectAttribute: { name: "John", email: "john@example.com" }
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"]
+        }
       });
 
       expect(updatedInstance).toEqual({
@@ -587,7 +602,11 @@ describe("Update", () => {
         nullableNumberAttribute: 10,
         enumAttribute: "val-1",
         nullableEnumAttribute: "val-2",
-        objectAttribute: { name: "John", email: "john@example.com" },
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"]
+        },
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
@@ -609,7 +628,11 @@ describe("Update", () => {
         nullableNumberAttribute: 8,
         enumAttribute: "val-2",
         nullableEnumAttribute: "val-1",
-        objectAttribute: { name: "Old", email: "old@example.com" },
+        objectAttribute: {
+          name: "Old",
+          email: "old@example.com",
+          tags: ["old-tag"]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1273,7 +1296,11 @@ describe("Update", () => {
         boolAttribute: true,
         numberAttribute: 9,
         enumAttribute: "val-2",
-        objectAttribute: { name: "John", email: "john@example.com" },
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -7489,10 +7516,11 @@ describe("Update", () => {
                         ":nullableNumberAttribute": 10,
                         ":nullableStringAttribute": "2",
                         ":numberAttribute": 9,
-                        ":objectAttribute": JSON.stringify({
+                        ":objectAttribute": {
                           name: "John",
-                          email: "john@example.com"
-                        }),
+                          email: "john@example.com",
+                          tags: ["work", "vip"]
+                        },
                         ":stringAttribute": "1"
                       },
                       Key: {
@@ -7534,7 +7562,11 @@ describe("Update", () => {
                 nullableNumberAttribute: 10,
                 enumAttribute: "val-1",
                 nullableEnumAttribute: "val-2",
-                objectAttribute: { name: "John", email: "john@example.com" }
+                objectAttribute: {
+                  name: "John",
+                  email: "john@example.com",
+                  tags: ["work", "vip"]
+                }
               },
               { referentialIntegrityCheck: false }
             )
@@ -7563,7 +7595,11 @@ describe("Update", () => {
             nullableNumberAttribute: 8,
             enumAttribute: "val-2",
             nullableEnumAttribute: "val-1",
-            objectAttribute: { name: "Old", email: "old@example.com" },
+            objectAttribute: {
+              name: "Old",
+              email: "old@example.com",
+              tags: ["old-tag"]
+            },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
           });
@@ -7582,7 +7618,11 @@ describe("Update", () => {
               nullableNumberAttribute: 10,
               enumAttribute: "val-1",
               nullableEnumAttribute: "val-2",
-              objectAttribute: { name: "John", email: "john@example.com" }
+              objectAttribute: {
+                name: "John",
+                email: "john@example.com",
+                tags: ["work", "vip"]
+              }
             },
             { referentialIntegrityCheck: false }
           );
@@ -7601,7 +7641,11 @@ describe("Update", () => {
             nullableNumberAttribute: 10,
             enumAttribute: "val-1",
             nullableEnumAttribute: "val-2",
-            objectAttribute: { name: "John", email: "john@example.com" },
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"]
+            },
             updatedAt: new Date("2023-10-16T03:31:35.918Z")
           });
           expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
@@ -7623,7 +7667,11 @@ describe("Update", () => {
             nullableNumberAttribute: 8,
             enumAttribute: "val-2",
             nullableEnumAttribute: "val-1",
-            objectAttribute: { name: "Old", email: "old@example.com" },
+            objectAttribute: {
+              name: "Old",
+              email: "old@example.com",
+              tags: ["old-tag"]
+            },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
           });

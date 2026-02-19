@@ -2,7 +2,6 @@ import { z, type ZodType } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types";
-import { objectSerializer } from "./serializers";
 import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
 
 /**
@@ -40,6 +39,8 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
 
   if (fieldDef.type === "object") {
     zodType = objectSchemaToZod(fieldDef.fields);
+  } else if (fieldDef.type === "array") {
+    zodType = z.array(fieldDefToZod(fieldDef.items));
   } else if (fieldDef.type === "string") {
     zodType = z.string();
   } else if (fieldDef.type === "number") {
@@ -58,7 +59,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
 /**
  * A decorator for marking class fields as structured object attributes within the context of a single-table design entity.
  *
- * Objects are stored as JSON strings in DynamoDB and validated at runtime against the provided schema.
+ * Objects are stored as native DynamoDB Map types and validated at runtime against the provided schema.
  * The TypeScript type is inferred from the schema using {@link InferObjectSchema}.
  *
  * Can be set to nullable via decorator props.
@@ -104,7 +105,6 @@ function ObjectAttribute<
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
-          serializers: objectSerializer,
           type: zodSchema,
           ...restProps
         });
