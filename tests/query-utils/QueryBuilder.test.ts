@@ -10,10 +10,7 @@ import {
   ForeignKeyAttribute,
   ObjectAttribute
 } from "../../src/decorators";
-import type {
-  ObjectSchema,
-  InferObjectSchema
-} from "../../src/decorators";
+import type { ObjectSchema, InferObjectSchema } from "../../src/decorators";
 import type { ForeignKey, PartitionKey, SortKey } from "../../src/types";
 
 @Table({
@@ -316,8 +313,7 @@ describe("QueryBuilder", () => {
     expect(queryBuilder.build()).toEqual({
       TableName: "mock-table",
       KeyConditionExpression: "#PK = :PK3",
-      FilterExpression:
-        "#Meta.#location IN (:Metalocation1,:Metalocation2)",
+      FilterExpression: "#Meta.#location IN (:Metalocation1,:Metalocation2)",
       ExpressionAttributeNames: {
         "#Meta": "Meta",
         "#PK": "PK",
@@ -341,10 +337,7 @@ describe("QueryBuilder", () => {
       options: {
         filter: {
           "meta.location": "warehouse",
-          $or: [
-            { "meta.tags": { $contains: "heavy" } },
-            { name: "Scale-A" }
-          ]
+          $or: [{ "meta.tags": { $contains: "heavy" } }, { name: "Scale-A" }]
         }
       }
     });

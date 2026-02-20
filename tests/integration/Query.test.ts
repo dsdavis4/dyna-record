@@ -18,8 +18,6 @@ const mockSend = jest.fn();
 const mockQuery = jest.fn();
 const mockedQueryCommand = jest.mocked(QueryCommand);
 
-// TODO add tests for object filtering
-
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
     DynamoDBClient: jest.fn().mockImplementation(() => {
@@ -109,33 +107,68 @@ describe("Query", () => {
   });
 
   describe("filters on nested Map and List attributes", () => {
+    const mockItem = {
+      PK: "MyClassWithAllAttributeTypes#123",
+      SK: "MyClassWithAllAttributeTypes",
+      Id: "123",
+      Type: "MyClassWithAllAttributeTypes",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z",
+      stringAttribute: "some-string",
+      dateAttribute: "2023-10-16T03:31:35.918Z",
+      boolAttribute: true,
+      numberAttribute: 9,
+      foreignKeyAttribute: "111",
+      enumAttribute: "val-1",
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      },
+      nullableObjectAttribute: {
+        street: "123 Main St",
+        city: "Springfield",
+        zip: 12345,
+        geo: { lat: 40.7128, lng: -74.006 },
+        scores: [95, 87, 100]
+      }
+    };
+
+    const expectedEntity = {
+      pk: "MyClassWithAllAttributeTypes#123",
+      sk: "MyClassWithAllAttributeTypes",
+      id: "123",
+      type: "MyClassWithAllAttributeTypes",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z"),
+      stringAttribute: "some-string",
+      dateAttribute: new Date("2023-10-16T03:31:35.918Z"),
+      boolAttribute: true,
+      numberAttribute: 9,
+      foreignKeyAttribute: "111",
+      enumAttribute: "val-1",
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"]
+      },
+      nullableObjectAttribute: {
+        street: "123 Main St",
+        city: "Springfield",
+        zip: 12345,
+        geo: { lat: 40.7128, lng: -74.006 },
+        scores: [95, 87, 100]
+      }
+    };
+
     beforeEach(() => {
       mockQuery.mockResolvedValueOnce({
-        Items: [
-          {
-            PK: "MyClassWithAllAttributeTypes#123",
-            SK: "MyClassWithAllAttributeTypes",
-            Id: "123",
-            Type: "MyClassWithAllAttributeTypes",
-            CreatedAt: "2023-10-16T03:31:35.918Z",
-            UpdatedAt: "2023-10-16T03:31:35.918Z",
-            stringAttribute: "some-string",
-            boolAttribute: true,
-            numberAttribute: 9,
-            foreignKeyAttribute: "111",
-            enumAttribute: "val-1",
-            objectAttribute: {
-              name: "John",
-              email: "john@example.com",
-              tags: ["work", "vip"]
-            }
-          }
-        ]
+        Items: [mockItem]
       });
     });
 
-    it("can filter on a nested Map attribute using dot-path equality", async () => {
-      expect.assertions(2);
+    it("can filter on a nested Map string field using dot-path equality", async () => {
+      expect.assertions(5);
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
@@ -143,25 +176,104 @@ describe("Query", () => {
         }
       });
 
+      expect(results).toEqual([expectedEntity]);
       expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
       expect(mockedQueryCommand.mock.calls).toEqual([
         [
-          expect.objectContaining({
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
             FilterExpression: "#objectAttribute.#name = :objectAttributename1",
-            ExpressionAttributeNames: expect.objectContaining({
+            ExpressionAttributeNames: {
+              "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#name": "name"
-            }),
-            ExpressionAttributeValues: expect.objectContaining({
-              ":objectAttributename1": "John"
-            })
-          })
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributename1": "John",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
         ]
       ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter on a nested Map number field using dot-path equality", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "nullableObjectAttribute.zip": 12345
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "#nullableObjectAttribute.#zip = :nullableObjectAttributezip1",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#zip": "zip"
+            },
+            ExpressionAttributeValues: {
+              ":nullableObjectAttributezip1": 12345,
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter on a deeply nested Map field using dot-path equality", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "nullableObjectAttribute.geo.lat": 40.7128
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "#nullableObjectAttribute.#geo.#lat = :nullableObjectAttributegeolat1",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#geo": "geo",
+              "#lat": "lat"
+            },
+            ExpressionAttributeValues: {
+              ":nullableObjectAttributegeolat1": 40.7128,
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
     it("can filter using $contains on a nested List attribute", async () => {
-      expect.assertions(2);
+      expect.assertions(5);
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
@@ -169,26 +281,212 @@ describe("Query", () => {
         }
       });
 
+      expect(results).toEqual([expectedEntity]);
       expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
       expect(mockedQueryCommand.mock.calls).toEqual([
         [
-          expect.objectContaining({
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
             FilterExpression:
               "contains(#objectAttribute.#tags, :objectAttributetags1)",
-            ExpressionAttributeNames: expect.objectContaining({
+            ExpressionAttributeNames: {
+              "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#tags": "tags"
-            }),
-            ExpressionAttributeValues: expect.objectContaining({
-              ":objectAttributetags1": "vip"
-            })
-          })
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributetags1": "vip",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
         ]
       ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
-    it("can combine dot-path and $contains filters with AND/OR", async () => {
-      expect.assertions(2);
+    it("can filter using $contains on a nested number List attribute", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "nullableObjectAttribute.scores": { $contains: 95 }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#scores": "scores"
+            },
+            ExpressionAttributeValues: {
+              ":nullableObjectAttributescores1": 95,
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter using $contains on a top-level string attribute", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          stringAttribute: { $contains: "some" }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression: "contains(#stringAttribute, :stringAttribute1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#stringAttribute": "stringAttribute"
+            },
+            ExpressionAttributeValues: {
+              ":stringAttribute1": "some",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter using $beginsWith on a nested Map string field", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.email": { $beginsWith: "john" }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "begins_with(#objectAttribute.#email, :objectAttributeemail1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#email": "email"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributeemail1": "john",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter using IN on a nested Map field", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"]
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            FilterExpression:
+              "#nullableObjectAttribute.#city IN (:nullableObjectAttributecity1,:nullableObjectAttributecity2)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#city": "city"
+            },
+            ExpressionAttributeValues: {
+              ":nullableObjectAttributecity1": "Springfield",
+              ":nullableObjectAttributecity2": "Shelbyville",
+              ":PK3": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can combine multiple dot-path filters with AND", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.name": "John",
+          "nullableObjectAttribute.city": "Springfield"
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            FilterExpression:
+              "#objectAttribute.#name = :objectAttributename1 AND #nullableObjectAttribute.#city = :nullableObjectAttributecity2",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#name": "name",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#city": "city"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributename1": "John",
+              ":nullableObjectAttributecity2": "Springfield",
+              ":PK3": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can combine dot-path, $contains, and $beginsWith filters with AND/OR", async () => {
+      expect.assertions(5);
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
@@ -200,26 +498,123 @@ describe("Query", () => {
         }
       });
 
+      expect(results).toEqual([expectedEntity]);
       expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
       expect(mockedQueryCommand.mock.calls).toEqual([
         [
-          expect.objectContaining({
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK4",
             FilterExpression:
               "(contains(#objectAttribute.#tags, :objectAttributetags1) OR begins_with(#objectAttribute.#email, :objectAttributeemail2)) AND (#objectAttribute.#name = :objectAttributename3)",
-            ExpressionAttributeNames: expect.objectContaining({
+            ExpressionAttributeNames: {
+              "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#tags": "tags",
               "#email": "email",
               "#name": "name"
-            }),
-            ExpressionAttributeValues: expect.objectContaining({
+            },
+            ExpressionAttributeValues: {
               ":objectAttributetags1": "work",
               ":objectAttributeemail2": "john",
-              ":objectAttributename3": "John"
-            })
-          })
+              ":objectAttributename3": "John",
+              ":PK4": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
         ]
       ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can use $contains inside $or with top-level AND filters", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          stringAttribute: "some-string",
+          $or: [
+            { "objectAttribute.tags": { $contains: "vip" } },
+            { "nullableObjectAttribute.scores": { $contains: 95 } }
+          ]
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK4",
+            FilterExpression:
+              "(contains(#objectAttribute.#tags, :objectAttributetags1) OR contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores2)) AND (#stringAttribute = :stringAttribute3)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#tags": "tags",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#scores": "scores",
+              "#stringAttribute": "stringAttribute"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributetags1": "vip",
+              ":nullableObjectAttributescores2": 95,
+              ":stringAttribute3": "some-string",
+              ":PK4": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can mix dot-path IN with top-level equality in AND/OR", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"],
+          $or: [
+            { "objectAttribute.name": "John" },
+            { stringAttribute: { $beginsWith: "some" } }
+          ]
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK5",
+            FilterExpression:
+              "(#objectAttribute.#name = :objectAttributename1 OR begins_with(#stringAttribute, :stringAttribute2)) AND (#nullableObjectAttribute.#city IN (:nullableObjectAttributecity3,:nullableObjectAttributecity4))",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#name": "name",
+              "#stringAttribute": "stringAttribute",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#city": "city"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributename1": "John",
+              ":stringAttribute2": "some",
+              ":nullableObjectAttributecity3": "Springfield",
+              ":nullableObjectAttributecity4": "Shelbyville",
+              ":PK5": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
   });
 
