@@ -616,6 +616,68 @@ describe("Query", () => {
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
+
+    it("can combine all filter operations in a single complex query: dot-path equality, $contains, $beginsWith, IN, deeply nested path, and AND/OR", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.name": "John",
+          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"],
+          "nullableObjectAttribute.geo.lat": 40,
+          $or: [
+            {
+              "objectAttribute.tags": { $contains: "vip" },
+              "objectAttribute.email": { $beginsWith: "john" }
+            },
+            {
+              "nullableObjectAttribute.scores": { $contains: 95 },
+              stringAttribute: "some-string"
+            }
+          ]
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK9",
+            FilterExpression:
+              "((contains(#objectAttribute.#tags, :objectAttributetags1) AND begins_with(#objectAttribute.#email, :objectAttributeemail2)) OR (contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores3) AND #stringAttribute = :stringAttribute4)) AND (#objectAttribute.#name = :objectAttributename5 AND #nullableObjectAttribute.#city IN (:nullableObjectAttributecity6,:nullableObjectAttributecity7) AND #nullableObjectAttribute.#geo.#lat = :nullableObjectAttributegeolat8)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#tags": "tags",
+              "#email": "email",
+              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#scores": "scores",
+              "#stringAttribute": "stringAttribute",
+              "#name": "name",
+              "#city": "city",
+              "#geo": "geo",
+              "#lat": "lat"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributetags1": "vip",
+              ":objectAttributeemail2": "john",
+              ":nullableObjectAttributescores3": 95,
+              ":stringAttribute4": "some-string",
+              ":objectAttributename5": "John",
+              ":nullableObjectAttributecity6": "Springfield",
+              ":nullableObjectAttributecity7": "Shelbyville",
+              ":nullableObjectAttributegeolat8": 40,
+              ":PK9": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
   });
 
   describe("queries by PK only", () => {
@@ -1706,6 +1768,121 @@ describe("Query", () => {
 
           // @ts-expect-error: Query does not include HasMany relationship associations
           Logger.log(paymentMethod.orders);
+        }
+      });
+
+      it("return value includes objectAttribute with correct nested types", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined) {
+          // @ts-expect-no-error: objectAttribute is accessible on return value
+          Logger.log(item.objectAttribute);
+
+          // @ts-expect-no-error: nested string field is accessible
+          Logger.log(item.objectAttribute.name);
+
+          // @ts-expect-no-error: nested string field is accessible
+          Logger.log(item.objectAttribute.email);
+
+          // @ts-expect-no-error: nested array field is accessible
+          Logger.log(item.objectAttribute.tags);
+
+          // @ts-expect-no-error: array item is a string
+          Logger.log(item.objectAttribute.tags[0]);
+        }
+      });
+
+      it("return value objectAttribute fields have correct types (rejects wrong type assignments)", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined) {
+          // @ts-expect-error: name is string, not number
+          const nameAsNum: number = item.objectAttribute.name;
+          Logger.log(nameAsNum);
+
+          // @ts-expect-error: tags is string[], not number[]
+          const tagsAsNums: number[] = item.objectAttribute.tags;
+          Logger.log(tagsAsNums);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(item.objectAttribute.nonExistent);
+        }
+      });
+
+      it("return value nullableObjectAttribute requires optional chaining", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined) {
+          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
+          Logger.log(item.nullableObjectAttribute.city);
+        }
+      });
+
+      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined) {
+          // @ts-expect-no-error: optional chaining allows safe access
+          Logger.log(item.nullableObjectAttribute?.street);
+
+          // @ts-expect-no-error: nested string field
+          Logger.log(item.nullableObjectAttribute?.city);
+
+          // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+          Logger.log(item.nullableObjectAttribute?.zip);
+
+          // @ts-expect-no-error: nested object field
+          Logger.log(item.nullableObjectAttribute?.geo.lat);
+
+          // @ts-expect-no-error: nested object field
+          Logger.log(item.nullableObjectAttribute?.geo.lng);
+
+          // @ts-expect-no-error: nested array field
+          Logger.log(item.nullableObjectAttribute?.scores);
+
+          // @ts-expect-no-error: array item is a number
+          Logger.log(item.nullableObjectAttribute?.scores[0]);
+        }
+      });
+
+      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined && item.nullableObjectAttribute !== undefined) {
+          // @ts-expect-error: city is string, not number
+          const cityAsNum: number = item.nullableObjectAttribute.city;
+          Logger.log(cityAsNum);
+
+          // @ts-expect-error: geo.lat is number, not string
+          const latAsStr: string = item.nullableObjectAttribute.geo.lat;
+          Logger.log(latAsStr);
+
+          // @ts-expect-error: scores is number[], not string[]
+          const scoresAsStrs: string[] = item.nullableObjectAttribute.scores;
+          Logger.log(scoresAsStrs);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(item.nullableObjectAttribute.nonExistent);
         }
       });
 

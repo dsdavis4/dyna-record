@@ -39,8 +39,6 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
-// TODO make sure there are tests for runtime validation of all object and list types
-
 jest.mock("uuid");
 
 const mockTransactGetItems = jest.fn();
@@ -3511,6 +3509,175 @@ describe("Create", () => {
         }
       }).catch(() => {
         Logger.log("Testing types");
+      });
+    });
+
+    describe("return value object attribute types", () => {
+      it("return value includes objectAttribute with correct nested types", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        // @ts-expect-no-error: objectAttribute is accessible on return value
+        Logger.log(res.objectAttribute);
+
+        // @ts-expect-no-error: nested string field is accessible
+        Logger.log(res.objectAttribute.name);
+
+        // @ts-expect-no-error: nested string field is accessible
+        Logger.log(res.objectAttribute.email);
+
+        // @ts-expect-no-error: nested array field is accessible
+        Logger.log(res.objectAttribute.tags);
+
+        // @ts-expect-no-error: array item is a string
+        Logger.log(res.objectAttribute.tags[0]);
+      });
+
+      it("return value objectAttribute fields have correct types (rejects wrong type assignments)", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        // @ts-expect-error: name is string, not number
+        const nameAsNum: number = res.objectAttribute.name;
+        Logger.log(nameAsNum);
+
+        // @ts-expect-error: tags is string[], not number[]
+        const tagsAsNums: number[] = res.objectAttribute.tags;
+        Logger.log(tagsAsNums);
+      });
+
+      it("return value objectAttribute does not have extra fields", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        // @ts-expect-error: nonExistent is not in the schema
+        Logger.log(res.objectAttribute.nonExistent);
+      });
+
+      it("return value nullableObjectAttribute is optional (may be undefined)", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        try {
+          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
+          Logger.log(res.nullableObjectAttribute.city);
+        } catch {
+          Logger.log("Testing types");
+        }
+      });
+
+      it("return value nullableObjectAttribute is accessible with optional chaining", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        // @ts-expect-no-error: optional chaining allows safe access
+        Logger.log(res.nullableObjectAttribute?.street);
+
+        // @ts-expect-no-error: nested string field
+        Logger.log(res.nullableObjectAttribute?.city);
+
+        // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+        Logger.log(res.nullableObjectAttribute?.zip);
+
+        // @ts-expect-no-error: nested object field
+        Logger.log(res.nullableObjectAttribute?.geo.lat);
+
+        // @ts-expect-no-error: nested object field
+        Logger.log(res.nullableObjectAttribute?.geo.lng);
+
+        // @ts-expect-no-error: nested array field
+        Logger.log(res.nullableObjectAttribute?.scores);
+
+        // @ts-expect-no-error: array item is a number
+        Logger.log(res.nullableObjectAttribute?.scores[0]);
+      });
+
+      it("return value nullableObjectAttribute nested fields have correct types", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"]
+          }
+        });
+
+        if (res.nullableObjectAttribute !== undefined) {
+          // @ts-expect-error: city is string, not number
+          const cityAsNum: number = res.nullableObjectAttribute.city;
+          Logger.log(cityAsNum);
+
+          // @ts-expect-error: geo.lat is number, not string
+          const latAsStr: string = res.nullableObjectAttribute.geo.lat;
+          Logger.log(latAsStr);
+
+          // @ts-expect-error: scores is number[], not string[]
+          const scoresAsStrs: string[] = res.nullableObjectAttribute.scores;
+          Logger.log(scoresAsStrs);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(res.nullableObjectAttribute.nonExistent);
+        }
       });
     });
   });

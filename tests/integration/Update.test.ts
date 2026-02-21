@@ -8876,6 +8876,140 @@ describe("Update", () => {
           });
       });
 
+      it("return value includes objectAttribute with correct nested types", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work"]
+            }
+          })
+          .then(result => {
+            // @ts-expect-no-error: objectAttribute is accessible on return value
+            Logger.log(result.objectAttribute);
+
+            // @ts-expect-no-error: nested string field is accessible
+            Logger.log(result.objectAttribute.name);
+
+            // @ts-expect-no-error: nested string field is accessible
+            Logger.log(result.objectAttribute.email);
+
+            // @ts-expect-no-error: nested array field is accessible
+            Logger.log(result.objectAttribute.tags);
+
+            // @ts-expect-no-error: array item is a string
+            Logger.log(result.objectAttribute.tags[0]);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value objectAttribute fields have correct types (rejects wrong type assignments)", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work"]
+            }
+          })
+          .then(result => {
+            // @ts-expect-error: name is string, not number
+            const nameAsNum: number = result.objectAttribute.name;
+            Logger.log(nameAsNum);
+
+            // @ts-expect-error: tags is string[], not number[]
+            const tagsAsNums: number[] = result.objectAttribute.tags;
+            Logger.log(tagsAsNums);
+
+            // @ts-expect-error: nonExistent is not in the schema
+            Logger.log(result.objectAttribute.nonExistent);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value nullableObjectAttribute requires optional chaining", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
+            Logger.log(result.nullableObjectAttribute.city);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: optional chaining allows safe access
+            Logger.log(result.nullableObjectAttribute?.street);
+
+            // @ts-expect-no-error: nested string field
+            Logger.log(result.nullableObjectAttribute?.city);
+
+            // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+            Logger.log(result.nullableObjectAttribute?.zip);
+
+            // @ts-expect-no-error: nested object field
+            Logger.log(result.nullableObjectAttribute?.geo.lat);
+
+            // @ts-expect-no-error: nested object field
+            Logger.log(result.nullableObjectAttribute?.geo.lng);
+
+            // @ts-expect-no-error: nested array field
+            Logger.log(result.nullableObjectAttribute?.scores);
+
+            // @ts-expect-no-error: array item is a number
+            Logger.log(result.nullableObjectAttribute?.scores[0]);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            if (result.nullableObjectAttribute !== undefined) {
+              // @ts-expect-error: city is string, not number
+              const cityAsNum: number = result.nullableObjectAttribute.city;
+              Logger.log(cityAsNum);
+
+              // @ts-expect-error: geo.lat is number, not string
+              const latAsStr: string = result.nullableObjectAttribute.geo.lat;
+              Logger.log(latAsStr);
+
+              // @ts-expect-error: scores is number[], not string[]
+              const scoresAsStrs: string[] = result.nullableObjectAttribute.scores;
+              Logger.log(scoresAsStrs);
+
+              // @ts-expect-error: nonExistent is not in the schema
+              Logger.log(result.nullableObjectAttribute.nonExistent);
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
       it("will accept referentialIntegrityCheck option", async () => {
         const instance = new Order();
 
