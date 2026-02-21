@@ -19,7 +19,9 @@ import {
   type Desk,
   type Assignment,
   type Student,
-  Employee
+  Employee,
+  type Warehouse,
+  Shipment
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -39,7 +41,6 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
-// TODO tests here and update need to have tests for denoramlized records
 
 jest.mock("uuid");
 
@@ -2314,6 +2315,133 @@ describe("Create", () => {
         ]);
       }
     });
+  });
+
+  it("will denormalize object attributes to related entity partitions (HasMany with ObjectAttribute)", async () => {
+    expect.assertions(5);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const warehouse: MockTableEntityTableItem<Warehouse> = {
+      PK: "Warehouse#123",
+      SK: "Warehouse",
+      Id: "123",
+      Type: "Warehouse",
+      Name: "Main Warehouse",
+      Location: { city: "Springfield", state: "IL" },
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: warehouse }]
+    });
+
+    const shipment = await Shipment.create({
+      destination: "Chicago",
+      warehouseId: "123",
+      dimensions: { weight: 50, unit: "kg" }
+    });
+
+    const newShipmentTableAttributes = {
+      Id: "uuid1",
+      Type: "Shipment",
+      Destination: "Chicago",
+      Dimensions: { weight: 50, unit: "kg" },
+      WarehouseId: "123",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z"
+    };
+
+    expect(shipment).toEqual({
+      pk: "Shipment#uuid1",
+      sk: "Shipment",
+      id: "uuid1",
+      type: "Shipment",
+      destination: "Chicago",
+      dimensions: { weight: 50, unit: "kg" },
+      warehouseId: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(shipment).toBeInstanceOf(Shipment);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Prefetch associated records to denormalize
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Warehouse#123", SK: "Warehouse" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Put the new Shipment
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Shipment#uuid1",
+                  SK: "Shipment",
+                  ...newShipmentTableAttributes
+                }
+              }
+            },
+            // Check that the associated Warehouse exists
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Warehouse#123", SK: "Warehouse" },
+                TableName: "mock-table"
+              }
+            },
+            // Denormalize the Shipment to the Warehouse partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Warehouse#123",
+                  SK: "Shipment#uuid1",
+                  ...newShipmentTableAttributes
+                }
+              }
+            },
+            // Denormalize the Warehouse (with ObjectAttribute) to the Shipment partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Shipment#uuid1",
+                  SK: "Warehouse",
+                  Id: "123",
+                  Type: "Warehouse",
+                  Name: "Main Warehouse",
+                  Location: { city: "Springfield", state: "IL" },
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
   });
 
   describe("error handling", () => {

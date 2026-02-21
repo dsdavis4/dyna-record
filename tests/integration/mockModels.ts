@@ -517,10 +517,48 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
+const locationSchema = {
+  city: { type: "string" },
+  state: { type: "string" }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Warehouse extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Location", schema: locationSchema })
+  public readonly location: InferObjectSchema<typeof locationSchema>;
+
+  @HasMany(() => Shipment, { foreignKey: "warehouseId" })
+  public readonly shipments: Shipment[];
+}
+
+const dimensionsSchema = {
+  weight: { type: "number" },
+  unit: { type: "string" }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Shipment extends MockTable {
+  @StringAttribute({ alias: "Destination" })
+  public readonly destination: string;
+
+  @ObjectAttribute({ alias: "Dimensions", schema: dimensionsSchema })
+  public readonly dimensions: InferObjectSchema<typeof dimensionsSchema>;
+
+  @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+  public readonly warehouseId: ForeignKey<Warehouse>;
+
+  @BelongsTo(() => Warehouse, { foreignKey: "warehouseId" })
+  public readonly warehouse: Warehouse;
+}
+
 export {
   // Schemas
   addressSchema,
   contactSchema,
+  locationSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -544,6 +582,8 @@ export {
   Desk,
   Employee,
   Founder,
+  Warehouse,
+  Shipment,
   // OtherTable exports
   OtherTable,
   Teacher,

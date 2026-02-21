@@ -21,7 +21,9 @@ import {
   PhoneBook,
   type Student,
   type User,
-  Website
+  Website,
+  Warehouse,
+  type Shipment
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -8060,6 +8062,176 @@ describe("Update", () => {
         } catch (e) {
           operationSharedAssertions(e);
         }
+      });
+    });
+  });
+
+  describe("A model who HasMany of a relationship is updated with an ObjectAttribute", () => {
+    const warehouse: MockTableEntityTableItem<Warehouse> = {
+      PK: "Warehouse#123",
+      SK: "Warehouse",
+      Id: "123",
+      Type: "Warehouse",
+      Name: "Main Warehouse",
+      Location: { city: "Springfield", state: "IL" },
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+
+    const instance = createInstance(Warehouse, {
+      pk: "Warehouse#123" as PartitionKey,
+      sk: "Warehouse" as SortKey,
+      id: "123",
+      type: "Warehouse",
+      name: "Main Warehouse",
+      location: { city: "Springfield", state: "IL" },
+      createdAt: new Date("2023-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2023-01-02T00:00:00.000Z")
+    });
+
+    beforeEach(() => {
+      // Shipment record denormalized to Warehouse partition
+      const linkedShipment: MockTableEntityTableItem<Shipment> = {
+        PK: warehouse.PK, // Linked record in Warehouse partition
+        SK: "Shipment#456",
+        Id: "456",
+        Type: "Shipment",
+        Destination: "Chicago",
+        Dimensions: { weight: 50, unit: "kg" },
+        WarehouseId: warehouse.Id,
+        CreatedAt: "2023-01-03T00:00:00.000Z",
+        UpdatedAt: "2023-01-04T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValue({
+        Items: [warehouse, linkedShipment]
+      });
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    afterEach(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    describe("will update the entity and its denormalized records including the ObjectAttribute", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK3",
+              ExpressionAttributeNames: {
+                "#PK": "PK",
+                "#Type": "Type"
+              },
+              ExpressionAttributeValues: {
+                ":PK3": "Warehouse#123",
+                ":Type1": "Warehouse",
+                ":Type2": "Shipment"
+              },
+              FilterExpression: "#Type IN (:Type1,:Type2)",
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                // Update the Warehouse attributes including the ObjectAttribute
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Warehouse#123",
+                      SK: "Warehouse"
+                    },
+                    UpdateExpression:
+                      "SET #Location = :Location, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Location": "Location",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Location": { city: "Chicago", state: "IL" },
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                },
+                // Update the Warehouse denormalized record in the Shipment partition
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "Shipment#456",
+                      SK: "Warehouse"
+                    },
+                    UpdateExpression:
+                      "SET #Location = :Location, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Location": "Location",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Location": { city: "Chicago", state: "IL" },
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await Warehouse.update("123", {
+            location: { city: "Chicago", state: "IL" }
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const updatedInstance = await instance.update({
+          location: { city: "Chicago", state: "IL" }
+        });
+
+        expect(updatedInstance).toEqual({
+          ...instance,
+          location: { city: "Chicago", state: "IL" },
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance).toBeInstanceOf(Warehouse);
+        // Original instance is not mutated
+        expect(instance).toEqual({
+          pk: instance.pk,
+          sk: instance.sk,
+          id: instance.id,
+          type: instance.type,
+          name: instance.name,
+          location: { city: "Springfield", state: "IL" },
+          createdAt: instance.createdAt,
+          updatedAt: instance.updatedAt
+        });
+
+        dbOperationAssertions();
       });
     });
   });

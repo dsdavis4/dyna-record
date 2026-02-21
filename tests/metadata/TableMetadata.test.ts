@@ -1741,6 +1741,168 @@ describe("TableMetadata", () => {
                 foreignKey: "organizationId"
               }
             }
+          },
+          Warehouse: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              location: {
+                name: "location",
+                alias: "Location",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Location: {
+                name: "location",
+                alias: "Location",
+                nullable: false
+              }
+            },
+            relationships: {
+              shipments: {
+                type: "HasMany",
+                propertyName: "shipments",
+                target: "Shipment",
+                foreignKey: "warehouseId"
+              }
+            }
+          },
+          Shipment: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              destination: {
+                name: "destination",
+                alias: "Destination",
+                nullable: false
+              },
+              dimensions: {
+                name: "dimensions",
+                alias: "Dimensions",
+                nullable: false
+              },
+              warehouseId: {
+                name: "warehouseId",
+                alias: "WarehouseId",
+                nullable: false,
+                foreignKeyTarget: "Warehouse"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Destination: {
+                name: "destination",
+                alias: "Destination",
+                nullable: false
+              },
+              Dimensions: {
+                name: "dimensions",
+                alias: "Dimensions",
+                nullable: false
+              },
+              WarehouseId: {
+                name: "warehouseId",
+                alias: "WarehouseId",
+                nullable: false,
+                foreignKeyTarget: "Warehouse"
+              }
+            },
+            relationships: {
+              warehouse: {
+                type: "BelongsTo",
+                propertyName: "warehouse",
+                target: "Warehouse",
+                foreignKey: "warehouseId"
+              }
+            }
           }
         }
       });
