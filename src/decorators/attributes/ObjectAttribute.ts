@@ -37,18 +37,27 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 function fieldDefToZod(fieldDef: FieldDef): ZodType {
   let zodType: ZodType;
 
-  if (fieldDef.type === "object") {
-    zodType = objectSchemaToZod(fieldDef.fields);
-  } else if (fieldDef.type === "array") {
-    zodType = z.array(fieldDefToZod(fieldDef.items));
-  } else if (fieldDef.type === "string") {
-    zodType = z.string();
-  } else if (fieldDef.type === "number") {
-    zodType = z.number();
-    // TODO should this be an else if, and throw if it doesnt match?
-    // TODO make this if else an exhaustive check?
-  } else {
-    zodType = z.boolean();
+  switch (fieldDef.type) {
+    case "object":
+      zodType = objectSchemaToZod(fieldDef.fields);
+      break;
+    case "array":
+      zodType = z.array(fieldDefToZod(fieldDef.items));
+      break;
+    case "string":
+      zodType = z.string();
+      break;
+    case "number":
+      zodType = z.number();
+      break;
+    case "boolean":
+      zodType = z.boolean();
+      break;
+    default: {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _exhaustiveCheck: never = fieldDef;
+      throw new Error("Unsupported field type");
+    }
   }
 
   if (fieldDef.nullable === true) {
