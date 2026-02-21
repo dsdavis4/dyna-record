@@ -20,6 +20,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Create](#create)
   - [FindById](#findbyid)
   - [Query](#query)
+    - [Filtering on Object Attributes](#filtering-on-object-attributes)
   - [Update](#update)
   - [Delete](#delete)
 - [Type Safety Features](#type-safety-features)
@@ -206,6 +207,7 @@ class Store extends MyTable {
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
 - **Storage:** Objects are stored as native DynamoDB Map types
 - **Updates:** Updates replace the entire object (not a partial merge)
+- **Filtering:** Object attributes support dot-path filtering in queries — see [Filtering on Object Attributes](#filtering-on-object-attributes)
 
 ### Foreign Keys
 
@@ -536,6 +538,69 @@ const result = await Course.query(
     }
   }
 );
+```
+
+#### Filtering on Object Attributes
+
+When using `@ObjectAttribute`, you can filter on nested Map fields using **dot-path notation** and check List membership using the **`$contains`** operator.
+
+##### Dot-path filtering on nested fields
+
+Use dot notation to filter on fields within an `@ObjectAttribute`. All standard filter operators work with dot-paths: equality, `$beginsWith`, and `IN` (array of values).
+
+```typescript
+// Equality on a nested field
+const result = await Store.query("123", {
+  filter: { "address.city": "Springfield" }
+});
+
+// $beginsWith on a nested field
+const result = await Store.query("123", {
+  filter: { "address.street": { $beginsWith: "123" } }
+});
+
+// IN on a nested field
+const result = await Store.query("123", {
+  filter: { "address.city": ["Springfield", "Shelbyville"] }
+});
+
+// Deeply nested fields
+const result = await Store.query("123", {
+  filter: { "address.geo.lat": 40 }
+});
+```
+
+##### `$contains` operator
+
+Use `$contains` to check if a List attribute contains a specific element, or if a string attribute contains a substring. Works on both top-level attributes and nested fields via dot-path.
+
+```typescript
+// Check if a List contains an element
+const result = await Store.query("123", {
+  filter: { "address.tags": { $contains: "home" } }
+});
+
+// Check if a top-level string contains a substring
+const result = await Store.query("123", {
+  filter: { name: { $contains: "john" } }
+});
+```
+
+##### Combining dot-path and `$contains` with AND/OR
+
+Dot-path filters and `$contains` work with all existing AND/OR filter combinations.
+
+```typescript
+const result = await Store.query("123", {
+  filter: {
+    "address.city": "Springfield",
+    "address.geo.lat": 40,
+    $or: [
+      { "address.tags": { $contains: "home" } },
+      { name: { $beginsWith: "Main" } }
+    ]
+  }
+});
 ```
 
 ### Querying on an index

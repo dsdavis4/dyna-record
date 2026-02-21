@@ -31,13 +31,30 @@ export type BeginsWithFilter = Record<"$beginsWith", NativeAttributeValue>;
 
 /**
  * Represents a filter condition specifying that a list contains a given element, or a string contains a given substring.
+ * Maps to the DynamoDB `contains()` function.
+ *
+ * Works with both top-level attributes and nested `@ObjectAttribute` fields via dot-path notation.
  *
  * @type {ContainsFilter} - A record with "$contains" key pointing to the value to check for.
+ *
+ * @example
+ * ```typescript
+ * // Check if a List attribute contains an element
+ * filter: { tags: { $contains: "vip" } }
+ *
+ * // Check on a nested List via dot-path
+ * filter: { "address.tags": { $contains: "home" } }
+ *
+ * // Check if a string attribute contains a substring
+ * filter: { name: { $contains: "john" } }
+ * ```
  */
 export type ContainsFilter = Record<"$contains", NativeAttributeValue>;
 
 /**
  * Defines possible types of values that can be used in a filter condition, including begins with, contains, exact value, or an array for "IN" conditions.
+ *
+ * Filter keys support dot-path notation for nested `@ObjectAttribute` Map fields (e.g., `"address.city"`).
  *
  * @type {FilterTypes} - A union of `BeginsWithFilter`, `ContainsFilter`, a single scalar value, or an array of scalar values.
  */

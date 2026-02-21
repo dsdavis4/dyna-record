@@ -89,6 +89,19 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  *   public meta?: InferObjectSchema<typeof metaSchema>;
  * }
  * ```
+ *
+ * Object attributes support filtering in queries using dot-path notation for nested fields
+ * and the {@link ContainsFilter | $contains} operator for List membership checks.
+ *
+ * ```typescript
+ * await MyEntity.query("123", {
+ *   filter: { "address.city": "Springfield" }
+ * });
+ *
+ * await MyEntity.query("123", {
+ *   filter: { "address.tags": { $contains: "home" } }
+ * });
+ * ```
  */
 function ObjectAttribute<
   T extends DynaRecord,
