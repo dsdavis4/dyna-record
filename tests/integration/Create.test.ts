@@ -39,6 +39,8 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
+// TODO tests here and update need to have tests for denoramlized records
+
 jest.mock("uuid");
 
 const mockTransactGetItems = jest.fn();
