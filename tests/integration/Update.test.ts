@@ -8998,7 +8998,8 @@ describe("Update", () => {
               Logger.log(latAsStr);
 
               // @ts-expect-error: scores is number[], not string[]
-              const scoresAsStrs: string[] = result.nullableObjectAttribute.scores;
+              const scoresAsStrs: string[] =
+                result.nullableObjectAttribute.scores;
               Logger.log(scoresAsStrs);
 
               // @ts-expect-error: nonExistent is not in the schema

@@ -1868,7 +1868,7 @@ describe("Query", () => {
 
         const item = result[0];
 
-        if (item !== undefined && item.nullableObjectAttribute !== undefined) {
+        if (item?.nullableObjectAttribute !== undefined) {
           // @ts-expect-error: city is string, not number
           const cityAsNum: number = item.nullableObjectAttribute.city;
           Logger.log(cityAsNum);

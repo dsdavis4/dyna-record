@@ -1465,7 +1465,7 @@ describe("FindById", () => {
       it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
-        if (result !== undefined && result.nullableObjectAttribute !== undefined) {
+        if (result?.nullableObjectAttribute !== undefined) {
           // @ts-expect-error: city is string, not number
           const cityAsNum: number = result.nullableObjectAttribute.city;
           Logger.log(cityAsNum);
