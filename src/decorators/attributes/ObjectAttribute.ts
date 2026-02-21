@@ -45,6 +45,8 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
     zodType = z.string();
   } else if (fieldDef.type === "number") {
     zodType = z.number();
+    // TODO should this be an else if, and throw if it doesnt match?
+    // TODO make this if else an exhaustive check?
   } else {
     zodType = z.boolean();
   }
