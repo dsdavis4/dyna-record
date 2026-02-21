@@ -25,10 +25,6 @@ export interface PrimitiveFieldDef {
  * A schema field definition for a nested object type
  */
 export interface ObjectFieldDef {
-  // TODO update so this is "$type" that way it is clear if if type is an actual attribute on the object
-  //    -- make a test for that
-  //    -- Does this make it confusion that "fields" and "nullable" do not have the $?
-  //    -- this would have to be applied on the other types like this too such as PrimitiveFieldDef above
   type: "object";
   fields: ObjectSchema;
   nullable?: boolean;

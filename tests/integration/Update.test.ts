@@ -135,17 +135,6 @@ class MockInformation extends MockTable {
   public someDate?: Date;
 }
 
-// TODO add or update tests for object attributes being denoramlzied to other partitions accordingly
-// TODO make sure there are tests for runtime validation of all object and list types
-// TODO make sure there is support for lists, that dont have to be nested in objects
-// TODO add type unit tests for replacing an object, and that on update even nullable fields are respected
-
-// TODO not this page but make sure readme docs are good
-
-// TODO for both findById and query test that the serialzied object has the correct types
-
-// TODO make sure there are tests for runtime validations for write operations
-
 describe("Update", () => {
   beforeAll(() => {
     jest.useFakeTimers();

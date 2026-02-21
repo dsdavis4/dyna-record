@@ -93,14 +93,38 @@ describe("Query", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
-      expect(results[0]).toEqual(
-        // TODO do strict equal
-        expect.objectContaining({
-          objectAttribute: objectVal,
-          nullableObjectAttribute: nullableObjectVal,
-          dateAttribute: new Date("2023-10-16T03:31:35.918Z")
-        })
-      );
+      expect(results[0]).toEqual({
+        boolAttribute: true,
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        dateAttribute: new Date("2023-10-16T03:31:35.918Z"),
+        enumAttribute: "val-1",
+        foreignKeyAttribute: "111",
+        id: "123",
+        nullableBoolAttribute: undefined,
+        nullableDateAttribute: undefined,
+        nullableEnumAttribute: undefined,
+        nullableForeignKeyAttribute: undefined,
+        nullableNumberAttribute: undefined,
+        nullableObjectAttribute: {
+          city: "Springfield",
+          geo: { lat: 40.7128, lng: -74.006 },
+          scores: [95, 87, 100],
+          street: "123 Main St",
+          zip: 12345
+        },
+        nullableStringAttribute: undefined,
+        numberAttribute: 9,
+        objectAttribute: {
+          email: "john@example.com",
+          name: "John",
+          tags: ["work", "vip"]
+        },
+        pk: "MyClassWithAllAttributeTypes#123",
+        sk: "MyClassWithAllAttributeTypes",
+        stringAttribute: "some-string",
+        type: "MyClassWithAllAttributeTypes",
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
       // Verify objects are stored/returned as native maps, not JSON strings
       expect(typeof results[0].objectAttribute).not.toBe("string");
     });
