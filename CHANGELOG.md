@@ -1,3 +1,15 @@
+## 0.5.0 - 2026-02-22
+
+### Added
+
+- **`@ObjectAttribute` decorator:** Define structured, typed object attributes on entities. Objects are validated at runtime via Zod and stored as native DynamoDB Map types. Declare schemas using `ObjectSchema` and derive TypeScript types with `InferObjectSchema<typeof schema>`.
+  - **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"enum"`, nested `"object"`, and `"array"`
+  - **Enum fields:** Use `{ type: "enum", values: ["a", "b"] }` to define string literal union fields with compile-time type inference and runtime validation. Enum fields work at any nesting level — top-level, inside nested objects, or as array items.
+  - **Nullable fields:** Individual fields and the object attribute itself support `nullable: true`
+  - **Nested objects and arrays:** Arbitrarily deep nesting via `"object"` with `fields` and `"array"` with `items`, including arrays of objects and nested arrays
+- **`$contains` query filter operator:** Filter on List attributes containing a specific element or string attributes containing a substring. Maps to DynamoDB's `contains()` function. Works with both top-level attributes and nested fields via dot-path notation.
+- **Dot-path query filtering for nested Map attributes:** Filter on fields within `@ObjectAttribute` using dot notation (e.g., `"address.city"`, `"address.geo.lat"`). All standard filter operators work with dot-paths: equality, `$beginsWith`, `$contains`, and `IN`.
+
 ## 0.4.9 - 2026-02-16
 
 ### Fixed
