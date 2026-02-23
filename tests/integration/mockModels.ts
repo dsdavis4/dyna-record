@@ -14,8 +14,10 @@ import {
   BooleanAttribute,
   NumberAttribute,
   EnumAttribute,
-  IdAttribute
+  IdAttribute,
+  ObjectAttribute
 } from "../../src/decorators";
+import type { ObjectSchema, InferObjectSchema } from "../../src/decorators";
 import { JoinTable } from "../../src/relationships";
 import type {
   PartitionKey,
@@ -23,6 +25,29 @@ import type {
   ForeignKey,
   NullableForeignKey
 } from "../../src/types";
+
+const addressSchema = {
+  street: { type: "string" },
+  city: { type: "string" },
+  zip: { type: "number", nullable: true },
+  geo: {
+    type: "object",
+    fields: {
+      lat: { type: "number" },
+      lng: { type: "number" },
+      accuracy: { type: "enum", values: ["precise", "approximate"] }
+    }
+  },
+  scores: { type: "array", items: { type: "number" } },
+  category: { type: "enum", values: ["home", "work", "other"], nullable: true }
+} as const satisfies ObjectSchema;
+
+const contactSchema = {
+  name: { type: "string" },
+  email: { type: "string" },
+  tags: { type: "array", items: { type: "string" } },
+  status: { type: "enum", values: ["active", "inactive"] }
+} as const satisfies ObjectSchema;
 
 @Table({
   name: "mock-table",
@@ -278,6 +303,12 @@ class MyClassWithAllAttributeTypes extends MockTable {
 
   @EnumAttribute({ values: ["val-1", "val-2"], nullable: true })
   public nullableEnumAttribute?: "val-1" | "val-2";
+
+  @ObjectAttribute({ schema: contactSchema })
+  public objectAttribute: InferObjectSchema<typeof contactSchema>;
+
+  @ObjectAttribute({ schema: addressSchema, nullable: true })
+  public nullableObjectAttribute?: InferObjectSchema<typeof addressSchema>;
 }
 
 @Entity
@@ -489,7 +520,48 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
+const locationSchema = {
+  city: { type: "string" },
+  state: { type: "string" }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Warehouse extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Location", schema: locationSchema })
+  public readonly location: InferObjectSchema<typeof locationSchema>;
+
+  @HasMany(() => Shipment, { foreignKey: "warehouseId" })
+  public readonly shipments: Shipment[];
+}
+
+const dimensionsSchema = {
+  weight: { type: "number" },
+  unit: { type: "string" }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Shipment extends MockTable {
+  @StringAttribute({ alias: "Destination" })
+  public readonly destination: string;
+
+  @ObjectAttribute({ alias: "Dimensions", schema: dimensionsSchema })
+  public readonly dimensions: InferObjectSchema<typeof dimensionsSchema>;
+
+  @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+  public readonly warehouseId: ForeignKey<Warehouse>;
+
+  @BelongsTo(() => Warehouse, { foreignKey: "warehouseId" })
+  public readonly warehouse: Warehouse;
+}
+
 export {
+  // Schemas
+  addressSchema,
+  contactSchema,
+  locationSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -513,6 +585,8 @@ export {
   Desk,
   Employee,
   Founder,
+  Warehouse,
+  Shipment,
   // OtherTable exports
   OtherTable,
   Teacher,

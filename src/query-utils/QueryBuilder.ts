@@ -1,5 +1,5 @@
 import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, {
   type AttributeMetadataStorage,
   type TableMetadata
@@ -9,6 +9,7 @@ import type {
   AndFilter,
   AndOrFilter,
   BeginsWithFilter,
+  ContainsFilter,
   FilterExpression,
   FilterParams,
   FilterTypes,
@@ -19,9 +20,22 @@ import type {
 import { consistentReadVal } from "../operations/utils";
 
 /**
+ * Represents the resolved components of an attribute path for use in DynamoDB expressions.
+ *
+ * @property expressionPath - The `#`-prefixed expression path (e.g., `#Address.#city`)
+ * @property names - The ExpressionAttributeNames entries for each path segment
+ * @property placeholderKey - A flat key for use in value placeholders (e.g., `Addresscity`)
+ */
+interface ResolvedPath {
+  expressionPath: string;
+  names: StringObj;
+  placeholderKey: string;
+}
+
+/**
  * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
  *
- * Utilizing metadata about the entity and its attributes, `QueryBuilder` generates the necessary DynamoDB expressions to perform precise queries, including support for conditional operators like '=', 'begins_with', and 'IN', as well as logical 'AND' and 'OR' operations.
+ * Utilizing metadata about the entity and its attributes, `QueryBuilder` generates the necessary DynamoDB expressions to perform precise queries, including support for conditional operators like '=', 'begins_with', 'contains', and 'IN', as well as logical 'AND' and 'OR' operations. Supports dot-path notation for filtering on nested Map attributes.
  */
 class QueryBuilder {
   readonly #props: QueryCommandProps;
@@ -108,8 +122,8 @@ class QueryBuilder {
     const { filter } = this.#props.options ?? {};
 
     const accumulator = (obj: StringObj, key: string): StringObj => {
-      const tableKey = this.#attributeMetadata[key].alias;
-      obj[`#${tableKey}`] = tableKey;
+      const resolved = this.resolveAttrPath(key);
+      Object.assign(obj, resolved.names);
       return obj;
     };
 
@@ -140,8 +154,8 @@ class QueryBuilder {
    * Creates the filters
    *
    * Supports 'AND' and 'OR'
-   * Currently only works for '=', 'begins_with' or 'IN' operands
-   * Does not support operations like 'contains' etc yet
+   * Supports '=', 'begins_with', 'contains', and 'IN' operands
+   * Supports dot-path notation for nested Map attributes (e.g., 'address.city')
    *
    * @param filter
    * @returns
@@ -192,34 +206,76 @@ class QueryBuilder {
   }
 
   /**
-   * Creates an AND condition
-   * @param attr
+   * Creates an AND condition.
+   * Supports equality, begins_with, contains, and IN operators.
+   * Supports dot-path notation for nested Map attributes.
+   * @param attr - The attribute key, optionally using dot notation for nested paths
    * @param value
    * @returns
    */
   private andCondition(attr: string, value: FilterTypes): FilterExpression {
-    const tableKey = this.#attributeMetadata[attr].alias;
+    const resolved = this.resolveAttrPath(attr);
 
     let condition;
-    let values: Record<string, NativeScalarAttributeValue> = {};
+    let values: Record<string, NativeAttributeValue> = {};
     if (Array.isArray(value)) {
       const mappings = value.reduce<string[]>((acc, val) => {
-        const attr = `${tableKey}${++this.#attrCounter}`;
-        values[attr] = val;
-        return acc.concat(`:${attr}`);
+        const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+        values[placeholder] = val;
+        return acc.concat(`:${placeholder}`);
       }, []);
-      condition = `#${tableKey} IN (${mappings.join()})`;
+      condition = `${resolved.expressionPath} IN (${mappings.join()})`;
     } else if (this.isBeginsWithFilter(value)) {
-      const attr = `${tableKey}${++this.#attrCounter}`;
-      condition = `begins_with(#${tableKey}, :${attr})`;
-      values = { [`${attr}`]: value.$beginsWith };
+      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      condition = `begins_with(${resolved.expressionPath}, :${placeholder})`;
+      values = { [placeholder]: value.$beginsWith };
+    } else if (this.isContainsFilter(value)) {
+      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      condition = `contains(${resolved.expressionPath}, :${placeholder})`;
+      values = { [placeholder]: value.$contains };
     } else {
-      const attr = `${tableKey}${++this.#attrCounter}`;
-      condition = `#${tableKey} = :${attr}`;
-      values = { [`${attr}`]: value };
+      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      condition = `${resolved.expressionPath} = :${placeholder}`;
+      values = { [placeholder]: value };
     }
 
     return { expression: `${condition} AND `, values };
+  }
+
+  /**
+   * Resolves an attribute key (potentially a dot-path) into its DynamoDB expression components.
+   *
+   * For simple keys (e.g., "name"), resolves via metadata alias.
+   * For dot-paths (e.g., "address.city"), resolves the first segment via metadata alias
+   * and uses remaining segments as literal Map sub-keys.
+   *
+   * @param key - The attribute key, optionally using dot notation
+   * @returns The resolved expression path, attribute names, and placeholder key
+   */
+  private resolveAttrPath(key: string): ResolvedPath {
+    const segments = key.split(".");
+    const topLevelKey = segments[0];
+    const tableKey = this.#attributeMetadata[topLevelKey].alias;
+
+    const names: StringObj = { [`#${tableKey}`]: tableKey };
+
+    if (segments.length === 1) {
+      return {
+        expressionPath: `#${tableKey}`,
+        names,
+        placeholderKey: tableKey
+      };
+    }
+
+    const subSegments = segments.slice(1);
+    for (const segment of subSegments) {
+      names[`#${segment}`] = segment;
+    }
+
+    const expressionPath = `#${tableKey}.${subSegments.map(s => `#${s}`).join(".")}`;
+    const placeholderKey = `${tableKey}${subSegments.join("")}`;
+
+    return { expressionPath, names, placeholderKey };
   }
 
   /**
@@ -267,6 +323,15 @@ class QueryBuilder {
    */
   private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
     return (filter as BeginsWithFilter).$beginsWith !== undefined;
+  }
+
+  /**
+   * Type guard to check if its a ContainsFilter
+   * @param filter
+   * @returns
+   */
+  private isContainsFilter(filter: FilterTypes): filter is ContainsFilter {
+    return (filter as ContainsFilter).$contains !== undefined;
   }
 
   /**

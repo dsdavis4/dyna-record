@@ -15,7 +15,8 @@ import {
   Address,
   PhoneBook,
   Desk,
-  User
+  User,
+  MyClassWithAllAttributeTypes
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -230,6 +231,49 @@ describe("FindById", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
+    });
+
+    it("will deserialize an entity with object attributes from JSON strings", async () => {
+      expect.assertions(3);
+
+      const objectVal = {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"],
+        status: "active"
+      };
+      const nullableObjectVal = {
+        street: "123 Main St",
+        city: "Springfield",
+        zip: 12345,
+        geo: { lat: 40.7128, lng: -74.006 },
+        scores: [95, 87, 100]
+      };
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "MyClassWithAllAttributeTypes#123",
+          SK: "MyClassWithAllAttributeTypes",
+          Id: "123",
+          Type: "MyClassWithAllAttributeTypes",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          stringAttribute: "some-string",
+          dateAttribute: "2023-10-16T03:31:35.918Z",
+          boolAttribute: true,
+          numberAttribute: 9,
+          foreignKeyAttribute: "111",
+          enumAttribute: "val-1",
+          objectAttribute: objectVal,
+          nullableObjectAttribute: nullableObjectVal
+        }
+      });
+
+      const result = await MyClassWithAllAttributeTypes.findById("123");
+
+      expect(result).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(result?.objectAttribute).toEqual(objectVal);
+      expect(result?.nullableObjectAttribute).toEqual(nullableObjectVal);
     });
 
     it("will return undefined if it doesn't find the record", async () => {
@@ -1343,6 +1387,144 @@ describe("FindById", () => {
       it("will not consistentRead as a non-boolean", async () => {
         // @ts-expect-error: consistentRead must be a boolean
         await PaymentMethod.findById("789", { consistentRead: "not-boolean" });
+      });
+
+      it("return value includes objectAttribute with correct nested types", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: objectAttribute is accessible on return value
+          Logger.log(result.objectAttribute);
+
+          // @ts-expect-no-error: nested string field is accessible
+          Logger.log(result.objectAttribute.name);
+
+          // @ts-expect-no-error: nested string field is accessible
+          Logger.log(result.objectAttribute.email);
+
+          // @ts-expect-no-error: nested array field is accessible
+          Logger.log(result.objectAttribute.tags);
+
+          // @ts-expect-no-error: array item is a string
+          Logger.log(result.objectAttribute.tags[0]);
+        }
+      });
+
+      it("return value objectAttribute fields have correct types (rejects wrong type assignments)", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-error: name is string, not number
+          const nameAsNum: number = result.objectAttribute.name;
+          Logger.log(nameAsNum);
+
+          // @ts-expect-error: tags is string[], not number[]
+          const tagsAsNums: number[] = result.objectAttribute.tags;
+          Logger.log(tagsAsNums);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(result.objectAttribute.nonExistent);
+        }
+      });
+
+      it("return value nullableObjectAttribute requires optional chaining", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
+          Logger.log(result.nullableObjectAttribute.city);
+        }
+      });
+
+      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: optional chaining allows safe access
+          Logger.log(result.nullableObjectAttribute?.street);
+
+          // @ts-expect-no-error: nested string field
+          Logger.log(result.nullableObjectAttribute?.city);
+
+          // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+          Logger.log(result.nullableObjectAttribute?.zip);
+
+          // @ts-expect-no-error: nested object field
+          Logger.log(result.nullableObjectAttribute?.geo.lat);
+
+          // @ts-expect-no-error: nested object field
+          Logger.log(result.nullableObjectAttribute?.geo.lng);
+
+          // @ts-expect-no-error: nested array field
+          Logger.log(result.nullableObjectAttribute?.scores);
+
+          // @ts-expect-no-error: array item is a number
+          Logger.log(result.nullableObjectAttribute?.scores[0]);
+        }
+      });
+
+      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-error: city is string, not number
+          const cityAsNum: number = result.nullableObjectAttribute.city;
+          Logger.log(cityAsNum);
+
+          // @ts-expect-error: geo.lat is number, not string
+          const latAsStr: string = result.nullableObjectAttribute.geo.lat;
+          Logger.log(latAsStr);
+
+          // @ts-expect-error: scores is number[], not string[]
+          const scoresAsStrs: string[] = result.nullableObjectAttribute.scores;
+          Logger.log(scoresAsStrs);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(result.nullableObjectAttribute.nonExistent);
+        }
+      });
+
+      it("return value objectAttribute enum field is typed as union of values", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: status is "active" | "inactive"
+          const status: "active" | "inactive" = result.objectAttribute.status;
+          Logger.log(status);
+
+          // @ts-expect-error: status is "active" | "inactive", not number
+          const statusAsNum: number = result.objectAttribute.status;
+          Logger.log(statusAsNum);
+        }
+      });
+
+      it("return value nested objectAttribute enum field is typed correctly", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: accuracy is "precise" | "approximate"
+          const acc: "precise" | "approximate" =
+            result.nullableObjectAttribute.geo.accuracy;
+          Logger.log(acc);
+
+          // @ts-expect-error: accuracy is "precise" | "approximate", not number
+          const accAsNum: number = result.nullableObjectAttribute.geo.accuracy;
+          Logger.log(accAsNum);
+        }
+      });
+
+      it("return value nullable enum field supports null and undefined", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
+        Logger.log(result?.nullableObjectAttribute?.category);
+
+        if (result?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
+          const cat: "home" | "work" | "other" | null | undefined =
+            result.nullableObjectAttribute.category;
+          Logger.log(cat);
+        }
       });
     });
 

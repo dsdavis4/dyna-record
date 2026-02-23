@@ -20,6 +20,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Create](#create)
   - [FindById](#findbyid)
   - [Query](#query)
+    - [Filtering on Object Attributes](#filtering-on-object-attributes)
   - [Update](#update)
   - [Delete](#delete)
 - [Type Safety Features](#type-safety-features)
@@ -144,6 +145,7 @@ Use the attribute decorators below to define attributes on a model. The decorato
   - [@DateAttribute](https://dyna-record.com/functions/DateAttribute.html)
   - [@EnumAttribute](https://dyna-record.com/functions/EnumAttribute.html)
   - [@IdAttribute](https://dyna-record.com/functions/IdAttribute.html)
+  - [@ObjectAttribute](https://dyna-record.com/functions/ObjectAttribute.html)
 
 - The [alias](https://dyna-record.com/interfaces/AttributeOptions.html#alias) option allows you to specify the attribute name as it appears in the DynamoDB table, different from your class property name.
 - Set nullable attributes as optional for optimal type safety
@@ -164,6 +166,78 @@ class Student extends MyTable {
   public someAttribute?: number; // Mark as optional
 }
 ```
+
+#### @ObjectAttribute
+
+Use `@ObjectAttribute` to define structured, typed object attributes on an entity. Objects are validated at runtime and stored as native DynamoDB Map types.
+
+Define the shape using an `ObjectSchema` and derive the TypeScript type with `InferObjectSchema`:
+
+```typescript
+import { Entity, ObjectAttribute } from "dyna-record";
+import type { ObjectSchema, InferObjectSchema } from "dyna-record";
+
+const addressSchema = {
+  street: { type: "string" },
+  city: { type: "string" },
+  zip: { type: "number", nullable: true },
+  tags: { type: "array", items: { type: "string" } },
+  category: { type: "enum", values: ["home", "work", "other"] },
+  geo: {
+    type: "object",
+    fields: {
+      lat: { type: "number" },
+      lng: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Store extends MyTable {
+  @ObjectAttribute({ alias: "Address", schema: addressSchema })
+  public readonly address: InferObjectSchema<typeof addressSchema>;
+
+  @ObjectAttribute({ alias: "Metadata", schema: metaSchema, nullable: true })
+  public readonly metadata?: InferObjectSchema<typeof metaSchema>;
+}
+```
+
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
+- **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
+- **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
+- **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
+- **Storage:** Objects are stored as native DynamoDB Map types
+- **Updates:** Updates replace the entire object (not a partial merge)
+- **Filtering:** Object attributes support dot-path filtering in queries — see [Filtering on Object Attributes](#filtering-on-object-attributes)
+
+##### Enum fields
+
+Use `{ type: "enum", values: [...] }` to define a field that only accepts specific string values. The TypeScript type is inferred as a union of the provided values, and invalid values are rejected at runtime via Zod validation.
+
+Enum fields can appear at any nesting level — top-level, inside nested objects, or as array items:
+
+```typescript
+const schema = {
+  // Top-level enum: inferred as "active" | "inactive"
+  status: { type: "enum", values: ["active", "inactive"] },
+
+  // Nullable enum: inferred as "home" | "work" | "other" | null | undefined
+  category: { type: "enum", values: ["home", "work", "other"], nullable: true },
+
+  // Enum inside a nested object
+  geo: {
+    type: "object",
+    fields: {
+      accuracy: { type: "enum", values: ["precise", "approximate"] }
+    }
+  },
+
+  // Array of enum values: inferred as ("admin" | "user")[]
+  roles: { type: "array", items: { type: "enum", values: ["admin", "user"] } }
+} as const satisfies ObjectSchema;
+```
+
+The schema must be declared with `as const satisfies ObjectSchema` so TypeScript preserves the literal string values for type inference. At runtime, providing an invalid value (e.g., `status: "unknown"`) throws a `ValidationError`.
 
 ### Foreign Keys
 
@@ -494,6 +568,69 @@ const result = await Course.query(
     }
   }
 );
+```
+
+#### Filtering on Object Attributes
+
+When using `@ObjectAttribute`, you can filter on nested Map fields using **dot-path notation** and check List membership using the **`$contains`** operator.
+
+##### Dot-path filtering on nested fields
+
+Use dot notation to filter on fields within an `@ObjectAttribute`. All standard filter operators work with dot-paths: equality, `$beginsWith`, and `IN` (array of values).
+
+```typescript
+// Equality on a nested field
+const result = await Store.query("123", {
+  filter: { "address.city": "Springfield" }
+});
+
+// $beginsWith on a nested field
+const result = await Store.query("123", {
+  filter: { "address.street": { $beginsWith: "123" } }
+});
+
+// IN on a nested field
+const result = await Store.query("123", {
+  filter: { "address.city": ["Springfield", "Shelbyville"] }
+});
+
+// Deeply nested fields
+const result = await Store.query("123", {
+  filter: { "address.geo.lat": 40 }
+});
+```
+
+##### `$contains` operator
+
+Use `$contains` to check if a List attribute contains a specific element, or if a string attribute contains a substring. Works on both top-level attributes and nested fields via dot-path.
+
+```typescript
+// Check if a List contains an element
+const result = await Store.query("123", {
+  filter: { "address.tags": { $contains: "home" } }
+});
+
+// Check if a top-level string contains a substring
+const result = await Store.query("123", {
+  filter: { name: { $contains: "john" } }
+});
+```
+
+##### Combining dot-path and `$contains` with AND/OR
+
+Dot-path filters and `$contains` work with all existing AND/OR filter combinations.
+
+```typescript
+const result = await Store.query("123", {
+  filter: {
+    "address.city": "Springfield",
+    "address.geo.lat": 40,
+    $or: [
+      { "address.tags": { $contains: "home" } },
+      { name: { $beginsWith: "Main" } }
+    ]
+  }
+});
 ```
 
 ### Querying on an index

@@ -1,4 +1,4 @@
-import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type {
   AttributeMetadata,
   BelongsToRelationship,
@@ -91,12 +91,12 @@ export type KeysAttributeMetadataOptions = MakeOptional<
 /**
  * Function that takes a attribute from a Dynamo table item, and serialize it to a non-Dynamo native type (EX: Date)
  */
-export type EntitySerializer = (param: NativeScalarAttributeValue) => any;
+export type EntitySerializer = (param: NativeAttributeValue) => any;
 
 /**
  * Function that takes a attribute from an Entity which is not a native Dynamo type and serializes it a type that is supported by Dynamo
  */
-export type TableSerializer = (param: any) => NativeScalarAttributeValue;
+export type TableSerializer = (param: any) => NativeAttributeValue;
 
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item

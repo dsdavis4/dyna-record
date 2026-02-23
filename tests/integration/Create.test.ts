@@ -19,7 +19,9 @@ import {
   type Desk,
   type Assignment,
   type Student,
-  Employee
+  Employee,
+  type Warehouse,
+  Shipment
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -269,7 +271,13 @@ describe("Create", () => {
       numberAttribute: 9,
       nullableNumberAttribute: 10,
       enumAttribute: "val-1",
-      nullableEnumAttribute: "val-2"
+      nullableEnumAttribute: "val-2",
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"],
+        status: "active"
+      }
     });
 
     expect(instance).toEqual({
@@ -289,6 +297,12 @@ describe("Create", () => {
       nullableNumberAttribute: 10,
       enumAttribute: "val-1",
       nullableEnumAttribute: "val-2",
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"],
+        status: "active"
+      },
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
@@ -319,6 +333,12 @@ describe("Create", () => {
                   nullableNumberAttribute: 10,
                   nullableStringAttribute: "2",
                   numberAttribute: 9,
+                  objectAttribute: {
+                    name: "John",
+                    email: "john@example.com",
+                    tags: ["work", "vip"],
+                    status: "active"
+                  },
                   stringAttribute: "1"
                 },
                 TableName: "mock-table"
@@ -450,6 +470,13 @@ describe("Create", () => {
           message: "Required",
           path: ["enumAttribute"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Required",
+          path: ["objectAttribute"],
+          received: "undefined"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -483,7 +510,13 @@ describe("Create", () => {
         nullableForeignKeyAttribute: "missing-optional-customer",
         boolAttribute: true,
         numberAttribute: 9,
-        enumAttribute: "val-1"
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"],
+          status: "active"
+        }
       });
     } catch (e: any) {
       expect(e.constructor.name).toEqual("TransactionWriteFailedError");
@@ -515,6 +548,12 @@ describe("Create", () => {
                     foreignKeyAttribute: "missing-customer",
                     nullableForeignKeyAttribute: "missing-optional-customer",
                     numberAttribute: 9,
+                    objectAttribute: {
+                      name: "John",
+                      email: "john@example.com",
+                      tags: ["work", "vip"],
+                      status: "active"
+                    },
                     stringAttribute: "1"
                   },
                   TableName: "mock-table"
@@ -651,6 +690,484 @@ describe("Create", () => {
           options: ["val-1", "val-2"],
           path: ["nullableEnumAttribute"],
           received: "val-4"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Required",
+          path: ["objectAttribute"],
+          received: "undefined"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if objectAttribute fields are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: 123,
+          email: true,
+          tags: "not-array"
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["objectAttribute", "name"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received boolean",
+          path: ["objectAttribute", "email"],
+          received: "boolean"
+        },
+        {
+          code: "invalid_type",
+          expected: "array",
+          message: "Expected array, received string",
+          path: ["objectAttribute", "tags"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if objectAttribute array items are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["valid", 123, true]
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["objectAttribute", "tags", 1],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received boolean",
+          path: ["objectAttribute", "tags", 2],
+          received: "boolean"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if nullableObjectAttribute nested object and array fields are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: "bad", lng: "bad" },
+          scores: ["bad"]
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableObjectAttribute", "geo", "lat"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableObjectAttribute", "geo", "lng"],
+          received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "'precise' | 'approximate'",
+          message: "Required",
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received string",
+          path: ["nullableObjectAttribute", "scores", 0],
+          received: "string"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if nullableObjectAttribute top-level fields are the wrong type", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: 123,
+          city: false,
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [1]
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received number",
+          path: ["nullableObjectAttribute", "street"],
+          received: "number"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received boolean",
+          path: ["nullableObjectAttribute", "city"],
+          received: "boolean"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if non-nullable objectAttribute fields are set to null", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: null,
+          email: null,
+          tags: null
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received null",
+          path: ["objectAttribute", "name"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received null",
+          path: ["objectAttribute", "email"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "array",
+          message: "Expected array, received null",
+          path: ["objectAttribute", "tags"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if non-nullable nullableObjectAttribute fields are set to null", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: null,
+          city: null,
+          zip: null,
+          geo: null,
+          scores: null
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received null",
+          path: ["nullableObjectAttribute", "street"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "string",
+          message: "Expected string, received null",
+          path: ["nullableObjectAttribute", "city"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Expected object, received null",
+          path: ["nullableObjectAttribute", "geo"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "array",
+          message: "Expected array, received null",
+          path: ["nullableObjectAttribute", "scores"],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if non-nullable nested fields within nullableObjectAttribute are set to null", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: null, lng: null },
+          scores: [null]
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received null",
+          path: ["nullableObjectAttribute", "geo", "lat"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received null",
+          path: ["nullableObjectAttribute", "geo", "lng"],
+          received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "'precise' | 'approximate'",
+          message: "Required",
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "number",
+          message: "Expected number, received null",
+          path: ["nullableObjectAttribute", "scores", 0],
+          received: "null"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if objectAttribute enum field has an invalid value", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "bad-value"
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'active' | 'inactive', received 'bad-value'",
+          options: ["active", "inactive"],
+          path: ["objectAttribute", "status"],
+          received: "bad-value"
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    }
+  });
+
+  it("will error if nullableObjectAttribute nested enum field has an invalid value", async () => {
+    expect.assertions(5);
+
+    try {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123" as any,
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "bad-value" },
+          scores: [1]
+        }
+      } as any);
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
+          options: ["precise", "approximate"],
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "bad-value"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -1921,6 +2438,133 @@ describe("Create", () => {
     });
   });
 
+  it("will denormalize object attributes to related entity partitions (HasMany with ObjectAttribute)", async () => {
+    expect.assertions(5);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const warehouse: MockTableEntityTableItem<Warehouse> = {
+      PK: "Warehouse#123",
+      SK: "Warehouse",
+      Id: "123",
+      Type: "Warehouse",
+      Name: "Main Warehouse",
+      Location: { city: "Springfield", state: "IL" },
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: warehouse }]
+    });
+
+    const shipment = await Shipment.create({
+      destination: "Chicago",
+      warehouseId: "123",
+      dimensions: { weight: 50, unit: "kg" }
+    });
+
+    const newShipmentTableAttributes = {
+      Id: "uuid1",
+      Type: "Shipment",
+      Destination: "Chicago",
+      Dimensions: { weight: 50, unit: "kg" },
+      WarehouseId: "123",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z"
+    };
+
+    expect(shipment).toEqual({
+      pk: "Shipment#uuid1",
+      sk: "Shipment",
+      id: "uuid1",
+      type: "Shipment",
+      destination: "Chicago",
+      dimensions: { weight: 50, unit: "kg" },
+      warehouseId: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(shipment).toBeInstanceOf(Shipment);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Prefetch associated records to denormalize
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Warehouse#123", SK: "Warehouse" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Put the new Shipment
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Shipment#uuid1",
+                  SK: "Shipment",
+                  ...newShipmentTableAttributes
+                }
+              }
+            },
+            // Check that the associated Warehouse exists
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Warehouse#123", SK: "Warehouse" },
+                TableName: "mock-table"
+              }
+            },
+            // Denormalize the Shipment to the Warehouse partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Warehouse#123",
+                  SK: "Shipment#uuid1",
+                  ...newShipmentTableAttributes
+                }
+              }
+            },
+            // Denormalize the Warehouse (with ObjectAttribute) to the Shipment partition
+            {
+              Put: {
+                TableName: "mock-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Shipment#uuid1",
+                  SK: "Warehouse",
+                  Id: "123",
+                  Type: "Warehouse",
+                  Name: "Main Warehouse",
+                  Location: { city: "Springfield", state: "IL" },
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   describe("error handling", () => {
     describe("will return an error if an entity with that id already exists", () => {
       it("when there is a id attribute alias", async () => {
@@ -2276,7 +2920,13 @@ describe("Create", () => {
             numberAttribute: 9,
             nullableNumberAttribute: 10,
             enumAttribute: "val-1",
-            nullableEnumAttribute: "val-2"
+            nullableEnumAttribute: "val-2",
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"],
+              status: "active"
+            }
           },
           { referentialIntegrityCheck: false }
         );
@@ -2298,6 +2948,12 @@ describe("Create", () => {
           nullableNumberAttribute: 10,
           enumAttribute: "val-1",
           nullableEnumAttribute: "val-2",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work", "vip"],
+            status: "active"
+          },
           createdAt: new Date("2023-10-16T03:31:35.918Z"),
           updatedAt: new Date("2023-10-16T03:31:35.918Z")
         });
@@ -2330,6 +2986,12 @@ describe("Create", () => {
                       nullableNumberAttribute: 10,
                       nullableStringAttribute: "2",
                       numberAttribute: 9,
+                      objectAttribute: {
+                        name: "John",
+                        email: "john@example.com",
+                        tags: ["work", "vip"],
+                        status: "active"
+                      },
                       stringAttribute: "1"
                     },
                     TableName: "mock-table"
@@ -2523,7 +3185,13 @@ describe("Create", () => {
             nullableForeignKeyAttribute: "missing-optional-customer",
             boolAttribute: true,
             numberAttribute: 9,
-            enumAttribute: "val-1"
+            enumAttribute: "val-1",
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work", "vip"],
+              status: "active"
+            }
           },
           { referentialIntegrityCheck: false }
         );
@@ -2551,6 +3219,12 @@ describe("Create", () => {
                   foreignKeyAttribute: "missing-customer",
                   nullableForeignKeyAttribute: "missing-optional-customer",
                   numberAttribute: 9,
+                  objectAttribute: {
+                    name: "John",
+                    email: "john@example.com",
+                    tags: ["work", "vip"],
+                    status: "active"
+                  },
                   stringAttribute: "1"
                 },
                 TableName: "mock-table"
@@ -2800,6 +3474,587 @@ describe("Create", () => {
           invalidOption: true
         }
       );
+    });
+
+    it("objectAttribute requires the correct shape", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        // @ts-expect-no-error: correct object shape is accepted
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        }
+      });
+    });
+
+    it("objectAttribute is required on create", async () => {
+      // @ts-expect-error: objectAttribute is required (non-nullable)
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1"
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("objectAttribute does not accept wrong types for string fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          // @ts-expect-error: name must be a string, not number
+          name: 123,
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("objectAttribute does not accept wrong types for array fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          // @ts-expect-error: tags must be string[], not string
+          tags: "not-array"
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("objectAttribute does not accept wrong item types in arrays", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          // @ts-expect-error: tags must be string[], not number[]
+          tags: [123, 456]
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("objectAttribute does not accept missing required fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        // @ts-expect-error: email and tags are missing
+        objectAttribute: {
+          name: "John"
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("objectAttribute does not accept extra fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active",
+          // @ts-expect-error: extra is not in the schema
+          extra: "not-allowed"
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("nullableObjectAttribute is optional on create", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        }
+        // @ts-expect-no-error: nullableObjectAttribute is optional
+      });
+    });
+
+    it("nullableObjectAttribute accepts correct nested object shape", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        // @ts-expect-no-error: correct nested shape is accepted
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95, 87]
+        }
+      });
+    });
+
+    it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: {
+            // @ts-expect-error: lat must be a number, not string
+            lat: "bad",
+            lng: 2,
+            accuracy: "precise"
+          },
+          scores: [95]
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          // @ts-expect-error: scores must be number[], not string[]
+          scores: ["bad"]
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        // @ts-expect-no-error: zip is nullable so it can be null or omitted
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          zip: null,
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
+        }
+      });
+    });
+
+    it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          // @ts-expect-error: street is non-nullable, cannot be null
+          street: null,
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    it("nullableObjectAttribute does not accept missing required nested fields", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active"
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          // @ts-expect-error: geo is missing required field lng
+          geo: { lat: 1 },
+          scores: [95]
+        }
+      }).catch(() => {
+        Logger.log("Testing types");
+      });
+    });
+
+    describe("return value object attribute types", () => {
+      it("return value includes objectAttribute with correct nested types", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-no-error: objectAttribute is accessible on return value
+        Logger.log(res.objectAttribute);
+
+        // @ts-expect-no-error: nested string field is accessible
+        Logger.log(res.objectAttribute.name);
+
+        // @ts-expect-no-error: nested string field is accessible
+        Logger.log(res.objectAttribute.email);
+
+        // @ts-expect-no-error: nested array field is accessible
+        Logger.log(res.objectAttribute.tags);
+
+        // @ts-expect-no-error: array item is a string
+        Logger.log(res.objectAttribute.tags[0]);
+      });
+
+      it("return value objectAttribute fields have correct types (rejects wrong type assignments)", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-error: name is string, not number
+        const nameAsNum: number = res.objectAttribute.name;
+        Logger.log(nameAsNum);
+
+        // @ts-expect-error: tags is string[], not number[]
+        const tagsAsNums: number[] = res.objectAttribute.tags;
+        Logger.log(tagsAsNums);
+      });
+
+      it("return value objectAttribute does not have extra fields", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-error: nonExistent is not in the schema
+        Logger.log(res.objectAttribute.nonExistent);
+      });
+
+      it("return value nullableObjectAttribute is optional (may be undefined)", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        try {
+          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
+          Logger.log(res.nullableObjectAttribute.city);
+        } catch {
+          Logger.log("Testing types");
+        }
+      });
+
+      it("return value nullableObjectAttribute is accessible with optional chaining", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-no-error: optional chaining allows safe access
+        Logger.log(res.nullableObjectAttribute?.street);
+
+        // @ts-expect-no-error: nested string field
+        Logger.log(res.nullableObjectAttribute?.city);
+
+        // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+        Logger.log(res.nullableObjectAttribute?.zip);
+
+        // @ts-expect-no-error: nested object field
+        Logger.log(res.nullableObjectAttribute?.geo.lat);
+
+        // @ts-expect-no-error: nested object field
+        Logger.log(res.nullableObjectAttribute?.geo.lng);
+
+        // @ts-expect-no-error: nested array field
+        Logger.log(res.nullableObjectAttribute?.scores);
+
+        // @ts-expect-no-error: array item is a number
+        Logger.log(res.nullableObjectAttribute?.scores[0]);
+      });
+
+      it("return value nullableObjectAttribute nested fields have correct types", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        if (res.nullableObjectAttribute !== undefined) {
+          // @ts-expect-error: city is string, not number
+          const cityAsNum: number = res.nullableObjectAttribute.city;
+          Logger.log(cityAsNum);
+
+          // @ts-expect-error: geo.lat is number, not string
+          const latAsStr: string = res.nullableObjectAttribute.geo.lat;
+          Logger.log(latAsStr);
+
+          // @ts-expect-error: scores is number[], not string[]
+          const scoresAsStrs: string[] = res.nullableObjectAttribute.scores;
+          Logger.log(scoresAsStrs);
+
+          // @ts-expect-error: nonExistent is not in the schema
+          Logger.log(res.nullableObjectAttribute.nonExistent);
+        }
+      });
+
+      it("return value objectAttribute enum field is typed as union of values", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-no-error: status is "active" | "inactive"
+        const status: "active" | "inactive" = res.objectAttribute.status;
+        Logger.log(status);
+
+        // @ts-expect-error: status is "active" | "inactive", not number
+        const statusAsNum: number = res.objectAttribute.status;
+        Logger.log(statusAsNum);
+      });
+
+      it("return value objectAttribute rejects wrong enum value on create", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            // @ts-expect-error: "bad-value" is not a valid enum value
+            status: "bad-value"
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("return value nullableObjectAttribute nullable enum field supports null and undefined", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
+        Logger.log(res.nullableObjectAttribute?.category);
+
+        if (res.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
+          const cat: "home" | "work" | "other" | null | undefined =
+            res.nullableObjectAttribute.category;
+          Logger.log(cat);
+        }
+      });
+
+      it("return value nested objectAttribute enum field is typed correctly", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active"
+          }
+        });
+
+        // @ts-expect-no-error: accuracy is accessible on geo via optional chaining
+        Logger.log(res.nullableObjectAttribute?.geo.accuracy);
+
+        if (res.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: accuracy is "precise" | "approximate"
+          const acc: "precise" | "approximate" =
+            res.nullableObjectAttribute.geo.accuracy;
+          Logger.log(acc);
+
+          // @ts-expect-error: accuracy is "precise" | "approximate", not number
+          const accAsNum: number = res.nullableObjectAttribute.geo.accuracy;
+          Logger.log(accAsNum);
+        }
+      });
     });
   });
 });

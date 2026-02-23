@@ -1,7 +1,6 @@
 import type DynaRecord from "./DynaRecord";
 import type { DynamoTableItem, Nullable } from "./types";
 import Metadata from "./metadata";
-import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type EntityAttributesOnly } from "./operations";
 
 /**
@@ -28,7 +27,7 @@ export const entityToTableItem = <T extends DynaRecord>(
             ? val
             : serializers.toTableAttribute(val);
 
-        acc[alias] = value as NativeScalarAttributeValue;
+        acc[alias] = value;
       }
       return acc;
     },

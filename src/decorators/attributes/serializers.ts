@@ -1,4 +1,4 @@
-import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
 /**
  * Provides serialization and deserialization functions for date attributes when interfacing with a DynamoDB table, enabling the conversion between the table's string-based date representation and JavaScript's `Date` object. DynamoDb dos not support Date types naturally, this utility allows for Date attributes to be serialized to an entity and stored as ISO strings in Dynamo.
@@ -8,7 +8,7 @@ import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
  *
  */
 export const dateSerializer = {
-  toEntityAttribute: (val: NativeScalarAttributeValue) => {
+  toEntityAttribute: (val: NativeAttributeValue) => {
     if (typeof val === "string") {
       return new Date(val);
     }

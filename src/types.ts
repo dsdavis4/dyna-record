@@ -1,4 +1,4 @@
-import { type NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
 import type DynaRecord from "./DynaRecord";
 
@@ -44,7 +44,7 @@ export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 /**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
  */
-export type DynamoTableItem = Record<string, NativeScalarAttributeValue>;
+export type DynamoTableItem = Record<string, NativeAttributeValue>;
 
 /**
  * A utility type for objects with string keys and string values.
