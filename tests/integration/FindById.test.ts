@@ -239,7 +239,8 @@ describe("FindById", () => {
       const objectVal = {
         name: "John",
         email: "john@example.com",
-        tags: ["work", "vip"]
+        tags: ["work", "vip"],
+        status: "active"
       };
       const nullableObjectVal = {
         street: "123 Main St",
@@ -1480,6 +1481,49 @@ describe("FindById", () => {
 
           // @ts-expect-error: nonExistent is not in the schema
           Logger.log(result.nullableObjectAttribute.nonExistent);
+        }
+      });
+
+      it("return value objectAttribute enum field is typed as union of values", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: status is "active" | "inactive"
+          const status: "active" | "inactive" = result.objectAttribute.status;
+          Logger.log(status);
+
+          // @ts-expect-error: status is "active" | "inactive", not number
+          const statusAsNum: number = result.objectAttribute.status;
+          Logger.log(statusAsNum);
+        }
+      });
+
+      it("return value nested objectAttribute enum field is typed correctly", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: accuracy is "precise" | "approximate"
+          const acc: "precise" | "approximate" =
+            result.nullableObjectAttribute.geo.accuracy;
+          Logger.log(acc);
+
+          // @ts-expect-error: accuracy is "precise" | "approximate", not number
+          const accAsNum: number = result.nullableObjectAttribute.geo.accuracy;
+          Logger.log(accAsNum);
+        }
+      });
+
+      it("return value nullable enum field supports null and undefined", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
+        Logger.log(result?.nullableObjectAttribute?.category);
+
+        if (result?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
+          const cat: "home" | "work" | "other" | null | undefined =
+            result.nullableObjectAttribute.category;
+          Logger.log(cat);
         }
       });
     });

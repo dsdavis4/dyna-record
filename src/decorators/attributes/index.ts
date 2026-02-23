@@ -16,5 +16,6 @@ export type {
   FieldDef,
   PrimitiveFieldDef,
   ObjectFieldDef,
-  ArrayFieldDef
+  ArrayFieldDef,
+  EnumFieldDef
 } from "./types";

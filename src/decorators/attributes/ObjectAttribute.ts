@@ -8,10 +8,26 @@ import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
  * Options for the `@ObjectAttribute` decorator.
  * Extends {@link AttributeOptions} with a required `schema` field describing the object shape.
  *
+ * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, and arrays.
+ *
  * @template S The specific ObjectSchema type used for type inference
+ *
+ * @example
+ * ```typescript
+ * @ObjectAttribute({ alias: "Address", schema: addressSchema })
+ * public readonly address: InferObjectSchema<typeof addressSchema>;
+ *
+ * @ObjectAttribute({ alias: "Meta", schema: metaSchema, nullable: true })
+ * public readonly meta?: InferObjectSchema<typeof metaSchema>;
+ * ```
  */
 export interface ObjectAttributeOptions<S extends ObjectSchema>
   extends AttributeOptions {
+  /**
+   * The {@link ObjectSchema} defining the structure of the object attribute.
+   *
+   * Must be declared with `as const satisfies ObjectSchema` for accurate type inference.
+   */
   schema: S;
 }
 
@@ -32,7 +48,20 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 }
 
 /**
- * Converts a single {@link FieldDef} to the corresponding Zod type
+ * Converts a single {@link FieldDef} to the corresponding Zod type for runtime validation.
+ *
+ * Handles all field types:
+ * - `"object"` → recursively builds a `z.object()` via {@link objectSchemaToZod}
+ * - `"array"` → `z.array()` wrapping a recursive call for the `items` type
+ * - `"string"` → `z.string()`
+ * - `"number"` → `z.number()`
+ * - `"boolean"` → `z.boolean()`
+ * - `"enum"` → `z.enum(values)` for string literal validation
+ *
+ * When `nullable` is `true`, wraps the type with `.nullable().optional()`.
+ *
+ * @param fieldDef The field definition to convert
+ * @returns A ZodType that validates values matching the field definition
  */
 function fieldDefToZod(fieldDef: FieldDef): ZodType {
   let zodType: ZodType;
@@ -52,6 +81,9 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
       break;
     case "boolean":
       zodType = z.boolean();
+      break;
+    case "enum":
+      zodType = z.enum(fieldDef.values);
       break;
     default: {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -75,6 +107,14 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  *
  * Can be set to nullable via decorator props.
  *
+ * **Supported field types within the schema:**
+ * - `"string"`, `"number"`, `"boolean"` — primitives
+ * - `"enum"` — string literal unions, validated at runtime via `z.enum()`
+ * - `"object"` — nested objects (arbitrarily deep)
+ * - `"array"` — lists of any field type
+ *
+ * All field types support `nullable: true` to allow `null` values.
+ *
  * @template T The class type that the decorator is applied to
  * @template S The ObjectSchema type used for validation and type inference
  * @template K The inferred TypeScript type from the schema
@@ -87,7 +127,16 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * const addressSchema = {
  *   street: { type: "string" },
  *   city: { type: "string" },
- *   zip: { type: "number", nullable: true }
+ *   zip: { type: "number", nullable: true },
+ *   category: { type: "enum", values: ["home", "work", "other"] },
+ *   geo: {
+ *     type: "object",
+ *     fields: {
+ *       lat: { type: "number" },
+ *       lng: { type: "number" },
+ *       accuracy: { type: "enum", values: ["precise", "approximate"] }
+ *     }
+ *   }
  * } as const satisfies ObjectSchema;
  *
  * class MyEntity extends MyTable {
@@ -97,6 +146,10 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  *   @ObjectAttribute({ alias: 'Meta', schema: metaSchema, nullable: true })
  *   public meta?: InferObjectSchema<typeof metaSchema>;
  * }
+ *
+ * // TypeScript infers:
+ * // address.category → "home" | "work" | "other"
+ * // address.geo.accuracy → "precise" | "approximate"
  * ```
  *
  * Object attributes support filtering in queries using dot-path notation for nested fields

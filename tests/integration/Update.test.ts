@@ -472,7 +472,8 @@ describe("Update", () => {
                     ":objectAttribute": {
                       name: "John",
                       email: "john@example.com",
-                      tags: ["work", "vip"]
+                      tags: ["work", "vip"],
+                      status: "active"
                     },
                     ":stringAttribute": "1"
                   },
@@ -530,7 +531,8 @@ describe("Update", () => {
           objectAttribute: {
             name: "John",
             email: "john@example.com",
-            tags: ["work", "vip"]
+            tags: ["work", "vip"],
+            status: "active"
           }
         })
       ).toBeUndefined();
@@ -560,7 +562,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "Old",
           email: "old@example.com",
-          tags: ["old-tag"]
+          tags: ["old-tag"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -582,7 +585,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         }
       });
 
@@ -603,7 +607,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
@@ -629,7 +634,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "Old",
           email: "old@example.com",
-          tags: ["old-tag"]
+          tags: ["old-tag"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1297,7 +1303,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1349,6 +1356,13 @@ describe("Update", () => {
           message: "Expected array, received string",
           path: ["objectAttribute", "tags"],
           received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1389,7 +1403,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1427,6 +1442,13 @@ describe("Update", () => {
           message: "Expected string, received boolean",
           path: ["objectAttribute", "tags", 2],
           received: "boolean"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1467,7 +1489,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1505,6 +1528,13 @@ describe("Update", () => {
           message: "Expected number, received string",
           path: ["nullableObjectAttribute", "geo", "lng"],
           received: "string"
+        },
+        {
+          code: "invalid_type",
+          expected: "'precise' | 'approximate'",
+          message: "Required",
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "undefined"
         },
         {
           code: "invalid_type",
@@ -1553,7 +1583,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1607,7 +1638,7 @@ describe("Update", () => {
           nullableObjectAttribute: {
             street: 123,
             city: false,
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [1]
           }
         } as any);
@@ -1633,7 +1664,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1644,7 +1676,7 @@ describe("Update", () => {
           nullableObjectAttribute: {
             street: 123,
             city: false,
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [1]
           }
         } as any);
@@ -1679,6 +1711,13 @@ describe("Update", () => {
           message: "Expected array, received null",
           path: ["objectAttribute", "tags"],
           received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "'active' | 'inactive'",
+          message: "Required",
+          path: ["objectAttribute", "status"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1719,7 +1758,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1813,7 +1853,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1853,6 +1894,13 @@ describe("Update", () => {
           message: "Expected number, received null",
           path: ["nullableObjectAttribute", "geo", "lng"],
           received: "null"
+        },
+        {
+          code: "invalid_type",
+          expected: "'precise' | 'approximate'",
+          message: "Required",
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "undefined"
         },
         {
           code: "invalid_type",
@@ -1901,7 +1949,8 @@ describe("Update", () => {
         objectAttribute: {
           name: "John",
           email: "john@example.com",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1914,6 +1963,156 @@ describe("Update", () => {
             city: "Springfield",
             geo: { lat: null, lng: null },
             scores: [null]
+          }
+        } as any);
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("will error if objectAttribute enum field has an invalid value", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'active' | 'inactive', received 'bad-value'",
+          options: ["active", "inactive"],
+          path: ["objectAttribute", "status"],
+          received: "bad-value"
+        }
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
+      expect.assertions(6);
+
+      try {
+        await MyClassWithAllAttributeTypes.update("123", {
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "bad-value"
+          }
+        } as any);
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+
+    test("instance method", async () => {
+      expect.assertions(6);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"],
+          status: "active"
+        },
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      try {
+        await instance.update({
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "bad-value"
+          }
+        } as any);
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+  });
+
+  describe("will error if nullableObjectAttribute nested enum field has an invalid value", () => {
+    const operationSharedAssertions = (e: any): void => {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual("Validation errors");
+      expect(e.cause).toEqual([
+        {
+          code: "invalid_enum_value",
+          message:
+            "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
+          options: ["precise", "approximate"],
+          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          received: "bad-value"
+        }
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    test("static method", async () => {
+      expect.assertions(6);
+
+      try {
+        await MyClassWithAllAttributeTypes.update("123", {
+          nullableObjectAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "bad-value" },
+            scores: [1]
+          }
+        } as any);
+      } catch (e: any) {
+        operationSharedAssertions(e);
+      }
+    });
+
+    test("instance method", async () => {
+      expect.assertions(6);
+
+      const instance = createInstance(MyClassWithAllAttributeTypes, {
+        pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+        sk: "MyClassWithAllAttributeTypes" as SortKey,
+        id: "123",
+        type: "MyClassWithAllAttributeTypes",
+        stringAttribute: "1",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+        boolAttribute: true,
+        numberAttribute: 9,
+        enumAttribute: "val-2",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work", "vip"],
+          status: "active"
+        },
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      try {
+        await instance.update({
+          nullableObjectAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "bad-value" },
+            scores: [1]
           }
         } as any);
       } catch (e: any) {
@@ -8285,7 +8484,8 @@ describe("Update", () => {
                         ":objectAttribute": {
                           name: "John",
                           email: "john@example.com",
-                          tags: ["work", "vip"]
+                          tags: ["work", "vip"],
+                          status: "active"
                         },
                         ":stringAttribute": "1"
                       },
@@ -8331,7 +8531,8 @@ describe("Update", () => {
                 objectAttribute: {
                   name: "John",
                   email: "john@example.com",
-                  tags: ["work", "vip"]
+                  tags: ["work", "vip"],
+                  status: "active"
                 }
               },
               { referentialIntegrityCheck: false }
@@ -8364,7 +8565,8 @@ describe("Update", () => {
             objectAttribute: {
               name: "Old",
               email: "old@example.com",
-              tags: ["old-tag"]
+              tags: ["old-tag"],
+              status: "active"
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8387,7 +8589,8 @@ describe("Update", () => {
               objectAttribute: {
                 name: "John",
                 email: "john@example.com",
-                tags: ["work", "vip"]
+                tags: ["work", "vip"],
+                status: "active"
               }
             },
             { referentialIntegrityCheck: false }
@@ -8410,7 +8613,8 @@ describe("Update", () => {
             objectAttribute: {
               name: "John",
               email: "john@example.com",
-              tags: ["work", "vip"]
+              tags: ["work", "vip"],
+              status: "active"
             },
             updatedAt: new Date("2023-10-16T03:31:35.918Z")
           });
@@ -8436,7 +8640,8 @@ describe("Update", () => {
             objectAttribute: {
               name: "Old",
               email: "old@example.com",
-              tags: ["old-tag"]
+              tags: ["old-tag"],
+              status: "active"
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8665,7 +8870,8 @@ describe("Update", () => {
           objectAttribute: {
             name: "John",
             email: "john@example.com",
-            tags: ["work"]
+            tags: ["work"],
+            status: "active"
           }
         });
       });
@@ -8676,7 +8882,8 @@ describe("Update", () => {
             // @ts-expect-error: name must be a string, not number
             name: 123,
             email: "john@example.com",
-            tags: ["work"]
+            tags: ["work"],
+            status: "active"
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8726,6 +8933,7 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
+            status: "active",
             // @ts-expect-error: extra is not in the schema
             extra: "not-allowed"
           }
@@ -8740,7 +8948,7 @@ describe("Update", () => {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95, 87]
           }
         });
@@ -8754,7 +8962,8 @@ describe("Update", () => {
             geo: {
               // @ts-expect-error: lat must be a number, not string
               lat: "bad",
-              lng: 2
+              lng: 2,
+              accuracy: "precise"
             },
             scores: [95]
           }
@@ -8768,7 +8977,7 @@ describe("Update", () => {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             // @ts-expect-error: scores must be number[], not string[]
             scores: ["bad"]
           }
@@ -8784,7 +8993,7 @@ describe("Update", () => {
             street: "123 Main St",
             city: "Springfield",
             zip: null,
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
         });
@@ -8796,7 +9005,7 @@ describe("Update", () => {
             // @ts-expect-error: street is non-nullable, cannot be null
             street: null,
             city: "Springfield",
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
         }).catch(() => {
@@ -9045,7 +9254,8 @@ describe("Update", () => {
             objectAttribute: {
               name: "John",
               email: "john@example.com",
-              tags: ["work"]
+              tags: ["work"],
+              status: "active"
             }
           })
           .then(result => {
@@ -9077,7 +9287,8 @@ describe("Update", () => {
             objectAttribute: {
               name: "John",
               email: "john@example.com",
-              tags: ["work"]
+              tags: ["work"],
+              status: "active"
             }
           })
           .then(result => {
@@ -9243,7 +9454,8 @@ describe("Update", () => {
           objectAttribute: {
             name: "John",
             email: "john@example.com",
-            tags: ["work"]
+            tags: ["work"],
+            status: "active"
           }
         });
       });
@@ -9257,7 +9469,8 @@ describe("Update", () => {
               // @ts-expect-error: name must be a string, not number
               name: 123,
               email: "john@example.com",
-              tags: ["work"]
+              tags: ["work"],
+              status: "active"
             }
           })
           .catch(() => {
@@ -9340,7 +9553,7 @@ describe("Update", () => {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95, 87]
           }
         });
@@ -9357,7 +9570,8 @@ describe("Update", () => {
               geo: {
                 // @ts-expect-error: lat must be a number, not string
                 lat: "bad",
-                lng: 2
+                lng: 2,
+                accuracy: "precise"
               },
               scores: [95]
             }
@@ -9375,7 +9589,7 @@ describe("Update", () => {
             nullableObjectAttribute: {
               street: "123 Main St",
               city: "Springfield",
-              geo: { lat: 1, lng: 2 },
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
               // @ts-expect-error: scores must be number[], not string[]
               scores: ["bad"]
             }
@@ -9394,7 +9608,7 @@ describe("Update", () => {
             street: "123 Main St",
             city: "Springfield",
             zip: null,
-            geo: { lat: 1, lng: 2 },
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
         });
@@ -9409,7 +9623,7 @@ describe("Update", () => {
               // @ts-expect-error: street is non-nullable, cannot be null
               street: null,
               city: "Springfield",
-              geo: { lat: 1, lng: 2 },
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
               scores: [95]
             }
           })
@@ -9429,6 +9643,97 @@ describe("Update", () => {
               // @ts-expect-error: geo is missing required field lng
               geo: { lat: 1 },
               scores: [95]
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value objectAttribute enum field is typed as union of values", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work"],
+              status: "active"
+            }
+          })
+          .then(result => {
+            // @ts-expect-no-error: status is "active" | "inactive"
+            const status: "active" | "inactive" = result.objectAttribute.status;
+            Logger.log(status);
+
+            // @ts-expect-error: status is "active" | "inactive", not number
+            const statusAsNum: number = result.objectAttribute.status;
+            Logger.log(statusAsNum);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("objectAttribute rejects wrong enum value on update", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            objectAttribute: {
+              name: "John",
+              email: "john@example.com",
+              tags: ["work"],
+              // @ts-expect-error: "bad-value" is not a valid enum value
+              status: "bad-value"
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value nested objectAttribute enum field is typed correctly", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: accuracy is accessible on geo via optional chaining
+            Logger.log(result.nullableObjectAttribute?.geo.accuracy);
+
+            if (result.nullableObjectAttribute !== undefined) {
+              // @ts-expect-no-error: accuracy is "precise" | "approximate"
+              const acc: "precise" | "approximate" =
+                result.nullableObjectAttribute.geo.accuracy;
+              Logger.log(acc);
+
+              // @ts-expect-error: accuracy is "precise" | "approximate", not number
+              const accAsNum: number =
+                result.nullableObjectAttribute.geo.accuracy;
+              Logger.log(accAsNum);
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("nullableObjectAttribute nullable enum field supports null and undefined", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
+            Logger.log(result.nullableObjectAttribute?.category);
+
+            if (result.nullableObjectAttribute !== undefined) {
+              // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
+              const cat: "home" | "work" | "other" | null | undefined =
+                result.nullableObjectAttribute.category;
+              Logger.log(cat);
             }
           })
           .catch(() => {

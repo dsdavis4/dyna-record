@@ -182,6 +182,7 @@ const addressSchema = {
   city: { type: "string" },
   zip: { type: "number", nullable: true },
   tags: { type: "array", items: { type: "string" } },
+  category: { type: "enum", values: ["home", "work", "other"] },
   geo: {
     type: "object",
     fields: {
@@ -201,13 +202,42 @@ class Store extends MyTable {
 }
 ```
 
-- **Supported field types:** `"string"`, `"number"`, `"boolean"`, nested `"object"` (via `fields`), and `"array"` (via `items`)
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
 - **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
 - **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
 - **Storage:** Objects are stored as native DynamoDB Map types
 - **Updates:** Updates replace the entire object (not a partial merge)
 - **Filtering:** Object attributes support dot-path filtering in queries — see [Filtering on Object Attributes](#filtering-on-object-attributes)
+
+##### Enum fields
+
+Use `{ type: "enum", values: [...] }` to define a field that only accepts specific string values. The TypeScript type is inferred as a union of the provided values, and invalid values are rejected at runtime via Zod validation.
+
+Enum fields can appear at any nesting level — top-level, inside nested objects, or as array items:
+
+```typescript
+const schema = {
+  // Top-level enum: inferred as "active" | "inactive"
+  status: { type: "enum", values: ["active", "inactive"] },
+
+  // Nullable enum: inferred as "home" | "work" | "other" | null | undefined
+  category: { type: "enum", values: ["home", "work", "other"], nullable: true },
+
+  // Enum inside a nested object
+  geo: {
+    type: "object",
+    fields: {
+      accuracy: { type: "enum", values: ["precise", "approximate"] }
+    }
+  },
+
+  // Array of enum values: inferred as ("admin" | "user")[]
+  roles: { type: "array", items: { type: "enum", values: ["admin", "user"] } }
+} as const satisfies ObjectSchema;
+```
+
+The schema must be declared with `as const satisfies ObjectSchema` so TypeScript preserves the literal string values for type inference. At runtime, providing an invalid value (e.g., `status: "unknown"`) throws a `ValidationError`.
 
 ### Foreign Keys
 

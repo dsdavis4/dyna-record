@@ -34,16 +34,19 @@ const addressSchema = {
     type: "object",
     fields: {
       lat: { type: "number" },
-      lng: { type: "number" }
+      lng: { type: "number" },
+      accuracy: { type: "enum", values: ["precise", "approximate"] }
     }
   },
-  scores: { type: "array", items: { type: "number" } }
+  scores: { type: "array", items: { type: "number" } },
+  category: { type: "enum", values: ["home", "work", "other"], nullable: true }
 } as const satisfies ObjectSchema;
 
 const contactSchema = {
   name: { type: "string" },
   email: { type: "string" },
-  tags: { type: "array", items: { type: "string" } }
+  tags: { type: "array", items: { type: "string" } },
+  status: { type: "enum", values: ["active", "inactive"] }
 } as const satisfies ObjectSchema;
 
 @Table({

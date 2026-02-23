@@ -58,7 +58,8 @@ describe("Query", () => {
       const objectVal = {
         name: "John",
         email: "john@example.com",
-        tags: ["work", "vip"]
+        tags: ["work", "vip"],
+        status: "active"
       };
       const nullableObjectVal = {
         street: "123 Main St",
@@ -117,7 +118,8 @@ describe("Query", () => {
         objectAttribute: {
           email: "john@example.com",
           name: "John",
-          tags: ["work", "vip"]
+          tags: ["work", "vip"],
+          status: "active"
         },
         pk: "MyClassWithAllAttributeTypes#123",
         sk: "MyClassWithAllAttributeTypes",
@@ -147,7 +149,8 @@ describe("Query", () => {
       objectAttribute: {
         name: "John",
         email: "john@example.com",
-        tags: ["work", "vip"]
+        tags: ["work", "vip"],
+        status: "active"
       },
       nullableObjectAttribute: {
         street: "123 Main St",
@@ -174,7 +177,8 @@ describe("Query", () => {
       objectAttribute: {
         name: "John",
         email: "john@example.com",
-        tags: ["work", "vip"]
+        tags: ["work", "vip"],
+        status: "active"
       },
       nullableObjectAttribute: {
         street: "123 Main St",
@@ -1907,6 +1911,61 @@ describe("Query", () => {
 
           // @ts-expect-error: nonExistent is not in the schema
           Logger.log(item.nullableObjectAttribute.nonExistent);
+        }
+      });
+
+      it("return value objectAttribute enum field is typed as union of values", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item !== undefined) {
+          // @ts-expect-no-error: status is "active" | "inactive"
+          const status: "active" | "inactive" = item.objectAttribute.status;
+          Logger.log(status);
+
+          // @ts-expect-error: status is "active" | "inactive", not number
+          const statusAsNum: number = item.objectAttribute.status;
+          Logger.log(statusAsNum);
+        }
+      });
+
+      it("return value nested objectAttribute enum field is typed correctly", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        if (item?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: accuracy is "precise" | "approximate"
+          const acc: "precise" | "approximate" =
+            item.nullableObjectAttribute.geo.accuracy;
+          Logger.log(acc);
+
+          // @ts-expect-error: accuracy is "precise" | "approximate", not number
+          const accAsNum: number = item.nullableObjectAttribute.geo.accuracy;
+          Logger.log(accAsNum);
+        }
+      });
+
+      it("return value nullable enum field supports null and undefined", async () => {
+        const result = await MyClassWithAllAttributeTypes.query({
+          pk: "MyClassWithAllAttributeTypes#123"
+        });
+
+        const item = result[0];
+
+        // @ts-expect-no-error: nullable enum field via optional chaining
+        Logger.log(item?.nullableObjectAttribute?.category);
+
+        if (item?.nullableObjectAttribute !== undefined) {
+          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
+          const cat: "home" | "work" | "other" | null | undefined =
+            item.nullableObjectAttribute.category;
+          Logger.log(cat);
         }
       });
 

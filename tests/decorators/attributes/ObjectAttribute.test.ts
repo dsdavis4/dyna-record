@@ -183,6 +183,149 @@ describe("ObjectAttribute", () => {
       }
     });
 
+    describe("enum fields", () => {
+      it("values is not allowed on string type fields", () => {
+        const badSchema = {
+          // @ts-expect-error: values is not a valid property on string fields
+          name: { type: "string", values: ["a", "b"] }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("values is not allowed on number type fields", () => {
+        const badSchema = {
+          // @ts-expect-error: values is not a valid property on number fields
+          count: { type: "number", values: ["a", "b"] }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("values is not allowed on boolean type fields", () => {
+        const badSchema = {
+          // @ts-expect-error: values is not a valid property on boolean fields
+          active: { type: "boolean", values: ["a", "b"] }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("values is not allowed on object type fields", () => {
+        const badSchema = {
+          geo: {
+            type: "object",
+            fields: { lat: { type: "number" } },
+            // @ts-expect-error: values is not a valid property on object fields
+            values: ["a", "b"]
+          }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("values is not allowed on array type fields", () => {
+        const badSchema = {
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            // @ts-expect-error: values is not a valid property on array fields
+            values: ["a", "b"]
+          }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("enum type requires values property", () => {
+        const badSchema = {
+          // @ts-expect-error: enum type requires values
+          status: { type: "enum" }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("enum values must be a non-empty tuple", () => {
+        const badSchema = {
+          // @ts-expect-error: values must have at least one element
+          status: { type: "enum", values: [] }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("supports enum fields in schema", () => {
+        const enumSchema = {
+          status: { type: "enum", values: ["active", "inactive"] }
+        } as const satisfies ObjectSchema;
+
+        @Entity
+        class ModelOne extends MockTable {
+          // @ts-expect-no-error: enum field infers union type
+          @ObjectAttribute({ schema: enumSchema })
+          public key1: InferObjectSchema<typeof enumSchema>;
+        }
+      });
+
+      it("infers correct union type from enum values", () => {
+        const enumSchema = {
+          status: { type: "enum", values: ["active", "inactive"] }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof enumSchema>;
+
+        // @ts-expect-no-error: status accepts valid enum values
+        const good: Inferred = { status: "active" };
+
+        // @ts-expect-error: status does not accept invalid values
+        const bad: Inferred = { status: "unknown" };
+      });
+
+      it("supports nullable enum fields", () => {
+        const enumSchema = {
+          status: {
+            type: "enum",
+            values: ["active", "inactive"],
+            nullable: true
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof enumSchema>;
+
+        // @ts-expect-no-error: nullable enum accepts null
+        const withNull: Inferred = { status: null };
+
+        // @ts-expect-no-error: nullable enum accepts valid value
+        const withValue: Inferred = { status: "active" };
+
+        // @ts-expect-no-error: nullable enum accepts undefined (optional)
+        const withUndefined: Inferred = {};
+      });
+
+      it("supports enum inside nested objects", () => {
+        const nestedEnumSchema = {
+          geo: {
+            type: "object",
+            fields: {
+              accuracy: { type: "enum", values: ["precise", "approximate"] }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof nestedEnumSchema>;
+
+        // @ts-expect-no-error: nested enum accepts valid value
+        const good: Inferred = { geo: { accuracy: "precise" } };
+
+        // @ts-expect-error: nested enum does not accept invalid value
+        const bad: Inferred = { geo: { accuracy: "wrong" } };
+      });
+
+      it("supports enum as array items", () => {
+        const arrayEnumSchema = {
+          roles: {
+            type: "array",
+            items: { type: "enum", values: ["admin", "user", "guest"] }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof arrayEnumSchema>;
+
+        // @ts-expect-no-error: array of valid enum values
+        const good: Inferred = { roles: ["admin", "user"] };
+
+        // @ts-expect-error: array item is not a valid enum value
+        const bad: Inferred = { roles: ["invalid"] };
+      });
+    });
+
     describe("array fields", () => {
       const arraySchema = {
         tags: { type: "array", items: { type: "string" } },
