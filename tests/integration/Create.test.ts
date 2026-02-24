@@ -3460,6 +3460,7 @@ describe("Create", () => {
       });
     });
 
+    // TODO make sure there is a runtime equivalent test for this
     it("will not allow nullable attributes to be set to null (they should be left undefined)", async () => {
       await MyModelNullableAttribute.create({
         // @ts-expect-error nullable fields cannot be set to null (they should be left undefined)
