@@ -183,6 +183,7 @@ const addressSchema = {
   zip: { type: "number", nullable: true },
   tags: { type: "array", items: { type: "string" } },
   category: { type: "enum", values: ["home", "work", "other"] },
+  createdDate: { type: "date" },
   geo: {
     type: "object",
     fields: {
@@ -202,7 +203,7 @@ class Store extends MyTable {
 }
 ```
 
-- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"date"` (stored as ISO strings, exposed as `Date` objects), `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
 - **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
 - **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name

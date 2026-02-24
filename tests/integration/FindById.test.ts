@@ -37,6 +37,8 @@ const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
 
+// TODO make sure that there are tests that find by id with includes serializes included relationships with object attributes correctly
+
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
     DynamoDBClient: jest.fn().mockImplementation(() => {
@@ -236,11 +238,13 @@ describe("FindById", () => {
     it("will deserialize an entity with object attributes from JSON strings", async () => {
       expect.assertions(3);
 
-      const objectVal = {
+      const objectTableVal = {
         name: "John",
         email: "john@example.com",
         tags: ["work", "vip"],
-        status: "active"
+        status: "active",
+        createdDate: "2023-10-16T03:31:35.918Z",
+        deletedAt: null // TODO would this actually return null or would it be undefined? How do other nullable attributes work?
       };
       const nullableObjectVal = {
         street: "123 Main St",
@@ -264,7 +268,7 @@ describe("FindById", () => {
           numberAttribute: 9,
           foreignKeyAttribute: "111",
           enumAttribute: "val-1",
-          objectAttribute: objectVal,
+          objectAttribute: objectTableVal,
           nullableObjectAttribute: nullableObjectVal
         }
       });
@@ -272,7 +276,14 @@ describe("FindById", () => {
       const result = await MyClassWithAllAttributeTypes.findById("123");
 
       expect(result).toBeInstanceOf(MyClassWithAllAttributeTypes);
-      expect(result?.objectAttribute).toEqual(objectVal);
+      expect(result?.objectAttribute).toEqual({
+        name: "John",
+        email: "john@example.com",
+        tags: ["work", "vip"],
+        status: "active",
+        createdDate: new Date("2023-10-16T03:31:35.918Z"),
+        deletedAt: null
+      });
       expect(result?.nullableObjectAttribute).toEqual(nullableObjectVal);
     });
 
@@ -1524,6 +1535,30 @@ describe("FindById", () => {
           const cat: "home" | "work" | "other" | null | undefined =
             result.nullableObjectAttribute.category;
           Logger.log(cat);
+        }
+      });
+
+      it("return value date field on objectAttribute is typed as Date", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: createdDate is Date
+          const d: Date = result.objectAttribute.createdDate;
+          Logger.log(d);
+
+          // @ts-expect-error: createdDate is Date, not string
+          const dStr: string = result.objectAttribute.createdDate;
+          Logger.log(dStr);
+        }
+      });
+
+      it("return value nullable date field supports null and undefined", async () => {
+        const result = await MyClassWithAllAttributeTypes.findById("123");
+
+        if (result !== undefined) {
+          // @ts-expect-no-error: deletedAt is Date | null | undefined
+          const d: Date | null | undefined = result.objectAttribute.deletedAt;
+          Logger.log(d);
         }
       });
     });

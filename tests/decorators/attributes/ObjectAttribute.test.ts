@@ -19,7 +19,11 @@ describe("ObjectAttribute", () => {
       name: "objectAttribute",
       alias: "objectAttribute",
       nullable: false,
-      type: expect.any(ZodObject)
+      type: expect.any(ZodObject),
+      serializers: {
+        toTableAttribute: expect.any(Function),
+        toEntityAttribute: expect.any(Function)
+      }
     });
   });
 
@@ -51,12 +55,26 @@ describe("ObjectAttribute", () => {
     });
   });
 
-  it("does not have serializers attached (objects use native DynamoDB Map types)", () => {
-    expect.assertions(1);
+  it("has serializers attached when schema contains date fields", () => {
+    expect.assertions(2);
 
     const attr = Metadata.getEntityAttributes(
       MyClassWithAllAttributeTypes.name
     ).objectAttribute;
+
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers).toEqual({
+      toTableAttribute: expect.any(Function), // TODO move the object serialize to a file, then assert that its the one called. Just like how the date serialize and tests work
+      toEntityAttribute: expect.any(Function)
+    });
+  });
+
+  it("does not have serializers attached when schema has no date fields", () => {
+    expect.assertions(1);
+
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).nullableObjectAttribute;
 
     expect(attr.serializers).toBeUndefined();
   });
@@ -181,6 +199,95 @@ describe("ObjectAttribute", () => {
         })
         public key1?: InferObjectSchema<typeof testSchema>;
       }
+    });
+
+    describe("date fields", () => {
+      it("supports date fields in schema", () => {
+        const dateSchema = {
+          createdAt: { type: "date" }
+        } as const satisfies ObjectSchema;
+
+        @Entity
+        class ModelOne extends MockTable {
+          // @ts-expect-no-error: date field infers Date type
+          @ObjectAttribute({ schema: dateSchema })
+          public key1: InferObjectSchema<typeof dateSchema>;
+        }
+      });
+
+      it("infers Date type from date field", () => {
+        const dateSchema = {
+          createdAt: { type: "date" }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof dateSchema>;
+
+        // @ts-expect-no-error: createdAt is Date
+        const good: Inferred = { createdAt: new Date() };
+
+        // @ts-expect-error: createdAt must be Date, not string
+        const bad: Inferred = { createdAt: "2023-01-01" };
+      });
+
+      it("supports nullable date fields", () => {
+        const dateSchema = {
+          deletedAt: { type: "date", nullable: true }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof dateSchema>;
+
+        // @ts-expect-no-error: nullable date accepts null
+        const withNull: Inferred = { deletedAt: null };
+
+        // @ts-expect-no-error: nullable date accepts Date
+        const withValue: Inferred = { deletedAt: new Date() };
+
+        // @ts-expect-no-error: nullable date accepts undefined (optional)
+        const withUndefined: Inferred = {};
+      });
+
+      it("supports date inside nested objects", () => {
+        const nestedDateSchema = {
+          meta: {
+            type: "object",
+            fields: {
+              createdAt: { type: "date" }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof nestedDateSchema>;
+
+        // @ts-expect-no-error: nested date accepts Date
+        const good: Inferred = { meta: { createdAt: new Date() } };
+
+        // @ts-expect-error: nested date must be Date, not string
+        const bad: Inferred = { meta: { createdAt: "2023-01-01" } };
+      });
+
+      it("supports date as array items", () => {
+        const arrayDateSchema = {
+          timestamps: {
+            type: "array",
+            items: { type: "date" }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof arrayDateSchema>;
+
+        // @ts-expect-no-error: array of Dates
+        const good: Inferred = { timestamps: [new Date(), new Date()] };
+
+        // @ts-expect-error: array item must be Date, not string
+        const bad: Inferred = { timestamps: ["2023-01-01"] };
+      });
+
+      it("values is not allowed on date type fields", () => {
+        const badSchema = {
+          // @ts-expect-error: values is not a valid property on date fields
+          createdAt: { type: "date", values: ["a", "b"] }
+        } as const satisfies ObjectSchema;
+      });
     });
 
     describe("enum fields", () => {

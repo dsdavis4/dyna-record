@@ -82,6 +82,9 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
     case "boolean":
       zodType = z.boolean();
       break;
+    case "date":
+      zodType = z.date();
+      break;
     case "enum":
       zodType = z.enum(fieldDef.values);
       break;
@@ -97,6 +100,110 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
   }
 
   return zodType;
+}
+
+/**
+ * Recursively checks if any field in the schema tree has `type: "date"`.
+ */
+function schemaHasDateField(schema: ObjectSchema): boolean {
+  for (const fieldDef of Object.values(schema)) {
+    if (fieldDef.type === "date") return true;
+    if (fieldDef.type === "object" && schemaHasDateField(fieldDef.fields))
+      return true;
+    if (fieldDef.type === "array" && itemsHaveDateField(fieldDef.items))
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Recursively checks if an array's items contain a date field.
+ */
+function itemsHaveDateField(fieldDef: FieldDef): boolean {
+  if (fieldDef.type === "date") return true;
+  if (fieldDef.type === "object") return schemaHasDateField(fieldDef.fields);
+  if (fieldDef.type === "array") return itemsHaveDateField(fieldDef.items);
+  return false;
+}
+
+/**
+ * Recursively converts `Date` objects to ISO strings for DynamoDB storage.
+ */
+function objectSchemaToTableItem(
+  schema: ObjectSchema,
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, fieldDef] of Object.entries(schema)) {
+    const val = value[key];
+    if (val === undefined || val === null) {
+      result[key] = val;
+      continue;
+    }
+    result[key] = convertFieldToTableItem(fieldDef, val);
+  }
+  return result;
+}
+
+/**
+ * Converts a single field value to its DynamoDB representation.
+ */
+function convertFieldToTableItem(fieldDef: FieldDef, val: unknown): unknown {
+  switch (fieldDef.type) {
+    case "date":
+      return (val as Date).toISOString();
+    case "object":
+      return objectSchemaToTableItem(
+        fieldDef.fields,
+        val as Record<string, unknown>
+      );
+    case "array":
+      return (val as unknown[]).map(item =>
+        convertFieldToTableItem(fieldDef.items, item)
+      );
+    default:
+      return val;
+  }
+}
+
+/**
+ * Recursively converts ISO strings back to `Date` objects when reading from DynamoDB.
+ */
+function tableItemToObjectValue(
+  schema: ObjectSchema,
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, fieldDef] of Object.entries(schema)) {
+    const val = value[key];
+    if (val === undefined || val === null) {
+      result[key] = val;
+      continue;
+    }
+    result[key] = convertFieldToEntityValue(fieldDef, val);
+  }
+  return result;
+}
+
+/**
+ * Converts a single field value from DynamoDB to its entity representation.
+ */
+function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
+  switch (fieldDef.type) {
+    case "date":
+      return new Date(val as string);
+    case "object":
+      return tableItemToObjectValue(
+        fieldDef.fields,
+        val as Record<string, unknown>
+      );
+    case "array":
+      return (val as unknown[]).map(item =>
+        convertFieldToEntityValue(fieldDef.items, item)
+      );
+    default:
+      return val;
+  }
 }
 
 /**
@@ -179,10 +286,21 @@ function ObjectAttribute<
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
 
+        // TODO will the code be more efficient if there is always a data serializer available?
+        const serializers = schemaHasDateField(schema)
+          ? {
+              toTableAttribute: (val: Record<string, unknown>) =>
+                objectSchemaToTableItem(schema, val),
+              toEntityAttribute: (val: Record<string, unknown>) =>
+                tableItemToObjectValue(schema, val)
+            }
+          : undefined;
+
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: zodSchema,
+          serializers,
           ...restProps
         });
       });

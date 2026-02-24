@@ -473,7 +473,8 @@ describe("Update", () => {
                       name: "John",
                       email: "john@example.com",
                       tags: ["work", "vip"],
-                      status: "active"
+                      status: "active",
+                      createdDate: "2023-10-16T03:31:35.918Z"
                     },
                     ":stringAttribute": "1"
                   },
@@ -532,7 +533,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work", "vip"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         })
       ).toBeUndefined();
@@ -563,7 +565,8 @@ describe("Update", () => {
           name: "Old",
           email: "old@example.com",
           tags: ["old-tag"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -586,7 +589,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         }
       });
 
@@ -608,7 +612,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
@@ -635,7 +640,8 @@ describe("Update", () => {
           name: "Old",
           email: "old@example.com",
           tags: ["old-tag"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1304,7 +1310,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1363,6 +1370,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1404,7 +1418,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1449,6 +1464,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1490,7 +1512,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1584,7 +1607,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1665,7 +1689,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1718,6 +1743,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1759,7 +1791,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1854,7 +1887,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1950,7 +1984,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1999,7 +2034,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "bad-value"
+            status: "bad-value",
+            createdDate: new Date()
           }
         } as any);
       } catch (e: any) {
@@ -2025,7 +2061,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -2037,7 +2074,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "bad-value"
+            status: "bad-value",
+            createdDate: new Date()
           }
         } as any);
       } catch (e: any) {
@@ -2100,7 +2138,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -8485,7 +8524,8 @@ describe("Update", () => {
                           name: "John",
                           email: "john@example.com",
                           tags: ["work", "vip"],
-                          status: "active"
+                          status: "active",
+                          createdDate: "2023-10-16T03:31:35.918Z"
                         },
                         ":stringAttribute": "1"
                       },
@@ -8532,7 +8572,8 @@ describe("Update", () => {
                   name: "John",
                   email: "john@example.com",
                   tags: ["work", "vip"],
-                  status: "active"
+                  status: "active",
+                  createdDate: new Date()
                 }
               },
               { referentialIntegrityCheck: false }
@@ -8566,7 +8607,8 @@ describe("Update", () => {
               name: "Old",
               email: "old@example.com",
               tags: ["old-tag"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8590,7 +8632,8 @@ describe("Update", () => {
                 name: "John",
                 email: "john@example.com",
                 tags: ["work", "vip"],
-                status: "active"
+                status: "active",
+                createdDate: new Date()
               }
             },
             { referentialIntegrityCheck: false }
@@ -8614,7 +8657,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work", "vip"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             updatedAt: new Date("2023-10-16T03:31:35.918Z")
           });
@@ -8641,7 +8685,8 @@ describe("Update", () => {
               name: "Old",
               email: "old@example.com",
               tags: ["old-tag"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8871,7 +8916,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         });
       });
@@ -8883,7 +8929,8 @@ describe("Update", () => {
             name: 123,
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8896,7 +8943,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             // @ts-expect-error: tags must be string[], not string
-            tags: "not-array"
+            tags: "not-array",
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8909,7 +8957,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             // @ts-expect-error: tags must be string[], not number[]
-            tags: [123, 456]
+            tags: [123, 456],
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8934,6 +8983,7 @@ describe("Update", () => {
             email: "john@example.com",
             tags: ["work"],
             status: "active",
+            createdDate: new Date(),
             // @ts-expect-error: extra is not in the schema
             extra: "not-allowed"
           }
@@ -9255,7 +9305,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9288,7 +9339,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9455,7 +9507,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         });
       });
@@ -9470,7 +9523,8 @@ describe("Update", () => {
               name: 123,
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9487,7 +9541,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               // @ts-expect-error: tags must be string[], not string
-              tags: "not-array"
+              tags: "not-array",
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9504,7 +9559,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               // @ts-expect-error: tags must be string[], not number[]
-              tags: [123, 456]
+              tags: [123, 456],
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9536,6 +9592,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
+              status: "active",
+              createdDate: new Date(),
               // @ts-expect-error: extra is not in the schema
               extra: "not-allowed"
             }
@@ -9659,7 +9717,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9685,6 +9744,7 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
+              createdDate: new Date(),
               // @ts-expect-error: "bad-value" is not a valid enum value
               status: "bad-value"
             }

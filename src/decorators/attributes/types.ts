@@ -13,6 +13,7 @@ export interface PrimitiveTypeMap {
   string: string;
   number: number;
   boolean: boolean;
+  date: Date; // TODO make sure this typedoc gets updated
 }
 
 /**
@@ -148,10 +149,32 @@ export interface EnumFieldDef {
 }
 
 /**
+ * A schema field definition for a date type.
+ *
+ * Date fields are stored as ISO 8601 strings in DynamoDB and exposed as
+ * JavaScript `Date` objects on entities, mirroring `@DateAttribute` behavior.
+ *
+ * @example
+ * ```typescript
+ * const schema = {
+ *   createdDate: { type: "date" },
+ *   deletedAt: { type: "date", nullable: true }
+ * } as const satisfies ObjectSchema;
+ * ```
+ */
+export interface DateFieldDef {
+  /** Must be `"date"` to indicate a date field. */
+  type: "date";
+  /** When `true`, the field accepts `null` and becomes optional (`Date | null | undefined`). */
+  nullable?: boolean;
+}
+
+/**
  * A field definition within an {@link ObjectSchema}.
  *
  * This is the union of all supported field types:
  * - {@link PrimitiveFieldDef} — `"string"`, `"number"`, `"boolean"`
+ * - {@link DateFieldDef} — dates stored as ISO strings, exposed as `Date` objects
  * - {@link ObjectFieldDef} — nested objects via `fields`
  * - {@link ArrayFieldDef} — arrays/lists via `items`
  * - {@link EnumFieldDef} — string literal enums via `values`
@@ -160,6 +183,7 @@ export interface EnumFieldDef {
  */
 export type FieldDef =
   | PrimitiveFieldDef
+  | DateFieldDef
   | ObjectFieldDef
   | ArrayFieldDef
   | EnumFieldDef;
