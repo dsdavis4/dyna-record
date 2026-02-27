@@ -103,30 +103,6 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
 }
 
 /**
- * Recursively checks if any field in the schema tree has `type: "date"`.
- */
-function schemaHasDateField(schema: ObjectSchema): boolean {
-  for (const fieldDef of Object.values(schema)) {
-    if (fieldDef.type === "date") return true;
-    if (fieldDef.type === "object" && schemaHasDateField(fieldDef.fields))
-      return true;
-    if (fieldDef.type === "array" && itemsHaveDateField(fieldDef.items))
-      return true;
-  }
-  return false;
-}
-
-/**
- * Recursively checks if an array's items contain a date field.
- */
-function itemsHaveDateField(fieldDef: FieldDef): boolean {
-  if (fieldDef.type === "date") return true;
-  if (fieldDef.type === "object") return schemaHasDateField(fieldDef.fields);
-  if (fieldDef.type === "array") return itemsHaveDateField(fieldDef.items);
-  return false;
-}
-
-/**
  * Recursively converts `Date` objects to ISO strings for DynamoDB storage.
  */
 function objectSchemaToTableItem(
@@ -284,15 +260,13 @@ function ObjectAttribute<
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
 
-        // TODO will the code be more efficient if there is always a data serializer available?
-        const serializers = schemaHasDateField(schema)
-          ? {
-              toTableAttribute: (val: Record<string, unknown>) =>
-                objectSchemaToTableItem(schema, val),
-              toEntityAttribute: (val: Record<string, unknown>) =>
-                tableItemToObjectValue(schema, val)
-            }
-          : undefined;
+        // TODO move this to where other serializers are, and then update the ObjectAttribute test to assert that the serializer is the one called
+        const serializers = {
+          toTableAttribute: (val: Record<string, unknown>) =>
+            objectSchemaToTableItem(schema, val),
+          toEntityAttribute: (val: Record<string, unknown>) =>
+            tableItemToObjectValue(schema, val)
+        };
 
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),

@@ -51,11 +51,15 @@ describe("ObjectAttribute", () => {
       name: "nullableObjectAttribute",
       alias: "nullableObjectAttribute",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>)
+      type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>),
+      serializers: {
+        toTableAttribute: expect.any(Function),
+        toEntityAttribute: expect.any(Function)
+      }
     });
   });
 
-  it("has serializers attached when schema contains date fields", () => {
+  it("has serializers attached for object attributes with date fields", () => {
     expect.assertions(2);
 
     const attr = Metadata.getEntityAttributes(
@@ -64,19 +68,23 @@ describe("ObjectAttribute", () => {
 
     expect(attr.serializers).toBeDefined();
     expect(attr.serializers).toEqual({
-      toTableAttribute: expect.any(Function), // TODO move the object serialize to a file, then assert that its the one called. Just like how the date serialize and tests work
+      toTableAttribute: expect.any(Function),
       toEntityAttribute: expect.any(Function)
     });
   });
 
-  it("does not have serializers attached when schema has no date fields", () => {
-    expect.assertions(1);
+  it("has serializers attached for object attributes without date fields", () => {
+    expect.assertions(2);
 
     const attr = Metadata.getEntityAttributes(
       MyClassWithAllAttributeTypes.name
     ).nullableObjectAttribute;
 
-    expect(attr.serializers).toBeUndefined();
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers).toEqual({
+      toTableAttribute: expect.any(Function),
+      toEntityAttribute: expect.any(Function)
+    });
   });
 
   describe("types", () => {

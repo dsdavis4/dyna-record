@@ -12,13 +12,42 @@ type NullableProperties<T> = {
 }[keyof T];
 
 /**
+ * Recursively resolves the value type for `AllowNullForNullable`.
+ *
+ * For plain object types (not `Date`, arrays, primitives, or functions),
+ * recurses via {@link AllowNullForNullable} so that nullable fields within
+ * object schemas (e.g. `@ObjectAttribute`) also receive `| null` during updates.
+ *
+ * Primitives, `Date`, arrays, and functions pass through unchanged.
+ */
+type AllowNullForNullableValue<T> = T extends
+  | Date
+  | readonly unknown[]
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ((...args: unknown[]) => unknown)
+  ? T
+  : T extends Record<string, unknown>
+    ? AllowNullForNullable<T>
+    : T;
+
+/**
  * Transforms a type `T` by allowing `null` as an additional type for its nullable properties.
+ *
+ * Recurses into plain object values (e.g. object schema attributes) so that
+ * nullable fields at any depth receive `| null`, matching root-level nullable
+ * attribute behavior during updates.
  *
  * @typeParam T - The type whose properties are to be transformed.
  * @returns A new type with properties of `T` where each nullable property is also allowed to be `null`.
  */
 type AllowNullForNullable<T> = {
-  [K in keyof T]: K extends NullableProperties<T> ? T[K] | null : T[K];
+  [K in keyof T]: K extends NullableProperties<T>
+    ? AllowNullForNullableValue<NonNullable<T[K]>> | null | undefined
+    : AllowNullForNullableValue<T[K]>;
 };
 
 /**

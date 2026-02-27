@@ -2160,6 +2160,64 @@ describe("Update", () => {
     });
   });
 
+  describe("nullable fields within object attributes are stripped when set to null", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    test("static method", async () => {
+      expect.assertions(4);
+
+      await MyClassWithAllAttributeTypes.update("123", {
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          zip: null,
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95],
+          category: null
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#nullableObjectAttribute": "nullableObjectAttribute",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":nullableObjectAttribute": {
+                      street: "123 Main St",
+                      city: "Springfield",
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [95]
+                    },
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #nullableObjectAttribute = :nullableObjectAttribute, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
   describe("will allow nullable attributes to be set to null", () => {
     const dbOperationAssertions = (): void => {
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
@@ -9049,13 +9107,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not allow nullable fields to be null", async () => {
+      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            // TODO should this be allowed to be consistent with root attributes?
-            // @ts-expect-error: zip is nullable but null is not allowed, only undefined/omitted
+            // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
             zip: null,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
@@ -9687,8 +9744,7 @@ describe("Update", () => {
         });
       });
 
-      // TODO is this what I want?
-      it("nullableObjectAttribute does not allow nullable fields to be null", async () => {
+      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
@@ -9696,7 +9752,7 @@ describe("Update", () => {
             nullableObjectAttribute: {
               street: "123 Main St",
               city: "Springfield",
-              // @ts-expect-error: zip is nullable but null is not allowed, only undefined/omitted
+              // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
               zip: null,
               geo: { lat: 1, lng: 2, accuracy: "precise" },
               scores: [95]
