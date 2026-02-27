@@ -281,8 +281,7 @@ describe("FindById", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: new Date("2023-10-16T03:31:35.918Z"),
-        deletedAt: null
+        createdDate: new Date("2023-10-16T03:31:35.918Z")
       });
       expect(result?.nullableObjectAttribute).toEqual(nullableObjectVal);
     });
@@ -1457,7 +1456,7 @@ describe("FindById", () => {
           // @ts-expect-no-error: nested string field
           Logger.log(result.nullableObjectAttribute?.city);
 
-          // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+          // @ts-expect-no-error: nested nullable field can be number or undefined
           Logger.log(result.nullableObjectAttribute?.zip);
 
           // @ts-expect-no-error: nested object field
@@ -1531,8 +1530,8 @@ describe("FindById", () => {
         Logger.log(result?.nullableObjectAttribute?.category);
 
         if (result?.nullableObjectAttribute !== undefined) {
-          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
-          const cat: "home" | "work" | "other" | null | undefined =
+          // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
+          const cat: "home" | "work" | "other" | undefined =
             result.nullableObjectAttribute.category;
           Logger.log(cat);
         }
@@ -1556,8 +1555,8 @@ describe("FindById", () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
         if (result !== undefined) {
-          // @ts-expect-no-error: deletedAt is Date | null | undefined
-          const d: Date | null | undefined = result.objectAttribute.deletedAt;
+          // @ts-expect-no-error: deletedAt is Date | undefined
+          const d: Date | undefined = result.objectAttribute.deletedAt;
           Logger.log(d);
         }
       });

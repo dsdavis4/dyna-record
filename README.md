@@ -204,7 +204,7 @@ class Store extends MyTable {
 ```
 
 - **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"date"` (stored as ISO strings, exposed as `Date` objects), `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
-- **Nullable fields:** Set `nullable: true` on individual fields within the schema to allow `null` values
+- **Nullable fields:** Set `nullable: true` on individual fields within the schema to remove them
 - **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
 - **Storage:** Objects are stored as native DynamoDB Map types
@@ -222,7 +222,7 @@ const schema = {
   // Top-level enum: inferred as "active" | "inactive"
   status: { type: "enum", values: ["active", "inactive"] },
 
-  // Nullable enum: inferred as "home" | "work" | "other" | null | undefined
+  // Nullable enum: inferred as "home" | "work" | "other" | undefined
   category: { type: "enum", values: ["home", "work", "other"], nullable: true },
 
   // Enum inside a nested object

@@ -9036,16 +9036,32 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          // @ts-expect-no-error: zip is nullable so it can be null or omitted
+          // @ts-expect-no-error: zip is nullable so it can be omitted
+          nullableObjectAttribute: {
+            zip: undefined,
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          }
+        });
+      });
+
+      it("nullableObjectAttribute does not allow nullable fields to be null", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
+            // TODO should this be allowed to be consistent with root attributes?
+            // @ts-expect-error: zip is nullable but null is not allowed, only undefined/omitted
             zip: null,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -9386,7 +9402,7 @@ describe("Update", () => {
             // @ts-expect-no-error: nested string field
             Logger.log(result.nullableObjectAttribute?.city);
 
-            // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+            // @ts-expect-no-error: nested nullable field can be number or undefined
             Logger.log(result.nullableObjectAttribute?.zip);
 
             // @ts-expect-no-error: nested object field
@@ -9657,19 +9673,38 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
-          // @ts-expect-no-error: zip is nullable so it can be null or omitted
+          // @ts-expect-no-error: zip is nullable so it can be omitted
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            zip: null,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
         });
+      });
+
+      // TODO is this what I want?
+      it("nullableObjectAttribute does not allow nullable fields to be null", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            nullableObjectAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              // @ts-expect-error: zip is nullable but null is not allowed, only undefined/omitted
+              zip: null,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
@@ -9780,7 +9815,7 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute nullable enum field supports null and undefined", async () => {
+      it("nullableObjectAttribute nullable enum field supports undefined", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
@@ -9790,8 +9825,8 @@ describe("Update", () => {
             Logger.log(result.nullableObjectAttribute?.category);
 
             if (result.nullableObjectAttribute !== undefined) {
-              // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
-              const cat: "home" | "work" | "other" | null | undefined =
+              // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
+              const cat: "home" | "work" | "other" | undefined =
                 result.nullableObjectAttribute.category;
               Logger.log(cat);
             }

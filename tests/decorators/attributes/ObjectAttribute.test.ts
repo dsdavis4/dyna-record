@@ -236,14 +236,14 @@ describe("ObjectAttribute", () => {
 
         type Inferred = InferObjectSchema<typeof dateSchema>;
 
-        // @ts-expect-no-error: nullable date accepts null
+        // @ts-expect-error: nullable date does not accept null (consistent with root-level nullable attributes)
         const withNull: Inferred = { deletedAt: null };
 
         // @ts-expect-no-error: nullable date accepts Date
         const withValue: Inferred = { deletedAt: new Date() };
 
         // @ts-expect-no-error: nullable date accepts undefined (optional)
-        const withUndefined: Inferred = {};
+        const withUndefined: Inferred = { deletedAt: undefined };
       });
 
       it("supports date inside nested objects", () => {
@@ -386,14 +386,14 @@ describe("ObjectAttribute", () => {
 
         type Inferred = InferObjectSchema<typeof enumSchema>;
 
-        // @ts-expect-no-error: nullable enum accepts null
+        // @ts-expect-error: nullable enum does not accept null (consistent with root-level nullable attributes)
         const withNull: Inferred = { status: null };
 
         // @ts-expect-no-error: nullable enum accepts valid value
         const withValue: Inferred = { status: "active" };
 
         // @ts-expect-no-error: nullable enum accepts undefined (optional)
-        const withUndefined: Inferred = {};
+        const withUndefined: Inferred = { status: undefined };
       });
 
       it("supports enum inside nested objects", () => {
@@ -469,11 +469,16 @@ describe("ObjectAttribute", () => {
       });
 
       it("rejects wrong array item type", () => {
+        const wrongArraySchema = {
+          tags: { type: "array", items: { type: "number" } },
+          scores: { type: "array", items: { type: "number" }, nullable: true }
+        } as const satisfies ObjectSchema;
+
         @Entity
         class ModelOne extends MockTable {
-          // @ts-expect-error: number[] does not match array of string items
+          // @ts-expect-error: arraySchema expects string[] for tags, but wrongArraySchema infers number[]
           @ObjectAttribute({ schema: arraySchema })
-          public key1: { tags: number[]; scores?: number[] | null };
+          public key1: InferObjectSchema<typeof wrongArraySchema>;
         }
       });
 

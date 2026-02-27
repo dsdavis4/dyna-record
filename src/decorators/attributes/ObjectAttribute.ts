@@ -58,7 +58,7 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
  * - `"boolean"` → `z.boolean()`
  * - `"enum"` → `z.enum(values)` for string literal validation
  *
- * When `nullable` is `true`, wraps the type with `.nullable().optional()`.
+ * When `nullable` is `true`, wraps the type with `.optional().nullable()`.
  *
  * @param fieldDef The field definition to convert
  * @returns A ZodType that validates values matching the field definition
@@ -96,7 +96,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
   }
 
   if (fieldDef.nullable === true) {
-    zodType = zodType.nullable().optional();
+    zodType = zodType.optional().nullable();
   }
 
   return zodType;
@@ -137,7 +137,6 @@ function objectSchemaToTableItem(
   for (const [key, fieldDef] of Object.entries(schema)) {
     const val = value[key];
     if (val === undefined || val === null) {
-      result[key] = val;
       continue;
     }
     result[key] = convertFieldToTableItem(fieldDef, val);
@@ -177,7 +176,6 @@ function tableItemToObjectValue(
   for (const [key, fieldDef] of Object.entries(schema)) {
     const val = value[key];
     if (val === undefined || val === null) {
-      result[key] = val;
       continue;
     }
     result[key] = convertFieldToEntityValue(fieldDef, val);
@@ -220,7 +218,7 @@ function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
  * - `"object"` — nested objects (arbitrarily deep)
  * - `"array"` — lists of any field type
  *
- * All field types support `nullable: true` to allow `null` values.
+ * All field types support `nullable: true` to remove them
  *
  * @template T The class type that the decorator is applied to
  * @template S The ObjectSchema type used for validation and type inference

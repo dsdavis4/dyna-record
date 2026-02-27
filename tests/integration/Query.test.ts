@@ -122,8 +122,7 @@ describe("Query", () => {
           name: "John",
           tags: ["work", "vip"],
           status: "active",
-          createdDate: new Date("2023-10-16T03:31:35.918Z"),
-          deletedAt: null
+          createdDate: new Date("2023-10-16T03:31:35.918Z")
         },
         pk: "MyClassWithAllAttributeTypes#123",
         sk: "MyClassWithAllAttributeTypes",
@@ -185,8 +184,7 @@ describe("Query", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: new Date("2023-10-16T03:31:35.918Z"),
-        deletedAt: null
+        createdDate: new Date("2023-10-16T03:31:35.918Z")
       },
       nullableObjectAttribute: {
         street: "123 Main St",
@@ -1880,7 +1878,7 @@ describe("Query", () => {
           // @ts-expect-no-error: nested string field
           Logger.log(item.nullableObjectAttribute?.city);
 
-          // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+          // @ts-expect-no-error: nested nullable field can be number or undefined
           Logger.log(item.nullableObjectAttribute?.zip);
 
           // @ts-expect-no-error: nested object field
@@ -1970,8 +1968,8 @@ describe("Query", () => {
         Logger.log(item?.nullableObjectAttribute?.category);
 
         if (item?.nullableObjectAttribute !== undefined) {
-          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
-          const cat: "home" | "work" | "other" | null | undefined =
+          // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
+          const cat: "home" | "work" | "other" | undefined =
             item.nullableObjectAttribute.category;
           Logger.log(cat);
         }

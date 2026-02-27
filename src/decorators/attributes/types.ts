@@ -38,7 +38,7 @@ export type PrimitiveFieldType = keyof PrimitiveTypeMap;
 export interface PrimitiveFieldDef {
   /** The primitive type — `"string"`, `"number"`, or `"boolean"`. */
   type: PrimitiveFieldType;
-  /** When `true`, the field accepts `null` and becomes optional (`T | null | undefined`). */
+  /** When `true`, the field becomes optional (`T | undefined`). */
   nullable?: boolean;
 }
 
@@ -65,7 +65,7 @@ export interface ObjectFieldDef {
   type: "object";
   /** The nested {@link ObjectSchema} describing the object's shape. */
   fields: ObjectSchema;
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
 
@@ -88,7 +88,7 @@ export interface ArrayFieldDef {
   type: "array";
   /** A {@link FieldDef} describing the type of each array element. */
   items: FieldDef;
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
 
@@ -126,7 +126,7 @@ export interface ArrayFieldDef {
  * type T = InferObjectSchema<typeof schema>;
  * // {
  * //   status: "active" | "inactive";
- * //   category?: "home" | "work" | "other" | null;
+ * //   category?: "home" | "work" | "other";
  * //   geo: { accuracy: "precise" | "approximate" };
  * //   roles: ("admin" | "user" | "guest")[];
  * // }
@@ -144,7 +144,7 @@ export interface EnumFieldDef {
    * Must contain at least one value (enforced by the `[string, ...string[]]` tuple type).
    */
   values: readonly [string, ...string[]];
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
 
@@ -165,7 +165,7 @@ export interface EnumFieldDef {
 export interface DateFieldDef {
   /** Must be `"date"` to indicate a date field. */
   type: "date";
-  /** When `true`, the field accepts `null` and becomes optional (`Date | null | undefined`). */
+  /** When `true`, the field becomes optional (`Date | undefined`). */
   nullable?: boolean;
 }
 
@@ -238,7 +238,7 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  * - Enum fields become a union of their `values` (`values[number]`)
  * - Nested object fields recurse through `InferObjectSchema`
  * - Array fields become `T[]` where `T` is inferred from `items`
- * - Fields with `nullable: true` become optional and accept `null` (`T | null | undefined`)
+ * - Fields with `nullable: true` become optional (`T | undefined`)
  *
  * @example
  * ```typescript
@@ -256,7 +256,7 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  * //   status: "active" | "inactive";
  * //   tags: string[];
  * //   geo: { lat: number; lng: number };
- * //   age?: number | null;
+ * //   age?: number;
  * // }
  * ```
  */
@@ -267,5 +267,5 @@ export type InferObjectSchema<S extends ObjectSchema> = {
 } & {
   [K in keyof S as S[K]["nullable"] extends true ? K : never]?: InferFieldDef<
     S[K]
-  > | null;
+  >;
 };

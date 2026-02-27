@@ -277,8 +277,7 @@ describe("Create", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: new Date(),
-        deletedAt: null
+        createdDate: new Date()
       }
     });
 
@@ -304,8 +303,7 @@ describe("Create", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: new Date(),
-        deletedAt: null
+        createdDate: new Date()
       },
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
@@ -342,8 +340,7 @@ describe("Create", () => {
                     email: "john@example.com",
                     tags: ["work", "vip"],
                     status: "active",
-                    createdDate: "2023-10-16T03:31:35.918Z",
-                    deletedAt: null
+                    createdDate: "2023-10-16T03:31:35.918Z"
                   },
                   stringAttribute: "1"
                 },
@@ -2967,8 +2964,7 @@ describe("Create", () => {
               email: "john@example.com",
               tags: ["work", "vip"],
               status: "active",
-              createdDate: new Date(),
-              deletedAt: null
+              createdDate: new Date()
             }
           },
           { referentialIntegrityCheck: false }
@@ -2996,8 +2992,7 @@ describe("Create", () => {
             email: "john@example.com",
             tags: ["work", "vip"],
             status: "active",
-            createdDate: new Date(),
-            deletedAt: null
+            createdDate: new Date()
           },
           createdAt: new Date("2023-10-16T03:31:35.918Z"),
           updatedAt: new Date("2023-10-16T03:31:35.918Z")
@@ -3036,8 +3031,7 @@ describe("Create", () => {
                         email: "john@example.com",
                         tags: ["work", "vip"],
                         status: "active",
-                        createdDate: "2023-10-16T03:31:35.918Z",
-                        deletedAt: null // TODO test this out... does this cause an error when sent to dynamo?
+                        createdDate: "2023-10-16T03:31:35.918Z"
                       },
                       stringAttribute: "1"
                     },
@@ -3761,7 +3755,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+    it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3776,14 +3770,41 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        // @ts-expect-no-error: zip is nullable so it can be null or omitted
+        // @ts-expect-no-error: zip is nullable so it can be omitted
         nullableObjectAttribute: {
           street: "123 Main St",
           city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
+        }
+      });
+    });
+
+    it("nullableObjectAttribute does not allow nullable fields to be null (omit instead)", async () => {
+      await MyClassWithAllAttributeTypes.create({
+        stringAttribute: "val",
+        dateAttribute: new Date(),
+        foreignKeyAttribute: "123",
+        boolAttribute: true,
+        numberAttribute: 1,
+        enumAttribute: "val-1",
+        objectAttribute: {
+          name: "John",
+          email: "john@example.com",
+          tags: ["work"],
+          status: "active",
+          createdDate: new Date()
+        },
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          // @ts-expect-error: nullable fields cannot be set to null, they should be left undefined
           zip: null,
           geo: { lat: 1, lng: 2, accuracy: "precise" },
           scores: [95]
         }
+      }).catch(() => {
+        Logger.log("Testing types");
       });
     });
 
@@ -3970,7 +3991,7 @@ describe("Create", () => {
         // @ts-expect-no-error: nested string field
         Logger.log(res.nullableObjectAttribute?.city);
 
-        // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+        // @ts-expect-no-error: nested nullable field can be number or undefined
         Logger.log(res.nullableObjectAttribute?.zip);
 
         // @ts-expect-no-error: nested object field
@@ -4067,7 +4088,7 @@ describe("Create", () => {
         });
       });
 
-      it("return value nullableObjectAttribute nullable enum field supports null and undefined", async () => {
+      it("return value nullableObjectAttribute nullable enum field supports undefined", async () => {
         const res = await MyClassWithAllAttributeTypes.create({
           stringAttribute: "val",
           dateAttribute: new Date(),
@@ -4088,8 +4109,8 @@ describe("Create", () => {
         Logger.log(res.nullableObjectAttribute?.category);
 
         if (res.nullableObjectAttribute !== undefined) {
-          // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
-          const cat: "home" | "work" | "other" | null | undefined =
+          // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
+          const cat: "home" | "work" | "other" | undefined =
             res.nullableObjectAttribute.category;
           Logger.log(cat);
         }
