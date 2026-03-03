@@ -3,6 +3,7 @@ import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
+import { createObjectSerializer } from "./serializers";
 
 /**
  * Options for the `@ObjectAttribute` decorator.
@@ -58,7 +59,7 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
  * - `"boolean"` → `z.boolean()`
  * - `"enum"` → `z.enum(values)` for string literal validation
  *
- * When `nullable` is `true`, wraps the type with `.nullable().optional()`.
+ * When `nullable` is `true`, wraps the type with `.optional().nullable()`.
  *
  * @param fieldDef The field definition to convert
  * @returns A ZodType that validates values matching the field definition
@@ -82,6 +83,9 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
     case "boolean":
       zodType = z.boolean();
       break;
+    case "date":
+      zodType = z.date();
+      break;
     case "enum":
       zodType = z.enum(fieldDef.values);
       break;
@@ -93,7 +97,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
   }
 
   if (fieldDef.nullable === true) {
-    zodType = zodType.nullable().optional();
+    zodType = zodType.optional().nullable();
   }
 
   return zodType;
@@ -113,7 +117,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * - `"object"` — nested objects (arbitrarily deep)
  * - `"array"` — lists of any field type
  *
- * All field types support `nullable: true` to allow `null` values.
+ * All field types support `nullable: true` to remove them
  *
  * @template T The class type that the decorator is applied to
  * @template S The ObjectSchema type used for validation and type inference
@@ -178,11 +182,13 @@ function ObjectAttribute<
       context.addInitializer(function (this: T) {
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
+        const serializers = createObjectSerializer(schema);
 
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: zodSchema,
+          serializers,
           ...restProps
         });
       });

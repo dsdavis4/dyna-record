@@ -8,17 +8,19 @@
  * | `"string"`  | `string`        |
  * | `"number"`  | `number`        |
  * | `"boolean"` | `boolean`       |
+ * | `"date"`    | `Date`          |
  */
 export interface PrimitiveTypeMap {
   string: string;
   number: number;
   boolean: boolean;
+  date: Date;
 }
 
 /**
  * The allowed primitive type strings for object schema fields.
  *
- * Derived from the keys of {@link PrimitiveTypeMap}: `"string" | "number" | "boolean"`.
+ * Derived from the keys of {@link PrimitiveTypeMap}: `"string" | "number" | "boolean" | "date"`.
  */
 export type PrimitiveFieldType = keyof PrimitiveTypeMap;
 
@@ -37,7 +39,7 @@ export type PrimitiveFieldType = keyof PrimitiveTypeMap;
 export interface PrimitiveFieldDef {
   /** The primitive type — `"string"`, `"number"`, or `"boolean"`. */
   type: PrimitiveFieldType;
-  /** When `true`, the field accepts `null` and becomes optional (`T | null | undefined`). */
+  /** When `true`, the field becomes optional (`T | undefined`). */
   nullable?: boolean;
 }
 
@@ -64,7 +66,7 @@ export interface ObjectFieldDef {
   type: "object";
   /** The nested {@link ObjectSchema} describing the object's shape. */
   fields: ObjectSchema;
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
 
@@ -87,7 +89,7 @@ export interface ArrayFieldDef {
   type: "array";
   /** A {@link FieldDef} describing the type of each array element. */
   items: FieldDef;
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
 
@@ -125,7 +127,7 @@ export interface ArrayFieldDef {
  * type T = InferObjectSchema<typeof schema>;
  * // {
  * //   status: "active" | "inactive";
- * //   category?: "home" | "work" | "other" | null;
+ * //   category?: "home" | "work" | "other";
  * //   geo: { accuracy: "precise" | "approximate" };
  * //   roles: ("admin" | "user" | "guest")[];
  * // }
@@ -143,7 +145,28 @@ export interface EnumFieldDef {
    * Must contain at least one value (enforced by the `[string, ...string[]]` tuple type).
    */
   values: readonly [string, ...string[]];
-  /** When `true`, the field accepts `null` and becomes optional. */
+  /** When `true`, the field becomes optional. */
+  nullable?: boolean;
+}
+
+/**
+ * A schema field definition for a date type.
+ *
+ * Date fields are stored as ISO 8601 strings in DynamoDB and exposed as
+ * JavaScript `Date` objects on entities, mirroring `@DateAttribute` behavior.
+ *
+ * @example
+ * ```typescript
+ * const schema = {
+ *   createdDate: { type: "date" },
+ *   deletedAt: { type: "date", nullable: true }
+ * } as const satisfies ObjectSchema;
+ * ```
+ */
+export interface DateFieldDef {
+  /** Must be `"date"` to indicate a date field. */
+  type: "date";
+  /** When `true`, the field becomes optional (`Date | undefined`). */
   nullable?: boolean;
 }
 
@@ -152,6 +175,7 @@ export interface EnumFieldDef {
  *
  * This is the union of all supported field types:
  * - {@link PrimitiveFieldDef} — `"string"`, `"number"`, `"boolean"`
+ * - {@link DateFieldDef} — dates stored as ISO strings, exposed as `Date` objects
  * - {@link ObjectFieldDef} — nested objects via `fields`
  * - {@link ArrayFieldDef} — arrays/lists via `items`
  * - {@link EnumFieldDef} — string literal enums via `values`
@@ -160,6 +184,7 @@ export interface EnumFieldDef {
  */
 export type FieldDef =
   | PrimitiveFieldDef
+  | DateFieldDef
   | ObjectFieldDef
   | ArrayFieldDef
   | EnumFieldDef;
@@ -214,7 +239,7 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  * - Enum fields become a union of their `values` (`values[number]`)
  * - Nested object fields recurse through `InferObjectSchema`
  * - Array fields become `T[]` where `T` is inferred from `items`
- * - Fields with `nullable: true` become optional and accept `null` (`T | null | undefined`)
+ * - Fields with `nullable: true` become optional (`T | undefined`)
  *
  * @example
  * ```typescript
@@ -232,7 +257,7 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  * //   status: "active" | "inactive";
  * //   tags: string[];
  * //   geo: { lat: number; lng: number };
- * //   age?: number | null;
+ * //   age?: number;
  * // }
  * ```
  */
@@ -243,5 +268,5 @@ export type InferObjectSchema<S extends ObjectSchema> = {
 } & {
   [K in keyof S as S[K]["nullable"] extends true ? K : never]?: InferFieldDef<
     S[K]
-  > | null;
+  >;
 };

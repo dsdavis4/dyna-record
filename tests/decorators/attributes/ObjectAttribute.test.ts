@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, ObjectAttribute } from "../../../src/decorators";
+import {
+  Entity,
+  ObjectAttribute,
+  objectToTableItem,
+  tableItemToObject
+} from "../../../src/decorators";
 import type { ObjectSchema, InferObjectSchema } from "../../../src/decorators";
 import {
   MockTable,
-  MyClassWithAllAttributeTypes
+  MyClassWithAllAttributeTypes,
+  contactSchema,
+  addressSchema
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 import { ZodObject, ZodNullable, type ZodOptional } from "zod";
@@ -12,14 +19,19 @@ describe("ObjectAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(
-      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
-        .objectAttribute
-    ).toEqual({
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).objectAttribute;
+
+    expect(attr).toEqual({
       name: "objectAttribute",
       alias: "objectAttribute",
       nullable: false,
-      type: expect.any(ZodObject)
+      type: expect.any(ZodObject),
+      serializers: {
+        toTableAttribute: expect.any(Function),
+        toEntityAttribute: expect.any(Function)
+      }
     });
   });
 
@@ -47,18 +59,70 @@ describe("ObjectAttribute", () => {
       name: "nullableObjectAttribute",
       alias: "nullableObjectAttribute",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>)
+      type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>),
+      serializers: {
+        toTableAttribute: expect.any(Function),
+        toEntityAttribute: expect.any(Function)
+      }
     });
   });
 
-  it("does not have serializers attached (objects use native DynamoDB Map types)", () => {
-    expect.assertions(1);
+  it("serializers use objectToTableItem for toTableAttribute", () => {
+    expect.assertions(2);
 
     const attr = Metadata.getEntityAttributes(
       MyClassWithAllAttributeTypes.name
     ).objectAttribute;
 
-    expect(attr.serializers).toBeUndefined();
+    const testDate = new Date("2024-01-01T00:00:00.000Z");
+    const input = {
+      name: "test",
+      email: "a@b.com",
+      tags: [],
+      status: "active",
+      createdDate: testDate
+    };
+
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers?.toTableAttribute(input)).toEqual(
+      objectToTableItem(contactSchema, input)
+    );
+  });
+
+  it("serializers use tableItemToObject for toEntityAttribute", () => {
+    expect.assertions(2);
+
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).objectAttribute;
+
+    const input = {
+      name: "test",
+      email: "a@b.com",
+      tags: [],
+      status: "active",
+      createdDate: "2024-01-01T00:00:00.000Z"
+    };
+
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers?.toEntityAttribute(input)).toEqual(
+      tableItemToObject(contactSchema, input)
+    );
+  });
+
+  it("has serializers attached for object attributes without date fields", () => {
+    expect.assertions(2);
+
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).nullableObjectAttribute;
+
+    const input = { street: "123 Main", city: "Springfield" };
+
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers?.toTableAttribute(input)).toEqual(
+      objectToTableItem(addressSchema, input)
+    );
   });
 
   describe("types", () => {
@@ -183,6 +247,95 @@ describe("ObjectAttribute", () => {
       }
     });
 
+    describe("date fields", () => {
+      it("supports date fields in schema", () => {
+        const dateSchema = {
+          createdAt: { type: "date" }
+        } as const satisfies ObjectSchema;
+
+        @Entity
+        class ModelOne extends MockTable {
+          // @ts-expect-no-error: date field infers Date type
+          @ObjectAttribute({ schema: dateSchema })
+          public key1: InferObjectSchema<typeof dateSchema>;
+        }
+      });
+
+      it("infers Date type from date field", () => {
+        const dateSchema = {
+          createdAt: { type: "date" }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof dateSchema>;
+
+        // @ts-expect-no-error: createdAt is Date
+        const good: Inferred = { createdAt: new Date() };
+
+        // @ts-expect-error: createdAt must be Date, not string
+        const bad: Inferred = { createdAt: "2023-01-01" };
+      });
+
+      it("supports nullable date fields", () => {
+        const dateSchema = {
+          deletedAt: { type: "date", nullable: true }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof dateSchema>;
+
+        // @ts-expect-error: nullable date does not accept null (consistent with root-level nullable attributes)
+        const withNull: Inferred = { deletedAt: null };
+
+        // @ts-expect-no-error: nullable date accepts Date
+        const withValue: Inferred = { deletedAt: new Date() };
+
+        // @ts-expect-no-error: nullable date accepts undefined (optional)
+        const withUndefined: Inferred = { deletedAt: undefined };
+      });
+
+      it("supports date inside nested objects", () => {
+        const nestedDateSchema = {
+          meta: {
+            type: "object",
+            fields: {
+              createdAt: { type: "date" }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof nestedDateSchema>;
+
+        // @ts-expect-no-error: nested date accepts Date
+        const good: Inferred = { meta: { createdAt: new Date() } };
+
+        // @ts-expect-error: nested date must be Date, not string
+        const bad: Inferred = { meta: { createdAt: "2023-01-01" } };
+      });
+
+      it("supports date as array items", () => {
+        const arrayDateSchema = {
+          timestamps: {
+            type: "array",
+            items: { type: "date" }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof arrayDateSchema>;
+
+        // @ts-expect-no-error: array of Dates
+        const good: Inferred = { timestamps: [new Date(), new Date()] };
+
+        // @ts-expect-error: array item must be Date, not string
+        const bad: Inferred = { timestamps: ["2023-01-01"] };
+      });
+
+      it("values is not allowed on date type fields", () => {
+        const badSchema = {
+          // @ts-expect-error: values is not a valid property on date fields
+          createdAt: { type: "date", values: ["a", "b"] }
+        } as const satisfies ObjectSchema;
+      });
+    });
+
     describe("enum fields", () => {
       it("values is not allowed on string type fields", () => {
         const badSchema = {
@@ -279,14 +432,14 @@ describe("ObjectAttribute", () => {
 
         type Inferred = InferObjectSchema<typeof enumSchema>;
 
-        // @ts-expect-no-error: nullable enum accepts null
+        // @ts-expect-error: nullable enum does not accept null (consistent with root-level nullable attributes)
         const withNull: Inferred = { status: null };
 
         // @ts-expect-no-error: nullable enum accepts valid value
         const withValue: Inferred = { status: "active" };
 
         // @ts-expect-no-error: nullable enum accepts undefined (optional)
-        const withUndefined: Inferred = {};
+        const withUndefined: Inferred = { status: undefined };
       });
 
       it("supports enum inside nested objects", () => {
@@ -362,11 +515,16 @@ describe("ObjectAttribute", () => {
       });
 
       it("rejects wrong array item type", () => {
+        const wrongArraySchema = {
+          tags: { type: "array", items: { type: "number" } },
+          scores: { type: "array", items: { type: "number" }, nullable: true }
+        } as const satisfies ObjectSchema;
+
         @Entity
         class ModelOne extends MockTable {
-          // @ts-expect-error: number[] does not match array of string items
+          // @ts-expect-error: arraySchema expects string[] for tags, but wrongArraySchema infers number[]
           @ObjectAttribute({ schema: arraySchema })
-          public key1: { tags: number[]; scores?: number[] | null };
+          public key1: InferObjectSchema<typeof wrongArraySchema>;
         }
       });
 

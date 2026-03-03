@@ -473,7 +473,8 @@ describe("Update", () => {
                       name: "John",
                       email: "john@example.com",
                       tags: ["work", "vip"],
-                      status: "active"
+                      status: "active",
+                      createdDate: "2023-10-16T03:31:35.918Z"
                     },
                     ":stringAttribute": "1"
                   },
@@ -532,7 +533,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work", "vip"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         })
       ).toBeUndefined();
@@ -563,7 +565,8 @@ describe("Update", () => {
           name: "Old",
           email: "old@example.com",
           tags: ["old-tag"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -586,7 +589,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         }
       });
 
@@ -608,7 +612,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         updatedAt: new Date("2023-10-16T03:31:35.918Z")
       });
@@ -635,7 +640,8 @@ describe("Update", () => {
           name: "Old",
           email: "old@example.com",
           tags: ["old-tag"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1304,7 +1310,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1363,6 +1370,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1404,7 +1418,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1449,6 +1464,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1490,7 +1512,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1584,7 +1607,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1665,7 +1689,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1718,6 +1743,13 @@ describe("Update", () => {
           message: "Required",
           path: ["objectAttribute", "status"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "date",
+          message: "Required",
+          path: ["objectAttribute", "createdDate"],
+          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1759,7 +1791,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1854,7 +1887,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1950,7 +1984,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1999,7 +2034,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "bad-value"
+            status: "bad-value",
+            createdDate: new Date()
           }
         } as any);
       } catch (e: any) {
@@ -2025,7 +2061,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -2037,7 +2074,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "bad-value"
+            status: "bad-value",
+            createdDate: new Date()
           }
         } as any);
       } catch (e: any) {
@@ -2100,7 +2138,8 @@ describe("Update", () => {
           name: "John",
           email: "john@example.com",
           tags: ["work", "vip"],
-          status: "active"
+          status: "active",
+          createdDate: new Date()
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -2118,6 +2157,64 @@ describe("Update", () => {
       } catch (e: any) {
         operationSharedAssertions(e);
       }
+    });
+  });
+
+  describe("nullable fields within object attributes are stripped when set to null", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    test("static method", async () => {
+      expect.assertions(4);
+
+      await MyClassWithAllAttributeTypes.update("123", {
+        nullableObjectAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          zip: null,
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95],
+          category: null
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#nullableObjectAttribute": "nullableObjectAttribute",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":nullableObjectAttribute": {
+                      street: "123 Main St",
+                      city: "Springfield",
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [95]
+                    },
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #nullableObjectAttribute = :nullableObjectAttribute, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 
@@ -8485,7 +8582,8 @@ describe("Update", () => {
                           name: "John",
                           email: "john@example.com",
                           tags: ["work", "vip"],
-                          status: "active"
+                          status: "active",
+                          createdDate: "2023-10-16T03:31:35.918Z"
                         },
                         ":stringAttribute": "1"
                       },
@@ -8532,7 +8630,8 @@ describe("Update", () => {
                   name: "John",
                   email: "john@example.com",
                   tags: ["work", "vip"],
-                  status: "active"
+                  status: "active",
+                  createdDate: new Date()
                 }
               },
               { referentialIntegrityCheck: false }
@@ -8566,7 +8665,8 @@ describe("Update", () => {
               name: "Old",
               email: "old@example.com",
               tags: ["old-tag"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8590,7 +8690,8 @@ describe("Update", () => {
                 name: "John",
                 email: "john@example.com",
                 tags: ["work", "vip"],
-                status: "active"
+                status: "active",
+                createdDate: new Date()
               }
             },
             { referentialIntegrityCheck: false }
@@ -8614,7 +8715,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work", "vip"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             updatedAt: new Date("2023-10-16T03:31:35.918Z")
           });
@@ -8641,7 +8743,8 @@ describe("Update", () => {
               name: "Old",
               email: "old@example.com",
               tags: ["old-tag"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8871,7 +8974,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         });
       });
@@ -8883,7 +8987,8 @@ describe("Update", () => {
             name: 123,
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8896,7 +9001,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             // @ts-expect-error: tags must be string[], not string
-            tags: "not-array"
+            tags: "not-array",
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8909,7 +9015,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             // @ts-expect-error: tags must be string[], not number[]
-            tags: [123, 456]
+            tags: [123, 456],
+            createdDate: new Date()
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -8934,6 +9041,7 @@ describe("Update", () => {
             email: "john@example.com",
             tags: ["work"],
             status: "active",
+            createdDate: new Date(),
             // @ts-expect-error: extra is not in the schema
             extra: "not-allowed"
           }
@@ -8986,16 +9094,31 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          // @ts-expect-no-error: zip is nullable so it can be null or omitted
+          // @ts-expect-no-error: zip is nullable so it can be omitted
+          nullableObjectAttribute: {
+            zip: undefined,
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          }
+        });
+      });
+
+      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
+            // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
             zip: null,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
+        }).catch(() => {
+          Logger.log("Testing types");
         });
       });
 
@@ -9255,7 +9378,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9288,7 +9412,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9334,7 +9459,7 @@ describe("Update", () => {
             // @ts-expect-no-error: nested string field
             Logger.log(result.nullableObjectAttribute?.city);
 
-            // @ts-expect-no-error: nested nullable field can be number, null, or undefined
+            // @ts-expect-no-error: nested nullable field can be number or undefined
             Logger.log(result.nullableObjectAttribute?.zip);
 
             // @ts-expect-no-error: nested object field
@@ -9455,7 +9580,8 @@ describe("Update", () => {
             name: "John",
             email: "john@example.com",
             tags: ["work"],
-            status: "active"
+            status: "active",
+            createdDate: new Date()
           }
         });
       });
@@ -9470,7 +9596,8 @@ describe("Update", () => {
               name: 123,
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9487,7 +9614,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               // @ts-expect-error: tags must be string[], not string
-              tags: "not-array"
+              tags: "not-array",
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9504,7 +9632,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               // @ts-expect-error: tags must be string[], not number[]
-              tags: [123, 456]
+              tags: [123, 456],
+              createdDate: new Date()
             }
           })
           .catch(() => {
@@ -9536,6 +9665,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
+              status: "active",
+              createdDate: new Date(),
               // @ts-expect-error: extra is not in the schema
               extra: "not-allowed"
             }
@@ -9599,19 +9730,37 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null or omitted", async () => {
+      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
-          // @ts-expect-no-error: zip is nullable so it can be null or omitted
+          // @ts-expect-no-error: zip is nullable so it can be omitted
           nullableObjectAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            zip: null,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
             scores: [95]
           }
         });
+      });
+
+      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            nullableObjectAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
+              zip: null,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
       });
 
       it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
@@ -9659,7 +9808,8 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
-              status: "active"
+              status: "active",
+              createdDate: new Date()
             }
           })
           .then(result => {
@@ -9685,6 +9835,7 @@ describe("Update", () => {
               name: "John",
               email: "john@example.com",
               tags: ["work"],
+              createdDate: new Date(),
               // @ts-expect-error: "bad-value" is not a valid enum value
               status: "bad-value"
             }
@@ -9720,7 +9871,7 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute nullable enum field supports null and undefined", async () => {
+      it("nullableObjectAttribute nullable enum field supports undefined", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
@@ -9730,8 +9881,8 @@ describe("Update", () => {
             Logger.log(result.nullableObjectAttribute?.category);
 
             if (result.nullableObjectAttribute !== undefined) {
-              // @ts-expect-no-error: category is "home" | "work" | "other" | null | undefined
-              const cat: "home" | "work" | "other" | null | undefined =
+              // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
+              const cat: "home" | "work" | "other" | undefined =
                 result.nullableObjectAttribute.category;
               Logger.log(cat);
             }
