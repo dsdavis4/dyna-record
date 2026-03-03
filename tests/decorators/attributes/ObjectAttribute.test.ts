@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, ObjectAttribute } from "../../../src/decorators";
+import {
+  Entity,
+  ObjectAttribute,
+  objectToTableItem,
+  tableItemToObject
+} from "../../../src/decorators";
 import type { ObjectSchema, InferObjectSchema } from "../../../src/decorators";
 import {
   MockTable,
-  MyClassWithAllAttributeTypes
+  MyClassWithAllAttributeTypes,
+  contactSchema,
+  addressSchema
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 import { ZodObject, ZodNullable, type ZodOptional } from "zod";
@@ -12,10 +19,11 @@ describe("ObjectAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
     expect.assertions(1);
 
-    expect(
-      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
-        .objectAttribute
-    ).toEqual({
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).objectAttribute;
+
+    expect(attr).toEqual({
       name: "objectAttribute",
       alias: "objectAttribute",
       nullable: false,
@@ -59,18 +67,47 @@ describe("ObjectAttribute", () => {
     });
   });
 
-  it("has serializers attached for object attributes with date fields", () => {
+  it("serializers use objectToTableItem for toTableAttribute", () => {
     expect.assertions(2);
 
     const attr = Metadata.getEntityAttributes(
       MyClassWithAllAttributeTypes.name
     ).objectAttribute;
 
+    const testDate = new Date("2024-01-01T00:00:00.000Z");
+    const input = {
+      name: "test",
+      email: "a@b.com",
+      tags: [],
+      status: "active",
+      createdDate: testDate
+    };
+
     expect(attr.serializers).toBeDefined();
-    expect(attr.serializers).toEqual({
-      toTableAttribute: expect.any(Function),
-      toEntityAttribute: expect.any(Function)
-    });
+    expect(attr.serializers?.toTableAttribute(input)).toEqual(
+      objectToTableItem(contactSchema, input)
+    );
+  });
+
+  it("serializers use tableItemToObject for toEntityAttribute", () => {
+    expect.assertions(2);
+
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).objectAttribute;
+
+    const input = {
+      name: "test",
+      email: "a@b.com",
+      tags: [],
+      status: "active",
+      createdDate: "2024-01-01T00:00:00.000Z"
+    };
+
+    expect(attr.serializers).toBeDefined();
+    expect(attr.serializers?.toEntityAttribute(input)).toEqual(
+      tableItemToObject(contactSchema, input)
+    );
   });
 
   it("has serializers attached for object attributes without date fields", () => {
@@ -80,11 +117,12 @@ describe("ObjectAttribute", () => {
       MyClassWithAllAttributeTypes.name
     ).nullableObjectAttribute;
 
+    const input = { street: "123 Main", city: "Springfield" };
+
     expect(attr.serializers).toBeDefined();
-    expect(attr.serializers).toEqual({
-      toTableAttribute: expect.any(Function),
-      toEntityAttribute: expect.any(Function)
-    });
+    expect(attr.serializers?.toTableAttribute(input)).toEqual(
+      objectToTableItem(addressSchema, input)
+    );
   });
 
   describe("types", () => {

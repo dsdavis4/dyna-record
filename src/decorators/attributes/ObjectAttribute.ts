@@ -3,6 +3,7 @@ import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types";
 import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
+import { createObjectSerializer } from "./serializers";
 
 /**
  * Options for the `@ObjectAttribute` decorator.
@@ -103,84 +104,6 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
 }
 
 /**
- * Recursively converts `Date` objects to ISO strings for DynamoDB storage.
- */
-function objectSchemaToTableItem(
-  schema: ObjectSchema,
-  value: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, fieldDef] of Object.entries(schema)) {
-    const val = value[key];
-    if (val === undefined || val === null) {
-      continue;
-    }
-    result[key] = convertFieldToTableItem(fieldDef, val);
-  }
-  return result;
-}
-
-/**
- * Converts a single field value to its DynamoDB representation.
- */
-function convertFieldToTableItem(fieldDef: FieldDef, val: unknown): unknown {
-  switch (fieldDef.type) {
-    case "date":
-      return (val as Date).toISOString();
-    case "object":
-      return objectSchemaToTableItem(
-        fieldDef.fields,
-        val as Record<string, unknown>
-      );
-    case "array":
-      return (val as unknown[]).map(item =>
-        convertFieldToTableItem(fieldDef.items, item)
-      );
-    default:
-      return val;
-  }
-}
-
-/**
- * Recursively converts ISO strings back to `Date` objects when reading from DynamoDB.
- */
-function tableItemToObjectValue(
-  schema: ObjectSchema,
-  value: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, fieldDef] of Object.entries(schema)) {
-    const val = value[key];
-    if (val === undefined || val === null) {
-      continue;
-    }
-    result[key] = convertFieldToEntityValue(fieldDef, val);
-  }
-  return result;
-}
-
-/**
- * Converts a single field value from DynamoDB to its entity representation.
- */
-function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
-  switch (fieldDef.type) {
-    case "date":
-      return new Date(val as string);
-    case "object":
-      return tableItemToObjectValue(
-        fieldDef.fields,
-        val as Record<string, unknown>
-      );
-    case "array":
-      return (val as unknown[]).map(item =>
-        convertFieldToEntityValue(fieldDef.items, item)
-      );
-    default:
-      return val;
-  }
-}
-
-/**
  * A decorator for marking class fields as structured object attributes within the context of a single-table design entity.
  *
  * Objects are stored as native DynamoDB Map types and validated at runtime against the provided schema.
@@ -259,14 +182,7 @@ function ObjectAttribute<
       context.addInitializer(function (this: T) {
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
-
-        // TODO move this to where other serializers are, and then update the ObjectAttribute test to assert that the serializer is the one called
-        const serializers = {
-          toTableAttribute: (val: Record<string, unknown>) =>
-            objectSchemaToTableItem(schema, val),
-          toEntityAttribute: (val: Record<string, unknown>) =>
-            tableItemToObjectValue(schema, val)
-        };
+        const serializers = createObjectSerializer(schema);
 
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
