@@ -16,7 +16,9 @@ import {
   PhoneBook,
   Desk,
   User,
-  MyClassWithAllAttributeTypes
+  MyClassWithAllAttributeTypes,
+  Warehouse,
+  Shipment
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -36,8 +38,6 @@ const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
 const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
 const mockedGetCommand = jest.mocked(GetCommand);
 const mockedQueryCommand = jest.mocked(QueryCommand);
-
-// TODO make sure that there are tests that find by id with includes serializes included relationships with object attributes correctly
 
 jest.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -243,8 +243,7 @@ describe("FindById", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: "2023-10-16T03:31:35.918Z",
-        deletedAt: null // TODO would this actually return null or would it be undefined? How do other nullable attributes work?
+        createdDate: "2023-10-16T03:31:35.918Z"
       };
       const nullableObjectVal = {
         street: "123 Main St",
@@ -1340,6 +1339,84 @@ describe("FindById", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("will serialize object attributes on included related entities", async () => {
+      expect.assertions(4);
+
+      const warehouse: MockTableEntityTableItem<Warehouse> = {
+        PK: "Warehouse#100",
+        SK: "Warehouse",
+        Id: "100",
+        Type: "Warehouse",
+        Name: "Main Warehouse",
+        Location: { city: "Portland", state: "OR" },
+        CreatedAt: "2023-01-10T10:00:00.000Z",
+        UpdatedAt: "2023-01-11T10:00:00.000Z"
+      };
+
+      const shipments: Array<MockTableEntityTableItem<Shipment>> = [
+        {
+          PK: warehouse.PK,
+          SK: "Shipment#201",
+          Id: "201",
+          Type: "Shipment",
+          Destination: "Seattle",
+          Dimensions: { weight: 50, unit: "kg" },
+          WarehouseId: warehouse.Id,
+          CreatedAt: "2023-02-01T12:00:00.000Z",
+          UpdatedAt: "2023-02-02T12:00:00.000Z"
+        },
+        {
+          PK: warehouse.PK,
+          SK: "Shipment#202",
+          Id: "202",
+          Type: "Shipment",
+          Destination: "San Francisco",
+          Dimensions: { weight: 25, unit: "lbs" },
+          WarehouseId: warehouse.Id,
+          CreatedAt: "2023-02-03T12:00:00.000Z",
+          UpdatedAt: "2023-02-04T12:00:00.000Z"
+        }
+      ];
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [warehouse, ...shipments]
+      });
+
+      const result = await Warehouse.findById("100", {
+        include: [{ association: "shipments" }]
+      });
+
+      expect(result).toBeInstanceOf(Warehouse);
+      expect(result?.location).toEqual({ city: "Portland", state: "OR" });
+      expect(
+        result?.shipments.every(shipment => shipment instanceof Shipment)
+      ).toEqual(true);
+      expect(result?.shipments).toEqual([
+        {
+          pk: "Warehouse#100",
+          sk: "Shipment#201",
+          id: "201",
+          type: "Shipment",
+          destination: "Seattle",
+          dimensions: { weight: 50, unit: "kg" },
+          warehouseId: "100",
+          createdAt: new Date("2023-02-01T12:00:00.000Z"),
+          updatedAt: new Date("2023-02-02T12:00:00.000Z")
+        },
+        {
+          pk: "Warehouse#100",
+          sk: "Shipment#202",
+          id: "202",
+          type: "Shipment",
+          destination: "San Francisco",
+          dimensions: { weight: 25, unit: "lbs" },
+          warehouseId: "100",
+          createdAt: new Date("2023-02-03T12:00:00.000Z"),
+          updatedAt: new Date("2023-02-04T12:00:00.000Z")
+        }
+      ]);
     });
   });
 

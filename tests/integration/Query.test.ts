@@ -60,8 +60,7 @@ describe("Query", () => {
         email: "john@example.com",
         tags: ["work", "vip"],
         status: "active",
-        createdDate: "2023-10-16T03:31:35.918Z",
-        deletedAt: null // TODO would dynamo actually return null or would it be undefined? How do other nullable attributes work?
+        createdDate: "2023-10-16T03:31:35.918Z"
       };
       const nullableObjectVal = {
         street: "123 Main St",
