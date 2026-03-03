@@ -8,18 +8,19 @@
  * | `"string"`  | `string`        |
  * | `"number"`  | `number`        |
  * | `"boolean"` | `boolean`       |
+ * | `"date"`    | `Date`          |
  */
 export interface PrimitiveTypeMap {
   string: string;
   number: number;
   boolean: boolean;
-  date: Date; // TODO make sure this typedoc gets updated
+  date: Date;
 }
 
 /**
  * The allowed primitive type strings for object schema fields.
  *
- * Derived from the keys of {@link PrimitiveTypeMap}: `"string" | "number" | "boolean"`.
+ * Derived from the keys of {@link PrimitiveTypeMap}: `"string" | "number" | "boolean" | "date"`.
  */
 export type PrimitiveFieldType = keyof PrimitiveTypeMap;
 
