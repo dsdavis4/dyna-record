@@ -33,7 +33,7 @@ import {
   HasOne,
   StringAttribute
 } from "../../src/decorators";
-import type { NullableForeignKey } from "../../src/types";
+import type { ForeignKey, NullableForeignKey } from "../../src/types";
 import { ValidationError } from "../../src";
 import {
   type MockTableEntityTableItem,
@@ -1125,6 +1125,81 @@ describe("Create", () => {
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     }
+  });
+
+  it("will strip null nullable fields within object attributes on create so they are not stored in DynamoDB", async () => {
+    expect.assertions(5);
+
+    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+    mockedUuidv4.mockReturnValueOnce("uuid1");
+
+    const instance = await MyClassWithAllAttributeTypes.create({
+      stringAttribute: "1",
+      dateAttribute: new Date(),
+      foreignKeyAttribute: "1111" as ForeignKey,
+      boolAttribute: true,
+      numberAttribute: 9,
+      enumAttribute: "val-1",
+      objectAttribute: {
+        name: "John",
+        email: "john@example.com",
+        tags: ["work"],
+        status: "active",
+        createdDate: new Date(),
+        deletedAt: null as any
+      }
+    });
+
+    expect(instance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "MyClassWithAllAttributeTypes#uuid1",
+                  SK: "MyClassWithAllAttributeTypes",
+                  Type: "MyClassWithAllAttributeTypes",
+                  Id: "uuid1",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  stringAttribute: "1",
+                  dateAttribute: "2023-10-16T03:31:35.918Z",
+                  foreignKeyAttribute: "1111",
+                  boolAttribute: true,
+                  numberAttribute: 9,
+                  enumAttribute: "val-1",
+                  objectAttribute: {
+                    name: "John",
+                    email: "john@example.com",
+                    tags: ["work"],
+                    status: "active",
+                    createdDate: "2023-10-16T03:31:35.918Z"
+                  }
+                },
+                TableName: "mock-table"
+              }
+            },
+            {
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Customer#1111", SK: "Customer" },
+                TableName: "mock-table"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(
+      (mockTransactWriteCommand.mock.calls[0][0] as any).TransactItems[0].Put
+        .Item.objectAttribute
+    ).not.toHaveProperty("deletedAt");
   });
 
   it("will error if objectAttribute enum field has an invalid value", async () => {
@@ -3454,7 +3529,6 @@ describe("Create", () => {
       });
     });
 
-    // TODO make sure there is a runtime equivalent test for this
     it("will not allow nullable attributes to be set to null (they should be left undefined)", async () => {
       await MyModelNullableAttribute.create({
         // @ts-expect-error nullable fields cannot be set to null (they should be left undefined)

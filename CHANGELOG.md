@@ -1,3 +1,15 @@
+## Unreleased
+
+### Added
+
+- **`"date"` field type for `@ObjectAttribute`:** Define date fields within object schemas using `{ type: "date" }`. Dates are stored as ISO 8601 strings in DynamoDB and exposed as JavaScript `Date` objects on entities, mirroring `@DateAttribute` behavior. Supports `nullable: true` for optional date fields. Works at any nesting level — top-level, inside nested objects, or as array items.
+- **Object attribute serialization:** `@ObjectAttribute` now registers `toTableAttribute` and `toEntityAttribute` serializers. These handle date conversion to/from ISO strings and strip `null`/`undefined` values for nullable fields, ensuring removed fields are omitted from stored objects rather than persisted as `null` in DynamoDB.
+
+### Changed
+
+- **Nullable field semantics in `@ObjectAttribute`:** Nullable fields (`nullable: true`) now omit the field from the stored object when set to `null` or `undefined`, rather than persisting `null` in DynamoDB. Inferred types for nullable fields changed from `T | null | undefined` to `T | undefined` — use `undefined` to omit a nullable field.
+- **Update operation typing for nested object attributes:** `AllowNullForNullable` now recurses into plain object values (e.g. object schema attributes) so that nullable fields at any nesting depth can receive `| null` in update payloads, matching root-level nullable attribute behavior. This allows explicitly passing `null` for nested nullable fields during updates to remove them.
+
 ## 0.5.0 - 2026-02-22
 
 ### Added
