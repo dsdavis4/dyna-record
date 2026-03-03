@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.11 - 2026-03-02
 
 ### Added
 
@@ -10,7 +10,7 @@
 - **Nullable field semantics in `@ObjectAttribute`:** Nullable fields (`nullable: true`) now omit the field from the stored object when set to `null` or `undefined`, rather than persisting `null` in DynamoDB. Inferred types for nullable fields changed from `T | null | undefined` to `T | undefined` — use `undefined` to omit a nullable field.
 - **Update operation typing for nested object attributes:** `AllowNullForNullable` now recurses into plain object values (e.g. object schema attributes) so that nullable fields at any nesting depth can receive `| null` in update payloads, matching root-level nullable attribute behavior. This allows explicitly passing `null` for nested nullable fields during updates to remove them.
 
-## 0.5.0 - 2026-02-22
+## 0.4.10 - 2026-02-22
 
 ### Added
 
