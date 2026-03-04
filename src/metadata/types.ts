@@ -11,6 +11,7 @@ import type {
 import type DynaRecord from "../DynaRecord";
 import type { EntityClass, MakeOptional } from "../types";
 import type { ZodType } from "zod";
+import type { ObjectSchema } from "../decorators/attributes/types";
 
 /**
  * Represents relationship metadata that includes a foreign key reference to another entity.
@@ -132,6 +133,16 @@ export interface AttributeMetadataOptions {
    * Used to enforce referential integrity even when a relationship decorator is not present.
    */
   foreignKeyTarget?: EntityClass<DynaRecord>;
+  /**
+   * When the attribute is an ObjectAttribute, stores the original ObjectSchema
+   * for use in partial update operations (document path expressions).
+   */
+  objectSchema?: ObjectSchema;
+  /**
+   * When present, an alternative Zod type used for partial (update) validation.
+   * ObjectAttributes use this to allow partial field updates.
+   */
+  partialType?: ZodType;
 }
 
 /**

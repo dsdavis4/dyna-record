@@ -22,6 +22,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Query](#query)
     - [Filtering on Object Attributes](#filtering-on-object-attributes)
   - [Update](#update)
+    - [Updating Object Attributes](#updating-object-attributes)
   - [Delete](#delete)
 - [Type Safety Features](#type-safety-features)
 - [Best Practices](#best-practices)
@@ -208,7 +209,7 @@ class Store extends MyTable {
 - **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
 - **Storage:** Objects are stored as native DynamoDB Map types
-- **Updates:** Updates replace the entire object (not a partial merge)
+- **Partial updates:** Updates are partial — only the fields you provide are modified. Omitted fields are preserved. Nested objects are recursively merged. See [Updating Object Attributes](#updating-object-attributes)
 - **Filtering:** Object attributes support dot-path filtering in queries — see [Filtering on Object Attributes](#filtering-on-object-attributes)
 
 ##### Enum fields
@@ -694,6 +695,64 @@ Note: Attempting to remove a non nullable foreign key will result in a [NullCons
 await Pet.update("123", {
   ownerId: null
 });
+```
+
+#### Updating Object Attributes
+
+Object attribute updates are **partial** — only the fields you provide are modified, and omitted fields are preserved. This uses DynamoDB document path expressions under the hood (e.g., `SET #address.#street = :address_street`) for efficient field-level updates.
+
+```typescript
+// Only updates street — city, zip, geo, etc. are preserved
+await Store.update("123", {
+  address: { street: "456 New St" }
+});
+```
+
+**Nested objects** are recursively merged:
+
+```typescript
+// Only updates lat — lng and accuracy are preserved
+await Store.update("123", {
+  address: {
+    geo: { lat: 42 }
+  }
+});
+```
+
+**Nullable fields** within the object can be removed by setting them to `null`:
+
+```typescript
+// Removes zip, preserves all other fields
+await Store.update("123", {
+  address: { zip: null }
+});
+```
+
+**Arrays** within objects are **full replacement** (not merged):
+
+```typescript
+// Replaces the entire tags array
+await Store.update("123", {
+  address: { tags: ["new-tag-1", "new-tag-2"] }
+});
+```
+
+Setting a **nullable object attribute** itself to `null` removes the entire object:
+
+```typescript
+// Removes the entire metadata object
+await Store.update("123", {
+  metadata: null
+});
+```
+
+The instance `update` method returns a deep-merged result, preserving existing fields:
+
+```typescript
+const updated = await storeInstance.update({
+  address: { street: "New Street" }
+});
+// updated.address.city → still has the original value
 ```
 
 #### Instance Method

@@ -1,3 +1,12 @@
+## 0.4.12 - 2026-03-03
+
+### Changed
+
+- **Partial `@ObjectAttribute` updates:** Updating an `@ObjectAttribute` is now a **partial merge** instead of a full replacement. Only the fields you provide are modified — omitted fields are preserved. Under the hood, dyna-record generates DynamoDB document path expressions (e.g., `SET #address.#street = :address_street`) instead of replacing the entire map. Nested objects are recursively merged. Arrays within objects are still full replacement. Setting a nullable field within an object to `null` generates a `REMOVE` expression for that specific field. Setting a nullable object attribute itself to `null` removes the entire object (unchanged behavior).
+- **Update types for `@ObjectAttribute`:** All fields within object attributes are now optional (`Partial<>`) in update payloads, matching the partial update semantics. This is a compile-time change — you no longer need to provide all required fields when updating a subset of an object attribute.
+- **Update validation for `@ObjectAttribute`:** The Zod schema used for update validation is now a deep partial schema for object attributes. All fields are optional (can be omitted), but type validation still applies for provided fields. Non-nullable fields still reject `null`.
+- **Instance `update` deep merge:** The instance `update` method now deep merges object attributes, preserving existing fields not included in the partial update. Previously, `Object.assign` would shallow-replace the entire object attribute value.
+
 ## 0.4.11 - 2026-03-02
 
 ### Added

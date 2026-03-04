@@ -13,7 +13,7 @@ import {
   addressSchema
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodObject, ZodNullable, type ZodOptional } from "zod";
+import { ZodObject, ZodNullable, type ZodOptional, type ZodType } from "zod";
 
 describe("ObjectAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -28,6 +28,8 @@ describe("ObjectAttribute", () => {
       alias: "objectAttribute",
       nullable: false,
       type: expect.any(ZodObject),
+      partialType: expect.any(ZodObject),
+      objectSchema: contactSchema,
       serializers: {
         toTableAttribute: expect.any(Function),
         toEntityAttribute: expect.any(Function)
@@ -60,6 +62,8 @@ describe("ObjectAttribute", () => {
       alias: "nullableObjectAttribute",
       nullable: true,
       type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>),
+      partialType: expect.any(ZodObject),
+      objectSchema: addressSchema,
       serializers: {
         toTableAttribute: expect.any(Function),
         toEntityAttribute: expect.any(Function)

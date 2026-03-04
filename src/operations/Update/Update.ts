@@ -18,9 +18,11 @@ import {
 } from "../../utils";
 import {
   type UpdateExpression,
+  type DocumentPathOperation,
   buildBelongsToLinkKey,
   expressionBuilder,
-  extractForeignKeyFromEntity
+  extractForeignKeyFromEntity,
+  flattenObjectForUpdate
 } from "../utils";
 import OperationBase from "../OperationBase";
 import type {
@@ -363,7 +365,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    *
    * **What it does:**
    * - Merges the provided attributes with `updatedAt` (automatically set to the current time).
-   * - Converts the updated attributes into a DynamoDB update expression.
+   * - For `@ObjectAttribute` fields with non-null values, flattens the partial object into
+   *   {@link DocumentPathOperation | document path operations} (e.g., `SET #address.#street = :address_street`)
+   *   instead of replacing the entire map. Nested objects are recursively flattened.
+   * - For regular attributes and `@ObjectAttribute` fields set to `null`, uses the standard
+   *   expression builder (existing full-replacement / REMOVE behavior).
+   * - Combines both regular and document path expressions into a single DynamoDB update expression.
    *
    * @param attributes - The partial attributes to be updated on the entity.
    * @returns An object containing:
@@ -377,8 +384,35 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       updatedAt: new Date()
     };
 
-    const tableAttrs = entityToTableItem(this.EntityClass, updatedAttrs);
-    const expression = expressionBuilder(tableAttrs);
+    const entityAttrs = Metadata.getEntityAttributes(this.EntityClass.name);
+
+    // Separate ObjectAttribute fields (non-null) for document path handling
+    const regularAttrs: Record<string, unknown> = {};
+    const allDocumentPathOps: DocumentPathOperation[] = [];
+
+    for (const [key, val] of Object.entries(updatedAttrs)) {
+      const attrMeta = entityAttrs[key];
+
+      if (attrMeta?.objectSchema !== undefined && val != null) {
+        // ObjectAttribute with non-null value → flatten for document path updates
+        const alias = attrMeta.alias;
+        const ops = flattenObjectForUpdate(
+          [alias],
+          attrMeta.objectSchema,
+          val as unknown as Record<string, unknown>
+        );
+        allDocumentPathOps.push(...ops);
+      } else {
+        // Regular attribute or ObjectAttribute set to null → existing behavior
+        regularAttrs[key] = val;
+      }
+    }
+
+    const tableAttrs = entityToTableItem(
+      this.EntityClass,
+      regularAttrs as Partial<T>
+    );
+    const expression = expressionBuilder(tableAttrs, allDocumentPathOps);
 
     return { updatedAttrs, expression };
   }

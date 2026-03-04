@@ -50,7 +50,10 @@ export function objectToTableItem(
   return result;
 }
 
-function convertFieldToTableItem(fieldDef: FieldDef, val: unknown): unknown {
+export function convertFieldToTableItem(
+  fieldDef: FieldDef,
+  val: unknown
+): unknown {
   switch (fieldDef.type) {
     case "date":
       return (val as Date).toISOString();

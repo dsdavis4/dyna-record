@@ -27,3 +27,16 @@ export interface UpdateRemoveExpression {
  * Represents either an update expression for setting new or modifying existing attributes of an item (UpdateSetExpression) or an update expression for removing attributes from an item (UpdateRemoveExpression) in DynamoDB.
  */
 export type UpdateExpression = UpdateSetExpression | UpdateRemoveExpression;
+
+/**
+ * Represents a single document path operation for partial ObjectAttribute updates.
+ * Used to build DynamoDB document path expressions like `SET #addr.#street = :addr_street`
+ * or `REMOVE #addr.#zip`.
+ */
+export interface DocumentPathOperation {
+  type: "set" | "remove";
+  /** Path segments, e.g. ["address", "street"] or ["address", "geo", "lat"] */
+  path: string[];
+  /** The serialized value for SET operations */
+  value?: unknown;
+}

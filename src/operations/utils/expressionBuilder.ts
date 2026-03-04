@@ -2,7 +2,8 @@ import type { DynamoTableItem } from "../../types";
 import type {
   UpdateExpression,
   UpdateSetExpression,
-  UpdateRemoveExpression
+  UpdateRemoveExpression,
+  DocumentPathOperation
 } from "./types";
 
 /**
@@ -14,17 +15,64 @@ interface AttributesByOperand {
 }
 
 /**
- * Builds a dynamo expression given the table attributes
+ * Builds a dynamo expression given the table attributes and optional document path operations
  * @param tableAttrs The table aliases of the entity attributes
+ * @param documentPathOps Optional document path operations for partial ObjectAttribute updates
  * @returns
  */
 export const expressionBuilder = (
-  tableAttrs: DynamoTableItem
+  tableAttrs: DynamoTableItem,
+  documentPathOps?: DocumentPathOperation[]
 ): UpdateExpression => {
   const sorted = sortAttributesByOperand(tableAttrs);
 
   const setExpression = buildUpdateSetExpression(sorted.set);
   const removeExpression = buildUpdateRemoveExpression(sorted.remove);
+
+  // Merge document path operations into the expressions
+  if (documentPathOps !== undefined && documentPathOps.length > 0) {
+    const docPathResult = buildDocumentPathExpressions(documentPathOps);
+
+    // Merge SET items
+    if (docPathResult.setItems.length > 0) {
+      Object.assign(
+        setExpression.ExpressionAttributeNames,
+        docPathResult.expressionAttributeNames
+      );
+      Object.assign(
+        setExpression.ExpressionAttributeValues,
+        docPathResult.expressionAttributeValues
+      );
+
+      const existingSet = setExpression.UpdateExpression;
+      const docSetClause = docPathResult.setItems.join(", ");
+
+      if (existingSet !== "") {
+        // Append to existing SET clause
+        setExpression.UpdateExpression = `${existingSet}, ${docSetClause}`;
+      } else {
+        setExpression.UpdateExpression = `SET ${docSetClause}`;
+      }
+    }
+
+    // Merge REMOVE items
+    if (docPathResult.removeItems.length > 0) {
+      // Add names used in REMOVE paths
+      Object.assign(
+        removeExpression.ExpressionAttributeNames,
+        docPathResult.expressionAttributeNames
+      );
+
+      const existingRemove = removeExpression.UpdateExpression;
+      const docRemoveClause = docPathResult.removeItems.join(", ");
+
+      if (existingRemove !== "") {
+        removeExpression.UpdateExpression = `${existingRemove}, ${docRemoveClause}`;
+      } else {
+        removeExpression.UpdateExpression = `REMOVE ${docRemoveClause}`;
+      }
+    }
+  }
 
   return {
     // If the operation has only REMOVE actions, it will not have expression attribute values
@@ -40,6 +88,48 @@ export const expressionBuilder = (
       .filter(expr => expr)
       .join(" ")
   };
+};
+
+interface DocPathExpressions {
+  setItems: string[];
+  removeItems: string[];
+  expressionAttributeNames: Record<string, string>;
+  expressionAttributeValues: Record<string, unknown>;
+}
+
+/**
+ * Build document path expressions from DocumentPathOperations
+ */
+const buildDocumentPathExpressions = (
+  ops: DocumentPathOperation[]
+): DocPathExpressions => {
+  const result: DocPathExpressions = {
+    setItems: [],
+    removeItems: [],
+    expressionAttributeNames: {},
+    expressionAttributeValues: {}
+  };
+
+  for (const op of ops) {
+    // Build the document path expression: #segment1.#segment2.#segment3
+    const pathExpr = op.path.map(seg => `#${seg}`).join(".");
+    // Build the value placeholder: :segment1_segment2_segment3
+    const valuePlaceholder = `:${op.path.join("_")}`;
+
+    // Register all path segment names
+    for (const seg of op.path) {
+      result.expressionAttributeNames[`#${seg}`] = seg;
+    }
+
+    if (op.type === "set") {
+      result.setItems.push(`${pathExpr} = ${valuePlaceholder}`);
+      result.expressionAttributeValues[valuePlaceholder] = op.value;
+    } else {
+      result.removeItems.push(pathExpr);
+    }
+  }
+
+  return result;
 };
 
 /**

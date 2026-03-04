@@ -2,6 +2,7 @@ import { type ZodType } from "zod";
 import type DynaRecord from "../DynaRecord";
 import type { AttributeMetadataOptions, Serializers } from "./types";
 import type { EntityClass } from "../types";
+import type { ObjectSchema } from "../decorators/attributes/types";
 
 /**
  * Represents the metadata for an attribute of an entity, including its name, alias (if any), nullability, and serialization strategies.
@@ -24,6 +25,8 @@ class AttributeMetadata {
   public readonly serializers?: Serializers;
   public readonly type: ZodType;
   public readonly foreignKeyTarget?: EntityClass<DynaRecord>;
+  public readonly objectSchema?: ObjectSchema;
+  public readonly partialType?: ZodType;
 
   constructor(options: AttributeMetadataOptions) {
     this.name = options.attributeName;
@@ -31,6 +34,8 @@ class AttributeMetadata {
     this.nullable = options.nullable ?? false;
     this.serializers = options.serializers;
     this.foreignKeyTarget = options.foreignKeyTarget;
+    this.objectSchema = options.objectSchema;
+    this.partialType = options.partialType;
 
     if (options.nullable === true) {
       this.type = options.type.optional().nullable();

@@ -33,6 +33,49 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
 }
 
 /**
+ * Converts an {@link ObjectSchema} to a partial Zod schema for update validation.
+ *
+ * All fields become optional (can be omitted). Nullable fields accept `null`.
+ * Non-nullable fields reject `null`. Nested objects are recursively partial.
+ * Array items validate normally (full replacement).
+ *
+ * @param schema The object schema definition
+ * @returns A ZodType that validates partial objects matching the schema
+ */
+function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
+  const shape: Record<string, ZodType> = {};
+
+  for (const [key, fieldDef] of Object.entries(schema)) {
+    shape[key] = fieldDefToZodPartial(fieldDef);
+  }
+
+  return z.object(shape).partial();
+}
+
+/**
+ * Converts a single {@link FieldDef} to the corresponding partial Zod type.
+ * Nested objects use partial schemas; all other types use the standard schema.
+ * Nullable handling is applied at the end.
+ */
+function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
+  let zodType: ZodType;
+
+  if (fieldDef.type === "object") {
+    zodType = objectSchemaToZodPartial(fieldDef.fields);
+  } else {
+    zodType = fieldDefToZod(fieldDef);
+    // fieldDefToZod already applied nullable wrapping, so return directly
+    return zodType;
+  }
+
+  if (fieldDef.nullable === true) {
+    zodType = zodType.optional().nullable();
+  }
+
+  return zodType;
+}
+
+/**
  * Converts an {@link ObjectSchema} to a Zod schema for runtime validation.
  *
  * @param schema The object schema definition
@@ -156,6 +199,25 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * // address.geo.accuracy → "precise" | "approximate"
  * ```
  *
+ * **Partial updates:** When updating an entity, `@ObjectAttribute` fields support partial
+ * updates — only the fields you provide are modified, omitted fields are preserved. Under
+ * the hood, dyna-record generates DynamoDB document path expressions
+ * (e.g., `SET #address.#street = :address_street`) instead of replacing the entire map.
+ * Nested objects are recursively merged. Arrays within objects are full replacement.
+ * Setting a nullable field within an object to `null` generates a `REMOVE` expression
+ * for that specific field.
+ *
+ * ```typescript
+ * // Only updates street — city, zip, geo are preserved
+ * await MyEntity.update("id", { address: { street: "456 Oak Ave" } });
+ *
+ * // Remove a nullable field within the object
+ * await MyEntity.update("id", { address: { zip: null } });
+ *
+ * // Setting a nullable ObjectAttribute itself to null removes the entire object
+ * await MyEntity.update("id", { meta: null });
+ * ```
+ *
  * Object attributes support filtering in queries using dot-path notation for nested fields
  * and the {@link ContainsFilter | $contains} operator for List membership checks.
  *
@@ -182,13 +244,16 @@ function ObjectAttribute<
       context.addInitializer(function (this: T) {
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
+        const partialZodSchema = objectSchemaToZodPartial(schema);
         const serializers = createObjectSerializer(schema);
 
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
           nullable: props?.nullable,
           type: zodSchema,
+          partialType: partialZodSchema,
           serializers,
+          objectSchema: schema,
           ...restProps
         });
       });
