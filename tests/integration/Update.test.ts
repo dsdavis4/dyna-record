@@ -8931,6 +8931,116 @@ describe("Update", () => {
       });
     });
 
+    describe("mixed SET and REMOVE across root-level and nested nullable attributes", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#stringAttribute": "stringAttribute",
+                      "#nullableStringAttribute": "nullableStringAttribute",
+                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#street": "street",
+                      "#zip": "zip",
+                      "#category": "category"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":stringAttribute": "updated-val",
+                      ":nullableObjectAttribute_street": "New Street"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt, " +
+                      "#nullableObjectAttribute.#street = :nullableObjectAttribute_street " +
+                      "REMOVE #nullableStringAttribute, " +
+                      "#nullableObjectAttribute.#zip, #nullableObjectAttribute.#category"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: "updated-val",
+          nullableStringAttribute: null,
+          nullableObjectAttribute: {
+            street: "New Street",
+            zip: null,
+            category: null
+          }
+        });
+
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(4);
+
+        const instance = createInstance(MyClassWithAllAttributeTypes, {
+          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+          sk: "MyClassWithAllAttributeTypes" as SortKey,
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "old-val",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Test",
+            email: "test@example.com",
+            tags: ["tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          nullableStringAttribute: "will-be-removed",
+          nullableObjectAttribute: {
+            street: "Old Street",
+            city: "Old City",
+            zip: 12345,
+            geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+            scores: [10],
+            category: "home" as const
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+
+        await instance.update({
+          stringAttribute: "updated-val",
+          nullableStringAttribute: null,
+          nullableObjectAttribute: {
+            street: "New Street",
+            zip: null,
+            category: null
+          }
+        });
+
+        dbOperationAssertions();
+      });
+    });
+
     describe("duplicate field names across nested objects and root attribute", () => {
       test("generates unique document path expressions for each nested path", async () => {
         expect.assertions(5);
