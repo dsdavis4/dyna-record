@@ -522,10 +522,42 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
+const duplicateFieldNameSchema = {
+  name: { type: "string" },
+  nested1: {
+    type: "object",
+    fields: {
+      name: { type: "string" },
+      value: { type: "number" }
+    }
+  },
+  nested2: {
+    type: "object",
+    fields: {
+      name: { type: "string" },
+      value: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
+
 const locationSchema = {
   city: { type: "string" },
   state: { type: "string" }
 } as const satisfies ObjectSchema;
+
+@Entity
+class DuplicateFieldEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({
+    alias: "DuplicateFieldObj",
+    schema: duplicateFieldNameSchema
+  })
+  public readonly duplicateFieldObj: InferObjectSchema<
+    typeof duplicateFieldNameSchema
+  >;
+}
 
 @Entity
 class Warehouse extends MockTable {
@@ -563,6 +595,7 @@ export {
   // Schemas
   addressSchema,
   contactSchema,
+  duplicateFieldNameSchema,
   locationSchema,
   // MockTable exports
   MockTable,
@@ -579,6 +612,7 @@ export {
   Author,
   Book,
   AuthorBook,
+  DuplicateFieldEntity,
   MyClassWithAllAttributeTypes,
   User,
   Organization,

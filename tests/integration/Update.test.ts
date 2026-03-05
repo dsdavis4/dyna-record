@@ -9,6 +9,7 @@ import {
   ContactInformation,
   Customer,
   Desk,
+  DuplicateFieldEntity,
   Employee,
   Grade,
   MockTable,
@@ -8927,6 +8928,83 @@ describe("Update", () => {
             }
           ]);
         }
+      });
+    });
+
+    describe("duplicate field names across nested objects and root attribute", () => {
+      test("generates unique document path expressions for each nested path", async () => {
+        expect.assertions(5);
+
+        await DuplicateFieldEntity.update("123", {
+          name: "root-name",
+          duplicateFieldObj: {
+            name: "top-level-obj-name",
+            nested1: { name: "nested1-name", value: 10 },
+            nested2: { name: "nested2-name", value: 20 }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt",
+                      "#DuplicateFieldObj": "DuplicateFieldObj",
+                      "#name": "name",
+                      "#nested1": "nested1",
+                      "#nested2": "nested2",
+                      "#value": "value"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "root-name",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":DuplicateFieldObj_name": "top-level-obj-name",
+                      ":DuplicateFieldObj_nested1_name": "nested1-name",
+                      ":DuplicateFieldObj_nested1_value": 10,
+                      ":DuplicateFieldObj_nested2_name": "nested2-name",
+                      ":DuplicateFieldObj_nested2_value": 20
+                    },
+                    Key: {
+                      PK: "DuplicateFieldEntity#123",
+                      SK: "DuplicateFieldEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt, " +
+                      "#DuplicateFieldObj.#name = :DuplicateFieldObj_name, " +
+                      "#DuplicateFieldObj.#nested1.#name = :DuplicateFieldObj_nested1_name, " +
+                      "#DuplicateFieldObj.#nested1.#value = :DuplicateFieldObj_nested1_value, " +
+                      "#DuplicateFieldObj.#nested2.#name = :DuplicateFieldObj_nested2_name, " +
+                      "#DuplicateFieldObj.#nested2.#value = :DuplicateFieldObj_nested2_value"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+
+        const updateCmd =
+          mockTransactWriteCommand.mock.calls[0]?.[0]?.TransactItems?.[0]
+            ?.Update;
+        expect(
+          updateCmd?.ExpressionAttributeValues?.[
+            ":DuplicateFieldObj_nested1_name"
+          ]
+        ).not.toEqual(
+          updateCmd?.ExpressionAttributeValues?.[
+            ":DuplicateFieldObj_nested2_name"
+          ]
+        );
       });
     });
 
