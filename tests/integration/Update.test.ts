@@ -8587,15 +8587,31 @@ describe("Update", () => {
           }
         });
 
-        // Deep merge: existing fields preserved, updated fields changed
-        expect(updatedInstance.objectAttribute).toEqual({
-          name: "NewName",
-          email: "new@example.com",
-          tags: ["old-tag"],
-          status: "active",
-          createdDate: new Date("2023-01-01")
-        });
         expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+
+        // Full instance: non-ObjectAttribute fields unchanged, ObjectAttribute deep merged
+        expect(updatedInstance).toEqual(
+          expect.objectContaining({
+            id: "123",
+            type: "MyClassWithAllAttributeTypes",
+            stringAttribute: "1",
+            dateAttribute: new Date("2023-01-02"),
+            foreignKeyAttribute: "11111",
+            boolAttribute: false,
+            numberAttribute: 9,
+            enumAttribute: "val-2",
+            objectAttribute: {
+              name: "NewName",
+              email: "new@example.com",
+              tags: ["old-tag"],
+              status: "active",
+              createdDate: new Date("2023-01-01")
+            },
+            createdAt: new Date("2023-10-01"),
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          })
+        );
+
         // Original instance is not mutated
         expect(instance.objectAttribute).toEqual({
           name: "Old",
