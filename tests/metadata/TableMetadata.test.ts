@@ -1903,6 +1903,74 @@ describe("TableMetadata", () => {
                 foreignKey: "warehouseId"
               }
             }
+          },
+          DuplicateFieldEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              duplicateFieldObj: {
+                name: "duplicateFieldObj",
+                alias: "DuplicateFieldObj",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              DuplicateFieldObj: {
+                name: "duplicateFieldObj",
+                alias: "DuplicateFieldObj",
+                nullable: false
+              }
+            },
+            relationships: {}
           }
         }
       });
