@@ -62,7 +62,7 @@ describe("ObjectAttribute", () => {
       alias: "nullableObjectAttribute",
       nullable: true,
       type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>),
-      partialType: expect.any(ZodObject),
+      partialType: expect.any(ZodNullable),
       objectSchema: addressSchema,
       serializers: {
         toTableAttribute: expect.any(Function),

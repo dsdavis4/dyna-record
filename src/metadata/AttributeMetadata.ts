@@ -35,12 +35,12 @@ class AttributeMetadata {
     this.serializers = options.serializers;
     this.foreignKeyTarget = options.foreignKeyTarget;
     this.objectSchema = options.objectSchema;
-    this.partialType = options.partialType;
-
     if (options.nullable === true) {
       this.type = options.type.optional().nullable();
+      this.partialType = options.partialType?.optional().nullable();
     } else {
       this.type = options.type;
+      this.partialType = options.partialType;
     }
   }
 }

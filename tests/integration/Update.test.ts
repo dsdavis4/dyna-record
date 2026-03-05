@@ -9547,27 +9547,27 @@ describe("Update", () => {
         expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
 
         // Full instance: non-ObjectAttribute fields unchanged, ObjectAttribute deep merged
-        expect(updatedInstance).toEqual(
-          expect.objectContaining({
-            id: "123",
-            type: "MyClassWithAllAttributeTypes",
-            stringAttribute: "1",
-            dateAttribute: new Date("2023-01-02"),
-            foreignKeyAttribute: "11111",
-            boolAttribute: false,
-            numberAttribute: 9,
-            enumAttribute: "val-2",
-            objectAttribute: {
-              name: "NewName",
-              email: "new@example.com",
-              tags: ["old-tag"],
-              status: "active",
-              createdDate: new Date("2023-01-01")
-            },
-            createdAt: new Date("2023-10-01"),
-            updatedAt: new Date("2023-10-16T03:31:35.918Z")
-          })
-        );
+        expect(updatedInstance).toEqual({
+          pk: "MyClassWithAllAttributeTypes#123",
+          sk: "MyClassWithAllAttributeTypes",
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111",
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "NewName",
+            email: "new@example.com",
+            tags: ["old-tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
 
         // Original instance is not mutated
         expect(instance.objectAttribute).toEqual({
@@ -9799,6 +9799,139 @@ describe("Update", () => {
             }
           ]
         ]);
+      });
+    });
+
+    describe("setting nullable ObjectAttribute itself to null generates REMOVE for the entire attribute", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#nullableObjectAttribute": "nullableObjectAttribute"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt REMOVE #nullableObjectAttribute"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await MyClassWithAllAttributeTypes.update("123", {
+            nullableObjectAttribute: null
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(6);
+
+        const inst = createInstance(MyClassWithAllAttributeTypes, {
+          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+          sk: "MyClassWithAllAttributeTypes" as SortKey,
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Name",
+            email: "email",
+            tags: ["tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          nullableObjectAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 39.78, lng: -89.65, accuracy: "precise" },
+            scores: [95]
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+
+        const updatedInstance = await inst.update({
+          nullableObjectAttribute: null
+        });
+
+        expect(updatedInstance).toEqual({
+          pk: "MyClassWithAllAttributeTypes#123",
+          sk: "MyClassWithAllAttributeTypes",
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111",
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Name",
+            email: "email",
+            tags: ["tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+        expect(updatedInstance.nullableObjectAttribute).toBeUndefined();
+        dbOperationAssertions();
+      });
+    });
+
+    describe("setting non-nullable ObjectAttribute to null throws ValidationError", () => {
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: null
+          } as any);
+        } catch (e: any) {
+          expect(e).toBeInstanceOf(ValidationError);
+          expect(e.message).toEqual("Validation errors");
+          expect(e.cause).toEqual([
+            {
+              code: "invalid_type",
+              expected: "object",
+              received: "null",
+              path: ["objectAttribute"],
+              message: "Expected object, received null"
+            }
+          ]);
+        }
       });
     });
 
