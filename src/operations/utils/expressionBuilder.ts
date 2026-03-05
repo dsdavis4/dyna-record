@@ -15,6 +15,21 @@ interface AttributesByOperand {
 }
 
 /**
+ * Accumulated expression fragments and placeholders for document path (nested attribute) update operations.
+ * Used when merging partial ObjectAttribute updates into the main update expression.
+ */
+interface DocPathExpressions {
+  /** SET clause fragments, e.g. `#path = :value`, to be joined into the UpdateExpression SET clause. */
+  setItems: string[];
+  /** REMOVE clause path fragments (expression-only, no values), to be joined into the UpdateExpression REMOVE clause. */
+  removeItems: string[];
+  /** DynamoDB ExpressionAttributeNames: placeholder (#foo) → actual attribute name. */
+  expressionAttributeNames: Record<string, string>;
+  /** DynamoDB ExpressionAttributeValues: placeholder (:foo) → value. */
+  expressionAttributeValues: Record<string, unknown>;
+}
+
+/**
  * Builds a dynamo expression given the table attributes and optional document path operations
  * @param tableAttrs The table aliases of the entity attributes
  * @param documentPathOps Optional document path operations for partial ObjectAttribute updates
@@ -89,13 +104,6 @@ export const expressionBuilder = (
       .join(" ")
   };
 };
-
-interface DocPathExpressions {
-  setItems: string[];
-  removeItems: string[];
-  expressionAttributeNames: Record<string, string>;
-  expressionAttributeValues: Record<string, unknown>;
-}
 
 /**
  * Build document path expressions from DocumentPathOperations
