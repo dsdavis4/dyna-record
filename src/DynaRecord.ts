@@ -386,8 +386,8 @@ abstract class DynaRecord implements DynaRecordBase {
 
     // Deep merge ObjectAttributes, shallow assign everything else
     mergePartialObjectAttributes(
-      clone as unknown as Record<string, unknown>,
-      updatedAttributes as Record<string, unknown>,
+      clone as Record<string, unknown>,
+      updatedAttributes,
       entityAttrs
     );
 
