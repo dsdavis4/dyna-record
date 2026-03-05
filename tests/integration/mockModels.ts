@@ -542,7 +542,8 @@ const duplicateFieldNameSchema = {
 
 const locationSchema = {
   city: { type: "string" },
-  state: { type: "string" }
+  state: { type: "string" },
+  zip: { type: "number", nullable: true }
 } as const satisfies ObjectSchema;
 
 @Entity
@@ -573,7 +574,8 @@ class Warehouse extends MockTable {
 
 const dimensionsSchema = {
   weight: { type: "number" },
-  unit: { type: "string" }
+  unit: { type: "string" },
+  label: { type: "string", nullable: true }
 } as const satisfies ObjectSchema;
 
 @Entity
@@ -591,12 +593,76 @@ class Shipment extends MockTable {
   public readonly warehouse: Warehouse;
 }
 
+const inventorySchema = {
+  quantity: { type: "number" },
+  location: { type: "string" },
+  notes: { type: "string", nullable: true }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Catalog extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Inventory", schema: inventorySchema })
+  public readonly inventory: InferObjectSchema<typeof inventorySchema>;
+
+  @HasOne(() => CatalogItem, { foreignKey: "catalogId" })
+  public readonly catalogItem: CatalogItem;
+}
+
+@Entity
+class CatalogItem extends MockTable {
+  @StringAttribute({ alias: "Description" })
+  public readonly description: string;
+
+  @ForeignKeyAttribute(() => Catalog, { alias: "CatalogId" })
+  public readonly catalogId: ForeignKey<Catalog>;
+
+  @BelongsTo(() => Catalog, { foreignKey: "catalogId" })
+  public readonly catalog: Catalog;
+}
+
+@Entity
+class Sponsor extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Inventory", schema: inventorySchema })
+  public readonly inventory: InferObjectSchema<typeof inventorySchema>;
+
+  @HasAndBelongsToMany(() => Festival, {
+    targetKey: "sponsors",
+    through: () => ({ joinTable: SponsorFestival, foreignKey: "sponsorId" })
+  })
+  public readonly festivals: Festival[];
+}
+
+@Entity
+class Festival extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Sponsor, {
+    targetKey: "festivals",
+    through: () => ({ joinTable: SponsorFestival, foreignKey: "festivalId" })
+  })
+  public readonly sponsors: Sponsor[];
+}
+
+class SponsorFestival extends JoinTable<Sponsor, Festival> {
+  public readonly sponsorId: ForeignKey;
+  public readonly festivalId: ForeignKey;
+}
+
 export {
   // Schemas
   addressSchema,
   contactSchema,
   duplicateFieldNameSchema,
   locationSchema,
+  inventorySchema,
+  dimensionsSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -623,6 +689,11 @@ export {
   Founder,
   Warehouse,
   Shipment,
+  Catalog,
+  CatalogItem,
+  Sponsor,
+  Festival,
+  SponsorFestival,
   // OtherTable exports
   OtherTable,
   Teacher,

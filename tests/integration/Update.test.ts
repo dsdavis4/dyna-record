@@ -6,11 +6,14 @@ import {
 import {
   type Address,
   type Assignment,
+  Catalog,
+  type CatalogItem,
   ContactInformation,
   Customer,
   Desk,
   DuplicateFieldEntity,
   Employee,
+  type Festival,
   Grade,
   MockTable,
   MyClassWithAllAttributeTypes,
@@ -20,11 +23,12 @@ import {
   type Person,
   Pet,
   PhoneBook,
+  Shipment,
+  Sponsor,
   type Student,
   type User,
   Website,
-  Warehouse,
-  type Shipment
+  Warehouse
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -8491,6 +8495,959 @@ describe("Update", () => {
         });
 
         dbOperationAssertions();
+      });
+    });
+  });
+
+  describe("partial ObjectAttribute updates propagate to denormalized records", () => {
+    describe("HasMany - partial update propagates to related entity partitions", () => {
+      const warehouse: MockTableEntityTableItem<Warehouse> = {
+        PK: "Warehouse#123",
+        SK: "Warehouse",
+        Id: "123",
+        Type: "Warehouse",
+        Name: "Main Warehouse",
+        Location: { city: "Springfield", state: "IL", zip: 62704 },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Warehouse, {
+        pk: "Warehouse#123" as PartitionKey,
+        sk: "Warehouse" as SortKey,
+        id: "123",
+        type: "Warehouse",
+        name: "Main Warehouse",
+        location: { city: "Springfield", state: "IL", zip: 62704 },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedShipment: MockTableEntityTableItem<Shipment> = {
+          PK: warehouse.PK,
+          SK: "Shipment#456",
+          Id: "456",
+          Type: "Shipment",
+          Destination: "Chicago",
+          Dimensions: { weight: 50, unit: "kg" },
+          WarehouseId: warehouse.Id,
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [warehouse, linkedShipment]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#123",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#city": "city"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Location_city": "Chicago",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Warehouse in Shipment partition gets the same expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#city": "city"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Location_city": "Chicago",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Warehouse.update("123", {
+              location: { city: "Chicago" }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            location: { city: "Chicago" }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            location: { city: "Chicago", state: "IL", zip: 62704 },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#123",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Location.#zip",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#zip": "zip"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Warehouse in Shipment partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Location.#zip",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#zip": "zip"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Warehouse.update("123", {
+              location: { zip: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            location: { zip: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            location: { city: "Springfield", state: "IL" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("BelongsTo - partial update propagates to foreign entity partition", () => {
+      const shipment: MockTableEntityTableItem<Shipment> = {
+        PK: "Shipment#456",
+        SK: "Shipment",
+        Id: "456",
+        Type: "Shipment",
+        Destination: "Chicago",
+        Dimensions: { weight: 50, unit: "kg", label: "Heavy" },
+        WarehouseId: "W123",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Shipment, {
+        pk: "Shipment#456" as PartitionKey,
+        sk: "Shipment" as SortKey,
+        id: "456",
+        type: "Shipment",
+        destination: "Chicago",
+        dimensions: { weight: 50, unit: "kg", label: "Heavy" },
+        warehouseId: "W123" as ForeignKey<Warehouse>,
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({
+          Items: [shipment]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to foreign entity partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Shipment#456",
+                  ":Type1": "Shipment"
+                },
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
+              }
+            ]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    // Update the Shipment main record
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Shipment"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Dimensions.#weight = :Dimensions_weight",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#weight": "weight"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Dimensions_weight": 100,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Shipment in Warehouse partition gets the same expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#W123",
+                        SK: "Shipment#456"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Dimensions.#weight = :Dimensions_weight",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#weight": "weight"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Dimensions_weight": 100,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(4);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Shipment.update("456", {
+              dimensions: { weight: 100 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(4);
+
+          const updatedInstance = await instance.update({
+            dimensions: { weight: 100 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            dimensions: { weight: 100, unit: "kg", label: "Heavy" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to foreign entity partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Shipment"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Dimensions.#label",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#label": "label"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Shipment in Warehouse partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#W123",
+                        SK: "Shipment#456"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Dimensions.#label",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#label": "label"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Shipment.update("456", {
+              dimensions: { label: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            dimensions: { label: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            dimensions: { weight: 50, unit: "kg" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("HasOne - partial update propagates to related entity partition", () => {
+      const catalog: MockTableEntityTableItem<Catalog> = {
+        PK: "Catalog#123",
+        SK: "Catalog",
+        Id: "123",
+        Type: "Catalog",
+        Name: "Spring Collection",
+        Inventory: { quantity: 100, location: "Aisle 3", notes: "Fragile" },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Catalog, {
+        pk: "Catalog#123" as PartitionKey,
+        sk: "Catalog" as SortKey,
+        id: "123",
+        type: "Catalog",
+        name: "Spring Collection",
+        inventory: { quantity: 100, location: "Aisle 3", notes: "Fragile" },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedCatalogItem: MockTableEntityTableItem<CatalogItem> = {
+          PK: catalog.PK,
+          SK: "CatalogItem",
+          Id: "456",
+          Type: "CatalogItem",
+          Description: "Blue Widget",
+          CatalogId: catalog.Id,
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [catalog, linkedCatalogItem]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Catalog#123",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 200,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Catalog in CatalogItem partition gets the same expression (HasOne SK = "Catalog")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "CatalogItem#456",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 200,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Catalog.update("123", {
+              inventory: { quantity: 200 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { quantity: 200 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 200, location: "Aisle 3", notes: "Fragile" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Catalog#123",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Catalog in CatalogItem partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "CatalogItem#456",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Catalog.update("123", {
+              inventory: { notes: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { notes: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 100, location: "Aisle 3" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("HasAndBelongsToMany - partial update propagates to related entity partitions", () => {
+      const sponsor: MockTableEntityTableItem<Sponsor> = {
+        PK: "Sponsor#123",
+        SK: "Sponsor",
+        Id: "123",
+        Type: "Sponsor",
+        Name: "Acme Corp",
+        Inventory: { quantity: 500, location: "Booth A", notes: "Premium" },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Sponsor, {
+        pk: "Sponsor#123" as PartitionKey,
+        sk: "Sponsor" as SortKey,
+        id: "123",
+        type: "Sponsor",
+        name: "Acme Corp",
+        inventory: { quantity: 500, location: "Booth A", notes: "Premium" },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedFestival1: MockTableEntityTableItem<Festival> = {
+          PK: sponsor.PK,
+          SK: "Festival#456",
+          Id: "456",
+          Type: "Festival",
+          Name: "Summer Fest",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        const linkedFestival2: MockTableEntityTableItem<Festival> = {
+          PK: sponsor.PK,
+          SK: "Festival#789",
+          Id: "789",
+          Type: "Festival",
+          Name: "Winter Gala",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [sponsor, linkedFestival1, linkedFestival2]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Sponsor#123",
+                        SK: "Sponsor"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#456 partition (HABTM SK = "Sponsor#123")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#456",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#789 partition (HABTM SK = "Sponsor#123")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#789",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Sponsor.update("123", {
+              inventory: { quantity: 1000 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { quantity: 1000 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: {
+              quantity: 1000,
+              location: "Booth A",
+              notes: "Premium"
+            },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Sponsor#123",
+                        SK: "Sponsor"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#456 partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#456",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#789 partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#789",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Sponsor.update("123", {
+              inventory: { notes: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { notes: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 500, location: "Booth A" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
       });
     });
   });
