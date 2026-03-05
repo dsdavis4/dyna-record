@@ -4116,6 +4116,160 @@ describe("Create", () => {
         }
       });
 
+      it("root-level enumAttribute rejects invalid literal on create input", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          // @ts-expect-error: "val-3" is not a valid enum value for enumAttribute ("val-1" | "val-2")
+          enumAttribute: "val-3",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("root-level nullableEnumAttribute rejects invalid literal on create input", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          // @ts-expect-error: "val-3" is not a valid enum value for nullableEnumAttribute ("val-1" | "val-2")
+          nullableEnumAttribute: "val-3",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("return value root-level enumAttribute is typed as literal union", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          }
+        });
+
+        // @ts-expect-no-error: enumAttribute is "val-1" | "val-2"
+        const val: "val-1" | "val-2" = res.enumAttribute;
+        Logger.log(val);
+
+        // @ts-expect-error: enumAttribute is "val-1" | "val-2", not number
+        const valAsNum: number = res.enumAttribute;
+        Logger.log(valAsNum);
+      });
+
+      it("return value root-level nullableEnumAttribute is typed as literal union or undefined", async () => {
+        const res = await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          }
+        });
+
+        // @ts-expect-no-error: nullableEnumAttribute is "val-1" | "val-2" | undefined
+        const val: "val-1" | "val-2" | undefined = res.nullableEnumAttribute;
+        Logger.log(val);
+
+        // @ts-expect-error: nullableEnumAttribute is not number
+        const valAsNum: number = res.nullableEnumAttribute;
+        Logger.log(valAsNum);
+      });
+
+      it("objectAttribute nested enum accuracy rejects invalid literal on create input", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          },
+          nullableObjectAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: {
+              lat: 1,
+              lng: 2,
+              // @ts-expect-error: "bad-value" is not a valid enum value for accuracy ("precise" | "approximate")
+              accuracy: "bad-value"
+            },
+            scores: [95]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("objectAttribute nullable enum category rejects invalid literal on create input", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date()
+          },
+          nullableObjectAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95],
+            // @ts-expect-error: "bad-value" is not a valid enum value for category ("home" | "work" | "other")
+            category: "bad-value"
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
       it("return value objectAttribute enum field is typed as union of values", async () => {
         const res = await MyClassWithAllAttributeTypes.create({
           stringAttribute: "val",

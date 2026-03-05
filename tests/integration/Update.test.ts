@@ -10277,6 +10277,121 @@ describe("Update", () => {
           });
       });
 
+      it("root-level enumAttribute rejects invalid literal on static update input", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
+          // @ts-expect-error: "val-3" is not a valid enum value for enumAttribute ("val-1" | "val-2")
+          enumAttribute: "val-3"
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("root-level nullableEnumAttribute rejects invalid literal on static update input", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
+          // @ts-expect-error: "val-3" is not a valid enum value for nullableEnumAttribute ("val-1" | "val-2")
+          nullableEnumAttribute: "val-3"
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("root-level enumAttribute rejects invalid literal on instance update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            // @ts-expect-error: "val-3" is not a valid enum value for enumAttribute ("val-1" | "val-2")
+            enumAttribute: "val-3"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("root-level nullableEnumAttribute rejects invalid literal on instance update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            // @ts-expect-error: "val-3" is not a valid enum value for nullableEnumAttribute ("val-1" | "val-2")
+            nullableEnumAttribute: "val-3"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value root-level enumAttribute is typed as literal union", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: enumAttribute is "val-1" | "val-2"
+            const val: "val-1" | "val-2" = result.enumAttribute;
+            Logger.log(val);
+
+            // @ts-expect-error: enumAttribute is "val-1" | "val-2", not number
+            const valAsNum: number = result.enumAttribute;
+            Logger.log(valAsNum);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value root-level nullableEnumAttribute is typed as literal union or undefined", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: nullableEnumAttribute is "val-1" | "val-2" | undefined
+            const val: "val-1" | "val-2" | undefined =
+              result.nullableEnumAttribute;
+            Logger.log(val);
+
+            // @ts-expect-error: nullableEnumAttribute is not number
+            const valAsNum: number = result.nullableEnumAttribute;
+            Logger.log(valAsNum);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("objectAttribute nested enum accuracy rejects invalid literal on update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            nullableObjectAttribute: {
+              geo: {
+                // @ts-expect-error: "bad-value" is not a valid enum value for accuracy ("precise" | "approximate")
+                accuracy: "bad-value"
+              }
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("objectAttribute nullable enum category rejects invalid literal on update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            nullableObjectAttribute: {
+              // @ts-expect-error: "bad-value" is not a valid enum value for category ("home" | "work" | "other")
+              category: "bad-value"
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
       it("return value objectAttribute enum field is typed as union of values", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
