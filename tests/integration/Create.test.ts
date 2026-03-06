@@ -21,7 +21,9 @@ import {
   type Student,
   Employee,
   type Warehouse,
-  Shipment
+  Shipment,
+  DeepNestedEntity,
+  ArrayOfObjectsEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -278,6 +280,12 @@ describe("Create", () => {
         tags: ["work", "vip"],
         status: "active",
         createdDate: new Date()
+      },
+      addressAttribute: {
+        street: "123 Main St",
+        city: "Springfield",
+        geo: { lat: 1, lng: 2, accuracy: "precise" },
+        scores: [95]
       }
     });
 
@@ -305,6 +313,12 @@ describe("Create", () => {
         status: "active",
         createdDate: new Date()
       },
+      addressAttribute: {
+        street: "123 Main St",
+        city: "Springfield",
+        geo: { lat: 1, lng: 2, accuracy: "precise" },
+        scores: [95]
+      },
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
@@ -324,6 +338,12 @@ describe("Create", () => {
                   SK: "MyClassWithAllAttributeTypes",
                   Type: "MyClassWithAllAttributeTypes",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  addressAttribute: {
+                    street: "123 Main St",
+                    city: "Springfield",
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [95]
+                  },
                   boolAttribute: true,
                   dateAttribute: "2023-10-16T03:31:35.918Z",
                   enumAttribute: "val-1",
@@ -480,6 +500,13 @@ describe("Create", () => {
           message: "Required",
           path: ["objectAttribute"],
           received: "undefined"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Required",
+          path: ["addressAttribute"],
+          received: "undefined"
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -520,6 +547,12 @@ describe("Create", () => {
           tags: ["work", "vip"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       });
     } catch (e: any) {
@@ -558,6 +591,12 @@ describe("Create", () => {
                       tags: ["work", "vip"],
                       status: "active",
                       createdDate: "2023-10-16T03:31:35.918Z"
+                    },
+                    addressAttribute: {
+                      street: "123 Main St",
+                      city: "Springfield",
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [95]
                     },
                     stringAttribute: "1"
                   },
@@ -604,7 +643,13 @@ describe("Create", () => {
         numberAttribute: "9",
         nullableNumberAttribute: "10",
         enumAttribute: "val-3",
-        nullableEnumAttribute: "val-4"
+        nullableEnumAttribute: "val-4",
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
+        }
       } as any);
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
@@ -724,6 +769,12 @@ describe("Create", () => {
           name: 123,
           email: true,
           tags: "not-array"
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       } as any);
     } catch (e: any) {
@@ -786,6 +837,12 @@ describe("Create", () => {
           name: "John",
           email: "john@example.com",
           tags: ["valid", 123, true]
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       } as any);
     } catch (e: any) {
@@ -826,7 +883,7 @@ describe("Create", () => {
     }
   });
 
-  it("will error if nullableObjectAttribute nested object and array fields are the wrong type", async () => {
+  it("will error if addressAttribute nested object and array fields are the wrong type", async () => {
     expect.assertions(5);
 
     try {
@@ -844,7 +901,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: "bad", lng: "bad" },
@@ -859,28 +916,28 @@ describe("Create", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "string"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "string"
         },
         {
           code: "invalid_type",
           expected: "'precise' | 'approximate'",
           message: "Required",
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          path: ["addressAttribute", "geo", "accuracy"],
           received: "undefined"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "string"
         }
       ]);
@@ -889,7 +946,7 @@ describe("Create", () => {
     }
   });
 
-  it("will error if nullableObjectAttribute top-level fields are the wrong type", async () => {
+  it("will error if addressAttribute top-level fields are the wrong type", async () => {
     expect.assertions(5);
 
     try {
@@ -907,7 +964,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: 123,
           city: false,
           geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -922,14 +979,14 @@ describe("Create", () => {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received number",
-          path: ["nullableObjectAttribute", "street"],
+          path: ["addressAttribute", "street"],
           received: "number"
         },
         {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received boolean",
-          path: ["nullableObjectAttribute", "city"],
+          path: ["addressAttribute", "city"],
           received: "boolean"
         }
       ]);
@@ -953,6 +1010,12 @@ describe("Create", () => {
           name: null,
           email: null,
           tags: null
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       } as any);
     } catch (e: any) {
@@ -1000,7 +1063,7 @@ describe("Create", () => {
     }
   });
 
-  it("will error if non-nullable nullableObjectAttribute fields are set to null", async () => {
+  it("will error if non-nullable nested fields within addressAttribute are set to null", async () => {
     expect.assertions(5);
 
     try {
@@ -1018,71 +1081,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
-          street: null,
-          city: null,
-          zip: null,
-          geo: null,
-          scores: null
-        }
-      } as any);
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(ValidationError);
-      expect(e.message).toEqual("Validation errors");
-      expect(e.cause).toEqual([
-        {
-          code: "invalid_type",
-          expected: "string",
-          message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "street"],
-          received: "null"
-        },
-        {
-          code: "invalid_type",
-          expected: "string",
-          message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "city"],
-          received: "null"
-        },
-        {
-          code: "invalid_type",
-          expected: "object",
-          message: "Expected object, received null",
-          path: ["nullableObjectAttribute", "geo"],
-          received: "null"
-        },
-        {
-          code: "invalid_type",
-          expected: "array",
-          message: "Expected array, received null",
-          path: ["nullableObjectAttribute", "scores"],
-          received: "null"
-        }
-      ]);
-      expect(mockSend.mock.calls).toEqual([]);
-      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
-    }
-  });
-
-  it("will error if non-nullable nested fields within nullableObjectAttribute are set to null", async () => {
-    expect.assertions(5);
-
-    try {
-      await MyClassWithAllAttributeTypes.create({
-        stringAttribute: "val",
-        dateAttribute: new Date(),
-        foreignKeyAttribute: "123" as any,
-        boolAttribute: true,
-        numberAttribute: 1,
-        enumAttribute: "val-1",
-        objectAttribute: {
-          name: "John",
-          email: "john@example.com",
-          tags: ["work"],
-          status: "active",
-          createdDate: new Date()
-        },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: null, lng: null },
@@ -1097,28 +1096,28 @@ describe("Create", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "'precise' | 'approximate'",
           message: "Required",
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          path: ["addressAttribute", "geo", "accuracy"],
           received: "undefined"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "null"
         }
       ]);
@@ -1148,6 +1147,12 @@ describe("Create", () => {
         status: "active",
         createdDate: new Date(),
         deletedAt: null as any
+      },
+      addressAttribute: {
+        street: "123 Main St",
+        city: "Springfield",
+        geo: { lat: 1, lng: 2, accuracy: "precise" },
+        scores: [95]
       }
     });
 
@@ -1180,6 +1185,12 @@ describe("Create", () => {
                     tags: ["work"],
                     status: "active",
                     createdDate: "2023-10-16T03:31:35.918Z"
+                  },
+                  addressAttribute: {
+                    street: "123 Main St",
+                    city: "Springfield",
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [95]
                   }
                 },
                 TableName: "mock-table"
@@ -1218,6 +1229,12 @@ describe("Create", () => {
           email: "john@example.com",
           tags: ["work"],
           status: "bad-value"
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       } as any);
     } catch (e: any) {
@@ -1245,7 +1262,7 @@ describe("Create", () => {
     }
   });
 
-  it("will error if nullableObjectAttribute nested enum field has an invalid value", async () => {
+  it("will error if addressAttribute nested enum field has an invalid value", async () => {
     expect.assertions(5);
 
     try {
@@ -1263,7 +1280,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: 1, lng: 2, accuracy: "bad-value" },
@@ -1279,7 +1296,7 @@ describe("Create", () => {
           message:
             "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
           options: ["precise", "approximate"],
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          path: ["addressAttribute", "geo", "accuracy"],
           received: "bad-value"
         }
       ]);
@@ -3040,6 +3057,12 @@ describe("Create", () => {
               tags: ["work", "vip"],
               status: "active",
               createdDate: new Date()
+            },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
             }
           },
           { referentialIntegrityCheck: false }
@@ -3069,6 +3092,12 @@ describe("Create", () => {
             status: "active",
             createdDate: new Date()
           },
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          },
           createdAt: new Date("2023-10-16T03:31:35.918Z"),
           updatedAt: new Date("2023-10-16T03:31:35.918Z")
         });
@@ -3090,6 +3119,12 @@ describe("Create", () => {
                       SK: "MyClassWithAllAttributeTypes",
                       Type: "MyClassWithAllAttributeTypes",
                       UpdatedAt: "2023-10-16T03:31:35.918Z",
+                      addressAttribute: {
+                        street: "123 Main St",
+                        city: "Springfield",
+                        geo: { lat: 1, lng: 2, accuracy: "precise" },
+                        scores: [95]
+                      },
                       boolAttribute: true,
                       dateAttribute: "2023-10-16T03:31:35.918Z",
                       enumAttribute: "val-1",
@@ -3308,6 +3343,12 @@ describe("Create", () => {
               tags: ["work", "vip"],
               status: "active",
               createdDate: new Date()
+            },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
             }
           },
           { referentialIntegrityCheck: false }
@@ -3343,6 +3384,12 @@ describe("Create", () => {
                     status: "active",
                     createdDate: "2023-10-16T03:31:35.918Z"
                   },
+                  addressAttribute: {
+                    street: "123 Main St",
+                    city: "Springfield",
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [95]
+                  },
                   stringAttribute: "1"
                 },
                 TableName: "mock-table"
@@ -3351,6 +3398,110 @@ describe("Create", () => {
           ]
         );
       });
+    });
+  });
+
+  describe("create deeply nested object with nullable fields omitted", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockSend.mockResolvedValue({});
+    });
+
+    it("creates with nested objects as empty objects when all inner fields are nullable and omitted", async () => {
+      expect.assertions(4);
+
+      await DeepNestedEntity.create({
+        name: "Deep Test",
+        data: {
+          label: "root",
+          level1: {
+            level2: {
+              level3: {}
+            }
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
+      expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
+        {
+          Put: {
+            ConditionExpression: "attribute_not_exists(PK)",
+            Item: {
+              PK: "DeepNestedEntity#uuid1",
+              SK: "DeepNestedEntity",
+              Id: "uuid1",
+              Type: "DeepNestedEntity",
+              CreatedAt: "2023-10-16T03:31:35.918Z",
+              UpdatedAt: "2023-10-16T03:31:35.918Z",
+              Name: "Deep Test",
+              Data: {
+                label: "root",
+                level1: {
+                  level2: {
+                    level3: {}
+                  }
+                }
+              }
+            },
+            TableName: "mock-table"
+          }
+        }
+      ]);
+    });
+  });
+
+  describe("create with array of objects", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockSend.mockResolvedValue({});
+    });
+
+    it("creates entity with array of objects field", async () => {
+      expect.assertions(4);
+
+      await ArrayOfObjectsEntity.create({
+        name: "Test Catalog",
+        data: {
+          title: "Spring",
+          entries: [
+            { sku: "A1", price: 10 },
+            { sku: "B2", price: 20 }
+          ]
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
+      expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
+        {
+          Put: {
+            ConditionExpression: "attribute_not_exists(PK)",
+            Item: {
+              PK: "ArrayOfObjectsEntity#uuid1",
+              SK: "ArrayOfObjectsEntity",
+              Id: "uuid1",
+              Type: "ArrayOfObjectsEntity",
+              CreatedAt: "2023-10-16T03:31:35.918Z",
+              UpdatedAt: "2023-10-16T03:31:35.918Z",
+              Name: "Test Catalog",
+              Data: {
+                title: "Spring",
+                entries: [
+                  { sku: "A1", price: 10 },
+                  { sku: "B2", price: 20 }
+                ]
+              }
+            },
+            TableName: "mock-table"
+          }
+        }
+      ]);
     });
   });
 
@@ -3609,6 +3760,12 @@ describe("Create", () => {
           tags: ["work"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       });
     });
@@ -3642,6 +3799,12 @@ describe("Create", () => {
           tags: ["work"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       }).catch(() => {
         Logger.log("Testing types");
@@ -3662,6 +3825,12 @@ describe("Create", () => {
           // @ts-expect-error: tags must be string[], not string
           tags: "not-array",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       }).catch(() => {
         Logger.log("Testing types");
@@ -3682,6 +3851,12 @@ describe("Create", () => {
           // @ts-expect-error: tags must be string[], not number[]
           tags: [123, 456],
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       }).catch(() => {
         Logger.log("Testing types");
@@ -3699,6 +3874,12 @@ describe("Create", () => {
         // @ts-expect-error: email and tags are missing
         objectAttribute: {
           name: "John"
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
       }).catch(() => {
         Logger.log("Testing types");
@@ -3727,7 +3908,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute is optional on create", async () => {
+    it("addressAttribute is required on create", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3741,12 +3922,18 @@ describe("Create", () => {
           tags: ["work"],
           status: "active",
           createdDate: new Date()
+        },
+        // @ts-expect-no-error: addressAttribute is required
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         }
-        // @ts-expect-no-error: nullableObjectAttribute is optional
       });
     });
 
-    it("nullableObjectAttribute accepts correct nested object shape", async () => {
+    it("addressAttribute accepts correct nested object shape", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3762,7 +3949,7 @@ describe("Create", () => {
           createdDate: new Date()
         },
         // @ts-expect-no-error: correct nested shape is accepted
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -3771,7 +3958,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+    it("addressAttribute does not accept wrong types for nested object fields", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3786,7 +3973,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: {
@@ -3802,7 +3989,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+    it("addressAttribute does not accept wrong item types in arrays", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3817,7 +4004,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -3829,7 +4016,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
+    it("addressAttribute allows nullable fields to be omitted", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3845,7 +4032,7 @@ describe("Create", () => {
           createdDate: new Date()
         },
         // @ts-expect-no-error: zip is nullable so it can be omitted
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -3854,7 +4041,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute does not allow nullable fields to be null (omit instead)", async () => {
+    it("addressAttribute does not allow nullable fields to be null (omit instead)", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3869,7 +4056,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           // @ts-expect-error: nullable fields cannot be set to null, they should be left undefined
@@ -3882,7 +4069,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+    it("addressAttribute does not allow non-nullable fields to be null", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3897,7 +4084,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           // @ts-expect-error: street is non-nullable, cannot be null
           street: null,
           city: "Springfield",
@@ -3909,7 +4096,7 @@ describe("Create", () => {
       });
     });
 
-    it("nullableObjectAttribute does not accept missing required nested fields", async () => {
+    it("addressAttribute does not accept missing required nested fields", async () => {
       await MyClassWithAllAttributeTypes.create({
         stringAttribute: "val",
         dateAttribute: new Date(),
@@ -3924,7 +4111,7 @@ describe("Create", () => {
           status: "active",
           createdDate: new Date()
         },
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           // @ts-expect-error: geo is missing required field lng
@@ -3951,6 +4138,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -3984,6 +4177,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -4010,6 +4209,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -4017,7 +4222,7 @@ describe("Create", () => {
         Logger.log(res.objectAttribute.nonExistent);
       });
 
-      it("return value nullableObjectAttribute is optional (may be undefined)", async () => {
+      it("return value addressAttribute is always present (not optional)", async () => {
         const res = await MyClassWithAllAttributeTypes.create({
           stringAttribute: "val",
           dateAttribute: new Date(),
@@ -4031,18 +4236,20 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
-        try {
-          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
-          Logger.log(res.nullableObjectAttribute.city);
-        } catch {
-          Logger.log("Testing types");
-        }
+        // @ts-expect-no-error: addressAttribute is always present, direct access works
+        Logger.log(res.addressAttribute.city);
       });
 
-      it("return value nullableObjectAttribute is accessible with optional chaining", async () => {
+      it("return value addressAttribute nested fields have correct types", async () => {
         const res = await MyClassWithAllAttributeTypes.create({
           stringAttribute: "val",
           dateAttribute: new Date(),
@@ -4056,63 +4263,30 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
-        // @ts-expect-no-error: optional chaining allows safe access
-        Logger.log(res.nullableObjectAttribute?.street);
-
-        // @ts-expect-no-error: nested string field
-        Logger.log(res.nullableObjectAttribute?.city);
-
-        // @ts-expect-no-error: nested nullable field can be number or undefined
-        Logger.log(res.nullableObjectAttribute?.zip);
-
-        // @ts-expect-no-error: nested object field
-        Logger.log(res.nullableObjectAttribute?.geo.lat);
-
-        // @ts-expect-no-error: nested object field
-        Logger.log(res.nullableObjectAttribute?.geo.lng);
-
-        // @ts-expect-no-error: nested array field
-        Logger.log(res.nullableObjectAttribute?.scores);
-
-        // @ts-expect-no-error: array item is a number
-        Logger.log(res.nullableObjectAttribute?.scores[0]);
-      });
-
-      it("return value nullableObjectAttribute nested fields have correct types", async () => {
-        const res = await MyClassWithAllAttributeTypes.create({
-          stringAttribute: "val",
-          dateAttribute: new Date(),
-          foreignKeyAttribute: "123",
-          boolAttribute: true,
-          numberAttribute: 1,
-          enumAttribute: "val-1",
-          objectAttribute: {
-            name: "John",
-            email: "john@example.com",
-            tags: ["work"],
-            status: "active",
-            createdDate: new Date()
-          }
-        });
-
-        if (res.nullableObjectAttribute !== undefined) {
+        if (res.addressAttribute !== undefined) {
           // @ts-expect-error: city is string, not number
-          const cityAsNum: number = res.nullableObjectAttribute.city;
+          const cityAsNum: number = res.addressAttribute.city;
           Logger.log(cityAsNum);
 
           // @ts-expect-error: geo.lat is number, not string
-          const latAsStr: string = res.nullableObjectAttribute.geo.lat;
+          const latAsStr: string = res.addressAttribute.geo.lat;
           Logger.log(latAsStr);
 
           // @ts-expect-error: scores is number[], not string[]
-          const scoresAsStrs: string[] = res.nullableObjectAttribute.scores;
+          const scoresAsStrs: string[] = res.addressAttribute.scores;
           Logger.log(scoresAsStrs);
 
           // @ts-expect-error: nonExistent is not in the schema
-          Logger.log(res.nullableObjectAttribute.nonExistent);
+          Logger.log(res.addressAttribute.nonExistent);
         }
       });
 
@@ -4173,6 +4347,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -4199,6 +4379,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -4226,7 +4412,7 @@ describe("Create", () => {
             status: "active",
             createdDate: new Date()
           },
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main",
             city: "Springfield",
             geo: {
@@ -4257,7 +4443,7 @@ describe("Create", () => {
             status: "active",
             createdDate: new Date()
           },
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -4284,6 +4470,12 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
@@ -4316,7 +4508,7 @@ describe("Create", () => {
         });
       });
 
-      it("return value nullableObjectAttribute nullable enum field supports undefined", async () => {
+      it("return value addressAttribute nullable enum field supports undefined", async () => {
         const res = await MyClassWithAllAttributeTypes.create({
           stringAttribute: "val",
           dateAttribute: new Date(),
@@ -4330,16 +4522,22 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
         // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
-        Logger.log(res.nullableObjectAttribute?.category);
+        Logger.log(res.addressAttribute?.category);
 
-        if (res.nullableObjectAttribute !== undefined) {
+        if (res.addressAttribute !== undefined) {
           // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
           const cat: "home" | "work" | "other" | undefined =
-            res.nullableObjectAttribute.category;
+            res.addressAttribute.category;
           Logger.log(cat);
         }
       });
@@ -4358,20 +4556,26 @@ describe("Create", () => {
             tags: ["work"],
             status: "active",
             createdDate: new Date()
+          },
+          addressAttribute: {
+            street: "123 Main",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
           }
         });
 
         // @ts-expect-no-error: accuracy is accessible on geo via optional chaining
-        Logger.log(res.nullableObjectAttribute?.geo.accuracy);
+        Logger.log(res.addressAttribute?.geo.accuracy);
 
-        if (res.nullableObjectAttribute !== undefined) {
+        if (res.addressAttribute !== undefined) {
           // @ts-expect-no-error: accuracy is "precise" | "approximate"
           const acc: "precise" | "approximate" =
-            res.nullableObjectAttribute.geo.accuracy;
+            res.addressAttribute.geo.accuracy;
           Logger.log(acc);
 
           // @ts-expect-error: accuracy is "precise" | "approximate", not number
-          const accAsNum: number = res.nullableObjectAttribute.geo.accuracy;
+          const accAsNum: number = res.addressAttribute.geo.accuracy;
           Logger.log(accAsNum);
         }
       });

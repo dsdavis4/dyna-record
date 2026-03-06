@@ -393,8 +393,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     for (const [key, val] of Object.entries(updatedAttrs)) {
       const attrMeta = entityAttrs[key];
 
-      if (attrMeta?.objectSchema !== undefined && val != null) {
-        // ObjectAttribute with non-null value → flatten for document path updates
+      if (attrMeta?.objectSchema !== undefined) {
+        // ObjectAttribute → flatten for document path updates (objects are never nullable)
         const alias = attrMeta.alias;
         const ops = flattenObjectForUpdate(
           [alias],
@@ -403,7 +403,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         );
         allDocumentPathOps.push(...ops);
       } else {
-        // Regular attribute or ObjectAttribute set to null → existing behavior
+        // Regular attribute → existing behavior
         regularAttrs[key] = val;
       }
     }

@@ -62,7 +62,7 @@ describe("Query", () => {
         status: "active",
         createdDate: "2023-10-16T03:31:35.918Z"
       };
-      const nullableObjectVal = {
+      const addressVal = {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
@@ -86,7 +86,7 @@ describe("Query", () => {
             foreignKeyAttribute: "111",
             enumAttribute: "val-1",
             objectAttribute: objectTableVal,
-            nullableObjectAttribute: nullableObjectVal
+            addressAttribute: addressVal
           }
         ]
       });
@@ -107,7 +107,7 @@ describe("Query", () => {
         nullableEnumAttribute: undefined,
         nullableForeignKeyAttribute: undefined,
         nullableNumberAttribute: undefined,
-        nullableObjectAttribute: {
+        addressAttribute: {
           city: "Springfield",
           geo: { lat: 40.7128, lng: -74.006 },
           scores: [95, 87, 100],
@@ -156,7 +156,7 @@ describe("Query", () => {
         createdDate: "2023-10-16T03:31:35.918Z",
         deletedAt: null
       },
-      nullableObjectAttribute: {
+      addressAttribute: {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
@@ -185,7 +185,7 @@ describe("Query", () => {
         status: "active",
         createdDate: new Date("2023-10-16T03:31:35.918Z")
       },
-      nullableObjectAttribute: {
+      addressAttribute: {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
@@ -239,7 +239,7 @@ describe("Query", () => {
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
-          "nullableObjectAttribute.zip": 12345
+          "addressAttribute.zip": 12345
         }
       });
 
@@ -251,15 +251,14 @@ describe("Query", () => {
           {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK2",
-            FilterExpression:
-              "#nullableObjectAttribute.#zip = :nullableObjectAttributezip1",
+            FilterExpression: "#addressAttribute.#zip = :addressAttributezip1",
             ExpressionAttributeNames: {
               "#PK": "PK",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#zip": "zip"
             },
             ExpressionAttributeValues: {
-              ":nullableObjectAttributezip1": 12345,
+              ":addressAttributezip1": 12345,
               ":PK2": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -274,7 +273,7 @@ describe("Query", () => {
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
-          "nullableObjectAttribute.geo.lat": 40.7128
+          "addressAttribute.geo.lat": 40.7128
         }
       });
 
@@ -287,15 +286,15 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK2",
             FilterExpression:
-              "#nullableObjectAttribute.#geo.#lat = :nullableObjectAttributegeolat1",
+              "#addressAttribute.#geo.#lat = :addressAttributegeolat1",
             ExpressionAttributeNames: {
               "#PK": "PK",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#geo": "geo",
               "#lat": "lat"
             },
             ExpressionAttributeValues: {
-              ":nullableObjectAttributegeolat1": 40.7128,
+              ":addressAttributegeolat1": 40.7128,
               ":PK2": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -345,7 +344,7 @@ describe("Query", () => {
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
-          "nullableObjectAttribute.scores": { $contains: 95 }
+          "addressAttribute.scores": { $contains: 95 }
         }
       });
 
@@ -358,14 +357,14 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK2",
             FilterExpression:
-              "contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores1)",
+              "contains(#addressAttribute.#scores, :addressAttributescores1)",
             ExpressionAttributeNames: {
               "#PK": "PK",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#scores": "scores"
             },
             ExpressionAttributeValues: {
-              ":nullableObjectAttributescores1": 95,
+              ":addressAttributescores1": 95,
               ":PK2": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -448,7 +447,7 @@ describe("Query", () => {
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
-          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"]
+          "addressAttribute.city": ["Springfield", "Shelbyville"]
         }
       });
 
@@ -461,15 +460,15 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK3",
             FilterExpression:
-              "#nullableObjectAttribute.#city IN (:nullableObjectAttributecity1,:nullableObjectAttributecity2)",
+              "#addressAttribute.#city IN (:addressAttributecity1,:addressAttributecity2)",
             ExpressionAttributeNames: {
               "#PK": "PK",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#city": "city"
             },
             ExpressionAttributeValues: {
-              ":nullableObjectAttributecity1": "Springfield",
-              ":nullableObjectAttributecity2": "Shelbyville",
+              ":addressAttributecity1": "Springfield",
+              ":addressAttributecity2": "Shelbyville",
               ":PK3": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -485,7 +484,7 @@ describe("Query", () => {
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
           "objectAttribute.name": "John",
-          "nullableObjectAttribute.city": "Springfield"
+          "addressAttribute.city": "Springfield"
         }
       });
 
@@ -498,17 +497,17 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK3",
             FilterExpression:
-              "#objectAttribute.#name = :objectAttributename1 AND #nullableObjectAttribute.#city = :nullableObjectAttributecity2",
+              "#objectAttribute.#name = :objectAttributename1 AND #addressAttribute.#city = :addressAttributecity2",
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#name": "name",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#city": "city"
             },
             ExpressionAttributeValues: {
               ":objectAttributename1": "John",
-              ":nullableObjectAttributecity2": "Springfield",
+              ":addressAttributecity2": "Springfield",
               ":PK3": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -569,7 +568,7 @@ describe("Query", () => {
           stringAttribute: "some-string",
           $or: [
             { "objectAttribute.tags": { $contains: "vip" } },
-            { "nullableObjectAttribute.scores": { $contains: 95 } }
+            { "addressAttribute.scores": { $contains: 95 } }
           ]
         }
       });
@@ -583,18 +582,18 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK4",
             FilterExpression:
-              "(contains(#objectAttribute.#tags, :objectAttributetags1) OR contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores2)) AND (#stringAttribute = :stringAttribute3)",
+              "(contains(#objectAttribute.#tags, :objectAttributetags1) OR contains(#addressAttribute.#scores, :addressAttributescores2)) AND (#stringAttribute = :stringAttribute3)",
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#tags": "tags",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#scores": "scores",
               "#stringAttribute": "stringAttribute"
             },
             ExpressionAttributeValues: {
               ":objectAttributetags1": "vip",
-              ":nullableObjectAttributescores2": 95,
+              ":addressAttributescores2": 95,
               ":stringAttribute3": "some-string",
               ":PK4": "MyClassWithAllAttributeTypes#123"
             },
@@ -610,7 +609,7 @@ describe("Query", () => {
 
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
-          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"],
+          "addressAttribute.city": ["Springfield", "Shelbyville"],
           $or: [
             { "objectAttribute.name": "John" },
             { stringAttribute: { $beginsWith: "some" } }
@@ -627,20 +626,20 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK5",
             FilterExpression:
-              "(#objectAttribute.#name = :objectAttributename1 OR begins_with(#stringAttribute, :stringAttribute2)) AND (#nullableObjectAttribute.#city IN (:nullableObjectAttributecity3,:nullableObjectAttributecity4))",
+              "(#objectAttribute.#name = :objectAttributename1 OR begins_with(#stringAttribute, :stringAttribute2)) AND (#addressAttribute.#city IN (:addressAttributecity3,:addressAttributecity4))",
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#name": "name",
               "#stringAttribute": "stringAttribute",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#city": "city"
             },
             ExpressionAttributeValues: {
               ":objectAttributename1": "John",
               ":stringAttribute2": "some",
-              ":nullableObjectAttributecity3": "Springfield",
-              ":nullableObjectAttributecity4": "Shelbyville",
+              ":addressAttributecity3": "Springfield",
+              ":addressAttributecity4": "Shelbyville",
               ":PK5": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -656,15 +655,15 @@ describe("Query", () => {
       const results = await MyClassWithAllAttributeTypes.query("123", {
         filter: {
           "objectAttribute.name": "John",
-          "nullableObjectAttribute.city": ["Springfield", "Shelbyville"],
-          "nullableObjectAttribute.geo.lat": 40,
+          "addressAttribute.city": ["Springfield", "Shelbyville"],
+          "addressAttribute.geo.lat": 40,
           $or: [
             {
               "objectAttribute.tags": { $contains: "vip" },
               "objectAttribute.email": { $beginsWith: "john" }
             },
             {
-              "nullableObjectAttribute.scores": { $contains: 95 },
+              "addressAttribute.scores": { $contains: 95 },
               stringAttribute: "some-string"
             }
           ]
@@ -680,13 +679,13 @@ describe("Query", () => {
             TableName: "mock-table",
             KeyConditionExpression: "#PK = :PK9",
             FilterExpression:
-              "((contains(#objectAttribute.#tags, :objectAttributetags1) AND begins_with(#objectAttribute.#email, :objectAttributeemail2)) OR (contains(#nullableObjectAttribute.#scores, :nullableObjectAttributescores3) AND #stringAttribute = :stringAttribute4)) AND (#objectAttribute.#name = :objectAttributename5 AND #nullableObjectAttribute.#city IN (:nullableObjectAttributecity6,:nullableObjectAttributecity7) AND #nullableObjectAttribute.#geo.#lat = :nullableObjectAttributegeolat8)",
+              "((contains(#objectAttribute.#tags, :objectAttributetags1) AND begins_with(#objectAttribute.#email, :objectAttributeemail2)) OR (contains(#addressAttribute.#scores, :addressAttributescores3) AND #stringAttribute = :stringAttribute4)) AND (#objectAttribute.#name = :objectAttributename5 AND #addressAttribute.#city IN (:addressAttributecity6,:addressAttributecity7) AND #addressAttribute.#geo.#lat = :addressAttributegeolat8)",
             ExpressionAttributeNames: {
               "#PK": "PK",
               "#objectAttribute": "objectAttribute",
               "#tags": "tags",
               "#email": "email",
-              "#nullableObjectAttribute": "nullableObjectAttribute",
+              "#addressAttribute": "addressAttribute",
               "#scores": "scores",
               "#stringAttribute": "stringAttribute",
               "#name": "name",
@@ -697,12 +696,12 @@ describe("Query", () => {
             ExpressionAttributeValues: {
               ":objectAttributetags1": "vip",
               ":objectAttributeemail2": "john",
-              ":nullableObjectAttributescores3": 95,
+              ":addressAttributescores3": 95,
               ":stringAttribute4": "some-string",
               ":objectAttributename5": "John",
-              ":nullableObjectAttributecity6": "Springfield",
-              ":nullableObjectAttributecity7": "Shelbyville",
-              ":nullableObjectAttributegeolat8": 40,
+              ":addressAttributecity6": "Springfield",
+              ":addressAttributecity7": "Shelbyville",
+              ":addressAttributegeolat8": 40,
               ":PK9": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -1850,7 +1849,7 @@ describe("Query", () => {
         }
       });
 
-      it("return value nullableObjectAttribute requires optional chaining", async () => {
+      it("return value addressAttribute is accessible directly (non-nullable)", async () => {
         const result = await MyClassWithAllAttributeTypes.query({
           pk: "MyClassWithAllAttributeTypes#123"
         });
@@ -1858,12 +1857,12 @@ describe("Query", () => {
         const item = result[0];
 
         if (item !== undefined) {
-          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
-          Logger.log(item.nullableObjectAttribute.city);
+          // @ts-expect-no-error: addressAttribute is non-nullable, direct access is valid
+          Logger.log(item.addressAttribute.city);
         }
       });
 
-      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
+      it("return value addressAttribute is accessible directly and has correct nested types", async () => {
         const result = await MyClassWithAllAttributeTypes.query({
           pk: "MyClassWithAllAttributeTypes#123"
         });
@@ -1871,51 +1870,51 @@ describe("Query", () => {
         const item = result[0];
 
         if (item !== undefined) {
-          // @ts-expect-no-error: optional chaining allows safe access
-          Logger.log(item.nullableObjectAttribute?.street);
+          // @ts-expect-no-error: direct access on non-nullable attribute
+          Logger.log(item.addressAttribute.street);
 
           // @ts-expect-no-error: nested string field
-          Logger.log(item.nullableObjectAttribute?.city);
+          Logger.log(item.addressAttribute.city);
 
           // @ts-expect-no-error: nested nullable field can be number or undefined
-          Logger.log(item.nullableObjectAttribute?.zip);
+          Logger.log(item.addressAttribute.zip);
 
           // @ts-expect-no-error: nested object field
-          Logger.log(item.nullableObjectAttribute?.geo.lat);
+          Logger.log(item.addressAttribute.geo.lat);
 
           // @ts-expect-no-error: nested object field
-          Logger.log(item.nullableObjectAttribute?.geo.lng);
+          Logger.log(item.addressAttribute.geo.lng);
 
           // @ts-expect-no-error: nested array field
-          Logger.log(item.nullableObjectAttribute?.scores);
+          Logger.log(item.addressAttribute.scores);
 
           // @ts-expect-no-error: array item is a number
-          Logger.log(item.nullableObjectAttribute?.scores[0]);
+          Logger.log(item.addressAttribute.scores[0]);
         }
       });
 
-      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
+      it("return value addressAttribute nested fields have correct types (rejects wrong assignments)", async () => {
         const result = await MyClassWithAllAttributeTypes.query({
           pk: "MyClassWithAllAttributeTypes#123"
         });
 
         const item = result[0];
 
-        if (item?.nullableObjectAttribute !== undefined) {
+        if (item !== undefined) {
           // @ts-expect-error: city is string, not number
-          const cityAsNum: number = item.nullableObjectAttribute.city;
+          const cityAsNum: number = item.addressAttribute.city;
           Logger.log(cityAsNum);
 
           // @ts-expect-error: geo.lat is number, not string
-          const latAsStr: string = item.nullableObjectAttribute.geo.lat;
+          const latAsStr: string = item.addressAttribute.geo.lat;
           Logger.log(latAsStr);
 
           // @ts-expect-error: scores is number[], not string[]
-          const scoresAsStrs: string[] = item.nullableObjectAttribute.scores;
+          const scoresAsStrs: string[] = item.addressAttribute.scores;
           Logger.log(scoresAsStrs);
 
           // @ts-expect-error: nonExistent is not in the schema
-          Logger.log(item.nullableObjectAttribute.nonExistent);
+          Logger.log(item.addressAttribute.nonExistent);
         }
       });
 
@@ -1944,14 +1943,14 @@ describe("Query", () => {
 
         const item = result[0];
 
-        if (item?.nullableObjectAttribute !== undefined) {
+        if (item !== undefined) {
           // @ts-expect-no-error: accuracy is "precise" | "approximate"
           const acc: "precise" | "approximate" =
-            item.nullableObjectAttribute.geo.accuracy;
+            item.addressAttribute.geo.accuracy;
           Logger.log(acc);
 
           // @ts-expect-error: accuracy is "precise" | "approximate", not number
-          const accAsNum: number = item.nullableObjectAttribute.geo.accuracy;
+          const accAsNum: number = item.addressAttribute.geo.accuracy;
           Logger.log(accAsNum);
         }
       });
@@ -1963,13 +1962,13 @@ describe("Query", () => {
 
         const item = result[0];
 
-        // @ts-expect-no-error: nullable enum field via optional chaining
-        Logger.log(item?.nullableObjectAttribute?.category);
+        // @ts-expect-no-error: enum field via direct access
+        Logger.log(item?.addressAttribute.category);
 
-        if (item?.nullableObjectAttribute !== undefined) {
+        if (item !== undefined) {
           // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
           const cat: "home" | "work" | "other" | undefined =
-            item.nullableObjectAttribute.category;
+            item.addressAttribute.category;
           Logger.log(cat);
         }
       });

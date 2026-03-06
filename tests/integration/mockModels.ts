@@ -309,8 +309,8 @@ class MyClassWithAllAttributeTypes extends MockTable {
   @ObjectAttribute({ schema: contactSchema })
   public objectAttribute: InferObjectSchema<typeof contactSchema>;
 
-  @ObjectAttribute({ schema: addressSchema, nullable: true })
-  public nullableObjectAttribute?: InferObjectSchema<typeof addressSchema>;
+  @ObjectAttribute({ schema: addressSchema })
+  public addressAttribute: InferObjectSchema<typeof addressSchema>;
 }
 
 @Entity
@@ -522,6 +522,31 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
+const deeplyNestedSchema = {
+  label: { type: "string" },
+  level1: {
+    type: "object",
+    fields: {
+      value: { type: "string", nullable: true },
+      tag: { type: "enum", values: ["a", "b", "c"], nullable: true },
+      level2: {
+        type: "object",
+        fields: {
+          score: { type: "number", nullable: true },
+          note: { type: "string", nullable: true },
+          level3: {
+            type: "object",
+            fields: {
+              flag: { type: "boolean", nullable: true },
+              detail: { type: "string", nullable: true }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
 const duplicateFieldNameSchema = {
   name: { type: "string" },
   nested1: {
@@ -545,6 +570,49 @@ const locationSchema = {
   state: { type: "string" },
   zip: { type: "number", nullable: true }
 } as const satisfies ObjectSchema;
+
+const arrayOfObjectsSchema = {
+  title: { type: "string" },
+  entries: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        sku: { type: "string" },
+        price: { type: "number" }
+      }
+    }
+  },
+  backup: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        sku: { type: "string" },
+        price: { type: "number" }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class ArrayOfObjectsEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Data", schema: arrayOfObjectsSchema })
+  public readonly data: InferObjectSchema<typeof arrayOfObjectsSchema>;
+}
+
+@Entity
+class DeepNestedEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Data", schema: deeplyNestedSchema })
+  public readonly data: InferObjectSchema<typeof deeplyNestedSchema>;
+}
 
 @Entity
 class DuplicateFieldEntity extends MockTable {
@@ -659,6 +727,8 @@ export {
   // Schemas
   addressSchema,
   contactSchema,
+  deeplyNestedSchema,
+  arrayOfObjectsSchema,
   duplicateFieldNameSchema,
   locationSchema,
   inventorySchema,
@@ -678,6 +748,8 @@ export {
   Author,
   Book,
   AuthorBook,
+  ArrayOfObjectsEntity,
+  DeepNestedEntity,
   DuplicateFieldEntity,
   MyClassWithAllAttributeTypes,
   User,

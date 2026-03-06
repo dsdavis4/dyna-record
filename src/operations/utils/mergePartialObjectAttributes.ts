@@ -13,8 +13,8 @@ export function mergePartialObjectAttributes(
   for (const [key, val] of Object.entries(partial)) {
     const attrMeta = entityAttrs[key];
 
-    if (attrMeta?.objectSchema !== undefined && val != null) {
-      // Deep merge for ObjectAttribute
+    if (attrMeta?.objectSchema !== undefined) {
+      // Deep merge for ObjectAttribute (objects are never nullable)
       const existing =
         (target[key] as Record<string, unknown> | undefined) ?? {};
       target[key] = deepMergeObject(existing, val as Record<string, unknown>);

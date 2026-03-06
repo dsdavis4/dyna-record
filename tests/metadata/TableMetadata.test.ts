@@ -1165,10 +1165,10 @@ describe("TableMetadata", () => {
                 alias: "objectAttribute",
                 nullable: false
               },
-              nullableObjectAttribute: {
-                name: "nullableObjectAttribute",
-                alias: "nullableObjectAttribute",
-                nullable: true
+              addressAttribute: {
+                name: "addressAttribute",
+                alias: "addressAttribute",
+                nullable: false
               }
             },
             tableAttributes: {
@@ -1259,10 +1259,10 @@ describe("TableMetadata", () => {
                 alias: "objectAttribute",
                 nullable: false
               },
-              nullableObjectAttribute: {
-                name: "nullableObjectAttribute",
-                alias: "nullableObjectAttribute",
-                nullable: true
+              addressAttribute: {
+                name: "addressAttribute",
+                alias: "addressAttribute",
+                nullable: false
               }
             },
             relationships: {}
@@ -1534,6 +1534,142 @@ describe("TableMetadata", () => {
                 foreignKey: "organizationId"
               }
             }
+          },
+          ArrayOfObjectsEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            relationships: {}
+          },
+          DeepNestedEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            relationships: {}
           },
           Desk: {
             tableClassName: "MockTable",

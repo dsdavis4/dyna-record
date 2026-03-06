@@ -28,7 +28,10 @@ import {
   type Student,
   type User,
   Website,
-  Warehouse
+  Warehouse,
+  ArrayOfObjectsEntity,
+  DeepNestedEntity,
+  deeplyNestedSchema
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -576,6 +579,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -650,6 +659,12 @@ describe("Update", () => {
           tags: ["old-tag"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1270,6 +1285,13 @@ describe("Update", () => {
           options: ["val-1", "val-2"],
           path: ["nullableEnumAttribute"],
           received: "val-4"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Expected object, received string",
+          path: ["objectAttribute"],
+          received: "string"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1293,7 +1315,8 @@ describe("Update", () => {
           numberAttribute: "9",
           nullableNumberAttribute: "10",
           enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
+          nullableEnumAttribute: "val-4",
+          objectAttribute: "val-5"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
         operationSharedAssertions(e);
@@ -1321,6 +1344,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1338,7 +1367,8 @@ describe("Update", () => {
           numberAttribute: "9",
           nullableNumberAttribute: "10",
           enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
+          nullableEnumAttribute: "val-4",
+          objectAttribute: "val-5"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
         operationSharedAssertions(e);
@@ -1414,6 +1444,12 @@ describe("Update", () => {
           tags: ["work", "vip"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1495,6 +1531,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1513,7 +1555,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute nested object and array fields are the wrong type", () => {
+  describe("will error if addressAttribute nested object and array fields are the wrong type", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1522,21 +1564,21 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "string"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "string"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "string"
         }
       ]);
@@ -1550,7 +1592,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: "bad", lng: "bad" },
@@ -1583,13 +1625,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: "bad", lng: "bad" },
@@ -1602,7 +1650,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute top-level fields are the wrong type", () => {
+  describe("will error if addressAttribute top-level fields are the wrong type", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1611,14 +1659,14 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received number",
-          path: ["nullableObjectAttribute", "street"],
+          path: ["addressAttribute", "street"],
           received: "number"
         },
         {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received boolean",
-          path: ["nullableObjectAttribute", "city"],
+          path: ["addressAttribute", "city"],
           received: "boolean"
         }
       ]);
@@ -1632,7 +1680,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: 123,
             city: false,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -1665,13 +1713,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: 123,
             city: false,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -1753,6 +1807,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1771,7 +1831,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if non-nullable nullableObjectAttribute fields are set to null", () => {
+  describe("will error if non-nullable addressAttribute fields are set to null", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1780,28 +1840,28 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "street"],
+          path: ["addressAttribute", "street"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "city"],
+          path: ["addressAttribute", "city"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "object",
           message: "Expected object, received null",
-          path: ["nullableObjectAttribute", "geo"],
+          path: ["addressAttribute", "geo"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "array",
           message: "Expected array, received null",
-          path: ["nullableObjectAttribute", "scores"],
+          path: ["addressAttribute", "scores"],
           received: "null"
         }
       ]);
@@ -1815,7 +1875,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: null,
             city: null,
             zip: null,
@@ -1849,13 +1909,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: null,
             city: null,
             zip: null,
@@ -1869,7 +1935,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if non-nullable nested fields within nullableObjectAttribute are set to null", () => {
+  describe("will error if non-nullable nested fields within addressAttribute are set to null", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1878,21 +1944,21 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "null"
         }
       ]);
@@ -1906,7 +1972,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: null, lng: null },
@@ -1939,13 +2005,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: null, lng: null },
@@ -2016,6 +2088,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -2036,7 +2114,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute nested enum field has an invalid value", () => {
+  describe("will error if addressAttribute nested enum field has an invalid value", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -2046,7 +2124,7 @@ describe("Update", () => {
           message:
             "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
           options: ["precise", "approximate"],
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          path: ["addressAttribute", "geo", "accuracy"],
           received: "bad-value"
         }
       ]);
@@ -2060,7 +2138,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "bad-value" },
@@ -2093,13 +2171,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "bad-value" },
@@ -2121,7 +2205,7 @@ describe("Update", () => {
       expect.assertions(4);
 
       await MyClassWithAllAttributeTypes.update("123", {
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           zip: null,
@@ -2149,19 +2233,19 @@ describe("Update", () => {
                     "#geo": "geo",
                     "#lat": "lat",
                     "#lng": "lng",
-                    "#nullableObjectAttribute": "nullableObjectAttribute",
+                    "#addressAttribute": "addressAttribute",
                     "#scores": "scores",
                     "#street": "street",
                     "#zip": "zip"
                   },
                   ExpressionAttributeValues: {
                     ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                    ":nullableObjectAttribute_city": "Springfield",
-                    ":nullableObjectAttribute_geo_accuracy": "precise",
-                    ":nullableObjectAttribute_geo_lat": 1,
-                    ":nullableObjectAttribute_geo_lng": 2,
-                    ":nullableObjectAttribute_scores": [95],
-                    ":nullableObjectAttribute_street": "123 Main St"
+                    ":addressAttribute_city": "Springfield",
+                    ":addressAttribute_geo_accuracy": "precise",
+                    ":addressAttribute_geo_lat": 1,
+                    ":addressAttribute_geo_lng": 2,
+                    ":addressAttribute_scores": [95],
+                    ":addressAttribute_street": "123 Main St"
                   },
                   Key: {
                     PK: "MyClassWithAllAttributeTypes#123",
@@ -2169,7 +2253,7 @@ describe("Update", () => {
                   },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #UpdatedAt = :UpdatedAt, #nullableObjectAttribute.#street = :nullableObjectAttribute_street, #nullableObjectAttribute.#city = :nullableObjectAttribute_city, #nullableObjectAttribute.#geo.#lat = :nullableObjectAttribute_geo_lat, #nullableObjectAttribute.#geo.#lng = :nullableObjectAttribute_geo_lng, #nullableObjectAttribute.#geo.#accuracy = :nullableObjectAttribute_geo_accuracy, #nullableObjectAttribute.#scores = :nullableObjectAttribute_scores REMOVE #nullableObjectAttribute.#zip, #nullableObjectAttribute.#category"
+                    "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street, #addressAttribute.#city = :addressAttribute_city, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat, #addressAttribute.#geo.#lng = :addressAttribute_geo_lng, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy, #addressAttribute.#scores = :addressAttribute_scores REMOVE #addressAttribute.#zip, #addressAttribute.#category"
                 }
               }
             ]
@@ -9533,6 +9617,12 @@ describe("Update", () => {
             status: "active",
             createdDate: new Date("2023-01-01")
           },
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+            scores: [95]
+          },
           createdAt: new Date("2023-10-01"),
           updatedAt: new Date("2023-10-02")
         });
@@ -9565,6 +9655,12 @@ describe("Update", () => {
             status: "active",
             createdDate: new Date("2023-01-01")
           },
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          },
           createdAt: new Date("2023-10-01"),
           updatedAt: new Date("2023-10-16T03:31:35.918Z")
         });
@@ -9586,7 +9682,7 @@ describe("Update", () => {
         expect.assertions(4);
 
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "New Street"
           }
         });
@@ -9605,12 +9701,12 @@ describe("Update", () => {
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#UpdatedAt": "UpdatedAt",
-                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#addressAttribute": "addressAttribute",
                       "#street": "street"
                     },
                     ExpressionAttributeValues: {
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                      ":nullableObjectAttribute_street": "New Street"
+                      ":addressAttribute_street": "New Street"
                     },
                     Key: {
                       PK: "MyClassWithAllAttributeTypes#123",
@@ -9618,7 +9714,7 @@ describe("Update", () => {
                     },
                     TableName: "mock-table",
                     UpdateExpression:
-                      "SET #UpdatedAt = :UpdatedAt, #nullableObjectAttribute.#street = :nullableObjectAttribute_street"
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street"
                   }
                 }
               ]
@@ -9633,7 +9729,7 @@ describe("Update", () => {
         expect.assertions(4);
 
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             zip: null,
             category: null
@@ -9654,14 +9750,14 @@ describe("Update", () => {
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#UpdatedAt": "UpdatedAt",
-                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#addressAttribute": "addressAttribute",
                       "#street": "street",
                       "#zip": "zip",
                       "#category": "category"
                     },
                     ExpressionAttributeValues: {
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                      ":nullableObjectAttribute_street": "123 Main St"
+                      ":addressAttribute_street": "123 Main St"
                     },
                     Key: {
                       PK: "MyClassWithAllAttributeTypes#123",
@@ -9669,7 +9765,7 @@ describe("Update", () => {
                     },
                     TableName: "mock-table",
                     UpdateExpression:
-                      "SET #UpdatedAt = :UpdatedAt, #nullableObjectAttribute.#street = :nullableObjectAttribute_street REMOVE #nullableObjectAttribute.#zip, #nullableObjectAttribute.#category"
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street REMOVE #addressAttribute.#zip, #addressAttribute.#category"
                   }
                 }
               ]
@@ -9685,7 +9781,7 @@ describe("Update", () => {
 
         try {
           await MyClassWithAllAttributeTypes.update("123", {
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: null
             }
           } as any);
@@ -9697,7 +9793,7 @@ describe("Update", () => {
               code: "invalid_type",
               expected: "string",
               message: "Expected string, received null",
-              path: ["nullableObjectAttribute", "street"],
+              path: ["addressAttribute", "street"],
               received: "null"
             }
           ]);
@@ -9710,7 +9806,7 @@ describe("Update", () => {
         expect.assertions(4);
 
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             geo: {
               lat: 42
             }
@@ -9731,13 +9827,13 @@ describe("Update", () => {
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#UpdatedAt": "UpdatedAt",
-                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#addressAttribute": "addressAttribute",
                       "#geo": "geo",
                       "#lat": "lat"
                     },
                     ExpressionAttributeValues: {
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                      ":nullableObjectAttribute_geo_lat": 42
+                      ":addressAttribute_geo_lat": 42
                     },
                     Key: {
                       PK: "MyClassWithAllAttributeTypes#123",
@@ -9745,7 +9841,7 @@ describe("Update", () => {
                     },
                     TableName: "mock-table",
                     UpdateExpression:
-                      "SET #UpdatedAt = :UpdatedAt, #nullableObjectAttribute.#geo.#lat = :nullableObjectAttribute_geo_lat"
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat"
                   }
                 }
               ]
@@ -9760,7 +9856,7 @@ describe("Update", () => {
         expect.assertions(4);
 
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             scores: [100, 200, 300]
           }
         });
@@ -9779,12 +9875,12 @@ describe("Update", () => {
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#UpdatedAt": "UpdatedAt",
-                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#addressAttribute": "addressAttribute",
                       "#scores": "scores"
                     },
                     ExpressionAttributeValues: {
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                      ":nullableObjectAttribute_scores": [100, 200, 300]
+                      ":addressAttribute_scores": [100, 200, 300]
                     },
                     Key: {
                       PK: "MyClassWithAllAttributeTypes#123",
@@ -9792,122 +9888,13 @@ describe("Update", () => {
                     },
                     TableName: "mock-table",
                     UpdateExpression:
-                      "SET #UpdatedAt = :UpdatedAt, #nullableObjectAttribute.#scores = :nullableObjectAttribute_scores"
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#scores = :addressAttribute_scores"
                   }
                 }
               ]
             }
           ]
         ]);
-      });
-    });
-
-    describe("setting nullable ObjectAttribute itself to null generates REMOVE for the entire attribute", () => {
-      const dbOperationAssertions = (): void => {
-        expect(mockSend.mock.calls).toEqual([
-          [{ name: "TransactWriteCommand" }]
-        ]);
-        expect(mockedQueryCommand.mock.calls).toEqual([]);
-        expect(mockTransactGetCommand.mock.calls).toEqual([]);
-        expect(mockTransactWriteCommand.mock.calls).toEqual([
-          [
-            {
-              TransactItems: [
-                {
-                  Update: {
-                    ConditionExpression: "attribute_exists(PK)",
-                    ExpressionAttributeNames: {
-                      "#UpdatedAt": "UpdatedAt",
-                      "#nullableObjectAttribute": "nullableObjectAttribute"
-                    },
-                    ExpressionAttributeValues: {
-                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
-                    },
-                    Key: {
-                      PK: "MyClassWithAllAttributeTypes#123",
-                      SK: "MyClassWithAllAttributeTypes"
-                    },
-                    TableName: "mock-table",
-                    UpdateExpression:
-                      "SET #UpdatedAt = :UpdatedAt REMOVE #nullableObjectAttribute"
-                  }
-                }
-              ]
-            }
-          ]
-        ]);
-      };
-
-      test("static method", async () => {
-        expect.assertions(5);
-
-        expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
-          await MyClassWithAllAttributeTypes.update("123", {
-            nullableObjectAttribute: null
-          })
-        ).toBeUndefined();
-        dbOperationAssertions();
-      });
-
-      test("instance method", async () => {
-        expect.assertions(6);
-
-        const inst = createInstance(MyClassWithAllAttributeTypes, {
-          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
-          sk: "MyClassWithAllAttributeTypes" as SortKey,
-          id: "123",
-          type: "MyClassWithAllAttributeTypes",
-          stringAttribute: "1",
-          dateAttribute: new Date("2023-01-02"),
-          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
-          boolAttribute: false,
-          numberAttribute: 9,
-          enumAttribute: "val-2",
-          objectAttribute: {
-            name: "Name",
-            email: "email",
-            tags: ["tag"],
-            status: "active",
-            createdDate: new Date("2023-01-01")
-          },
-          nullableObjectAttribute: {
-            street: "123 Main St",
-            city: "Springfield",
-            geo: { lat: 39.78, lng: -89.65, accuracy: "precise" },
-            scores: [95]
-          },
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-02")
-        });
-
-        const updatedInstance = await inst.update({
-          nullableObjectAttribute: null
-        });
-
-        expect(updatedInstance).toEqual({
-          pk: "MyClassWithAllAttributeTypes#123",
-          sk: "MyClassWithAllAttributeTypes",
-          id: "123",
-          type: "MyClassWithAllAttributeTypes",
-          stringAttribute: "1",
-          dateAttribute: new Date("2023-01-02"),
-          foreignKeyAttribute: "11111",
-          boolAttribute: false,
-          numberAttribute: 9,
-          enumAttribute: "val-2",
-          objectAttribute: {
-            name: "Name",
-            email: "email",
-            tags: ["tag"],
-            status: "active",
-            createdDate: new Date("2023-01-01")
-          },
-          createdAt: new Date("2023-10-01"),
-          updatedAt: new Date("2023-10-16T03:31:35.918Z")
-        });
-        expect(updatedInstance.nullableObjectAttribute).toBeUndefined();
-        dbOperationAssertions();
       });
     });
 
@@ -9988,7 +9975,7 @@ describe("Update", () => {
 
         try {
           await MyClassWithAllAttributeTypes.update("123", {
-            nullableObjectAttribute: {
+            addressAttribute: {
               geo: {
                 accuracy: "bad-value"
               }
@@ -10003,7 +9990,7 @@ describe("Update", () => {
               message:
                 "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
               options: ["precise", "approximate"],
-              path: ["nullableObjectAttribute", "geo", "accuracy"],
+              path: ["addressAttribute", "geo", "accuracy"],
               received: "bad-value"
             }
           ]);
@@ -10017,7 +10004,7 @@ describe("Update", () => {
 
         try {
           await MyClassWithAllAttributeTypes.update("123", {
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: 123
             }
           } as any);
@@ -10029,7 +10016,7 @@ describe("Update", () => {
               code: "invalid_type",
               expected: "string",
               message: "Expected string, received number",
-              path: ["nullableObjectAttribute", "street"],
+              path: ["addressAttribute", "street"],
               received: "number"
             }
           ]);
@@ -10055,7 +10042,7 @@ describe("Update", () => {
                       "#UpdatedAt": "UpdatedAt",
                       "#stringAttribute": "stringAttribute",
                       "#nullableStringAttribute": "nullableStringAttribute",
-                      "#nullableObjectAttribute": "nullableObjectAttribute",
+                      "#addressAttribute": "addressAttribute",
                       "#street": "street",
                       "#zip": "zip",
                       "#category": "category"
@@ -10063,7 +10050,7 @@ describe("Update", () => {
                     ExpressionAttributeValues: {
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z",
                       ":stringAttribute": "updated-val",
-                      ":nullableObjectAttribute_street": "New Street"
+                      ":addressAttribute_street": "New Street"
                     },
                     Key: {
                       PK: "MyClassWithAllAttributeTypes#123",
@@ -10072,9 +10059,9 @@ describe("Update", () => {
                     TableName: "mock-table",
                     UpdateExpression:
                       "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt, " +
-                      "#nullableObjectAttribute.#street = :nullableObjectAttribute_street " +
+                      "#addressAttribute.#street = :addressAttribute_street " +
                       "REMOVE #nullableStringAttribute, " +
-                      "#nullableObjectAttribute.#zip, #nullableObjectAttribute.#category"
+                      "#addressAttribute.#zip, #addressAttribute.#category"
                   }
                 }
               ]
@@ -10089,7 +10076,7 @@ describe("Update", () => {
         await MyClassWithAllAttributeTypes.update("123", {
           stringAttribute: "updated-val",
           nullableStringAttribute: null,
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "New Street",
             zip: null,
             category: null
@@ -10121,7 +10108,7 @@ describe("Update", () => {
             createdDate: new Date("2023-01-01")
           },
           nullableStringAttribute: "will-be-removed",
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "Old Street",
             city: "Old City",
             zip: 12345,
@@ -10136,7 +10123,7 @@ describe("Update", () => {
         await instance.update({
           stringAttribute: "updated-val",
           nullableStringAttribute: null,
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "New Street",
             zip: null,
             category: null
@@ -10246,7 +10233,7 @@ describe("Update", () => {
             status: "active",
             createdDate: new Date("2023-01-01")
           },
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "Old Street",
             city: "Old City",
             zip: 12345,
@@ -10258,14 +10245,14 @@ describe("Update", () => {
         });
 
         const updatedInstance = await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "New Street",
             zip: null
           }
         });
 
         // Deep merge: street updated, zip removed, other fields preserved
-        expect(updatedInstance.nullableObjectAttribute).toEqual({
+        expect(updatedInstance.addressAttribute).toEqual({
           street: "New Street",
           city: "Old City",
           geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -10274,7 +10261,7 @@ describe("Update", () => {
         expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
 
         // Original instance is not mutated
-        expect(instance.nullableObjectAttribute).toEqual({
+        expect(instance.addressAttribute).toEqual({
           street: "Old Street",
           city: "Old City",
           zip: 12345,
@@ -10284,18 +10271,226 @@ describe("Update", () => {
 
         // Nested object deep merge
         const updatedInstance2 = await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             geo: { lat: 99 }
           }
         });
 
-        expect(updatedInstance2.nullableObjectAttribute).toEqual({
+        expect(updatedInstance2.addressAttribute).toEqual({
           street: "Old Street",
           city: "Old City",
           zip: 12345,
           geo: { lat: 99, lng: 2, accuracy: "precise" },
           scores: [10, 20]
         });
+      });
+    });
+
+    describe("removing all nullable fields from deeply nested object leaves nested objects as empty objects", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await DeepNestedEntity.update("123", {
+          data: {
+            level1: {
+              value: null,
+              tag: null,
+              level2: {
+                score: null,
+                note: null,
+                level3: {
+                  flag: null,
+                  detail: null
+                }
+              }
+            }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#level1": "level1",
+                      "#value": "value",
+                      "#tag": "tag",
+                      "#level2": "level2",
+                      "#score": "score",
+                      "#note": "note",
+                      "#level3": "level3",
+                      "#flag": "flag",
+                      "#detail": "detail"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    Key: {
+                      PK: "DeepNestedEntity#123",
+                      SK: "DeepNestedEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt " +
+                      "REMOVE #Data.#level1.#value, #Data.#level1.#tag, " +
+                      "#Data.#level1.#level2.#score, #Data.#level1.#level2.#note, " +
+                      "#Data.#level1.#level2.#level3.#flag, #Data.#level1.#level2.#level3.#detail"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("updating deeply nested object with nullable fields omitted", () => {
+      test("static method - partial update with only required label", async () => {
+        expect.assertions(4);
+
+        await DeepNestedEntity.update("123", {
+          data: {
+            label: "updated-label"
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#label": "label"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":Data_label": "updated-label"
+                    },
+                    Key: {
+                      PK: "DeepNestedEntity#123",
+                      SK: "DeepNestedEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #Data.#label = :Data_label"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("array of objects full replacement on update", () => {
+      test("replaces entire array of objects with new array", async () => {
+        expect.assertions(4);
+
+        await ArrayOfObjectsEntity.update("123", {
+          data: {
+            entries: [{ sku: "C3", price: 30 }]
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#entries": "entries"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":Data_entries": [{ sku: "C3", price: 30 }]
+                    },
+                    Key: {
+                      PK: "ArrayOfObjectsEntity#123",
+                      SK: "ArrayOfObjectsEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #Data.#entries = :Data_entries"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("nullable array of objects can be removed via null", () => {
+      test("generates REMOVE for nullable array field set to null", async () => {
+        expect.assertions(4);
+
+        await ArrayOfObjectsEntity.update("123", {
+          data: {
+            backup: null
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#backup": "backup"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    Key: {
+                      PK: "ArrayOfObjectsEntity#123",
+                      SK: "ArrayOfObjectsEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt REMOVE #Data.#backup"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
       });
     });
   });
@@ -10440,6 +10635,12 @@ describe("Update", () => {
               status: "active",
               createdDate: new Date()
             },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+              scores: [95]
+            },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
           });
@@ -10517,6 +10718,12 @@ describe("Update", () => {
               tags: ["old-tag"],
               status: "active",
               createdDate: new Date()
+            },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -10822,10 +11029,10 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute accepts correct nested object shape", async () => {
+      it("addressAttribute accepts correct nested object shape", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
           // @ts-expect-no-error: correct nested shape is accepted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -10834,9 +11041,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+      it("addressAttribute does not accept wrong types for nested object fields", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: {
@@ -10852,9 +11059,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+      it("addressAttribute does not accept wrong item types in arrays", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -10866,10 +11073,10 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
+      it("addressAttribute allows nullable fields to be omitted", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
           // @ts-expect-no-error: zip is nullable so it can be omitted
-          nullableObjectAttribute: {
+          addressAttribute: {
             zip: undefined,
             street: "123 Main St",
             city: "Springfield",
@@ -10879,9 +11086,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+      it("addressAttribute allows nullable fields to be null for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
@@ -10894,9 +11101,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+      it("addressAttribute does not allow non-nullable fields to be null", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             // @ts-expect-error: street is non-nullable, cannot be null
             street: null,
             city: "Springfield",
@@ -10908,9 +11115,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute accepts partial nested fields for updates", async () => {
+      it("addressAttribute accepts partial nested fields for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             // @ts-expect-no-error: partial updates allow omitting nested required fields
@@ -11205,74 +11412,27 @@ describe("Update", () => {
           });
       });
 
-      it("return value nullableObjectAttribute requires optional chaining", async () => {
+      it("return value addressAttribute nested fields have correct types (rejects wrong assignments)", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({ stringAttribute: "val" })
           .then(result => {
-            // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
-            Logger.log(result.nullableObjectAttribute.city);
-          })
-          .catch(() => {
-            Logger.log("Testing types");
-          });
-      });
-
-      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
-        const instance = new MyClassWithAllAttributeTypes();
-
-        await instance
-          .update({ stringAttribute: "val" })
-          .then(result => {
-            // @ts-expect-no-error: optional chaining allows safe access
-            Logger.log(result.nullableObjectAttribute?.street);
-
-            // @ts-expect-no-error: nested string field
-            Logger.log(result.nullableObjectAttribute?.city);
-
-            // @ts-expect-no-error: nested nullable field can be number or undefined
-            Logger.log(result.nullableObjectAttribute?.zip);
-
-            // @ts-expect-no-error: nested object field
-            Logger.log(result.nullableObjectAttribute?.geo.lat);
-
-            // @ts-expect-no-error: nested object field
-            Logger.log(result.nullableObjectAttribute?.geo.lng);
-
-            // @ts-expect-no-error: nested array field
-            Logger.log(result.nullableObjectAttribute?.scores);
-
-            // @ts-expect-no-error: array item is a number
-            Logger.log(result.nullableObjectAttribute?.scores[0]);
-          })
-          .catch(() => {
-            Logger.log("Testing types");
-          });
-      });
-
-      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
-        const instance = new MyClassWithAllAttributeTypes();
-
-        await instance
-          .update({ stringAttribute: "val" })
-          .then(result => {
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-error: city is string, not number
-              const cityAsNum: number = result.nullableObjectAttribute.city;
+              const cityAsNum: number = result.addressAttribute.city;
               Logger.log(cityAsNum);
 
               // @ts-expect-error: geo.lat is number, not string
-              const latAsStr: string = result.nullableObjectAttribute.geo.lat;
+              const latAsStr: string = result.addressAttribute.geo.lat;
               Logger.log(latAsStr);
 
               // @ts-expect-error: scores is number[], not string[]
-              const scoresAsStrs: string[] =
-                result.nullableObjectAttribute.scores;
+              const scoresAsStrs: string[] = result.addressAttribute.scores;
               Logger.log(scoresAsStrs);
 
               // @ts-expect-error: nonExistent is not in the schema
-              Logger.log(result.nullableObjectAttribute.nonExistent);
+              Logger.log(result.addressAttribute.nonExistent);
             }
           })
           .catch(() => {
@@ -11448,12 +11608,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute accepts correct nested object shape", async () => {
+      it("addressAttribute accepts correct nested object shape", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
           // @ts-expect-no-error: correct nested shape is accepted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -11462,12 +11622,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+      it("addressAttribute does not accept wrong types for nested object fields", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               geo: {
@@ -11484,12 +11644,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+      it("addressAttribute does not accept wrong item types in arrays", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -11502,12 +11662,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
+      it("addressAttribute allows nullable fields to be omitted", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
           // @ts-expect-no-error: zip is nullable so it can be omitted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -11516,12 +11676,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+      it("addressAttribute allows nullable fields to be null for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
@@ -11535,12 +11695,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+      it("addressAttribute does not allow non-nullable fields to be null", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               // @ts-expect-error: street is non-nullable, cannot be null
               street: null,
               city: "Springfield",
@@ -11553,12 +11713,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute accepts partial nested fields for updates", async () => {
+      it("addressAttribute accepts partial nested fields for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               // @ts-expect-no-error: partial updates allow omitting nested required fields
@@ -11659,7 +11819,7 @@ describe("Update", () => {
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               geo: {
                 // @ts-expect-error: "bad-value" is not a valid enum value for accuracy ("precise" | "approximate")
                 accuracy: "bad-value"
@@ -11676,7 +11836,7 @@ describe("Update", () => {
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               // @ts-expect-error: "bad-value" is not a valid enum value for category ("home" | "work" | "other")
               category: "bad-value"
             }
@@ -11739,17 +11899,16 @@ describe("Update", () => {
           .update({ stringAttribute: "val" })
           .then(result => {
             // @ts-expect-no-error: accuracy is accessible on geo via optional chaining
-            Logger.log(result.nullableObjectAttribute?.geo.accuracy);
+            Logger.log(result.addressAttribute?.geo.accuracy);
 
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-no-error: accuracy is "precise" | "approximate"
               const acc: "precise" | "approximate" =
-                result.nullableObjectAttribute.geo.accuracy;
+                result.addressAttribute.geo.accuracy;
               Logger.log(acc);
 
               // @ts-expect-error: accuracy is "precise" | "approximate", not number
-              const accAsNum: number =
-                result.nullableObjectAttribute.geo.accuracy;
+              const accAsNum: number = result.addressAttribute.geo.accuracy;
               Logger.log(accAsNum);
             }
           })
@@ -11758,19 +11917,19 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute nullable enum field supports undefined", async () => {
+      it("addressAttribute nullable enum field supports undefined", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({ stringAttribute: "val" })
           .then(result => {
             // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
-            Logger.log(result.nullableObjectAttribute?.category);
+            Logger.log(result.addressAttribute?.category);
 
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
               const cat: "home" | "work" | "other" | undefined =
-                result.nullableObjectAttribute.category;
+                result.addressAttribute.category;
               Logger.log(cat);
             }
           })
