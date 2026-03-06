@@ -198,15 +198,12 @@ const addressSchema = {
 class Store extends MyTable {
   @ObjectAttribute({ alias: "Address", schema: addressSchema })
   public readonly address: InferObjectSchema<typeof addressSchema>;
-
-  @ObjectAttribute({ alias: "Metadata", schema: metaSchema, nullable: true })
-  public readonly metadata?: InferObjectSchema<typeof metaSchema>;
 }
 ```
 
 - **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"date"` (stored as ISO strings, exposed as `Date` objects), `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
-- **Nullable fields:** Set `nullable: true` on individual fields within the schema to remove them
-- **Nullable object attributes:** Set `nullable: true` on the decorator options to make the entire object optional
+- **Nullable fields:** Set `nullable: true` on individual non-object fields within the schema to make them optional
+- **Object attributes are never nullable:** DynamoDB cannot update nested document paths (e.g., `address.geo.lat`) if the parent object does not exist. To prevent this, `@ObjectAttribute` fields always exist as at least an empty object `{}`. Nested object fields within the schema are also never nullable. Non-object fields (primitives, enums, dates, arrays) can still be nullable.
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
 - **Storage:** Objects are stored as native DynamoDB Map types
 - **Partial updates:** Updates are partial — only the fields you provide are modified. Omitted fields are preserved. Nested objects are recursively merged. See [Updating Object Attributes](#updating-object-attributes)
@@ -734,15 +731,6 @@ await Store.update("123", {
 // Replaces the entire tags array
 await Store.update("123", {
   address: { tags: ["new-tag-1", "new-tag-2"] }
-});
-```
-
-Setting a **nullable object attribute** itself to `null` removes the entire object:
-
-```typescript
-// Removes the entire metadata object
-await Store.update("123", {
-  metadata: null
 });
 ```
 
