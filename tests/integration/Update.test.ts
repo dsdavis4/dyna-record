@@ -30,8 +30,7 @@ import {
   Website,
   Warehouse,
   ArrayOfObjectsEntity,
-  DeepNestedEntity,
-  deeplyNestedSchema
+  DeepNestedEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -9995,6 +9994,56 @@ describe("Update", () => {
             }
           ]);
         }
+      });
+    });
+
+    describe("deeply nested enum field update generates correct document path", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            geo: {
+              accuracy: "approximate"
+            }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#geo": "geo",
+                      "#accuracy": "accuracy"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_geo_accuracy": "approximate"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
       });
     });
 

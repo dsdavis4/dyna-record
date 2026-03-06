@@ -232,13 +232,16 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * });
  * ```
  */
-function ObjectAttribute<
-  T extends DynaRecord,
-  const S extends ObjectSchema
->(props: ObjectAttributeOptions<S>) {
+function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
+  props: ObjectAttributeOptions<S>
+) {
   return function (
     _value: undefined,
-    context: AttributeDecoratorContext<T, InferObjectSchema<S>, ObjectAttributeOptions<S>>
+    context: AttributeDecoratorContext<
+      T,
+      InferObjectSchema<S>,
+      ObjectAttributeOptions<S>
+    >
   ) {
     if (context.kind === "field") {
       context.addInitializer(function (this: T) {
