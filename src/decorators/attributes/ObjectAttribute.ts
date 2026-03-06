@@ -1,15 +1,24 @@
 import { z, type ZodType } from "zod";
 import type DynaRecord from "../../DynaRecord";
 import Metadata from "../../metadata";
-import type { AttributeDecoratorContext, AttributeOptions } from "../types";
+import type {
+  AttributeDecoratorContext,
+  NonNullAttributeOptions
+} from "../types";
 import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
 import { createObjectSerializer } from "./serializers";
 
 /**
  * Options for the `@ObjectAttribute` decorator.
- * Extends {@link AttributeOptions} with a required `schema` field describing the object shape.
+ * Extends {@link NonNullAttributeOptions} with a required `schema` field describing the object shape.
+ *
+ * **Object attributes are never nullable.** DynamoDB cannot update nested document paths
+ * (e.g. `address.geo.lat`) if the parent object does not exist, which causes:
+ * `ValidationException: The document path provided in the update expression is invalid for update`.
+ * To avoid this, `@ObjectAttribute` fields always exist as at least an empty object `{}`.
  *
  * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, and arrays.
+ * Non-object fields within the schema may still be nullable.
  *
  * @template S The specific ObjectSchema type used for type inference
  *
@@ -17,19 +26,50 @@ import { createObjectSerializer } from "./serializers";
  * ```typescript
  * @ObjectAttribute({ alias: "Address", schema: addressSchema })
  * public readonly address: InferObjectSchema<typeof addressSchema>;
- *
- * @ObjectAttribute({ alias: "Meta", schema: metaSchema, nullable: true })
- * public readonly meta?: InferObjectSchema<typeof metaSchema>;
  * ```
  */
 export interface ObjectAttributeOptions<S extends ObjectSchema>
-  extends AttributeOptions {
+  extends NonNullAttributeOptions {
   /**
    * The {@link ObjectSchema} defining the structure of the object attribute.
    *
    * Must be declared with `as const satisfies ObjectSchema` for accurate type inference.
    */
   schema: S;
+}
+
+/**
+ * Converts an {@link ObjectSchema} to a partial Zod schema for update validation.
+ *
+ * All fields become optional (can be omitted). Nullable fields accept `null`.
+ * Non-nullable fields reject `null`. Nested objects are recursively partial.
+ * Array items validate normally (full replacement).
+ *
+ * @param schema The object schema definition
+ * @returns A ZodType that validates partial objects matching the schema
+ */
+function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
+  const shape: Record<string, ZodType> = {};
+
+  for (const [key, fieldDef] of Object.entries(schema)) {
+    shape[key] = fieldDefToZodPartial(fieldDef);
+  }
+
+  return z.object(shape).partial();
+}
+
+/**
+ * Converts a single {@link FieldDef} to the corresponding partial Zod type.
+ * Nested objects use partial schemas; all other types use the standard schema.
+ * Object fields are never nullable — they always exist as at least `{}`.
+ */
+function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
+  if (fieldDef.type === "object") {
+    return objectSchemaToZodPartial(fieldDef.fields);
+  }
+
+  // For non-object fields, use the standard schema (includes nullable wrapping)
+  return fieldDefToZod(fieldDef);
 }
 
 /**
@@ -52,25 +92,28 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
  * Converts a single {@link FieldDef} to the corresponding Zod type for runtime validation.
  *
  * Handles all field types:
- * - `"object"` → recursively builds a `z.object()` via {@link objectSchemaToZod}
+ * - `"object"` → recursively builds a `z.object()` via {@link objectSchemaToZod}.
+ *   Object fields are never nullable — DynamoDB requires them to exist for document path updates.
  * - `"array"` → `z.array()` wrapping a recursive call for the `items` type
  * - `"string"` → `z.string()`
  * - `"number"` → `z.number()`
  * - `"boolean"` → `z.boolean()`
  * - `"enum"` → `z.enum(values)` for string literal validation
  *
- * When `nullable` is `true`, wraps the type with `.optional().nullable()`.
+ * When `nullable` is `true` (non-object fields only), wraps the type with `.optional().nullable()`.
  *
  * @param fieldDef The field definition to convert
  * @returns A ZodType that validates values matching the field definition
  */
 function fieldDefToZod(fieldDef: FieldDef): ZodType {
+  // Object fields return early — they are never nullable
+  if (fieldDef.type === "object") {
+    return objectSchemaToZod(fieldDef.fields);
+  }
+
   let zodType: ZodType;
 
   switch (fieldDef.type) {
-    case "object":
-      zodType = objectSchemaToZod(fieldDef.fields);
-      break;
     case "array":
       zodType = z.array(fieldDefToZod(fieldDef.items));
       break;
@@ -109,21 +152,28 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * Objects are stored as native DynamoDB Map types and validated at runtime against the provided schema.
  * The TypeScript type is inferred from the schema using {@link InferObjectSchema}.
  *
- * Can be set to nullable via decorator props.
+ * **Object attributes are never nullable.** DynamoDB cannot update nested document paths
+ * (e.g. `address.geo.lat`) if the parent object does not exist, which causes:
+ * `ValidationException: The document path provided in the update expression is invalid for update`.
+ * To prevent this, `@ObjectAttribute` fields must always exist as at least an empty object `{}`.
+ * Similarly, nested object fields within the schema cannot be nullable.
  *
  * **Supported field types within the schema:**
- * - `"string"`, `"number"`, `"boolean"` — primitives
- * - `"enum"` — string literal unions, validated at runtime via `z.enum()`
- * - `"object"` — nested objects (arbitrarily deep)
- * - `"array"` — lists of any field type
+ * - `"string"`, `"number"`, `"boolean"` — primitives (support `nullable: true`)
+ * - `"enum"` — string literal unions (support `nullable: true`)
+ * - `"date"` — dates stored as ISO strings (support `nullable: true`)
+ * - `"object"` — nested objects, arbitrarily deep (**never nullable**)
+ * - `"array"` — lists of any field type (support `nullable: true`, full replacement on update)
  *
- * All field types support `nullable: true` to remove them
+ * Objects within arrays are not subject to the document path limitation because arrays
+ * use full replacement on update. Partial updates of individual objects within arrays
+ * are not supported.
  *
  * @template T The class type that the decorator is applied to
  * @template S The ObjectSchema type used for validation and type inference
  * @template K The inferred TypeScript type from the schema
  * @template P The decorator options type
- * @param props An {@link ObjectAttributeOptions} object providing the `schema` and optional `alias` and `nullable` configuration.
+ * @param props An {@link ObjectAttributeOptions} object providing the `schema` and optional `alias`.
  * @returns A class field decorator function
  *
  * Usage example:
@@ -146,14 +196,27 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * class MyEntity extends MyTable {
  *   @ObjectAttribute({ alias: 'Address', schema: addressSchema })
  *   public address: InferObjectSchema<typeof addressSchema>;
- *
- *   @ObjectAttribute({ alias: 'Meta', schema: metaSchema, nullable: true })
- *   public meta?: InferObjectSchema<typeof metaSchema>;
  * }
  *
  * // TypeScript infers:
  * // address.category → "home" | "work" | "other"
  * // address.geo.accuracy → "precise" | "approximate"
+ * ```
+ *
+ * **Partial updates:** When updating an entity, `@ObjectAttribute` fields support partial
+ * updates — only the fields you provide are modified, omitted fields are preserved. Under
+ * the hood, dyna-record generates DynamoDB document path expressions
+ * (e.g., `SET #address.#street = :address_street`) instead of replacing the entire map.
+ * Nested objects are recursively merged. Arrays within objects are full replacement.
+ * Setting a nullable field within an object to `null` generates a `REMOVE` expression
+ * for that specific field.
+ *
+ * ```typescript
+ * // Only updates street — city, zip, geo are preserved
+ * await MyEntity.update("id", { address: { street: "456 Oak Ave" } });
+ *
+ * // Remove a nullable field within the object
+ * await MyEntity.update("id", { address: { zip: null } });
  * ```
  *
  * Object attributes support filtering in queries using dot-path notation for nested fields
@@ -169,26 +232,31 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * });
  * ```
  */
-function ObjectAttribute<
-  T extends DynaRecord,
-  const S extends ObjectSchema,
-  P extends ObjectAttributeOptions<S>
->(props: P) {
+function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
+  props: ObjectAttributeOptions<S>
+) {
   return function (
     _value: undefined,
-    context: AttributeDecoratorContext<T, InferObjectSchema<S>, P>
+    context: AttributeDecoratorContext<
+      T,
+      InferObjectSchema<S>,
+      ObjectAttributeOptions<S>
+    >
   ) {
     if (context.kind === "field") {
       context.addInitializer(function (this: T) {
         const { schema, ...restProps } = props;
         const zodSchema = objectSchemaToZod(schema);
+        const partialZodSchema = objectSchemaToZodPartial(schema);
         const serializers = createObjectSerializer(schema);
 
         Metadata.addEntityAttribute(this.constructor.name, {
           attributeName: context.name.toString(),
-          nullable: props?.nullable,
           type: zodSchema,
+          partialType: partialZodSchema,
           serializers,
+          nullable: false,
+          objectSchema: schema,
           ...restProps
         });
       });

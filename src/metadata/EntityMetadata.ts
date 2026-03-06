@@ -79,6 +79,12 @@ class EntityMetadata {
    */
   #zodAttributes: Record<string, ZodType> = {};
 
+  /**
+   * Object containing zod attributes for partial (update) validation.
+   * ObjectAttributes use their partialType; others use the standard type.
+   */
+  #zodPartialAttributes: Record<string, ZodType> = {};
+
   constructor(entityClass: EntityClass, tableClassName: string) {
     this.EntityClass = entityClass;
 
@@ -97,6 +103,8 @@ class EntityMetadata {
     this.tableAttributes[attrMeta.alias] = attrMeta;
 
     this.#zodAttributes[attrMeta.name] = attrMeta.type;
+    this.#zodPartialAttributes[attrMeta.name] =
+      attrMeta.partialType ?? attrMeta.type;
   }
 
   /**
@@ -133,7 +141,7 @@ class EntityMetadata {
     if (this.#schemaPartial === undefined) {
       const tableMeta = Metadata.getTable(this.tableClassName);
       this.#schemaPartial = z
-        .object(this.#zodAttributes)
+        .object(this.#zodPartialAttributes)
         .omit(tableMeta.reservedKeys)
         .partial()
         .transform((data: Record<string, unknown>) => {

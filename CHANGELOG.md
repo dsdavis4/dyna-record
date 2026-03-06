@@ -1,3 +1,13 @@
+## 0.5.0 - 2026-03-03
+
+### Changed
+
+- **Partial `@ObjectAttribute` updates:** Updating an `@ObjectAttribute` is now a **partial merge** instead of a full replacement. Only the fields you provide are modified — omitted fields are preserved. Under the hood, dyna-record generates DynamoDB document path expressions (e.g., `SET #address.#street = :address_street`) instead of replacing the entire map. Nested objects are recursively merged. Arrays within objects are still full replacement. Setting a nullable field within an object to `null` generates a `REMOVE` expression for that specific field.
+- **Object attributes are never nullable:** `@ObjectAttribute` fields no longer support `nullable: true`. DynamoDB cannot update nested document paths (e.g., `address.geo.lat`) if the parent object does not exist, causing a `ValidationException`. To prevent this, object attributes always exist as at least `{}`. Nested `"object"` fields within schemas are also never nullable. Non-object fields (primitives, enums, dates, arrays) can still be nullable.
+- **Update types for `@ObjectAttribute`:** All fields within object attributes are now optional (`Partial<>`) in update payloads, matching the partial update semantics. This is a compile-time change — you no longer need to provide all required fields when updating a subset of an object attribute.
+- **Update validation for `@ObjectAttribute`:** The Zod schema used for update validation is now a deep partial schema for object attributes. All fields are optional (can be omitted), but type validation still applies for provided fields. Non-nullable fields still reject `null`.
+- **Instance `update` deep merge:** The instance `update` method now deep merges object attributes, preserving existing fields not included in the partial update. Previously, `Object.assign` would shallow-replace the entire object attribute value.
+
 ## 0.4.11 - 2026-03-02
 
 ### Added
@@ -17,7 +27,7 @@
 - **`@ObjectAttribute` decorator:** Define structured, typed object attributes on entities. Objects are validated at runtime via Zod and stored as native DynamoDB Map types. Declare schemas using `ObjectSchema` and derive TypeScript types with `InferObjectSchema<typeof schema>`.
   - **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"enum"`, nested `"object"`, and `"array"`
   - **Enum fields:** Use `{ type: "enum", values: ["a", "b"] }` to define string literal union fields with compile-time type inference and runtime validation. Enum fields work at any nesting level — top-level, inside nested objects, or as array items.
-  - **Nullable fields:** Individual fields and the object attribute itself support `nullable: true`
+  - **Nullable fields:** Individual non-object fields support `nullable: true`. Object attributes and nested object fields are never nullable.
   - **Nested objects and arrays:** Arbitrarily deep nesting via `"object"` with `fields` and `"array"` with `items`, including arrays of objects and nested arrays
 - **`$contains` query filter operator:** Filter on List attributes containing a specific element or string attributes containing a substring. Maps to DynamoDB's `contains()` function. Works with both top-level attributes and nested fields via dot-path notation.
 - **Dot-path query filtering for nested Map attributes:** Filter on fields within `@ObjectAttribute` using dot notation (e.g., `"address.city"`, `"address.geo.lat"`). All standard filter operators work with dot-paths: equality, `$beginsWith`, `$contains`, and `IN`.

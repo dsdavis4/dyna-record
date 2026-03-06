@@ -48,6 +48,15 @@ export interface PrimitiveFieldDef {
  *
  * The `fields` property is itself an {@link ObjectSchema}, enabling arbitrarily deep nesting.
  *
+ * **Object fields are never nullable.** DynamoDB cannot update nested document paths
+ * (e.g. `address.geo.lat`) if an intermediate object does not exist, which causes:
+ * `ValidationException: The document path provided in the update expression is invalid for update`.
+ * To avoid this, object-type fields always exist as at least an empty object `{}`.
+ * Non-object fields within the object may still be nullable.
+ *
+ * Objects within arrays are not subject to this limitation because arrays use full
+ * replacement on update rather than document path expressions.
+ *
  * @example
  * ```typescript
  * const schema = {
@@ -55,7 +64,8 @@ export interface PrimitiveFieldDef {
  *     type: "object",
  *     fields: {
  *       lat: { type: "number" },
- *       lng: { type: "number" }
+ *       lng: { type: "number" },
+ *       notes: { type: "string", nullable: true }
  *     }
  *   }
  * } as const satisfies ObjectSchema;
@@ -66,8 +76,6 @@ export interface ObjectFieldDef {
   type: "object";
   /** The nested {@link ObjectSchema} describing the object's shape. */
   fields: ObjectSchema;
-  /** When `true`, the field becomes optional. */
-  nullable?: boolean;
 }
 
 /**
@@ -237,9 +245,11 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  *
  * - Primitive fields map to their TS equivalents via {@link PrimitiveTypeMap}
  * - Enum fields become a union of their `values` (`values[number]`)
- * - Nested object fields recurse through `InferObjectSchema`
+ * - Nested object fields recurse through `InferObjectSchema` — always required (never nullable)
  * - Array fields become `T[]` where `T` is inferred from `items`
  * - Fields with `nullable: true` become optional (`T | undefined`)
+ * - Object fields are always required because DynamoDB cannot update nested document paths
+ *   if an intermediate object does not exist
  *
  * @example
  * ```typescript
@@ -262,11 +272,11 @@ export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
  * ```
  */
 export type InferObjectSchema<S extends ObjectSchema> = {
-  [K in keyof S as S[K]["nullable"] extends true ? never : K]: InferFieldDef<
+  [K in keyof S as S[K] extends { nullable: true } ? never : K]: InferFieldDef<
     S[K]
   >;
 } & {
-  [K in keyof S as S[K]["nullable"] extends true ? K : never]?: InferFieldDef<
+  [K in keyof S as S[K] extends { nullable: true } ? K : never]?: InferFieldDef<
     S[K]
   >;
 };

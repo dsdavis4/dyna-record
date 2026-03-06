@@ -245,7 +245,7 @@ describe("FindById", () => {
         status: "active",
         createdDate: "2023-10-16T03:31:35.918Z"
       };
-      const nullableObjectVal = {
+      const addressVal = {
         street: "123 Main St",
         city: "Springfield",
         zip: 12345,
@@ -268,7 +268,7 @@ describe("FindById", () => {
           foreignKeyAttribute: "111",
           enumAttribute: "val-1",
           objectAttribute: objectTableVal,
-          nullableObjectAttribute: nullableObjectVal
+          addressAttribute: addressVal
         }
       });
 
@@ -282,7 +282,7 @@ describe("FindById", () => {
         status: "active",
         createdDate: new Date("2023-10-16T03:31:35.918Z")
       });
-      expect(result?.nullableObjectAttribute).toEqual(nullableObjectVal);
+      expect(result?.addressAttribute).toEqual(addressVal);
     });
 
     it("will return undefined if it doesn't find the record", async () => {
@@ -1514,60 +1514,60 @@ describe("FindById", () => {
         }
       });
 
-      it("return value nullableObjectAttribute requires optional chaining", async () => {
+      it("return value addressAttribute is directly accessible (non-nullable)", async () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
         if (result !== undefined) {
-          // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
-          Logger.log(result.nullableObjectAttribute.city);
+          // @ts-expect-no-error: addressAttribute is non-nullable, direct access is valid
+          Logger.log(result.addressAttribute.city);
         }
       });
 
-      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
+      it("return value addressAttribute is accessible and has correct nested types", async () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
         if (result !== undefined) {
-          // @ts-expect-no-error: optional chaining allows safe access
-          Logger.log(result.nullableObjectAttribute?.street);
+          // @ts-expect-no-error: direct access on non-nullable attribute
+          Logger.log(result.addressAttribute.street);
 
           // @ts-expect-no-error: nested string field
-          Logger.log(result.nullableObjectAttribute?.city);
+          Logger.log(result.addressAttribute.city);
 
           // @ts-expect-no-error: nested nullable field can be number or undefined
-          Logger.log(result.nullableObjectAttribute?.zip);
+          Logger.log(result.addressAttribute.zip);
 
           // @ts-expect-no-error: nested object field
-          Logger.log(result.nullableObjectAttribute?.geo.lat);
+          Logger.log(result.addressAttribute.geo.lat);
 
           // @ts-expect-no-error: nested object field
-          Logger.log(result.nullableObjectAttribute?.geo.lng);
+          Logger.log(result.addressAttribute.geo.lng);
 
           // @ts-expect-no-error: nested array field
-          Logger.log(result.nullableObjectAttribute?.scores);
+          Logger.log(result.addressAttribute.scores);
 
           // @ts-expect-no-error: array item is a number
-          Logger.log(result.nullableObjectAttribute?.scores[0]);
+          Logger.log(result.addressAttribute.scores[0]);
         }
       });
 
-      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
+      it("return value addressAttribute nested fields have correct types (rejects wrong assignments)", async () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
-        if (result?.nullableObjectAttribute !== undefined) {
+        if (result !== undefined) {
           // @ts-expect-error: city is string, not number
-          const cityAsNum: number = result.nullableObjectAttribute.city;
+          const cityAsNum: number = result.addressAttribute.city;
           Logger.log(cityAsNum);
 
           // @ts-expect-error: geo.lat is number, not string
-          const latAsStr: string = result.nullableObjectAttribute.geo.lat;
+          const latAsStr: string = result.addressAttribute.geo.lat;
           Logger.log(latAsStr);
 
           // @ts-expect-error: scores is number[], not string[]
-          const scoresAsStrs: string[] = result.nullableObjectAttribute.scores;
+          const scoresAsStrs: string[] = result.addressAttribute.scores;
           Logger.log(scoresAsStrs);
 
           // @ts-expect-error: nonExistent is not in the schema
-          Logger.log(result.nullableObjectAttribute.nonExistent);
+          Logger.log(result.addressAttribute.nonExistent);
         }
       });
 
@@ -1588,14 +1588,14 @@ describe("FindById", () => {
       it("return value nested objectAttribute enum field is typed correctly", async () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
-        if (result?.nullableObjectAttribute !== undefined) {
+        if (result !== undefined) {
           // @ts-expect-no-error: accuracy is "precise" | "approximate"
           const acc: "precise" | "approximate" =
-            result.nullableObjectAttribute.geo.accuracy;
+            result.addressAttribute.geo.accuracy;
           Logger.log(acc);
 
           // @ts-expect-error: accuracy is "precise" | "approximate", not number
-          const accAsNum: number = result.nullableObjectAttribute.geo.accuracy;
+          const accAsNum: number = result.addressAttribute.geo.accuracy;
           Logger.log(accAsNum);
         }
       });
@@ -1604,12 +1604,12 @@ describe("FindById", () => {
         const result = await MyClassWithAllAttributeTypes.findById("123");
 
         // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
-        Logger.log(result?.nullableObjectAttribute?.category);
+        Logger.log(result?.addressAttribute.category);
 
-        if (result?.nullableObjectAttribute !== undefined) {
+        if (result !== undefined) {
           // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
           const cat: "home" | "work" | "other" | undefined =
-            result.nullableObjectAttribute.category;
+            result.addressAttribute.category;
           Logger.log(cat);
         }
       });

@@ -10,13 +10,30 @@ import {
   MockTable,
   MyClassWithAllAttributeTypes,
   contactSchema,
-  addressSchema
+  addressSchema,
+  ArrayOfObjectsEntity
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodObject, ZodNullable, type ZodOptional } from "zod";
+import { ZodObject } from "zod";
+
+const testSchema = {
+  name: { type: "string" },
+  count: { type: "number" }
+} as const satisfies ObjectSchema;
+
+const testSchema2 = {
+  isCool: { type: "boolean" },
+  geo: {
+    type: "object",
+    fields: {
+      lat: { type: "number" },
+      lng: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
 
 describe("ObjectAttribute", () => {
-  it("uses the provided table alias as attribute metadata if one is provided", () => {
+  it("creates attribute metadata with correct properties", () => {
     expect.assertions(1);
 
     const attr = Metadata.getEntityAttributes(
@@ -28,11 +45,26 @@ describe("ObjectAttribute", () => {
       alias: "objectAttribute",
       nullable: false,
       type: expect.any(ZodObject),
+      partialType: expect.any(ZodObject),
+      objectSchema: contactSchema,
       serializers: {
         toTableAttribute: expect.any(Function),
         toEntityAttribute: expect.any(Function)
       }
     });
+  });
+
+  it("uses the provided table alias as attribute metadata if one is provided", () => {
+    expect.assertions(1);
+
+    expect(
+      Metadata.getEntityAttributes(ArrayOfObjectsEntity.name).data
+    ).toEqual(
+      expect.objectContaining({
+        name: "data",
+        alias: "Data"
+      })
+    );
   });
 
   it("defaults attribute metadata alias to the table key if alias is not provided", () => {
@@ -47,24 +79,6 @@ describe("ObjectAttribute", () => {
         alias: "objectAttribute"
       })
     );
-  });
-
-  it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
-
-    expect(
-      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
-        .nullableObjectAttribute
-    ).toEqual({
-      name: "nullableObjectAttribute",
-      alias: "nullableObjectAttribute",
-      nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodObject<any>>>),
-      serializers: {
-        toTableAttribute: expect.any(Function),
-        toEntityAttribute: expect.any(Function)
-      }
-    });
   });
 
   it("serializers use objectToTableItem for toTableAttribute", () => {
@@ -84,9 +98,13 @@ describe("ObjectAttribute", () => {
     };
 
     expect(attr.serializers).toBeDefined();
-    expect(attr.serializers?.toTableAttribute(input)).toEqual(
-      objectToTableItem(contactSchema, input)
-    );
+    expect(attr.serializers?.toTableAttribute(input)).toEqual({
+      createdDate: "2024-01-01T00:00:00.000Z",
+      email: "a@b.com",
+      name: "test",
+      status: "active",
+      tags: []
+    });
   });
 
   it("serializers use tableItemToObject for toEntityAttribute", () => {
@@ -105,9 +123,13 @@ describe("ObjectAttribute", () => {
     };
 
     expect(attr.serializers).toBeDefined();
-    expect(attr.serializers?.toEntityAttribute(input)).toEqual(
-      tableItemToObject(contactSchema, input)
-    );
+    expect(attr.serializers?.toEntityAttribute(input)).toEqual({
+      createdDate: new Date("2024-01-01T00:00:00.000Z"),
+      email: "a@b.com",
+      name: "test",
+      status: "active",
+      tags: []
+    });
   });
 
   it("has serializers attached for object attributes without date fields", () => {
@@ -115,42 +137,18 @@ describe("ObjectAttribute", () => {
 
     const attr = Metadata.getEntityAttributes(
       MyClassWithAllAttributeTypes.name
-    ).nullableObjectAttribute;
+    ).addressAttribute;
 
     const input = { street: "123 Main", city: "Springfield" };
 
     expect(attr.serializers).toBeDefined();
-    expect(attr.serializers?.toTableAttribute(input)).toEqual(
-      objectToTableItem(addressSchema, input)
-    );
+    expect(attr.serializers?.toTableAttribute(input)).toEqual({
+      city: "Springfield",
+      street: "123 Main"
+    });
   });
 
   describe("types", () => {
-    const testSchema = {
-      name: { type: "string" },
-      count: { type: "number" }
-    } as const satisfies ObjectSchema;
-
-    const testSchema2 = {
-      isCool: { type: "boolean" },
-      geo: {
-        type: "object",
-        fields: {
-          lat: { type: "number" },
-          lng: { type: "number" }
-        }
-      }
-    } as const satisfies ObjectSchema;
-
-    it("can be applied to InferObjectSchema attributes", () => {
-      @Entity
-      class ModelOne extends MockTable {
-        // @ts-expect-error: type of attribute and schema are not the same
-        @ObjectAttribute({ alias: "Key1", schema: testSchema })
-        public key1: InferObjectSchema<typeof testSchema2>;
-      }
-    });
-
     it("requires the schema and type to be the same", () => {
       @Entity
       class ModelOne extends MockTable {
@@ -158,27 +156,40 @@ describe("ObjectAttribute", () => {
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema>;
       }
-    });
 
-    it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
-      class ModelOne extends MockTable {
-        // @ts-expect-error: ObjectAttributes cant be optional unless nullable
+      class ModelTwo extends MockTable {
+        // @ts-expect-error: type of attribute and schema are not the same
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
-        public key1?: InferObjectSchema<typeof testSchema>;
+        public key1: InferObjectSchema<typeof testSchema2>;
       }
     });
 
-    it("does allow the property its applied to to be optional if its nullable", () => {
+    // ObjectAttributes are always non nullable because DynamoDB cannot update nested document paths
+    // (e.g. `address.geo.lat`) if the parent object does not exist, which causes:
+    // `ValidationException: The document path provided in the update expression is invalid for update`.
+    // To avoid this, `@ObjectAttribute` fields always exist as at least an empty object `{}`.
+    it("nullable is not a valid property because its always non nullable", () => {
       @Entity
       class ModelOne extends MockTable {
-        // @ts-expect-no-error: ObjectAttributes can be optional if nullable
         @ObjectAttribute({
           alias: "Key1",
           schema: testSchema,
+          // @ts-expect-error: nullable property is not valid
           nullable: true
         })
-        public key1?: InferObjectSchema<typeof testSchema>;
+        public key1: InferObjectSchema<typeof testSchema>;
+      }
+
+      @Entity
+      class ModelTwo extends MockTable {
+        @ObjectAttribute({
+          alias: "Key1",
+          schema: testSchema,
+          // @ts-expect-error: nullable property is not valid
+          nullable: false
+        })
+        public key1: InferObjectSchema<typeof testSchema>;
       }
     });
 
@@ -200,51 +211,28 @@ describe("ObjectAttribute", () => {
       }
     });
 
-    it("if nullable is false the attribute is required", () => {
+    it("ObjectAttribute is always required (never optional)", () => {
       @Entity
       class SomeModel extends MockTable {
-        // @ts-expect-no-error: Non-nullable properties are required
-        @ObjectAttribute({
-          alias: "Key1",
-          schema: testSchema,
-          nullable: false
-        })
-        public key1: InferObjectSchema<typeof testSchema>;
-
-        // @ts-expect-error: Non-nullable properties are required
-        @ObjectAttribute({
-          alias: "Key2",
-          schema: testSchema,
-          nullable: false
-        })
-        public key2?: InferObjectSchema<typeof testSchema>;
-      }
-    });
-
-    it("nullable defaults to false and makes the property required", () => {
-      @Entity
-      class SomeModel extends MockTable {
-        // @ts-expect-no-error: Non-nullable properties are required
+        // @ts-expect-no-error: ObjectAttribute properties are always required
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema>;
 
-        // @ts-expect-error: Non-nullable properties are required
+        // @ts-expect-error: ObjectAttribute properties cannot be optional
         @ObjectAttribute({ alias: "Key2", schema: testSchema })
         public key2?: InferObjectSchema<typeof testSchema>;
       }
     });
 
-    it("when nullable is true, it will allow the property to be optional", () => {
-      @Entity
-      class SomeModel extends MockTable {
-        // @ts-expect-no-error: Nullable properties are optional
-        @ObjectAttribute({
-          alias: "Key1",
-          schema: testSchema,
+    it("object fields within a schema cannot have nullable via ObjectFieldDef", () => {
+      const schemaWithNullableField = {
+        nested: {
+          type: "object",
+          fields: { name: { type: "string" } },
+          // @ts-expect-error: nullable is not a valid property on ObjectFieldDef
           nullable: true
-        })
-        public key1?: InferObjectSchema<typeof testSchema>;
-      }
+        }
+      } as const satisfies ObjectSchema;
     });
 
     describe("date fields", () => {
@@ -557,6 +545,37 @@ describe("ObjectAttribute", () => {
           @ObjectAttribute({ schema: nullableArraySchema })
           public key1: InferObjectSchema<typeof nullableArraySchema>;
         }
+      });
+
+      it("infers Date type for array of date items", () => {
+        const arrayDateSchema = {
+          timestamps: { type: "array", items: { type: "date" } }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof arrayDateSchema>;
+
+        // @ts-expect-no-error: array of Dates inferred correctly
+        const good: Inferred = { timestamps: [new Date(), new Date()] };
+
+        // @ts-expect-no-error: empty array is valid
+        const empty: Inferred = { timestamps: [] };
+
+        // @ts-expect-error: array item must be Date, not string
+        const wrongType: Inferred = { timestamps: ["bad"] };
+      });
+
+      it("rejects wrong types for array of date items", () => {
+        const arrayDateSchema = {
+          timestamps: { type: "array", items: { type: "date" } }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof arrayDateSchema>;
+
+        // @ts-expect-error: array item must be Date, not string
+        const badStrings: Inferred = { timestamps: ["2023-01-01"] };
+
+        // @ts-expect-error: array item must be Date, not number
+        const badNumbers: Inferred = { timestamps: [1234567890] };
       });
     });
   });

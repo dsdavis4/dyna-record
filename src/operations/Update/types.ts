@@ -15,8 +15,10 @@ type NullableProperties<T> = {
  * Recursively resolves the value type for `AllowNullForNullable`.
  *
  * For plain object types (not `Date`, arrays, primitives, or functions),
- * recurses via {@link AllowNullForNullable} so that nullable fields within
- * object schemas (e.g. `@ObjectAttribute`) also receive `| null` during updates.
+ * wraps with `Partial<>` and recurses via {@link AllowNullForNullable} so that:
+ * - All fields within `@ObjectAttribute` objects are optional in update payloads,
+ *   matching the partial update semantics (only provided fields are modified).
+ * - Nullable fields at any nesting depth receive `| null` during updates.
  *
  * Primitives, `Date`, arrays, and functions pass through unchanged.
  */
@@ -31,7 +33,7 @@ type AllowNullForNullableValue<T> = T extends
   | ((...args: unknown[]) => unknown)
   ? T
   : T extends Record<string, unknown>
-    ? AllowNullForNullable<T>
+    ? Partial<AllowNullForNullable<T>>
     : T;
 
 /**
@@ -51,12 +53,20 @@ type AllowNullForNullable<T> = {
 };
 
 /**
- * Attributes of an entity to update. Not all properties are required. Setting a nullable property to null will remove the attribute from the item
+ * Attributes of an entity to update. Not all properties are required. Setting a nullable property to null will remove the attribute from the item.
+ *
+ * For `@ObjectAttribute` fields, all nested fields are `Partial` — you only need to provide the
+ * fields you want to change. Omitted fields are preserved in DynamoDB via document path expressions.
  *
  * @example
  * await MockModel.update("123", {
  *   nonNullableAttr: "new val", // Sets new value
  *   nullableAttr: null // Remove the value. This will throw a compile time error if the property is not nullable
+ * })
+ *
+ * @example Partial ObjectAttribute update
+ * await MockModel.update("123", {
+ *   address: { street: "456 Oak Ave" } // Only updates street, preserves other fields
  * })
  */
 export type UpdateOptions<T extends DynaRecord> = Partial<

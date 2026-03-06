@@ -6,10 +6,14 @@ import {
 import {
   type Address,
   type Assignment,
+  Catalog,
+  type CatalogItem,
   ContactInformation,
   Customer,
   Desk,
+  DuplicateFieldEntity,
   Employee,
+  type Festival,
   Grade,
   MockTable,
   MyClassWithAllAttributeTypes,
@@ -19,11 +23,14 @@ import {
   type Person,
   Pet,
   PhoneBook,
+  Shipment,
+  Sponsor,
   type Student,
   type User,
   Website,
   Warehouse,
-  type Shipment
+  ArrayOfObjectsEntity,
+  DeepNestedEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -442,9 +449,12 @@ describe("Update", () => {
                   ExpressionAttributeNames: {
                     "#UpdatedAt": "UpdatedAt",
                     "#boolAttribute": "boolAttribute",
+                    "#createdDate": "createdDate",
                     "#dateAttribute": "dateAttribute",
+                    "#email": "email",
                     "#enumAttribute": "enumAttribute",
                     "#foreignKeyAttribute": "foreignKeyAttribute",
+                    "#name": "name",
                     "#nullableBoolAttribute": "nullableBoolAttribute",
                     "#nullableDateAttribute": "nullableDateAttribute",
                     "#nullableEnumAttribute": "nullableEnumAttribute",
@@ -454,7 +464,9 @@ describe("Update", () => {
                     "#nullableStringAttribute": "nullableStringAttribute",
                     "#numberAttribute": "numberAttribute",
                     "#objectAttribute": "objectAttribute",
-                    "#stringAttribute": "stringAttribute"
+                    "#status": "status",
+                    "#stringAttribute": "stringAttribute",
+                    "#tags": "tags"
                   },
                   ExpressionAttributeValues: {
                     ":UpdatedAt": "2023-10-16T03:31:35.918Z",
@@ -469,13 +481,11 @@ describe("Update", () => {
                     ":nullableNumberAttribute": 10,
                     ":nullableStringAttribute": "2",
                     ":numberAttribute": 9,
-                    ":objectAttribute": {
-                      name: "John",
-                      email: "john@example.com",
-                      tags: ["work", "vip"],
-                      status: "active",
-                      createdDate: "2023-10-16T03:31:35.918Z"
-                    },
+                    ":objectAttribute_createdDate": "2023-10-16T03:31:35.918Z",
+                    ":objectAttribute_email": "john@example.com",
+                    ":objectAttribute_name": "John",
+                    ":objectAttribute_status": "active",
+                    ":objectAttribute_tags": ["work", "vip"],
                     ":stringAttribute": "1"
                   },
                   Key: {
@@ -484,7 +494,7 @@ describe("Update", () => {
                   },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #objectAttribute = :objectAttribute, #UpdatedAt = :UpdatedAt"
+                    "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt, #objectAttribute.#name = :objectAttribute_name, #objectAttribute.#email = :objectAttribute_email, #objectAttribute.#tags = :objectAttribute_tags, #objectAttribute.#status = :objectAttribute_status, #objectAttribute.#createdDate = :objectAttribute_createdDate"
                 }
               },
               {
@@ -568,6 +578,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -642,6 +658,12 @@ describe("Update", () => {
           tags: ["old-tag"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [95]
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1262,6 +1284,13 @@ describe("Update", () => {
           options: ["val-1", "val-2"],
           path: ["nullableEnumAttribute"],
           received: "val-4"
+        },
+        {
+          code: "invalid_type",
+          expected: "object",
+          message: "Expected object, received string",
+          path: ["objectAttribute"],
+          received: "string"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1285,7 +1314,8 @@ describe("Update", () => {
           numberAttribute: "9",
           nullableNumberAttribute: "10",
           enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
+          nullableEnumAttribute: "val-4",
+          objectAttribute: "val-5"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
         operationSharedAssertions(e);
@@ -1313,6 +1343,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1330,7 +1366,8 @@ describe("Update", () => {
           numberAttribute: "9",
           nullableNumberAttribute: "10",
           enumAttribute: "val-3",
-          nullableEnumAttribute: "val-4"
+          nullableEnumAttribute: "val-4",
+          objectAttribute: "val-5"
         } as any); // Force any to test runtime validations
       } catch (e: any) {
         operationSharedAssertions(e);
@@ -1363,20 +1400,6 @@ describe("Update", () => {
           message: "Expected array, received string",
           path: ["objectAttribute", "tags"],
           received: "string"
-        },
-        {
-          code: "invalid_type",
-          expected: "'active' | 'inactive'",
-          message: "Required",
-          path: ["objectAttribute", "status"],
-          received: "undefined"
-        },
-        {
-          code: "invalid_type",
-          expected: "date",
-          message: "Required",
-          path: ["objectAttribute", "createdDate"],
-          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1420,6 +1443,12 @@ describe("Update", () => {
           tags: ["work", "vip"],
           status: "active",
           createdDate: new Date()
+        },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
         },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
@@ -1457,20 +1486,6 @@ describe("Update", () => {
           message: "Expected string, received boolean",
           path: ["objectAttribute", "tags", 2],
           received: "boolean"
-        },
-        {
-          code: "invalid_type",
-          expected: "'active' | 'inactive'",
-          message: "Required",
-          path: ["objectAttribute", "status"],
-          received: "undefined"
-        },
-        {
-          code: "invalid_type",
-          expected: "date",
-          message: "Required",
-          path: ["objectAttribute", "createdDate"],
-          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1515,6 +1530,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1533,7 +1554,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute nested object and array fields are the wrong type", () => {
+  describe("will error if addressAttribute nested object and array fields are the wrong type", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1542,28 +1563,21 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "string"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "string"
-        },
-        {
-          code: "invalid_type",
-          expected: "'precise' | 'approximate'",
-          message: "Required",
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
-          received: "undefined"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received string",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "string"
         }
       ]);
@@ -1577,7 +1591,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: "bad", lng: "bad" },
@@ -1610,13 +1624,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: "bad", lng: "bad" },
@@ -1629,7 +1649,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute top-level fields are the wrong type", () => {
+  describe("will error if addressAttribute top-level fields are the wrong type", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1638,14 +1658,14 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received number",
-          path: ["nullableObjectAttribute", "street"],
+          path: ["addressAttribute", "street"],
           received: "number"
         },
         {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received boolean",
-          path: ["nullableObjectAttribute", "city"],
+          path: ["addressAttribute", "city"],
           received: "boolean"
         }
       ]);
@@ -1659,7 +1679,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: 123,
             city: false,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -1692,13 +1712,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: 123,
             city: false,
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -1736,20 +1762,6 @@ describe("Update", () => {
           message: "Expected array, received null",
           path: ["objectAttribute", "tags"],
           received: "null"
-        },
-        {
-          code: "invalid_type",
-          expected: "'active' | 'inactive'",
-          message: "Required",
-          path: ["objectAttribute", "status"],
-          received: "undefined"
-        },
-        {
-          code: "invalid_type",
-          expected: "date",
-          message: "Required",
-          path: ["objectAttribute", "createdDate"],
-          received: "undefined"
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1794,6 +1806,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -1812,7 +1830,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if non-nullable nullableObjectAttribute fields are set to null", () => {
+  describe("will error if non-nullable addressAttribute fields are set to null", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1821,28 +1839,28 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "street"],
+          path: ["addressAttribute", "street"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "string",
           message: "Expected string, received null",
-          path: ["nullableObjectAttribute", "city"],
+          path: ["addressAttribute", "city"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "object",
           message: "Expected object, received null",
-          path: ["nullableObjectAttribute", "geo"],
+          path: ["addressAttribute", "geo"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "array",
           message: "Expected array, received null",
-          path: ["nullableObjectAttribute", "scores"],
+          path: ["addressAttribute", "scores"],
           received: "null"
         }
       ]);
@@ -1856,7 +1874,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: null,
             city: null,
             zip: null,
@@ -1890,13 +1908,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: null,
             city: null,
             zip: null,
@@ -1910,7 +1934,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if non-nullable nested fields within nullableObjectAttribute are set to null", () => {
+  describe("will error if non-nullable nested fields within addressAttribute are set to null", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -1919,28 +1943,21 @@ describe("Update", () => {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lat"],
+          path: ["addressAttribute", "geo", "lat"],
           received: "null"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "geo", "lng"],
+          path: ["addressAttribute", "geo", "lng"],
           received: "null"
-        },
-        {
-          code: "invalid_type",
-          expected: "'precise' | 'approximate'",
-          message: "Required",
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
-          received: "undefined"
         },
         {
           code: "invalid_type",
           expected: "number",
           message: "Expected number, received null",
-          path: ["nullableObjectAttribute", "scores", 0],
+          path: ["addressAttribute", "scores", 0],
           received: "null"
         }
       ]);
@@ -1954,7 +1971,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: null, lng: null },
@@ -1987,13 +2004,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: null, lng: null },
@@ -2064,6 +2087,12 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
@@ -2084,7 +2113,7 @@ describe("Update", () => {
     });
   });
 
-  describe("will error if nullableObjectAttribute nested enum field has an invalid value", () => {
+  describe("will error if addressAttribute nested enum field has an invalid value", () => {
     const operationSharedAssertions = (e: any): void => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Validation errors");
@@ -2094,7 +2123,7 @@ describe("Update", () => {
           message:
             "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
           options: ["precise", "approximate"],
-          path: ["nullableObjectAttribute", "geo", "accuracy"],
+          path: ["addressAttribute", "geo", "accuracy"],
           received: "bad-value"
         }
       ]);
@@ -2108,7 +2137,7 @@ describe("Update", () => {
 
       try {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "bad-value" },
@@ -2141,13 +2170,19 @@ describe("Update", () => {
           status: "active",
           createdDate: new Date()
         },
+        addressAttribute: {
+          street: "123 Main St",
+          city: "Springfield",
+          geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+          scores: [95]
+        },
         createdAt: new Date("2023-10-01"),
         updatedAt: new Date("2023-10-02")
       });
 
       try {
         await instance.update({
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "bad-value" },
@@ -2169,7 +2204,7 @@ describe("Update", () => {
       expect.assertions(4);
 
       await MyClassWithAllAttributeTypes.update("123", {
-        nullableObjectAttribute: {
+        addressAttribute: {
           street: "123 Main St",
           city: "Springfield",
           zip: null,
@@ -2190,17 +2225,26 @@ describe("Update", () => {
                 Update: {
                   ConditionExpression: "attribute_exists(PK)",
                   ExpressionAttributeNames: {
-                    "#nullableObjectAttribute": "nullableObjectAttribute",
-                    "#UpdatedAt": "UpdatedAt"
+                    "#UpdatedAt": "UpdatedAt",
+                    "#accuracy": "accuracy",
+                    "#category": "category",
+                    "#city": "city",
+                    "#geo": "geo",
+                    "#lat": "lat",
+                    "#lng": "lng",
+                    "#addressAttribute": "addressAttribute",
+                    "#scores": "scores",
+                    "#street": "street",
+                    "#zip": "zip"
                   },
                   ExpressionAttributeValues: {
-                    ":nullableObjectAttribute": {
-                      street: "123 Main St",
-                      city: "Springfield",
-                      geo: { lat: 1, lng: 2, accuracy: "precise" },
-                      scores: [95]
-                    },
-                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":addressAttribute_city": "Springfield",
+                    ":addressAttribute_geo_accuracy": "precise",
+                    ":addressAttribute_geo_lat": 1,
+                    ":addressAttribute_geo_lng": 2,
+                    ":addressAttribute_scores": [95],
+                    ":addressAttribute_street": "123 Main St"
                   },
                   Key: {
                     PK: "MyClassWithAllAttributeTypes#123",
@@ -2208,7 +2252,7 @@ describe("Update", () => {
                   },
                   TableName: "mock-table",
                   UpdateExpression:
-                    "SET #nullableObjectAttribute = :nullableObjectAttribute, #UpdatedAt = :UpdatedAt"
+                    "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street, #addressAttribute.#city = :addressAttribute_city, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat, #addressAttribute.#geo.#lng = :addressAttribute_geo_lng, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy, #addressAttribute.#scores = :addressAttribute_scores REMOVE #addressAttribute.#zip, #addressAttribute.#category"
                 }
               }
             ]
@@ -8451,14 +8495,17 @@ describe("Update", () => {
                       SK: "Warehouse"
                     },
                     UpdateExpression:
-                      "SET #Location = :Location, #UpdatedAt = :UpdatedAt",
+                      "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city, #Location.#state = :Location_state",
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#Location": "Location",
-                      "#UpdatedAt": "UpdatedAt"
+                      "#UpdatedAt": "UpdatedAt",
+                      "#city": "city",
+                      "#state": "state"
                     },
                     ExpressionAttributeValues: {
-                      ":Location": { city: "Chicago", state: "IL" },
+                      ":Location_city": "Chicago",
+                      ":Location_state": "IL",
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                     }
                   }
@@ -8472,14 +8519,17 @@ describe("Update", () => {
                       SK: "Warehouse"
                     },
                     UpdateExpression:
-                      "SET #Location = :Location, #UpdatedAt = :UpdatedAt",
+                      "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city, #Location.#state = :Location_state",
                     ConditionExpression: "attribute_exists(PK)",
                     ExpressionAttributeNames: {
                       "#Location": "Location",
-                      "#UpdatedAt": "UpdatedAt"
+                      "#UpdatedAt": "UpdatedAt",
+                      "#city": "city",
+                      "#state": "state"
                     },
                     ExpressionAttributeValues: {
-                      ":Location": { city: "Chicago", state: "IL" },
+                      ":Location_city": "Chicago",
+                      ":Location_state": "IL",
                       ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                     }
                   }
@@ -8532,6 +8582,1968 @@ describe("Update", () => {
     });
   });
 
+  describe("partial ObjectAttribute updates propagate to denormalized records", () => {
+    describe("HasMany - partial update propagates to related entity partitions", () => {
+      const warehouse: MockTableEntityTableItem<Warehouse> = {
+        PK: "Warehouse#123",
+        SK: "Warehouse",
+        Id: "123",
+        Type: "Warehouse",
+        Name: "Main Warehouse",
+        Location: { city: "Springfield", state: "IL", zip: 62704 },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Warehouse, {
+        pk: "Warehouse#123" as PartitionKey,
+        sk: "Warehouse" as SortKey,
+        id: "123",
+        type: "Warehouse",
+        name: "Main Warehouse",
+        location: { city: "Springfield", state: "IL", zip: 62704 },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedShipment: MockTableEntityTableItem<Shipment> = {
+          PK: warehouse.PK,
+          SK: "Shipment#456",
+          Id: "456",
+          Type: "Shipment",
+          Destination: "Chicago",
+          Dimensions: { weight: 50, unit: "kg" },
+          WarehouseId: warehouse.Id,
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [warehouse, linkedShipment]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#123",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#city": "city"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Location_city": "Chicago",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Warehouse in Shipment partition gets the same expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Location.#city = :Location_city",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#city": "city"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Location_city": "Chicago",
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Warehouse.update("123", {
+              location: { city: "Chicago" }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            location: { city: "Chicago" }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            location: { city: "Chicago", state: "IL", zip: 62704 },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#123",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Location.#zip",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#zip": "zip"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Warehouse in Shipment partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Warehouse"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Location.#zip",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Location": "Location",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#zip": "zip"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Warehouse.update("123", {
+              location: { zip: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            location: { zip: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            location: { city: "Springfield", state: "IL" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("BelongsTo - partial update propagates to foreign entity partition", () => {
+      const shipment: MockTableEntityTableItem<Shipment> = {
+        PK: "Shipment#456",
+        SK: "Shipment",
+        Id: "456",
+        Type: "Shipment",
+        Destination: "Chicago",
+        Dimensions: { weight: 50, unit: "kg", label: "Heavy" },
+        WarehouseId: "W123",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Shipment, {
+        pk: "Shipment#456" as PartitionKey,
+        sk: "Shipment" as SortKey,
+        id: "456",
+        type: "Shipment",
+        destination: "Chicago",
+        dimensions: { weight: 50, unit: "kg", label: "Heavy" },
+        warehouseId: "W123" as ForeignKey<Warehouse>,
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({
+          Items: [shipment]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to foreign entity partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#Type": "Type"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Shipment#456",
+                  ":Type1": "Shipment"
+                },
+                FilterExpression: "#Type IN (:Type1)",
+                ConsistentRead: true
+              }
+            ]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    // Update the Shipment main record
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Shipment"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Dimensions.#weight = :Dimensions_weight",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#weight": "weight"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Dimensions_weight": 100,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Shipment in Warehouse partition gets the same expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#W123",
+                        SK: "Shipment#456"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Dimensions.#weight = :Dimensions_weight",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#weight": "weight"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Dimensions_weight": 100,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(4);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Shipment.update("456", {
+              dimensions: { weight: 100 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(4);
+
+          const updatedInstance = await instance.update({
+            dimensions: { weight: 100 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            dimensions: { weight: 100, unit: "kg", label: "Heavy" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to foreign entity partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Shipment#456",
+                        SK: "Shipment"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Dimensions.#label",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#label": "label"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Shipment in Warehouse partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Warehouse#W123",
+                        SK: "Shipment#456"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Dimensions.#label",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Dimensions": "Dimensions",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#label": "label"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Shipment.update("456", {
+              dimensions: { label: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            dimensions: { label: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            dimensions: { weight: 50, unit: "kg" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("HasOne - partial update propagates to related entity partition", () => {
+      const catalog: MockTableEntityTableItem<Catalog> = {
+        PK: "Catalog#123",
+        SK: "Catalog",
+        Id: "123",
+        Type: "Catalog",
+        Name: "Spring Collection",
+        Inventory: { quantity: 100, location: "Aisle 3", notes: "Fragile" },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Catalog, {
+        pk: "Catalog#123" as PartitionKey,
+        sk: "Catalog" as SortKey,
+        id: "123",
+        type: "Catalog",
+        name: "Spring Collection",
+        inventory: { quantity: 100, location: "Aisle 3", notes: "Fragile" },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedCatalogItem: MockTableEntityTableItem<CatalogItem> = {
+          PK: catalog.PK,
+          SK: "CatalogItem",
+          Id: "456",
+          Type: "CatalogItem",
+          Description: "Blue Widget",
+          CatalogId: catalog.Id,
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [catalog, linkedCatalogItem]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Catalog#123",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 200,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Catalog in CatalogItem partition gets the same expression (HasOne SK = "Catalog")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "CatalogItem#456",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 200,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Catalog.update("123", {
+              inventory: { quantity: 200 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { quantity: 200 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 200, location: "Aisle 3", notes: "Fragile" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partition", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Catalog#123",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Catalog in CatalogItem partition gets the same REMOVE expression
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "CatalogItem#456",
+                        SK: "Catalog"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Catalog.update("123", {
+              inventory: { notes: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { notes: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 100, location: "Aisle 3" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+
+    describe("HasAndBelongsToMany - partial update propagates to related entity partitions", () => {
+      const sponsor: MockTableEntityTableItem<Sponsor> = {
+        PK: "Sponsor#123",
+        SK: "Sponsor",
+        Id: "123",
+        Type: "Sponsor",
+        Name: "Acme Corp",
+        Inventory: { quantity: 500, location: "Booth A", notes: "Premium" },
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      const instance = createInstance(Sponsor, {
+        pk: "Sponsor#123" as PartitionKey,
+        sk: "Sponsor" as SortKey,
+        id: "123",
+        type: "Sponsor",
+        name: "Acme Corp",
+        inventory: { quantity: 500, location: "Booth A", notes: "Premium" },
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2023-01-02T00:00:00.000Z")
+      });
+
+      beforeEach(() => {
+        const linkedFestival1: MockTableEntityTableItem<Festival> = {
+          PK: sponsor.PK,
+          SK: "Festival#456",
+          Id: "456",
+          Type: "Festival",
+          Name: "Summer Fest",
+          CreatedAt: "2023-01-03T00:00:00.000Z",
+          UpdatedAt: "2023-01-04T00:00:00.000Z"
+        };
+
+        const linkedFestival2: MockTableEntityTableItem<Festival> = {
+          PK: sponsor.PK,
+          SK: "Festival#789",
+          Id: "789",
+          Type: "Festival",
+          Name: "Winter Gala",
+          CreatedAt: "2023-01-05T00:00:00.000Z",
+          UpdatedAt: "2023-01-06T00:00:00.000Z"
+        };
+
+        mockQuery.mockResolvedValue({
+          Items: [sponsor, linkedFestival1, linkedFestival2]
+        });
+
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      });
+
+      afterEach(() => {
+        mockSend.mockReset();
+        mockQuery.mockReset();
+        mockTransactGetItems.mockReset();
+      });
+
+      describe("partial SET propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Sponsor#123",
+                        SK: "Sponsor"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#456 partition (HABTM SK = "Sponsor#123")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#456",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#789 partition (HABTM SK = "Sponsor#123")
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#789",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt, #Inventory.#quantity = :Inventory_quantity",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#quantity": "quantity"
+                      },
+                      ExpressionAttributeValues: {
+                        ":Inventory_quantity": 1000,
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Sponsor.update("123", {
+              inventory: { quantity: 1000 }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { quantity: 1000 }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: {
+              quantity: 1000,
+              location: "Booth A",
+              notes: "Premium"
+            },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+
+      describe("REMOVE of nullable field propagates to related partitions", () => {
+        const dbOperationAssertions = (): void => {
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Sponsor#123",
+                        SK: "Sponsor"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#456 partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#456",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  },
+                  {
+                    // Denormalized Sponsor in Festival#789 partition
+                    Update: {
+                      TableName: "mock-table",
+                      Key: {
+                        PK: "Festival#789",
+                        SK: "Sponsor#123"
+                      },
+                      UpdateExpression:
+                        "SET #UpdatedAt = :UpdatedAt REMOVE #Inventory.#notes",
+                      ConditionExpression: "attribute_exists(PK)",
+                      ExpressionAttributeNames: {
+                        "#Inventory": "Inventory",
+                        "#UpdatedAt": "UpdatedAt",
+                        "#notes": "notes"
+                      },
+                      ExpressionAttributeValues: {
+                        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        };
+
+        test("static method", async () => {
+          expect.assertions(3);
+
+          expect(
+            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+            await Sponsor.update("123", {
+              inventory: { notes: null }
+            })
+          ).toBeUndefined();
+          dbOperationAssertions();
+        });
+
+        test("instance method", async () => {
+          expect.assertions(3);
+
+          const updatedInstance = await instance.update({
+            inventory: { notes: null }
+          });
+
+          expect(updatedInstance).toEqual({
+            ...instance,
+            inventory: { quantity: 500, location: "Booth A" },
+            updatedAt: new Date("2023-10-16T03:31:35.918Z")
+          });
+          dbOperationAssertions();
+        });
+      });
+    });
+  });
+
+  describe("partial ObjectAttribute updates", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    describe("partial update of non-nullable ObjectAttribute - only provide some fields", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#objectAttribute": "objectAttribute",
+                      "#name": "name",
+                      "#email": "email"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":objectAttribute_name": "NewName",
+                      ":objectAttribute_email": "new@example.com"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #objectAttribute.#name = :objectAttribute_name, #objectAttribute.#email = :objectAttribute_email"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(5);
+
+        expect(
+          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              name: "NewName",
+              email: "new@example.com"
+            }
+          })
+        ).toBeUndefined();
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(7);
+
+        const instance = createInstance(MyClassWithAllAttributeTypes, {
+          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+          sk: "MyClassWithAllAttributeTypes" as SortKey,
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Old",
+            email: "old@example.com",
+            tags: ["old-tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+            scores: [95]
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+
+        const updatedInstance = await instance.update({
+          objectAttribute: {
+            name: "NewName",
+            email: "new@example.com"
+          }
+        });
+
+        expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+
+        // Full instance: non-ObjectAttribute fields unchanged, ObjectAttribute deep merged
+        expect(updatedInstance).toEqual({
+          pk: "MyClassWithAllAttributeTypes#123",
+          sk: "MyClassWithAllAttributeTypes",
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111",
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "NewName",
+            email: "new@example.com",
+            tags: ["old-tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-16T03:31:35.918Z")
+        });
+
+        // Original instance is not mutated
+        expect(instance.objectAttribute).toEqual({
+          name: "Old",
+          email: "old@example.com",
+          tags: ["old-tag"],
+          status: "active",
+          createdDate: new Date("2023-01-01")
+        });
+        dbOperationAssertions();
+      });
+    });
+
+    describe("partial update of nullable ObjectAttribute", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            street: "New Street"
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#street": "street"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_street": "New Street"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("setting nullable field within ObjectAttribute to null generates REMOVE", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            street: "123 Main St",
+            zip: null,
+            category: null
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#street": "street",
+                      "#zip": "zip",
+                      "#category": "category"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_street": "123 Main St"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street REMOVE #addressAttribute.#zip, #addressAttribute.#category"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("non-nullable field within ObjectAttribute cannot be set to null", () => {
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await MyClassWithAllAttributeTypes.update("123", {
+            addressAttribute: {
+              street: null
+            }
+          } as any);
+        } catch (e: any) {
+          expect(e).toBeInstanceOf(ValidationError);
+          expect(e.message).toEqual("Validation errors");
+          expect(e.cause).toEqual([
+            {
+              code: "invalid_type",
+              expected: "string",
+              message: "Expected string, received null",
+              path: ["addressAttribute", "street"],
+              received: "null"
+            }
+          ]);
+        }
+      });
+    });
+
+    describe("nested object partial update generates deep document paths", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            geo: {
+              lat: 42
+            }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#geo": "geo",
+                      "#lat": "lat"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_geo_lat": 42
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("array field within ObjectAttribute is full replacement", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            scores: [100, 200, 300]
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#scores": "scores"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_scores": [100, 200, 300]
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#scores = :addressAttribute_scores"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("setting non-nullable ObjectAttribute to null throws ValidationError", () => {
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: null
+          } as any);
+        } catch (e: any) {
+          expect(e).toBeInstanceOf(ValidationError);
+          expect(e.message).toEqual("Validation errors");
+          expect(e.cause).toEqual([
+            {
+              code: "invalid_type",
+              expected: "object",
+              received: "null",
+              path: ["objectAttribute"],
+              message: "Expected object, received null"
+            }
+          ]);
+        }
+      });
+    });
+
+    describe("date field within ObjectAttribute is serialized to ISO string", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          objectAttribute: {
+            createdDate: new Date("2024-06-15T10:00:00.000Z")
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#objectAttribute": "objectAttribute",
+                      "#createdDate": "createdDate"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":objectAttribute_createdDate": "2024-06-15T10:00:00.000Z"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #objectAttribute.#createdDate = :objectAttribute_createdDate"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("enum field within ObjectAttribute is validated", () => {
+      test("static method - invalid enum throws ValidationError", async () => {
+        expect.assertions(3);
+
+        try {
+          await MyClassWithAllAttributeTypes.update("123", {
+            addressAttribute: {
+              geo: {
+                accuracy: "bad-value"
+              }
+            }
+          } as any);
+        } catch (e: any) {
+          expect(e).toBeInstanceOf(ValidationError);
+          expect(e.message).toEqual("Validation errors");
+          expect(e.cause).toEqual([
+            {
+              code: "invalid_enum_value",
+              message:
+                "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
+              options: ["precise", "approximate"],
+              path: ["addressAttribute", "geo", "accuracy"],
+              received: "bad-value"
+            }
+          ]);
+        }
+      });
+    });
+
+    describe("deeply nested enum field update generates correct document path", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          addressAttribute: {
+            geo: {
+              accuracy: "approximate"
+            }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#addressAttribute": "addressAttribute",
+                      "#geo": "geo",
+                      "#accuracy": "accuracy"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":addressAttribute_geo_accuracy": "approximate"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("wrong field types within ObjectAttribute throw ValidationError", () => {
+      test("static method", async () => {
+        expect.assertions(3);
+
+        try {
+          await MyClassWithAllAttributeTypes.update("123", {
+            addressAttribute: {
+              street: 123
+            }
+          } as any);
+        } catch (e: any) {
+          expect(e).toBeInstanceOf(ValidationError);
+          expect(e.message).toEqual("Validation errors");
+          expect(e.cause).toEqual([
+            {
+              code: "invalid_type",
+              expected: "string",
+              message: "Expected string, received number",
+              path: ["addressAttribute", "street"],
+              received: "number"
+            }
+          ]);
+        }
+      });
+    });
+
+    describe("mixed SET and REMOVE across root-level and nested nullable attributes", () => {
+      const dbOperationAssertions = (): void => {
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#stringAttribute": "stringAttribute",
+                      "#nullableStringAttribute": "nullableStringAttribute",
+                      "#addressAttribute": "addressAttribute",
+                      "#street": "street",
+                      "#zip": "zip",
+                      "#category": "category"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":stringAttribute": "updated-val",
+                      ":addressAttribute_street": "New Street"
+                    },
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt, " +
+                      "#addressAttribute.#street = :addressAttribute_street " +
+                      "REMOVE #nullableStringAttribute, " +
+                      "#addressAttribute.#zip, #addressAttribute.#category"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      };
+
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update("123", {
+          stringAttribute: "updated-val",
+          nullableStringAttribute: null,
+          addressAttribute: {
+            street: "New Street",
+            zip: null,
+            category: null
+          }
+        });
+
+        dbOperationAssertions();
+      });
+
+      test("instance method", async () => {
+        expect.assertions(4);
+
+        const instance = createInstance(MyClassWithAllAttributeTypes, {
+          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+          sk: "MyClassWithAllAttributeTypes" as SortKey,
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "old-val",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Test",
+            email: "test@example.com",
+            tags: ["tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          nullableStringAttribute: "will-be-removed",
+          addressAttribute: {
+            street: "Old Street",
+            city: "Old City",
+            zip: 12345,
+            geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+            scores: [10],
+            category: "home" as const
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+
+        await instance.update({
+          stringAttribute: "updated-val",
+          nullableStringAttribute: null,
+          addressAttribute: {
+            street: "New Street",
+            zip: null,
+            category: null
+          }
+        });
+
+        dbOperationAssertions();
+      });
+    });
+
+    describe("duplicate field names across nested objects and root attribute", () => {
+      test("generates unique document path expressions for each nested path", async () => {
+        expect.assertions(5);
+
+        await DuplicateFieldEntity.update("123", {
+          name: "root-name",
+          duplicateFieldObj: {
+            name: "top-level-obj-name",
+            nested1: { name: "nested1-name", value: 10 },
+            nested2: { name: "nested2-name", value: 20 }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#UpdatedAt": "UpdatedAt",
+                      "#DuplicateFieldObj": "DuplicateFieldObj",
+                      "#name": "name",
+                      "#nested1": "nested1",
+                      "#nested2": "nested2",
+                      "#value": "value"
+                    },
+                    ExpressionAttributeValues: {
+                      ":Name": "root-name",
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":DuplicateFieldObj_name": "top-level-obj-name",
+                      ":DuplicateFieldObj_nested1_name": "nested1-name",
+                      ":DuplicateFieldObj_nested1_value": 10,
+                      ":DuplicateFieldObj_nested2_name": "nested2-name",
+                      ":DuplicateFieldObj_nested2_value": 20
+                    },
+                    Key: {
+                      PK: "DuplicateFieldEntity#123",
+                      SK: "DuplicateFieldEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #Name = :Name, #UpdatedAt = :UpdatedAt, " +
+                      "#DuplicateFieldObj.#name = :DuplicateFieldObj_name, " +
+                      "#DuplicateFieldObj.#nested1.#name = :DuplicateFieldObj_nested1_name, " +
+                      "#DuplicateFieldObj.#nested1.#value = :DuplicateFieldObj_nested1_value, " +
+                      "#DuplicateFieldObj.#nested2.#name = :DuplicateFieldObj_nested2_name, " +
+                      "#DuplicateFieldObj.#nested2.#value = :DuplicateFieldObj_nested2_value"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+
+        const updateCmd =
+          mockTransactWriteCommand.mock.calls[0]?.[0]?.TransactItems?.[0]
+            ?.Update;
+        expect(
+          updateCmd?.ExpressionAttributeValues?.[
+            ":DuplicateFieldObj_nested1_name"
+          ]
+        ).not.toEqual(
+          updateCmd?.ExpressionAttributeValues?.[
+            ":DuplicateFieldObj_nested2_name"
+          ]
+        );
+      });
+    });
+
+    describe("instance method deep merges ObjectAttribute values", () => {
+      test("preserves existing fields when updating a subset", async () => {
+        expect.assertions(4);
+
+        const instance = createInstance(MyClassWithAllAttributeTypes, {
+          pk: "MyClassWithAllAttributeTypes#123" as PartitionKey,
+          sk: "MyClassWithAllAttributeTypes" as SortKey,
+          id: "123",
+          type: "MyClassWithAllAttributeTypes",
+          stringAttribute: "1",
+          dateAttribute: new Date("2023-01-02"),
+          foreignKeyAttribute: "11111" as ForeignKey<Customer>,
+          boolAttribute: false,
+          numberAttribute: 9,
+          enumAttribute: "val-2",
+          objectAttribute: {
+            name: "Old",
+            email: "old@example.com",
+            tags: ["old-tag"],
+            status: "active",
+            createdDate: new Date("2023-01-01")
+          },
+          addressAttribute: {
+            street: "Old Street",
+            city: "Old City",
+            zip: 12345,
+            geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+            scores: [10, 20]
+          },
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+
+        const updatedInstance = await instance.update({
+          addressAttribute: {
+            street: "New Street",
+            zip: null
+          }
+        });
+
+        // Deep merge: street updated, zip removed, other fields preserved
+        expect(updatedInstance.addressAttribute).toEqual({
+          street: "New Street",
+          city: "Old City",
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [10, 20]
+        });
+        expect(updatedInstance).toBeInstanceOf(MyClassWithAllAttributeTypes);
+
+        // Original instance is not mutated
+        expect(instance.addressAttribute).toEqual({
+          street: "Old Street",
+          city: "Old City",
+          zip: 12345,
+          geo: { lat: 1, lng: 2, accuracy: "precise" },
+          scores: [10, 20]
+        });
+
+        // Nested object deep merge
+        const updatedInstance2 = await instance.update({
+          addressAttribute: {
+            geo: { lat: 99 }
+          }
+        });
+
+        expect(updatedInstance2.addressAttribute).toEqual({
+          street: "Old Street",
+          city: "Old City",
+          zip: 12345,
+          geo: { lat: 99, lng: 2, accuracy: "precise" },
+          scores: [10, 20]
+        });
+      });
+    });
+
+    describe("removing all nullable fields from deeply nested object leaves nested objects as empty objects", () => {
+      test("static method", async () => {
+        expect.assertions(4);
+
+        await DeepNestedEntity.update("123", {
+          data: {
+            level1: {
+              value: null,
+              tag: null,
+              level2: {
+                score: null,
+                note: null,
+                level3: {
+                  flag: null,
+                  detail: null
+                }
+              }
+            }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#level1": "level1",
+                      "#value": "value",
+                      "#tag": "tag",
+                      "#level2": "level2",
+                      "#score": "score",
+                      "#note": "note",
+                      "#level3": "level3",
+                      "#flag": "flag",
+                      "#detail": "detail"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    Key: {
+                      PK: "DeepNestedEntity#123",
+                      SK: "DeepNestedEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt " +
+                      "REMOVE #Data.#level1.#value, #Data.#level1.#tag, " +
+                      "#Data.#level1.#level2.#score, #Data.#level1.#level2.#note, " +
+                      "#Data.#level1.#level2.#level3.#flag, #Data.#level1.#level2.#level3.#detail"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("updating deeply nested object with nullable fields omitted", () => {
+      test("static method - partial update with only required label", async () => {
+        expect.assertions(4);
+
+        await DeepNestedEntity.update("123", {
+          data: {
+            label: "updated-label"
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#label": "label"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":Data_label": "updated-label"
+                    },
+                    Key: {
+                      PK: "DeepNestedEntity#123",
+                      SK: "DeepNestedEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #Data.#label = :Data_label"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("array of objects full replacement on update", () => {
+      test("replaces entire array of objects with new array", async () => {
+        expect.assertions(4);
+
+        await ArrayOfObjectsEntity.update("123", {
+          data: {
+            entries: [{ sku: "C3", price: 30 }]
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#entries": "entries"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                      ":Data_entries": [{ sku: "C3", price: 30 }]
+                    },
+                    Key: {
+                      PK: "ArrayOfObjectsEntity#123",
+                      SK: "ArrayOfObjectsEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt, #Data.#entries = :Data_entries"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("nullable array of objects can be removed via null", () => {
+      test("generates REMOVE for nullable array field set to null", async () => {
+        expect.assertions(4);
+
+        await ArrayOfObjectsEntity.update("123", {
+          data: {
+            backup: null
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#Data": "Data",
+                      "#backup": "backup"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    Key: {
+                      PK: "ArrayOfObjectsEntity#123",
+                      SK: "ArrayOfObjectsEntity"
+                    },
+                    TableName: "mock-table",
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt REMOVE #Data.#backup"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+  });
+
   describe("referentialIntegrityCheck option", () => {
     describe("with referentialIntegrityCheck: false", () => {
       describe("can update all attribute types", () => {
@@ -8551,9 +10563,12 @@ describe("Update", () => {
                       ExpressionAttributeNames: {
                         "#UpdatedAt": "UpdatedAt",
                         "#boolAttribute": "boolAttribute",
+                        "#createdDate": "createdDate",
                         "#dateAttribute": "dateAttribute",
+                        "#email": "email",
                         "#enumAttribute": "enumAttribute",
                         "#foreignKeyAttribute": "foreignKeyAttribute",
+                        "#name": "name",
                         "#nullableBoolAttribute": "nullableBoolAttribute",
                         "#nullableDateAttribute": "nullableDateAttribute",
                         "#nullableEnumAttribute": "nullableEnumAttribute",
@@ -8563,7 +10578,9 @@ describe("Update", () => {
                         "#nullableStringAttribute": "nullableStringAttribute",
                         "#numberAttribute": "numberAttribute",
                         "#objectAttribute": "objectAttribute",
-                        "#stringAttribute": "stringAttribute"
+                        "#status": "status",
+                        "#stringAttribute": "stringAttribute",
+                        "#tags": "tags"
                       },
                       ExpressionAttributeValues: {
                         ":UpdatedAt": "2023-10-16T03:31:35.918Z",
@@ -8578,13 +10595,12 @@ describe("Update", () => {
                         ":nullableNumberAttribute": 10,
                         ":nullableStringAttribute": "2",
                         ":numberAttribute": 9,
-                        ":objectAttribute": {
-                          name: "John",
-                          email: "john@example.com",
-                          tags: ["work", "vip"],
-                          status: "active",
-                          createdDate: "2023-10-16T03:31:35.918Z"
-                        },
+                        ":objectAttribute_createdDate":
+                          "2023-10-16T03:31:35.918Z",
+                        ":objectAttribute_email": "john@example.com",
+                        ":objectAttribute_name": "John",
+                        ":objectAttribute_status": "active",
+                        ":objectAttribute_tags": ["work", "vip"],
                         ":stringAttribute": "1"
                       },
                       Key: {
@@ -8593,7 +10609,7 @@ describe("Update", () => {
                       },
                       TableName: "mock-table",
                       UpdateExpression:
-                        "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #objectAttribute = :objectAttribute, #UpdatedAt = :UpdatedAt"
+                        "SET #stringAttribute = :stringAttribute, #nullableStringAttribute = :nullableStringAttribute, #dateAttribute = :dateAttribute, #nullableDateAttribute = :nullableDateAttribute, #boolAttribute = :boolAttribute, #nullableBoolAttribute = :nullableBoolAttribute, #numberAttribute = :numberAttribute, #nullableNumberAttribute = :nullableNumberAttribute, #foreignKeyAttribute = :foreignKeyAttribute, #nullableForeignKeyAttribute = :nullableForeignKeyAttribute, #enumAttribute = :enumAttribute, #nullableEnumAttribute = :nullableEnumAttribute, #UpdatedAt = :UpdatedAt, #objectAttribute.#name = :objectAttribute_name, #objectAttribute.#email = :objectAttribute_email, #objectAttribute.#tags = :objectAttribute_tags, #objectAttribute.#status = :objectAttribute_status, #objectAttribute.#createdDate = :objectAttribute_createdDate"
                     }
                   }
                 ]
@@ -8667,6 +10683,12 @@ describe("Update", () => {
               tags: ["old-tag"],
               status: "active",
               createdDate: new Date()
+            },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" as const },
+              scores: [95]
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -8745,6 +10767,12 @@ describe("Update", () => {
               tags: ["old-tag"],
               status: "active",
               createdDate: new Date()
+            },
+            addressAttribute: {
+              street: "123 Main St",
+              city: "Springfield",
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [95]
             },
             createdAt: new Date("2023-10-01"),
             updatedAt: new Date("2023-10-02")
@@ -9023,9 +11051,9 @@ describe("Update", () => {
         });
       });
 
-      it("objectAttribute does not accept missing required fields", async () => {
+      it("objectAttribute accepts partial fields for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          // @ts-expect-error: email and tags are missing
+          // @ts-expect-no-error: partial updates allow omitting required fields
           objectAttribute: {
             name: "John"
           }
@@ -9050,10 +11078,10 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute accepts correct nested object shape", async () => {
+      it("addressAttribute accepts correct nested object shape", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
           // @ts-expect-no-error: correct nested shape is accepted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -9062,9 +11090,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+      it("addressAttribute does not accept wrong types for nested object fields", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: {
@@ -9080,9 +11108,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+      it("addressAttribute does not accept wrong item types in arrays", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -9094,10 +11122,10 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
+      it("addressAttribute allows nullable fields to be omitted", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
           // @ts-expect-no-error: zip is nullable so it can be omitted
-          nullableObjectAttribute: {
+          addressAttribute: {
             zip: undefined,
             street: "123 Main St",
             city: "Springfield",
@@ -9107,9 +11135,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+      it("addressAttribute allows nullable fields to be null for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
@@ -9122,9 +11150,9 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+      it("addressAttribute does not allow non-nullable fields to be null", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             // @ts-expect-error: street is non-nullable, cannot be null
             street: null,
             city: "Springfield",
@@ -9136,12 +11164,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept missing required nested fields", async () => {
+      it("addressAttribute accepts partial nested fields for updates", async () => {
         await MyClassWithAllAttributeTypes.update("123", {
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
-            // @ts-expect-error: geo is missing required field lng
+            // @ts-expect-no-error: partial updates allow omitting nested required fields
             geo: { lat: 1 },
             scores: [95]
           }
@@ -9433,74 +11461,27 @@ describe("Update", () => {
           });
       });
 
-      it("return value nullableObjectAttribute requires optional chaining", async () => {
+      it("return value addressAttribute nested fields have correct types (rejects wrong assignments)", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({ stringAttribute: "val" })
           .then(result => {
-            // @ts-expect-error: nullableObjectAttribute might be undefined, requires optional chaining
-            Logger.log(result.nullableObjectAttribute.city);
-          })
-          .catch(() => {
-            Logger.log("Testing types");
-          });
-      });
-
-      it("return value nullableObjectAttribute is accessible with optional chaining and has correct nested types", async () => {
-        const instance = new MyClassWithAllAttributeTypes();
-
-        await instance
-          .update({ stringAttribute: "val" })
-          .then(result => {
-            // @ts-expect-no-error: optional chaining allows safe access
-            Logger.log(result.nullableObjectAttribute?.street);
-
-            // @ts-expect-no-error: nested string field
-            Logger.log(result.nullableObjectAttribute?.city);
-
-            // @ts-expect-no-error: nested nullable field can be number or undefined
-            Logger.log(result.nullableObjectAttribute?.zip);
-
-            // @ts-expect-no-error: nested object field
-            Logger.log(result.nullableObjectAttribute?.geo.lat);
-
-            // @ts-expect-no-error: nested object field
-            Logger.log(result.nullableObjectAttribute?.geo.lng);
-
-            // @ts-expect-no-error: nested array field
-            Logger.log(result.nullableObjectAttribute?.scores);
-
-            // @ts-expect-no-error: array item is a number
-            Logger.log(result.nullableObjectAttribute?.scores[0]);
-          })
-          .catch(() => {
-            Logger.log("Testing types");
-          });
-      });
-
-      it("return value nullableObjectAttribute nested fields have correct types (rejects wrong assignments)", async () => {
-        const instance = new MyClassWithAllAttributeTypes();
-
-        await instance
-          .update({ stringAttribute: "val" })
-          .then(result => {
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-error: city is string, not number
-              const cityAsNum: number = result.nullableObjectAttribute.city;
+              const cityAsNum: number = result.addressAttribute.city;
               Logger.log(cityAsNum);
 
               // @ts-expect-error: geo.lat is number, not string
-              const latAsStr: string = result.nullableObjectAttribute.geo.lat;
+              const latAsStr: string = result.addressAttribute.geo.lat;
               Logger.log(latAsStr);
 
               // @ts-expect-error: scores is number[], not string[]
-              const scoresAsStrs: string[] =
-                result.nullableObjectAttribute.scores;
+              const scoresAsStrs: string[] = result.addressAttribute.scores;
               Logger.log(scoresAsStrs);
 
               // @ts-expect-error: nonExistent is not in the schema
-              Logger.log(result.nullableObjectAttribute.nonExistent);
+              Logger.log(result.addressAttribute.nonExistent);
             }
           })
           .catch(() => {
@@ -9641,12 +11622,12 @@ describe("Update", () => {
           });
       });
 
-      it("objectAttribute does not accept missing required fields", async () => {
+      it("objectAttribute accepts partial fields for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            // @ts-expect-error: email and tags are missing
+            // @ts-expect-no-error: partial updates allow omitting required fields
             objectAttribute: {
               name: "John"
             }
@@ -9676,12 +11657,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute accepts correct nested object shape", async () => {
+      it("addressAttribute accepts correct nested object shape", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
           // @ts-expect-no-error: correct nested shape is accepted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -9690,12 +11671,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute does not accept wrong types for nested object fields", async () => {
+      it("addressAttribute does not accept wrong types for nested object fields", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               geo: {
@@ -9712,12 +11693,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute does not accept wrong item types in arrays", async () => {
+      it("addressAttribute does not accept wrong item types in arrays", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -9730,12 +11711,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be omitted", async () => {
+      it("addressAttribute allows nullable fields to be omitted", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance.update({
           // @ts-expect-no-error: zip is nullable so it can be omitted
-          nullableObjectAttribute: {
+          addressAttribute: {
             street: "123 Main St",
             city: "Springfield",
             geo: { lat: 1, lng: 2, accuracy: "precise" },
@@ -9744,12 +11725,12 @@ describe("Update", () => {
         });
       });
 
-      it("nullableObjectAttribute allows nullable fields to be null for updates", async () => {
+      it("addressAttribute allows nullable fields to be null for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
               // @ts-expect-no-error: zip is nullable, null is allowed for updates (consistent with root-level nullable attributes)
@@ -9763,12 +11744,12 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute does not allow non-nullable fields to be null", async () => {
+      it("addressAttribute does not allow non-nullable fields to be null", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               // @ts-expect-error: street is non-nullable, cannot be null
               street: null,
               city: "Springfield",
@@ -9781,17 +11762,132 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute does not accept missing required nested fields", async () => {
+      it("addressAttribute accepts partial nested fields for updates", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({
-            nullableObjectAttribute: {
+            addressAttribute: {
               street: "123 Main St",
               city: "Springfield",
-              // @ts-expect-error: geo is missing required field lng
+              // @ts-expect-no-error: partial updates allow omitting nested required fields
               geo: { lat: 1 },
               scores: [95]
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("root-level enumAttribute rejects invalid literal on static update input", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
+          // @ts-expect-error: "val-3" is not a valid enum value for enumAttribute ("val-1" | "val-2")
+          enumAttribute: "val-3"
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("root-level nullableEnumAttribute rejects invalid literal on static update input", async () => {
+        await MyClassWithAllAttributeTypes.update("123", {
+          // @ts-expect-error: "val-3" is not a valid enum value for nullableEnumAttribute ("val-1" | "val-2")
+          nullableEnumAttribute: "val-3"
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("root-level enumAttribute rejects invalid literal on instance update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            // @ts-expect-error: "val-3" is not a valid enum value for enumAttribute ("val-1" | "val-2")
+            enumAttribute: "val-3"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("root-level nullableEnumAttribute rejects invalid literal on instance update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            // @ts-expect-error: "val-3" is not a valid enum value for nullableEnumAttribute ("val-1" | "val-2")
+            nullableEnumAttribute: "val-3"
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value root-level enumAttribute is typed as literal union", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: enumAttribute is "val-1" | "val-2"
+            const val: "val-1" | "val-2" = result.enumAttribute;
+            Logger.log(val);
+
+            // @ts-expect-error: enumAttribute is "val-1" | "val-2", not number
+            const valAsNum: number = result.enumAttribute;
+            Logger.log(valAsNum);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("return value root-level nullableEnumAttribute is typed as literal union or undefined", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({ stringAttribute: "val" })
+          .then(result => {
+            // @ts-expect-no-error: nullableEnumAttribute is "val-1" | "val-2" | undefined
+            const val: "val-1" | "val-2" | undefined =
+              result.nullableEnumAttribute;
+            Logger.log(val);
+
+            // @ts-expect-error: nullableEnumAttribute is not number
+            const valAsNum: number = result.nullableEnumAttribute;
+            Logger.log(valAsNum);
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("objectAttribute nested enum accuracy rejects invalid literal on update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            addressAttribute: {
+              geo: {
+                // @ts-expect-error: "bad-value" is not a valid enum value for accuracy ("precise" | "approximate")
+                accuracy: "bad-value"
+              }
+            }
+          })
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+      });
+
+      it("objectAttribute nullable enum category rejects invalid literal on update input", async () => {
+        const instance = new MyClassWithAllAttributeTypes();
+
+        await instance
+          .update({
+            addressAttribute: {
+              // @ts-expect-error: "bad-value" is not a valid enum value for category ("home" | "work" | "other")
+              category: "bad-value"
             }
           })
           .catch(() => {
@@ -9852,17 +11948,16 @@ describe("Update", () => {
           .update({ stringAttribute: "val" })
           .then(result => {
             // @ts-expect-no-error: accuracy is accessible on geo via optional chaining
-            Logger.log(result.nullableObjectAttribute?.geo.accuracy);
+            Logger.log(result.addressAttribute?.geo.accuracy);
 
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-no-error: accuracy is "precise" | "approximate"
               const acc: "precise" | "approximate" =
-                result.nullableObjectAttribute.geo.accuracy;
+                result.addressAttribute.geo.accuracy;
               Logger.log(acc);
 
               // @ts-expect-error: accuracy is "precise" | "approximate", not number
-              const accAsNum: number =
-                result.nullableObjectAttribute.geo.accuracy;
+              const accAsNum: number = result.addressAttribute.geo.accuracy;
               Logger.log(accAsNum);
             }
           })
@@ -9871,19 +11966,19 @@ describe("Update", () => {
           });
       });
 
-      it("nullableObjectAttribute nullable enum field supports undefined", async () => {
+      it("addressAttribute nullable enum field supports undefined", async () => {
         const instance = new MyClassWithAllAttributeTypes();
 
         await instance
           .update({ stringAttribute: "val" })
           .then(result => {
             // @ts-expect-no-error: nullable enum field can be accessed with optional chaining
-            Logger.log(result.nullableObjectAttribute?.category);
+            Logger.log(result.addressAttribute?.category);
 
-            if (result.nullableObjectAttribute !== undefined) {
+            if (result.addressAttribute !== undefined) {
               // @ts-expect-no-error: category is "home" | "work" | "other" | undefined
               const cat: "home" | "work" | "other" | undefined =
-                result.nullableObjectAttribute.category;
+                result.addressAttribute.category;
               Logger.log(cat);
             }
           })

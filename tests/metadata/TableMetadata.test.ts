@@ -1165,10 +1165,10 @@ describe("TableMetadata", () => {
                 alias: "objectAttribute",
                 nullable: false
               },
-              nullableObjectAttribute: {
-                name: "nullableObjectAttribute",
-                alias: "nullableObjectAttribute",
-                nullable: true
+              addressAttribute: {
+                name: "addressAttribute",
+                alias: "addressAttribute",
+                nullable: false
               }
             },
             tableAttributes: {
@@ -1259,10 +1259,10 @@ describe("TableMetadata", () => {
                 alias: "objectAttribute",
                 nullable: false
               },
-              nullableObjectAttribute: {
-                name: "nullableObjectAttribute",
-                alias: "nullableObjectAttribute",
-                nullable: true
+              addressAttribute: {
+                name: "addressAttribute",
+                alias: "addressAttribute",
+                nullable: false
               }
             },
             relationships: {}
@@ -1534,6 +1534,142 @@ describe("TableMetadata", () => {
                 foreignKey: "organizationId"
               }
             }
+          },
+          ArrayOfObjectsEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            relationships: {}
+          },
+          DeepNestedEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Data: {
+                name: "data",
+                alias: "Data",
+                nullable: false
+              }
+            },
+            relationships: {}
           },
           Desk: {
             tableClassName: "MockTable",
@@ -1901,6 +2037,366 @@ describe("TableMetadata", () => {
                 propertyName: "warehouse",
                 target: "Warehouse",
                 foreignKey: "warehouseId"
+              }
+            }
+          },
+          DuplicateFieldEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              duplicateFieldObj: {
+                name: "duplicateFieldObj",
+                alias: "DuplicateFieldObj",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              DuplicateFieldObj: {
+                name: "duplicateFieldObj",
+                alias: "DuplicateFieldObj",
+                nullable: false
+              }
+            },
+            relationships: {}
+          },
+          Catalog: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              inventory: {
+                name: "inventory",
+                alias: "Inventory",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Inventory: {
+                name: "inventory",
+                alias: "Inventory",
+                nullable: false
+              }
+            },
+            relationships: {
+              catalogItem: {
+                type: "HasOne",
+                propertyName: "catalogItem",
+                target: "CatalogItem",
+                foreignKey: "catalogId"
+              }
+            }
+          },
+          CatalogItem: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              description: {
+                name: "description",
+                alias: "Description",
+                nullable: false
+              },
+              catalogId: {
+                name: "catalogId",
+                alias: "CatalogId",
+                nullable: false,
+                foreignKeyTarget: "Catalog"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Description: {
+                name: "description",
+                alias: "Description",
+                nullable: false
+              },
+              CatalogId: {
+                name: "catalogId",
+                alias: "CatalogId",
+                nullable: false,
+                foreignKeyTarget: "Catalog"
+              }
+            },
+            relationships: {
+              catalog: {
+                type: "BelongsTo",
+                propertyName: "catalog",
+                target: "Catalog",
+                foreignKey: "catalogId"
+              }
+            }
+          },
+          Sponsor: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              inventory: {
+                name: "inventory",
+                alias: "Inventory",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              },
+              Inventory: {
+                name: "inventory",
+                alias: "Inventory",
+                nullable: false
+              }
+            },
+            relationships: {
+              festivals: {
+                type: "HasAndBelongsToMany",
+                propertyName: "festivals",
+                target: "Festival",
+                joinTableName: "SponsorFestival"
+              }
+            }
+          },
+          Festival: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              }
+            },
+            relationships: {
+              sponsors: {
+                type: "HasAndBelongsToMany",
+                propertyName: "sponsors",
+                target: "Sponsor",
+                joinTableName: "SponsorFestival"
               }
             }
           }

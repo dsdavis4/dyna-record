@@ -309,8 +309,8 @@ class MyClassWithAllAttributeTypes extends MockTable {
   @ObjectAttribute({ schema: contactSchema })
   public objectAttribute: InferObjectSchema<typeof contactSchema>;
 
-  @ObjectAttribute({ schema: addressSchema, nullable: true })
-  public nullableObjectAttribute?: InferObjectSchema<typeof addressSchema>;
+  @ObjectAttribute({ schema: addressSchema })
+  public addressAttribute: InferObjectSchema<typeof addressSchema>;
 }
 
 @Entity
@@ -522,10 +522,111 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
+const deeplyNestedSchema = {
+  label: { type: "string" },
+  level1: {
+    type: "object",
+    fields: {
+      value: { type: "string", nullable: true },
+      tag: { type: "enum", values: ["a", "b", "c"], nullable: true },
+      level2: {
+        type: "object",
+        fields: {
+          score: { type: "number", nullable: true },
+          note: { type: "string", nullable: true },
+          level3: {
+            type: "object",
+            fields: {
+              flag: { type: "boolean", nullable: true },
+              detail: { type: "string", nullable: true }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+const duplicateFieldNameSchema = {
+  name: { type: "string" },
+  nested1: {
+    type: "object",
+    fields: {
+      name: { type: "string" },
+      value: { type: "number" }
+    }
+  },
+  nested2: {
+    type: "object",
+    fields: {
+      name: { type: "string" },
+      value: { type: "number" }
+    }
+  }
+} as const satisfies ObjectSchema;
+
 const locationSchema = {
   city: { type: "string" },
-  state: { type: "string" }
+  state: { type: "string" },
+  zip: { type: "number", nullable: true }
 } as const satisfies ObjectSchema;
+
+const arrayOfObjectsSchema = {
+  title: { type: "string" },
+  entries: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        sku: { type: "string" },
+        price: { type: "number" }
+      }
+    }
+  },
+  backup: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        sku: { type: "string" },
+        price: { type: "number" }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class ArrayOfObjectsEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Data", schema: arrayOfObjectsSchema })
+  public readonly data: InferObjectSchema<typeof arrayOfObjectsSchema>;
+}
+
+@Entity
+class DeepNestedEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Data", schema: deeplyNestedSchema })
+  public readonly data: InferObjectSchema<typeof deeplyNestedSchema>;
+}
+
+@Entity
+class DuplicateFieldEntity extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({
+    alias: "DuplicateFieldObj",
+    schema: duplicateFieldNameSchema
+  })
+  public readonly duplicateFieldObj: InferObjectSchema<
+    typeof duplicateFieldNameSchema
+  >;
+}
 
 @Entity
 class Warehouse extends MockTable {
@@ -541,7 +642,8 @@ class Warehouse extends MockTable {
 
 const dimensionsSchema = {
   weight: { type: "number" },
-  unit: { type: "string" }
+  unit: { type: "string" },
+  label: { type: "string", nullable: true }
 } as const satisfies ObjectSchema;
 
 @Entity
@@ -559,11 +661,78 @@ class Shipment extends MockTable {
   public readonly warehouse: Warehouse;
 }
 
+const inventorySchema = {
+  quantity: { type: "number" },
+  location: { type: "string" },
+  notes: { type: "string", nullable: true }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Catalog extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Inventory", schema: inventorySchema })
+  public readonly inventory: InferObjectSchema<typeof inventorySchema>;
+
+  @HasOne(() => CatalogItem, { foreignKey: "catalogId" })
+  public readonly catalogItem: CatalogItem;
+}
+
+@Entity
+class CatalogItem extends MockTable {
+  @StringAttribute({ alias: "Description" })
+  public readonly description: string;
+
+  @ForeignKeyAttribute(() => Catalog, { alias: "CatalogId" })
+  public readonly catalogId: ForeignKey<Catalog>;
+
+  @BelongsTo(() => Catalog, { foreignKey: "catalogId" })
+  public readonly catalog: Catalog;
+}
+
+@Entity
+class Sponsor extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Inventory", schema: inventorySchema })
+  public readonly inventory: InferObjectSchema<typeof inventorySchema>;
+
+  @HasAndBelongsToMany(() => Festival, {
+    targetKey: "sponsors",
+    through: () => ({ joinTable: SponsorFestival, foreignKey: "sponsorId" })
+  })
+  public readonly festivals: Festival[];
+}
+
+@Entity
+class Festival extends MockTable {
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Sponsor, {
+    targetKey: "festivals",
+    through: () => ({ joinTable: SponsorFestival, foreignKey: "festivalId" })
+  })
+  public readonly sponsors: Sponsor[];
+}
+
+class SponsorFestival extends JoinTable<Sponsor, Festival> {
+  public readonly sponsorId: ForeignKey;
+  public readonly festivalId: ForeignKey;
+}
+
 export {
   // Schemas
   addressSchema,
   contactSchema,
+  deeplyNestedSchema,
+  arrayOfObjectsSchema,
+  duplicateFieldNameSchema,
   locationSchema,
+  inventorySchema,
+  dimensionsSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -579,6 +748,9 @@ export {
   Author,
   Book,
   AuthorBook,
+  ArrayOfObjectsEntity,
+  DeepNestedEntity,
+  DuplicateFieldEntity,
   MyClassWithAllAttributeTypes,
   User,
   Organization,
@@ -589,6 +761,11 @@ export {
   Founder,
   Warehouse,
   Shipment,
+  Catalog,
+  CatalogItem,
+  Sponsor,
+  Festival,
+  SponsorFestival,
   // OtherTable exports
   OtherTable,
   Teacher,

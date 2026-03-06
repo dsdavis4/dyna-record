@@ -20,6 +20,7 @@ import {
   type OptionsWithIndex,
   type EntityQueryKeyConditions
 } from "./operations";
+import { mergePartialObjectAttributes } from "./operations/utils";
 import type { DynamoTableItem, EntityClass, Optional } from "./types";
 import { createInstance, tableItemToEntity } from "./utils";
 
@@ -321,6 +322,11 @@ abstract class DynaRecord implements DynaRecordBase {
    *   { referentialIntegrityCheck: false }
    * );
    * ```
+   *
+   * @example Partial update of an ObjectAttribute (only provided fields are modified, omitted fields are preserved)
+   * ```typescript
+   * await User.update("userId", { address: { street: "456 Oak Ave" } });
+   * ```
    */
   public static async update<T extends DynaRecord>(
     this: EntityClass<T>,
@@ -333,7 +339,11 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   *  Same as the static `update` method but on an instance. Returns the full updated instance
+   *  Same as the static `update` method but on an instance. Returns the full updated instance.
+   *
+   * For `@ObjectAttribute` fields, the returned instance deep merges the partial update
+   * with the existing object value — omitted fields are preserved, and fields set to `null`
+   * are removed.
    *
    * @example Updating an entity.
    * ```typescript
@@ -343,6 +353,13 @@ abstract class DynaRecord implements DynaRecordBase {
    * @example Removing a nullable entities attributes
    * ```typescript
    * const updatedInstance = await instance.update({ email: "newemail@example.com", someKey: null });
+   * ```
+   *
+   * @example Partial ObjectAttribute update with deep merge
+   * ```typescript
+   * // instance.address is { street: "123 Main", city: "Springfield", zip: 12345 }
+   * const updated = await instance.update({ address: { street: "456 Oak Ave" } });
+   * // updated.address is { street: "456 Oak Ave", city: "Springfield", zip: 12345 }
    * ```
    *
    * @example With referential integrity check disabled
@@ -362,9 +379,14 @@ abstract class DynaRecord implements DynaRecordBase {
     const updatedAttributes = await op.run(this.id, attributes, options);
 
     const clone = structuredClone(this);
+    const entityAttrs = Metadata.getEntityAttributes(InstanceClass.name);
 
-    // Update the current instance with new attributes
-    Object.assign(clone, updatedAttributes);
+    // Deep merge ObjectAttributes, shallow assign everything else
+    mergePartialObjectAttributes(
+      clone as Record<string, unknown>,
+      updatedAttributes,
+      entityAttrs
+    );
 
     const updatedInstance = Object.fromEntries(
       Object.entries(clone).filter(([_, value]) => value !== null)
