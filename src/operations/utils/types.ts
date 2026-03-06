@@ -33,10 +33,16 @@ export type UpdateExpression = UpdateSetExpression | UpdateRemoveExpression;
  * Used to build DynamoDB document path expressions like `SET #addr.#street = :addr_street`
  * or `REMOVE #addr.#zip`.
  */
-export interface DocumentPathOperation {
-  type: "set" | "remove";
-  /** Path segments, e.g. ["address", "street"] or ["address", "geo", "lat"] */
-  path: string[];
-  /** The serialized value for SET operations */
-  value?: unknown;
-}
+export type DocumentPathOperation =
+  | {
+      type: "set";
+      /** Path segments, e.g. ["address", "street"] or ["address", "geo", "lat"] */
+      path: string[];
+      /** The serialized value */
+      value: unknown;
+    }
+  | {
+      type: "remove";
+      /** Path segments, e.g. ["address", "zip"] */
+      path: string[];
+    };
