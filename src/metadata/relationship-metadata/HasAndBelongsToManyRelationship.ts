@@ -9,7 +9,7 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - An instance of `RelationshipMetadata` containing the initial settings for the relationship. This can include properties like `joinTableName`, which are specific to many-to-many relationships.
  */
 class HasAndBelongsToManyRelationship extends RelationshipMetadata {
-  type: "HasAndBelongsToMany" = "HasAndBelongsToMany" as const;
+  type = "HasAndBelongsToMany" as const;
   joinTableName: string;
 
   constructor(item: RelationshipMetadata) {

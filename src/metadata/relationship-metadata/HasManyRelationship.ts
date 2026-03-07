@@ -11,7 +11,7 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - An existing set of relationship metadata that should be applied to the newly created `HasManyRelationship` instance. This parameter allows for the inheritance and augmentation of relationship properties.
  */
 class HasManyRelationship extends RelationshipMetadata {
-  type: "HasMany" = "HasMany" as const;
+  type = "HasMany" as const;
   foreignKey: ForeignKeyProperty;
   uniDirectional?: boolean = false;
 

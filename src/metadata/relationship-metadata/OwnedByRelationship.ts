@@ -11,7 +11,7 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - The initial relationship metadata to be copied into this "Owned By" relationship instance. This facilitates the creation and setup of relationship metadata based on existing configurations.
  */
 class OwnedByRelationship extends RelationshipMetadata {
-  type: "OwnedBy" = "OwnedBy" as const;
+  type = "OwnedBy" as const;
   foreignKey: ForeignKeyProperty;
 
   constructor(item: RelationshipMetadata) {
