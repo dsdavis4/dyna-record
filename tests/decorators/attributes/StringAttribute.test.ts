@@ -7,7 +7,7 @@ import {
   Profile
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodNullable, ZodString, type ZodOptional } from "zod";
+import { ZodNullable, ZodString } from "zod";
 import { type ForeignKey, type NullableForeignKey } from "../../../src";
 
 describe("StringAttribute", () => {
@@ -40,7 +40,7 @@ describe("StringAttribute", () => {
       name: "alternateEmail",
       alias: "alternateEmail",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodString>>)
+      type: expect.any(ZodNullable)
     });
   });
 

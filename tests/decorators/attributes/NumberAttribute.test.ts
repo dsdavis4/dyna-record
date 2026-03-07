@@ -2,7 +2,7 @@
 import { Entity, NumberAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodBoolean, ZodNullable, ZodNumber, type ZodOptional } from "zod";
+import { ZodNullable, ZodNumber } from "zod";
 
 @Entity
 class MyEntity extends MockTable {
@@ -48,7 +48,7 @@ describe("NumberAttribute", () => {
       name: "myNullableNumber",
       alias: "MyNullableNumber",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodNumber>>)
+      type: expect.any(ZodNullable)
     });
   });
 

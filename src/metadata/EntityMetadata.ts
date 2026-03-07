@@ -1,4 +1,4 @@
-import { z, ZodError, type ZodSchema, type ZodType } from "zod";
+import { z, ZodError, type ZodType } from "zod";
 import type {
   BelongsToRelationship,
   HasRelationships,
@@ -67,12 +67,12 @@ class EntityMetadata {
   /**
    * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
    */
-  #schema?: ZodSchema;
+  #schema?: ZodType;
 
   /**
    * Zod schema for runtime validation on entity attributes. Validates partial attributes (used on Update)
    */
-  #schemaPartial?: ZodSchema;
+  #schemaPartial?: ZodType;
 
   /**
    * Object containing zod attributes. Built programmatically via decorators and used to create schemas
@@ -118,7 +118,11 @@ class EntityMetadata {
   ): EntityDefinedAttributes<DynaRecord> {
     if (this.#schema === undefined) {
       const tableMeta = Metadata.getTable(this.tableClassName);
-      this.#schema = z.object(this.#zodAttributes).omit(tableMeta.reservedKeys);
+      const omitKeys = this.filterReservedKeys(
+        tableMeta.reservedKeys,
+        this.#zodAttributes
+      );
+      this.#schema = z.object(this.#zodAttributes).omit(omitKeys);
     }
 
     try {
@@ -142,9 +146,13 @@ class EntityMetadata {
   ): Partial<EntityDefinedAttributes<DynaRecord>> {
     if (this.#schemaPartial === undefined) {
       const tableMeta = Metadata.getTable(this.tableClassName);
+      const omitKeys = this.filterReservedKeys(
+        tableMeta.reservedKeys,
+        this.#zodPartialAttributes
+      );
       this.#schemaPartial = z
         .object(this.#zodPartialAttributes)
-        .omit(tableMeta.reservedKeys)
+        .omit(omitKeys)
         .partial()
         .transform((data: Record<string, unknown>) => {
           // Remove undefined values but keep null values
@@ -165,6 +173,23 @@ class EntityMetadata {
     } catch (error) {
       throw this.buildValidationError(error);
     }
+  }
+
+  /**
+   * Filters reserved keys to only include keys present in the given attributes.
+   * Zod v4 throws on .omit() with keys not in the schema.
+   */
+  private filterReservedKeys(
+    reservedKeys: Record<string, true>,
+    attributes: Record<string, ZodType>
+  ): Record<string, true> {
+    const filtered: Record<string, true> = {};
+    for (const key of Object.keys(reservedKeys)) {
+      if (key in attributes) {
+        filtered[key] = true;
+      }
+    }
+    return filtered;
   }
 
   /**

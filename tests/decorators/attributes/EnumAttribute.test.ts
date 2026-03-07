@@ -2,7 +2,7 @@
 import { Entity, EnumAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodEnum, ZodNullable, type ZodString, type ZodOptional } from "zod";
+import { ZodEnum, ZodNullable } from "zod";
 import { type ForeignKey, type NullableForeignKey } from "../../../src";
 
 type EnumValues = "val-1" | "val-2";
@@ -55,7 +55,7 @@ describe("EnumAttribute", () => {
       name: "someNullableEnum",
       alias: "SomeNullableEnum",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodString>>)
+      type: expect.any(ZodNullable)
     });
   });
 

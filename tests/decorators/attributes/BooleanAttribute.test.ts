@@ -2,7 +2,7 @@
 import { Entity, BooleanAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodBoolean, ZodNullable, type ZodOptional } from "zod";
+import { ZodBoolean, ZodNullable } from "zod";
 
 @Entity
 class MyEntity extends MockTable {
@@ -48,7 +48,7 @@ describe("BooleanAttribute", () => {
       name: "myNullableBoolean",
       alias: "MyNullableBoolean",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodBoolean>>)
+      type: expect.any(ZodNullable)
     });
   });
 

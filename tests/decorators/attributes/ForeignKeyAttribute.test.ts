@@ -52,7 +52,7 @@ describe("ForeignKeyAttribute", () => {
       alias: "nullableForeignKeyAttribute",
       nullable: true,
       foreignKeyTarget: Customer,
-      type: expect.any(ZodNullable<ZodString>)
+      type: expect.any(ZodNullable)
     });
   });
 

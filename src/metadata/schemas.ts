@@ -78,9 +78,9 @@ const RelationshipMetadataTransform = z
 const EntityMetadataTransform = z
   .object({
     tableClassName: z.string(),
-    attributes: z.record(AttributeMetadataTransform),
-    tableAttributes: z.record(AttributeMetadataTransform),
-    relationships: z.record(RelationshipMetadataTransform),
+    attributes: z.record(z.string(), AttributeMetadataTransform),
+    tableAttributes: z.record(z.string(), AttributeMetadataTransform),
+    relationships: z.record(z.string(), RelationshipMetadataTransform),
     idField: z.string().optional()
   })
   .transform(entity => ({
@@ -116,11 +116,11 @@ const EntityMetadataTransform = z
 export const TableMetadataTransform = z.object({
   name: z.string(),
   delimiter: z.string(),
-  defaultAttributes: z.record(AttributeMetadataTransform),
-  defaultTableAttributes: z.record(AttributeMetadataTransform),
+  defaultAttributes: z.record(z.string(), AttributeMetadataTransform),
+  defaultTableAttributes: z.record(z.string(), AttributeMetadataTransform),
   partitionKeyAttribute: AttributeMetadataTransform,
   sortKeyAttribute: AttributeMetadataTransform,
-  entities: z.record(EntityMetadataTransform)
+  entities: z.record(z.string(), EntityMetadataTransform)
 });
 
 /**
