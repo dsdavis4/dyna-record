@@ -2,7 +2,7 @@
 import { Entity, NumberAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodNullable, ZodNumber } from "zod";
+import { ZodNullable, ZodNumber, ZodOptional } from "zod";
 
 @Entity
 class MyEntity extends MockTable {
@@ -40,16 +40,20 @@ describe("NumberAttribute", () => {
   });
 
   it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
-    expect(
-      Metadata.getEntityAttributes(MyEntity.name).myNullableNumber
-    ).toEqual({
+    const attr = Metadata.getEntityAttributes(MyEntity.name).myNullableNumber;
+    expect(attr).toEqual({
       name: "myNullableNumber",
       alias: "MyNullableNumber",
       nullable: true,
       type: expect.any(ZodNullable)
     });
+    expect(attr.type).toBeInstanceOf(ZodNullable);
+    expect((attr.type as ZodNullable).unwrap()).toBeInstanceOf(ZodOptional);
+    expect(
+      ((attr.type as ZodNullable).unwrap() as ZodOptional).unwrap()
+    ).toBeInstanceOf(ZodNumber);
   });
 
   describe("types", () => {

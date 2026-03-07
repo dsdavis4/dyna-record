@@ -14,7 +14,7 @@ import {
   Course
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodNullable, ZodString } from "zod";
+import { ZodNullable, ZodOptional, ZodString } from "zod";
 
 describe("ForeignKeyAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -42,18 +42,23 @@ describe("ForeignKeyAttribute", () => {
   });
 
   it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
-    expect(
-      Metadata.getEntityAttributes(MyClassWithAllAttributeTypes.name)
-        .nullableForeignKeyAttribute
-    ).toEqual({
+    const attr = Metadata.getEntityAttributes(
+      MyClassWithAllAttributeTypes.name
+    ).nullableForeignKeyAttribute;
+    expect(attr).toEqual({
       name: "nullableForeignKeyAttribute",
       alias: "nullableForeignKeyAttribute",
       nullable: true,
       foreignKeyTarget: Customer,
       type: expect.any(ZodNullable)
     });
+    expect(attr.type).toBeInstanceOf(ZodNullable);
+    expect((attr.type as ZodNullable).unwrap()).toBeInstanceOf(ZodOptional);
+    expect(
+      ((attr.type as ZodNullable).unwrap() as ZodOptional).unwrap()
+    ).toBeInstanceOf(ZodString);
   });
 
   describe("types", () => {
