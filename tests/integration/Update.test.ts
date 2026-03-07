@@ -1195,95 +1195,80 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["stringAttribute"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["stringAttribute"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["nullableStringAttribute"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["nullableStringAttribute"]
         },
         {
           code: "invalid_type",
           expected: "date",
-          message: "Expected date, received number",
-          path: ["dateAttribute"],
-          received: "number"
+          message: "Invalid input: expected date, received number",
+          path: ["dateAttribute"]
         },
         {
           code: "invalid_type",
           expected: "date",
-          message: "Expected date, received number",
-          path: ["nullableDateAttribute"],
-          received: "number"
+          message: "Invalid input: expected date, received number",
+          path: ["nullableDateAttribute"]
         },
         {
           code: "invalid_type",
           expected: "boolean",
-          message: "Expected boolean, received number",
-          path: ["boolAttribute"],
-          received: "number"
+          message: "Invalid input: expected boolean, received number",
+          path: ["boolAttribute"]
         },
         {
           code: "invalid_type",
           expected: "boolean",
-          message: "Expected boolean, received number",
-          path: ["nullableBoolAttribute"],
-          received: "number"
+          message: "Invalid input: expected boolean, received number",
+          path: ["nullableBoolAttribute"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received string",
-          path: ["numberAttribute"],
-          received: "string"
+          message: "Invalid input: expected number, received string",
+          path: ["numberAttribute"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received string",
-          path: ["nullableNumberAttribute"],
-          received: "string"
+          message: "Invalid input: expected number, received string",
+          path: ["nullableNumberAttribute"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["foreignKeyAttribute"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["foreignKeyAttribute"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["nullableForeignKeyAttribute"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["nullableForeignKeyAttribute"]
         },
         {
-          code: "invalid_enum_value",
-          message:
-            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-3'",
-          options: ["val-1", "val-2"],
-          path: ["enumAttribute"],
-          received: "val-3"
+          code: "invalid_value",
+          message: 'Invalid option: expected one of "val-1"|"val-2"',
+          values: ["val-1", "val-2"],
+          path: ["enumAttribute"]
         },
         {
-          code: "invalid_enum_value",
-          message:
-            "Invalid enum value. Expected 'val-1' | 'val-2', received 'val-4'",
-          options: ["val-1", "val-2"],
-          path: ["nullableEnumAttribute"],
-          received: "val-4"
+          code: "invalid_value",
+          message: 'Invalid option: expected one of "val-1"|"val-2"',
+          values: ["val-1", "val-2"],
+          path: ["nullableEnumAttribute"]
         },
         {
           code: "invalid_type",
           expected: "object",
-          message: "Expected object, received string",
-          path: ["objectAttribute"],
-          received: "string"
+          message: "Invalid input: expected object, received string",
+          path: ["objectAttribute"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1376,23 +1361,20 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["objectAttribute", "name"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["objectAttribute", "name"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received boolean",
-          path: ["objectAttribute", "email"],
-          received: "boolean"
+          message: "Invalid input: expected string, received boolean",
+          path: ["objectAttribute", "email"]
         },
         {
           code: "invalid_type",
           expected: "array",
-          message: "Expected array, received string",
-          path: ["objectAttribute", "tags"],
-          received: "string"
+          message: "Invalid input: expected array, received string",
+          path: ["objectAttribute", "tags"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1469,16 +1451,14 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["objectAttribute", "tags", 1],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["objectAttribute", "tags", 1]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received boolean",
-          path: ["objectAttribute", "tags", 2],
-          received: "boolean"
+          message: "Invalid input: expected string, received boolean",
+          path: ["objectAttribute", "tags", 2]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1555,23 +1535,20 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received string",
-          path: ["addressAttribute", "geo", "lat"],
-          received: "string"
+          message: "Invalid input: expected number, received string",
+          path: ["addressAttribute", "geo", "lat"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received string",
-          path: ["addressAttribute", "geo", "lng"],
-          received: "string"
+          message: "Invalid input: expected number, received string",
+          path: ["addressAttribute", "geo", "lng"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received string",
-          path: ["addressAttribute", "scores", 0],
-          received: "string"
+          message: "Invalid input: expected number, received string",
+          path: ["addressAttribute", "scores", 0]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1650,16 +1627,14 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received number",
-          path: ["addressAttribute", "street"],
-          received: "number"
+          message: "Invalid input: expected string, received number",
+          path: ["addressAttribute", "street"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received boolean",
-          path: ["addressAttribute", "city"],
-          received: "boolean"
+          message: "Invalid input: expected string, received boolean",
+          path: ["addressAttribute", "city"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1738,23 +1713,20 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received null",
-          path: ["objectAttribute", "name"],
-          received: "null"
+          message: "Invalid input: expected string, received null",
+          path: ["objectAttribute", "name"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received null",
-          path: ["objectAttribute", "email"],
-          received: "null"
+          message: "Invalid input: expected string, received null",
+          path: ["objectAttribute", "email"]
         },
         {
           code: "invalid_type",
           expected: "array",
-          message: "Expected array, received null",
-          path: ["objectAttribute", "tags"],
-          received: "null"
+          message: "Invalid input: expected array, received null",
+          path: ["objectAttribute", "tags"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1831,30 +1803,26 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received null",
-          path: ["addressAttribute", "street"],
-          received: "null"
+          message: "Invalid input: expected string, received null",
+          path: ["addressAttribute", "street"]
         },
         {
           code: "invalid_type",
           expected: "string",
-          message: "Expected string, received null",
-          path: ["addressAttribute", "city"],
-          received: "null"
+          message: "Invalid input: expected string, received null",
+          path: ["addressAttribute", "city"]
         },
         {
           code: "invalid_type",
           expected: "object",
-          message: "Expected object, received null",
-          path: ["addressAttribute", "geo"],
-          received: "null"
+          message: "Invalid input: expected object, received null",
+          path: ["addressAttribute", "geo"]
         },
         {
           code: "invalid_type",
           expected: "array",
-          message: "Expected array, received null",
-          path: ["addressAttribute", "scores"],
-          received: "null"
+          message: "Invalid input: expected array, received null",
+          path: ["addressAttribute", "scores"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -1935,23 +1903,20 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received null",
-          path: ["addressAttribute", "geo", "lat"],
-          received: "null"
+          message: "Invalid input: expected number, received null",
+          path: ["addressAttribute", "geo", "lat"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received null",
-          path: ["addressAttribute", "geo", "lng"],
-          received: "null"
+          message: "Invalid input: expected number, received null",
+          path: ["addressAttribute", "geo", "lng"]
         },
         {
           code: "invalid_type",
           expected: "number",
-          message: "Expected number, received null",
-          path: ["addressAttribute", "scores", 0],
-          received: "null"
+          message: "Invalid input: expected number, received null",
+          path: ["addressAttribute", "scores", 0]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -2028,12 +1993,10 @@ describe("Update", () => {
       expect(e.message).toEqual("Validation errors");
       expect(e.cause).toEqual([
         {
-          code: "invalid_enum_value",
-          message:
-            "Invalid enum value. Expected 'active' | 'inactive', received 'bad-value'",
-          options: ["active", "inactive"],
-          path: ["objectAttribute", "status"],
-          received: "bad-value"
+          code: "invalid_value",
+          message: 'Invalid option: expected one of "active"|"inactive"',
+          values: ["active", "inactive"],
+          path: ["objectAttribute", "status"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -2112,12 +2075,10 @@ describe("Update", () => {
       expect(e.message).toEqual("Validation errors");
       expect(e.cause).toEqual([
         {
-          code: "invalid_enum_value",
-          message:
-            "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
-          options: ["precise", "approximate"],
-          path: ["addressAttribute", "geo", "accuracy"],
-          received: "bad-value"
+          code: "invalid_value",
+          message: 'Invalid option: expected one of "precise"|"approximate"',
+          values: ["precise", "approximate"],
+          path: ["addressAttribute", "geo", "accuracy"]
         }
       ]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
@@ -2360,9 +2321,8 @@ describe("Update", () => {
         {
           code: "invalid_type",
           expected: "date",
-          message: "Expected date, received null",
-          path: ["myAttribute"],
-          received: "null"
+          message: "Invalid input: expected date, received null",
+          path: ["myAttribute"]
         }
       ]);
       expect(mockSend.mock.calls).toEqual([]);
@@ -9749,9 +9709,8 @@ describe("Update", () => {
             {
               code: "invalid_type",
               expected: "string",
-              message: "Expected string, received null",
-              path: ["addressAttribute", "street"],
-              received: "null"
+              message: "Invalid input: expected string, received null",
+              path: ["addressAttribute", "street"]
             }
           ]);
         }
@@ -9870,9 +9829,8 @@ describe("Update", () => {
             {
               code: "invalid_type",
               expected: "object",
-              received: "null",
               path: ["objectAttribute"],
-              message: "Expected object, received null"
+              message: "Invalid input: expected object, received null"
             }
           ]);
         }
@@ -9943,12 +9901,11 @@ describe("Update", () => {
           expect(e.message).toEqual("Validation errors");
           expect(e.cause).toEqual([
             {
-              code: "invalid_enum_value",
+              code: "invalid_value",
               message:
-                "Invalid enum value. Expected 'precise' | 'approximate', received 'bad-value'",
-              options: ["precise", "approximate"],
-              path: ["addressAttribute", "geo", "accuracy"],
-              received: "bad-value"
+                'Invalid option: expected one of "precise"|"approximate"',
+              values: ["precise", "approximate"],
+              path: ["addressAttribute", "geo", "accuracy"]
             }
           ]);
         }
@@ -10022,9 +9979,8 @@ describe("Update", () => {
             {
               code: "invalid_type",
               expected: "string",
-              message: "Expected string, received number",
-              path: ["addressAttribute", "street"],
-              received: "number"
+              message: "Invalid input: expected string, received number",
+              path: ["addressAttribute", "street"]
             }
           ]);
         }
@@ -10880,9 +10836,8 @@ describe("Update", () => {
             {
               code: "invalid_type",
               expected: "string",
-              message: "Expected string, received null",
-              path: ["paymentMethodId"],
-              received: "null"
+              message: "Invalid input: expected string, received null",
+              path: ["paymentMethodId"]
             }
           ]);
         });
@@ -11292,9 +11247,8 @@ describe("Update", () => {
               {
                 code: "invalid_type",
                 expected: "string",
-                message: "Expected string, received null",
-                path: ["paymentMethodId"],
-                received: "null"
+                message: "Invalid input: expected string, received null",
+                path: ["paymentMethodId"]
               }
             ]);
           });
