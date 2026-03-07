@@ -9,25 +9,24 @@ import { type EntityAttributesOnly } from "./operations";
  * @param entityData
  * @returns
  */
-export const entityToTableItem = <T extends DynaRecord>(
-  EntityClass: new () => T,
+export const entityToTableItem = (
+  EntityClass: new () => DynaRecord,
   entityData: Partial<DynaRecord>
 ): DynamoTableItem => {
   const attributesMeta = Metadata.getEntityAttributes(EntityClass.name);
 
   return Object.entries(entityData).reduce<DynamoTableItem>(
-    (acc, [key, val]) => {
-      const attrMeta = attributesMeta[key];
-      if (attrMeta !== undefined) {
+    (acc, [key, rawVal]) => {
+      if (key in attributesMeta) {
+        const attrMeta = attributesMeta[key];
         const { alias, serializers } = attrMeta;
+        const val: unknown = rawVal;
 
-        // If the attribute has a custom serializer, serialize it
-        const value =
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- DynamoTableItem values are NativeAttributeValue (any) from AWS SDK
+        acc[alias] =
           serializers === undefined || val === null
             ? val
             : serializers.toTableAttribute(val);
-
-        acc[alias] = value;
       }
       return acc;
     },
@@ -50,16 +49,15 @@ export const tableItemToEntity = <T extends DynaRecord>(
   const entity = new EntityClass();
 
   Object.keys(tableItem).forEach(attrName => {
-    const attrMeta = tableAttributes[attrName];
-
-    if (attrMeta !== undefined) {
+    if (attrName in tableAttributes) {
+      const attrMeta = tableAttributes[attrName];
       const { name: entityKey, serializers } = attrMeta;
       if (isKeyOfEntity(entity, entityKey)) {
-        const rawVal = tableItem[attrName];
+        const rawVal: unknown = tableItem[attrName];
         const val =
           serializers?.toEntityAttribute === undefined
             ? rawVal
-            : serializers?.toEntityAttribute(rawVal);
+            : serializers.toEntityAttribute(rawVal);
 
         safeAssign(entity, entityKey, val);
       }
@@ -103,9 +101,10 @@ export const isKeyOfEntity = (
  * @param key
  * @returns
  */
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- Generic T needed for narrowing key to keyof T at call sites
 export const isKeyOfObject = <T>(
   entity: Partial<DynaRecord>,
-  key: any
+  key: PropertyKey
 ): key is keyof T => {
   return key in entity;
 };
@@ -128,7 +127,7 @@ export const chunkArray = <T>(array: T[], size: number): T[][] => {
  * @param value - The value to check. This can be any type as the function is meant to validate if it's a string.
  * @returns `true` if `value` is a string; otherwise, `false`.
  */
-export const isString = (value: any): value is string => {
+export const isString = (value: unknown): value is string => {
   return typeof value === "string";
 };
 
@@ -150,16 +149,12 @@ export const isString = (value: any): value is string => {
  * let entity = { id: "123" };
  * safeAssign(entity, "name", "Jane Doe");
  */
-export const safeAssign = <
-  TObject extends EntityAttributesOnly<DynaRecord>,
-  TKey extends keyof TObject,
-  TValue
->(
+export const safeAssign = <TObject extends EntityAttributesOnly<DynaRecord>>(
   object: TObject,
-  key: TKey,
-  value: TValue
+  key: keyof TObject,
+  value: unknown
 ): void => {
-  object[key] = value as TObject[TKey];
+  object[key] = value as TObject[keyof TObject];
 };
 
 /**

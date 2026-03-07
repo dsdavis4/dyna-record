@@ -53,19 +53,17 @@ function ForeignKeyAttribute<
       P
     >
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
-        const targetEntity = getTarget();
+    context.addInitializer(function (this: T) {
+      const targetEntity = getTarget();
 
-        Metadata.addEntityAttribute(this.constructor.name, {
-          attributeName: context.name.toString(),
-          nullable: props?.nullable,
-          type: z.string(),
-          foreignKeyTarget: targetEntity,
-          ...props
-        });
+      Metadata.addEntityAttribute(this.constructor.name, {
+        attributeName: context.name.toString(),
+        nullable: props?.nullable,
+        type: z.string(),
+        foreignKeyTarget: targetEntity,
+        ...props
       });
-    }
+    });
   };
 }
 

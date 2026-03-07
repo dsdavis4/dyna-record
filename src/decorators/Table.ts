@@ -19,10 +19,8 @@ import type DynaRecord from "../DynaRecord";
  * In this example, the `@Table` decorator is applied to the `User` class, specifying custom table metadata options, including the table name (`users`) and the schema (`public`). These options are registered with the ORM, which then uses them to correctly map the `User` entity to the corresponding table in the database. This mapping is critical for executing ORM operations such as querying, inserting, and updating records in the `users` table.
  */
 function Table(props: TableMetadataOptions) {
-  return function (target: typeof DynaRecord, context: ClassDecoratorContext) {
-    if (context.kind === "class") {
-      Metadata.addTable(target.name, props);
-    }
+  return function (target: typeof DynaRecord, _context: ClassDecoratorContext) {
+    Metadata.addTable(target.name, props);
   };
 }
 

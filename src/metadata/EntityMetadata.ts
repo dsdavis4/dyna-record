@@ -24,7 +24,7 @@ import {
   isForeignKeyAttributeMetadata
 } from "./utils";
 
-type EntityClass = new (...args: any) => DynaRecord;
+type EntityClass = new (...args: unknown[]) => DynaRecord;
 
 /**
  * Represents metadata for an entity within the ORM system, encapsulating information about the entity's attributes, relationships, and its associated database table.
@@ -62,7 +62,7 @@ class EntityMetadata {
   /**
    * Optional attribute of an entity, used with @IdAttribute decorator when an entity has a custom id field
    */
-  public idField: string;
+  public idField?: string;
 
   /**
    * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
@@ -122,7 +122,9 @@ class EntityMetadata {
     }
 
     try {
-      return this.#schema.parse(attributes);
+      return this.#schema.parse(
+        attributes
+      ) as EntityDefinedAttributes<DynaRecord>;
     } catch (error) {
       throw this.buildValidationError(error);
     }
@@ -157,7 +159,9 @@ class EntityMetadata {
     }
 
     try {
-      return this.#schemaPartial.parse(attributes);
+      return this.#schemaPartial.parse(attributes) as Partial<
+        EntityDefinedAttributes<DynaRecord>
+      >;
     } catch (error) {
       throw this.buildValidationError(error);
     }

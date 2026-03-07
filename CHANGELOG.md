@@ -1,3 +1,17 @@
+## 0.5.1 - 2026-03-07
+
+### Changed
+
+- **ESLint 9 migration:** Migrated from ESLint 8 to ESLint 9 with flat config (`eslint.config.mjs`). Removed legacy `.eslintrc.js` and `.eslintignore`. Added `@eslint/js@^9`, `typescript-eslint@^8`, `globals@^16`. Removed `@typescript-eslint/parser@6`, `eslint-config-standard-with-typescript`, `eslint-plugin-import`, `eslint-plugin-n`, `eslint-plugin-promise`.
+- **Strict type-checked linting:** Upgraded from `tseslint.configs.strict` to `tseslint.configs.strictTypeChecked` for non-test files, enforcing stricter type-aware lint rules across the codebase.
+- **Decorator type safety:** Removed unnecessary `context.kind` runtime checks from all decorator functions — TypeScript's type system already enforces correct decorator placement.
+- **Relationship metadata constructors:** Removed unnecessary `if (item !== undefined)` guards from all relationship metadata constructors (BelongsTo, HasOne, HasMany, HasAndBelongsToMany, OwnedBy).
+- **Record key existence checks:** Replaced `record[key] !== undefined` patterns with `key in record` for proper type narrowing with `Record<string, X>` types across MetadataStorage, FindById, Update, QueryBuilder, and utility files.
+- **Type guard improvements:** Changed relationship type guards in `metadata/utils.ts` to use `in` operator for checking discriminant properties (`foreignKey`, `joinTableName`).
+- **`EntityMetadata.idField`:** Made properly optional (`string` → `string?`) to reflect that not all entities have custom ID fields.
+- **`extractForeignKeyFromEntity` return type:** Widened to `ForeignKey | null | undefined` to accurately reflect nullable foreign key values at runtime, with corresponding null guards in Create and Update operations.
+- **`DynaRecord.query()` overloads:** Combined duplicate overload signatures into a single unified signature.
+
 ## 0.5.0 - 2026-03-03
 
 ### Changed

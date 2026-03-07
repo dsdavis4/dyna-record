@@ -58,11 +58,13 @@ export type ContainsFilter = Record<"$contains", NativeAttributeValue>;
  *
  * @type {FilterTypes} - A union of `BeginsWithFilter`, `ContainsFilter`, a single scalar value, or an array of scalar values.
  */
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents -- NativeAttributeValue is 'any' from AWS SDK */
 export type FilterTypes =
   | BeginsWithFilter
   | ContainsFilter
   | NativeAttributeValue
   | NativeAttributeValue[];
+/* eslint-enable @typescript-eslint/no-redundant-type-constituents */
 
 /**
  * Represents a filter condition using an AND logical operator. All items in this record will be queried with "AND"
@@ -104,6 +106,7 @@ export type AndOrFilter = FilterParams & OrFilter;
  *
  * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
  */
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- NativeAttributeValue is 'any' from AWS SDK
 export type SortKeyCondition = BeginsWithFilter | NativeAttributeValue;
 
 /**

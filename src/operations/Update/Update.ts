@@ -207,7 +207,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       BelongsToRelMetaAndKey[]
     >((acc, meta) => {
       const foreignKeyVal = extractForeignKeyFromEntity(meta, attributes);
-      if (foreignKeyVal !== undefined) acc.push({ meta, foreignKeyVal });
+      if (foreignKeyVal != null) acc.push({ meta, foreignKeyVal });
       return acc;
     }, []);
   }
@@ -284,16 +284,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     // Get the new BelongsTo relationship entities that are being updated
     belongsToRelFkAndMetas.forEach(({ meta, foreignKeyVal }) => {
-      if (foreignKeyVal !== null) {
-        transactionBuilder.addGet({
-          TableName: tableName,
-          Key: {
-            [this.partitionKeyAlias]:
-              meta.target.partitionKeyValue(foreignKeyVal),
-            [this.sortKeyAlias]: meta.target.name
-          }
-        });
-      }
+      transactionBuilder.addGet({
+        TableName: tableName,
+        Key: {
+          [this.partitionKeyAlias]:
+            meta.target.partitionKeyValue(foreignKeyVal),
+          [this.sortKeyAlias]: meta.target.name
+        }
+      });
     });
 
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
@@ -391,9 +389,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const allDocumentPathOps: DocumentPathOperation[] = [];
 
     for (const [key, val] of Object.entries(updatedAttrs)) {
+      if (!(key in entityAttrs)) {
+        regularAttrs[key] = val;
+        continue;
+      }
       const attrMeta = entityAttrs[key];
 
-      if (attrMeta?.objectSchema !== undefined) {
+      if (attrMeta.objectSchema !== undefined) {
         // ObjectAttribute → flatten for document path updates (objects are never nullable)
         const alias = attrMeta.alias;
         const ops = flattenObjectForUpdate(
@@ -504,13 +506,17 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
             referentialIntegrityCheck
           );
         } else if (isRemovingForeignKey) {
-          this.removeForeignKeysTransactions(entityId, relMeta, oldFk);
-        } else if (isUpdatingForeignKey) {
+          this.removeForeignKeysTransactions(
+            entityId,
+            relMeta,
+            oldFk as string
+          );
+        } else if (isUpdatingForeignKey && foreignKey !== null) {
           this.updateForeignKeyTransactions(
             updatedEntity,
             relMeta,
             foreignKey,
-            oldFk,
+            oldFk as string,
             newBelongsToEntityLookup,
             referentialIntegrityCheck
           );
@@ -677,13 +683,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     persistToSelfCondition: "attribute_not_exists" | "attribute_exists",
     persistToSelfConditionErrMessage?: string
   ): void {
-    const linkedEntity = newBelongsToEntityLookup[foreignKey];
-
-    if (linkedEntity === undefined) {
+    if (!(foreignKey in newBelongsToEntityLookup)) {
       throw new NotFoundError(
         `${relMeta.target.name} does not exist: ${foreignKey}`
       );
     }
+
+    const linkedEntity = newBelongsToEntityLookup[foreignKey];
 
     const key = {
       [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(
@@ -845,7 +851,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     entity: Entity,
     relLookup: HasAndBelongsToManyRelLookup
   ): DynamoTableItem {
-    const isHasAndBelongsToManyRel = relLookup[entity.type] !== undefined;
+    const isHasAndBelongsToManyRel = entity.type in relLookup;
     const sortKey = isHasAndBelongsToManyRel
       ? this.EntityClass.partitionKeyValue(id)
       : this.EntityClass.name;

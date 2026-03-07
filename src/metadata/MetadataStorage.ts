@@ -154,7 +154,7 @@ class MetadataStorage {
     options: RelationshipMetadata
   ): void {
     const entityMetadata = this.#entities[entityName];
-    if (entityMetadata.relationships[options.propertyName] === undefined) {
+    if (!(options.propertyName in entityMetadata.relationships)) {
       entityMetadata.relationships[options.propertyName] =
         createRelationshipInstance(options);
     }
@@ -166,9 +166,7 @@ class MetadataStorage {
    * @param options
    */
   public addJoinTable(joinTableName: string, options: JoinTableMetadata): void {
-    const metadata = this.#joinTables[joinTableName];
-
-    if (metadata === undefined) {
+    if (!(joinTableName in this.#joinTables)) {
       const meta = new JoinTableMetadata(options.entity, options.foreignKey);
       this.#joinTables[joinTableName] = [meta];
     } else if (this.#joinTables[joinTableName].length === 1) {
@@ -190,11 +188,11 @@ class MetadataStorage {
     const entityMetadata = this.#entities[entityName];
     const { defaultAttributes } = this.#tables[entityMetadata.tableClassName];
 
-    const defaultAttrMeta =
-      defaultAttributes[options.attributeName as DefaultFields];
-
     // The property is a default field assign it, otherwise instantiate new AttributeMetadata
-    const meta = defaultAttrMeta ?? new AttributeMetadata(options);
+    const meta =
+      options.attributeName in defaultAttributes
+        ? defaultAttributes[options.attributeName as DefaultFields]
+        : new AttributeMetadata(options);
     entityMetadata.addAttribute(meta);
   }
 
@@ -261,11 +259,13 @@ class MetadataStorage {
   private getEntityTableMetadata(
     classPrototype: DynaRecord
   ): TableMetadata | undefined {
-    const protoType: DynaRecord = Object.getPrototypeOf(classPrototype);
+    const protoType = Object.getPrototypeOf(
+      classPrototype
+    ) as DynaRecord | null;
 
     if (protoType === null) return;
 
-    if (this.#tables[protoType.constructor.name] !== undefined) {
+    if (protoType.constructor.name in this.#tables) {
       return this.#tables[protoType.constructor.name];
     } else {
       return this.getEntityTableMetadata(protoType);

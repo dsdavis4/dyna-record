@@ -1,4 +1,4 @@
-import type { ObjectSchema, FieldDef } from "../../decorators/attributes/types";
+import type { ObjectSchema } from "../../decorators/attributes/types";
 import { convertFieldToTableItem } from "../../decorators/attributes/serializers";
 import type { DocumentPathOperation } from "./types";
 
@@ -25,8 +25,8 @@ export function flattenObjectForUpdate(
   const ops: DocumentPathOperation[] = [];
 
   for (const [key, val] of Object.entries(partialValue)) {
-    const fieldDef: FieldDef | undefined = schema[key];
-    if (fieldDef === undefined) continue;
+    if (!(key in schema)) continue;
+    const fieldDef = schema[key];
 
     const fieldPath = [...parentPath, key];
 

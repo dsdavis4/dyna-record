@@ -106,7 +106,6 @@ describe("JoinTable", () => {
         Responses: [{ Item: author }, { Item: book }]
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       expect(await AuthorBook.create({ authorId: "1", bookId: "2" })).toEqual(
         undefined
       );
@@ -223,7 +222,6 @@ describe("JoinTable", () => {
         Responses: [{ Item: student }, { Item: course }]
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       const res = await StudentCourse.create({ studentId: "1", courseId: "2" });
 
       expect(res).toEqual(undefined);
@@ -341,7 +339,6 @@ describe("JoinTable", () => {
       });
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await UserWebsite.create({ userId: "email@email.com", websiteId: "2" })
       ).toEqual(undefined);
       expect(mockSend.mock.calls).toEqual([
@@ -654,7 +651,6 @@ describe("JoinTable", () => {
     it("will delete a denormalized record entry for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(3);
 
-      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       expect(await AuthorBook.delete({ authorId: "1", bookId: "2" })).toEqual(
         undefined
       );
@@ -694,7 +690,6 @@ describe("JoinTable", () => {
     it("alternate table style - will delete a denormalized record for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(3);
 
-      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       const res = await StudentCourse.delete({ studentId: "1", courseId: "2" });
 
       expect(res).toEqual(undefined);
@@ -727,7 +722,6 @@ describe("JoinTable", () => {
       expect.assertions(3);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await UserWebsite.delete({ userId: "email@email.com", websiteId: "2" })
       ).toEqual(undefined);
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
@@ -816,7 +810,6 @@ describe("JoinTable", () => {
         });
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await AuthorBook.create(
             { authorId: "1", bookId: "2" },
             { referentialIntegrityCheck: false }

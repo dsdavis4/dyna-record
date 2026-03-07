@@ -55,7 +55,7 @@ export type DefaultDateFields = "createdAt" | "updatedAt";
  * Specifies the default fields used in entities, including fields from `DynaRecord`. Instance methods are excluded
  */
 export type DefaultFields = {
-  [K in keyof DynaRecord]: DynaRecord[K] extends (...args: any[]) => any
+  [K in keyof DynaRecord]: DynaRecord[K] extends (...args: never[]) => unknown
     ? never
     : K;
 }[keyof DynaRecord];
@@ -92,12 +92,12 @@ export type KeysAttributeMetadataOptions = MakeOptional<
 /**
  * Function that takes a attribute from a Dynamo table item, and serialize it to a non-Dynamo native type (EX: Date)
  */
-export type EntitySerializer = (param: NativeAttributeValue) => any;
+export type EntitySerializer = (param: NativeAttributeValue) => unknown;
 
 /**
  * Function that takes a attribute from an Entity which is not a native Dynamo type and serializes it a type that is supported by Dynamo
  */
-export type TableSerializer = (param: any) => NativeAttributeValue;
+export type TableSerializer = (param: unknown) => NativeAttributeValue;
 
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item

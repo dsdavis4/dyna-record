@@ -11,14 +11,12 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - The initial relationship metadata to be copied into this "Belongs To" relationship instance. This allows for easy creation and setup of relationship metadata based on existing configurations.
  */
 class BelongsToRelationship extends RelationshipMetadata {
-  type: "BelongsTo" = "BelongsTo";
+  type = "BelongsTo" as const;
   foreignKey: ForeignKeyProperty;
 
   constructor(item: RelationshipMetadata) {
     super();
-    if (item !== undefined) {
-      Object.assign(this, item);
-    }
+    Object.assign(this, item);
   }
 }
 

@@ -20,6 +20,7 @@ type ThroughFunction<J extends JoinTable<DynaRecord, DynaRecord>> = () => {
    * @param {...any[]} args Constructor arguments for the join table.
    * @returns {J} An instance of the join table.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   joinTable: new (...args: any[]) => J;
   /**
    * The key representing the foreign key property of the join table.
@@ -95,24 +96,22 @@ function HasAndBelongsToMany<
   props: HasAndBelongsToManyProps<T, K, J, L>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: K) {
-        const target = getTarget();
-        const { joinTable, foreignKey } = props.through();
+    context.addInitializer(function (this: K) {
+      const target = getTarget();
+      const { joinTable, foreignKey } = props.through();
 
-        Metadata.addEntityRelationship(this.constructor.name, {
-          type: "HasAndBelongsToMany",
-          propertyName: context.name as keyof DynaRecord,
-          target,
-          joinTableName: joinTable.name
-        });
-
-        Metadata.addJoinTable(joinTable.name, {
-          entity: target,
-          foreignKey: foreignKey as keyof JoinTable<DynaRecord, DynaRecord>
-        });
+      Metadata.addEntityRelationship(this.constructor.name, {
+        type: "HasAndBelongsToMany",
+        propertyName: context.name as keyof DynaRecord,
+        target,
+        joinTableName: joinTable.name
       });
-    }
+
+      Metadata.addJoinTable(joinTable.name, {
+        entity: target,
+        foreignKey: foreignKey as keyof JoinTable<DynaRecord, DynaRecord>
+      });
+    });
   };
 }
 

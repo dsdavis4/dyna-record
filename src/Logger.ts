@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-extraneous-class */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 type LogLevels = "log" | "warn" | "error" | "info";
 
@@ -21,7 +20,7 @@ class Logger {
    * @param level
    * @param logParams
    */
-  private static _log(level: LogLevels, ...logParams: any[]): void {
+  private static _log(level: LogLevels, ...logParams: unknown[]): void {
     if (process.env.DYNA_RECORD_LOGGING_ENABLED === "true") {
       console[level](...logParams);
     }

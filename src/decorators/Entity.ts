@@ -20,14 +20,14 @@ import type DynaRecord from "../DynaRecord";
  * ```
  * In this example, the `User` class is marked as an entity using the `@Entity` decorator. This designation registers the `User` class within the ORM's metadata system, making it a recognized entity for the ORM to manage. The registration process involves associating the class with its corresponding table name and any additional metadata required by the ORM to handle instances of this class effectively.
  */
-function Entity<T extends DynaRecord>(
-  target: new () => T,
-  context: ClassDecoratorContext
+function Entity(
+  target: new () => DynaRecord,
+  _context: ClassDecoratorContext
 ): void {
-  if (context.kind === "class") {
-    const tableClassName: string = Object.getPrototypeOf(target).name;
-    Metadata.addEntity(target, tableClassName);
-  }
+  const tableClassName: string = (
+    Object.getPrototypeOf(target) as { name: string }
+  ).name;
+  Metadata.addEntity(target, tableClassName);
 }
 
 export default Entity;

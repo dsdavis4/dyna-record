@@ -782,7 +782,7 @@ describe("Query", () => {
         }
       ]);
 
-      result.forEach((res, index) => {
+      result.forEach((res, _index) => {
         if (res.type === "Customer") expect(res).toBeInstanceOf(Customer);
         else if (res.type === "Order") expect(res).toBeInstanceOf(Order);
         else if (res.type === "PaymentMethod")
@@ -1220,7 +1220,7 @@ describe("Query", () => {
           updatedAt: new Date("2022-09-15T04:26:31.148Z")
         }
       ]);
-      result.forEach((res, index) => {
+      result.forEach((res, _index) => {
         expect(res).toBeInstanceOf(Customer);
       });
 
@@ -1539,7 +1539,7 @@ describe("Query", () => {
         }
       ]);
 
-      result.forEach((res, index) => {
+      result.forEach((res, _index) => {
         if (res.type === "Customer") expect(res).toBeInstanceOf(Customer);
         else if (res.type === "Order") expect(res).toBeInstanceOf(Order);
         else if (res.type === "PaymentMethod")
@@ -2032,8 +2032,8 @@ describe("Query", () => {
       });
 
       it("when querying on an index the attribute must exist on the entity", async () => {
-        // @ts-expect-error: Key condition attributes must exist on the entity
         await Customer.query(
+          // @ts-expect-error: Key condition attributes must exist on the entity
           { someVal: "Testing" },
           { indexName: "MyIndex" }
         ).catch(_e => {

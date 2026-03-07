@@ -263,11 +263,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     item: Entity
   ): void {
     this.#belongsToRelationships.forEach(relMeta => {
-      if (
-        isKeyOfObject(item, relMeta.foreignKey) &&
-        item[relMeta.foreignKey] !== undefined
-      ) {
-        const foreignKeyValue = item[relMeta.foreignKey];
+      if (isKeyOfObject(item, relMeta.foreignKey)) {
+        const foreignKeyValue = item[relMeta.foreignKey] as string | undefined;
+        if (foreignKeyValue === undefined) return;
 
         const belongsToLinksKeys = buildBelongsToLinkKey(
           this.EntityClass,

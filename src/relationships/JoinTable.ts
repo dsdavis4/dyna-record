@@ -194,7 +194,8 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
     return transactionResults.reduce<TableItemLookup>((acc, res) => {
       if (res.Item !== undefined) {
-        acc[res.Item[idAlias]] = res.Item;
+        const id = res.Item[idAlias] as string;
+        acc[id] = res.Item;
       }
 
       return acc;
@@ -369,8 +370,10 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
     const foundEntityIds = new Set(
       transactionResults
-        .filter(result => result?.Item)
-        .map(result => result.Item?.[idAlias])
+        .filter(result => result.Item !== undefined)
+        .map(
+          result => (result.Item as Record<string, unknown>)[idAlias] as string
+        )
     );
 
     const missingEntities = joinedEntityData.filter(entityData => {

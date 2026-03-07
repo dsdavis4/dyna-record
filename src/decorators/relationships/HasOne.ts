@@ -41,16 +41,14 @@ function HasOne<T extends DynaRecord, K extends DynaRecord>(
     _value: undefined,
     context: ClassFieldDecoratorContext<K, Optional<T>>
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: K) {
-        Metadata.addEntityRelationship(this.constructor.name, {
-          type: "HasOne",
-          propertyName: context.name as keyof DynaRecord,
-          target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyProperty
-        });
+    context.addInitializer(function (this: K) {
+      Metadata.addEntityRelationship(this.constructor.name, {
+        type: "HasOne",
+        propertyName: context.name as keyof DynaRecord,
+        target: getTarget(),
+        foreignKey: props.foreignKey as ForeignKeyProperty
       });
-    }
+    });
   };
 }
 

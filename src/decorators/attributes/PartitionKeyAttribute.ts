@@ -29,15 +29,13 @@ function PartitionKeyAttribute<T extends DynaRecord, K extends PartitionKey>(
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
-        Metadata.addPartitionKeyAttribute(this, {
-          attributeName: context.name.toString(),
-          type: z.string(),
-          ...props
-        });
+    context.addInitializer(function (this: T) {
+      Metadata.addPartitionKeyAttribute(this, {
+        attributeName: context.name.toString(),
+        type: z.string(),
+        ...props
       });
-    }
+    });
   };
 }
 
