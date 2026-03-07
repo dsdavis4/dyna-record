@@ -77,10 +77,11 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
     const modelPk = this.tableMetadata.partitionKeyAttribute.name;
     const modelSk = this.tableMetadata.sortKeyAttribute.name;
 
-    const keyCondition = {
+    const keyCondition: Record<string, unknown> = {
       [modelPk]: this.EntityClass.partitionKeyValue(id),
       ...(options?.skCondition !== undefined && {
-        [modelSk]: options?.skCondition
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- SortKeyCondition includes NativeAttributeValue (any) from AWS SDK
+        [modelSk]: options.skCondition
       })
     };
 
@@ -114,7 +115,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
 
   private tableItemToLinkedEntity(tableItem: DynamoTableItem): QueryResult<T> {
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
-    const entityName = tableItem[typeAlias];
+    const entityName: unknown = tableItem[typeAlias];
 
     if (isString(entityName)) {
       const entityMeta = Metadata.getEntity(entityName);

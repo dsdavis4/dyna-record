@@ -96,24 +96,22 @@ function HasAndBelongsToMany<
   props: HasAndBelongsToManyProps<T, K, J, L>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: K) {
-        const target = getTarget();
-        const { joinTable, foreignKey } = props.through();
+    context.addInitializer(function (this: K) {
+      const target = getTarget();
+      const { joinTable, foreignKey } = props.through();
 
-        Metadata.addEntityRelationship(this.constructor.name, {
-          type: "HasAndBelongsToMany",
-          propertyName: context.name as keyof DynaRecord,
-          target,
-          joinTableName: joinTable.name
-        });
-
-        Metadata.addJoinTable(joinTable.name, {
-          entity: target,
-          foreignKey: foreignKey as keyof JoinTable<DynaRecord, DynaRecord>
-        });
+      Metadata.addEntityRelationship(this.constructor.name, {
+        type: "HasAndBelongsToMany",
+        propertyName: context.name as keyof DynaRecord,
+        target,
+        joinTableName: joinTable.name
       });
-    }
+
+      Metadata.addJoinTable(joinTable.name, {
+        entity: target,
+        foreignKey: foreignKey as keyof JoinTable<DynaRecord, DynaRecord>
+      });
+    });
   };
 }
 

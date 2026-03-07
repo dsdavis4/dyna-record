@@ -10,7 +10,7 @@ import type { Serializers } from "../../metadata/types";
  *
  */
 export const dateSerializer = {
-  toEntityAttribute: (val: NativeAttributeValue) => {
+  toEntityAttribute: (val: NativeAttributeValue): unknown => {
     if (typeof val === "string") {
       return new Date(val);
     }

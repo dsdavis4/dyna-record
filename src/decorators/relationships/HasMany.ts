@@ -46,28 +46,26 @@ function HasMany<T extends DynaRecord, K extends DynaRecord>(
   props: HasManyProps<T>
 ) {
   return (_value: undefined, context: ClassFieldDecoratorContext<K, T[]>) => {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: K) {
-        const target = getTarget();
+    context.addInitializer(function (this: K) {
+      const target = getTarget();
 
-        if (props.uniDirectional === true) {
-          Metadata.addEntityRelationship(target.name, {
-            type: "OwnedBy",
-            propertyName: props.foreignKey as keyof DynaRecord,
-            foreignKey: props.foreignKey as ForeignKeyProperty,
-            target: this.constructor as EntityClass<K>
-          });
-        }
-
-        Metadata.addEntityRelationship(this.constructor.name, {
-          type: "HasMany",
-          propertyName: context.name as keyof DynaRecord,
-          target,
+      if (props.uniDirectional === true) {
+        Metadata.addEntityRelationship(target.name, {
+          type: "OwnedBy",
+          propertyName: props.foreignKey as keyof DynaRecord,
           foreignKey: props.foreignKey as ForeignKeyProperty,
-          uniDirectional: props.uniDirectional
+          target: this.constructor as EntityClass<K>
         });
+      }
+
+      Metadata.addEntityRelationship(this.constructor.name, {
+        type: "HasMany",
+        propertyName: context.name as keyof DynaRecord,
+        target,
+        foreignKey: props.foreignKey as ForeignKeyProperty,
+        uniDirectional: props.uniDirectional
       });
-    }
+    });
   };
 }
 

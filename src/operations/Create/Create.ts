@@ -197,7 +197,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     for (const relMeta of relMetadata) {
       const foreignKey = extractForeignKeyFromEntity(relMeta, entityData);
 
-      if (foreignKey !== undefined) {
+      if (foreignKey != null) {
         // Ensure referenced entity exists before linking
         if (referentialIntegrityCheck) {
           this.buildRelationshipExistsConditionTransaction(relMeta, foreignKey);
@@ -289,7 +289,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     belongsToRelMetas.forEach(relMeta => {
       const fk = extractForeignKeyFromEntity(relMeta, entityData);
-      if (fk !== undefined) {
+      if (fk != null) {
         transactionBuilder.addGet({
           TableName: tableName,
           Key: {
@@ -361,9 +361,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const typeAlias = this.tableMetadata.defaultAttributes.type.alias;
 
     belongsToTableItems.forEach(tableItem => {
-      const relationshipType = tableItem[typeAlias];
+      const relationshipType = tableItem[typeAlias] as string;
 
-      const key = {
+      const key: DynamoTableItem = {
         [this.partitionKeyAlias]: pk,
         [this.sortKeyAlias]: relationshipType
       };

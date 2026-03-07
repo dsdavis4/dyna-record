@@ -43,16 +43,14 @@ function BelongsTo<
     _value: undefined,
     context: ClassFieldDecoratorContext<Source, BelongsToField<Source, FK>>
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: Source) {
-        Metadata.addEntityRelationship(this.constructor.name, {
-          type: "BelongsTo",
-          propertyName: context.name as keyof DynaRecord,
-          target: getTarget(),
-          foreignKey: props.foreignKey as ForeignKeyProperty
-        });
+    context.addInitializer(function (this: Source) {
+      Metadata.addEntityRelationship(this.constructor.name, {
+        type: "BelongsTo",
+        propertyName: context.name as keyof DynaRecord,
+        target: getTarget(),
+        foreignKey: props.foreignKey as ForeignKeyProperty
       });
-    }
+    });
   };
 }
 

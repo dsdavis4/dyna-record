@@ -45,7 +45,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     } else {
       return await this.findByIdWithIncludes(id, {
         includedAssociations: options.include,
-        consistentRead: options?.consistentRead
+        consistentRead: options.consistentRead
       });
     }
   }
@@ -146,14 +146,15 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
    * @param includedAssociations
    * @returns
    */
-  private getIncludedRelationships<Inc extends IncludedAssociations<T>>(
-    includedAssociations: Inc
+  private getIncludedRelationships(
+    includedAssociations: IncludedAssociations<T>
   ): RelationshipMetadata[] {
     return includedAssociations.reduce<RelationshipMetadata[]>(
       (acc, includedRel: IncludedAssociations<T>[number]) => {
         const key = includedRel.association as string;
-        const included = this.entityMetadata.relationships[key];
-        if (included !== undefined) acc.push(included);
+        if (key in this.entityMetadata.relationships) {
+          acc.push(this.entityMetadata.relationships[key]);
+        }
         return acc;
       },
       []

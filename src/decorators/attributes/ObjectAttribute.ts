@@ -133,7 +133,6 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
       zodType = z.enum(fieldDef.values);
       break;
     default: {
-       
       const _exhaustiveCheck: never = fieldDef;
       throw new Error("Unsupported field type");
     }
@@ -243,24 +242,22 @@ function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
       ObjectAttributeOptions<S>
     >
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
-        const { schema, ...restProps } = props;
-        const zodSchema = objectSchemaToZod(schema);
-        const partialZodSchema = objectSchemaToZodPartial(schema);
-        const serializers = createObjectSerializer(schema);
+    context.addInitializer(function (this: T) {
+      const { schema, ...restProps } = props;
+      const zodSchema = objectSchemaToZod(schema);
+      const partialZodSchema = objectSchemaToZodPartial(schema);
+      const serializers = createObjectSerializer(schema);
 
-        Metadata.addEntityAttribute(this.constructor.name, {
-          attributeName: context.name.toString(),
-          type: zodSchema,
-          partialType: partialZodSchema,
-          serializers,
-          nullable: false,
-          objectSchema: schema,
-          ...restProps
-        });
+      Metadata.addEntityAttribute(this.constructor.name, {
+        attributeName: context.name.toString(),
+        type: zodSchema,
+        partialType: partialZodSchema,
+        serializers,
+        nullable: false,
+        objectSchema: schema,
+        ...restProps
       });
-    }
+    });
   };
 }
 

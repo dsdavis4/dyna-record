@@ -12,9 +12,13 @@ export function mergePartialObjectAttributes(
   entityAttrs: AttributeMetadataStorage
 ): void {
   for (const [key, val] of Object.entries(partial)) {
+    if (!(key in entityAttrs)) {
+      target[key] = val;
+      continue;
+    }
     const attrMeta = entityAttrs[key];
 
-    if (attrMeta?.objectSchema !== undefined) {
+    if (attrMeta.objectSchema !== undefined) {
       // Deep merge for ObjectAttribute (objects are never nullable)
       const existing =
         (target[key] as Record<string, unknown> | undefined) ?? {};
@@ -57,11 +61,15 @@ function deepMergeObject(
       continue;
     }
 
+    if (!(key in schema)) {
+      result[key] = val;
+      continue;
+    }
     const fieldDef = schema[key];
 
-    if (fieldDef?.type === "object" && typeof existing[key] === "object") {
+    if (fieldDef.type === "object" && typeof existing[key] === "object") {
       result[key] = deepMergeObject(
-        (existing[key] as Record<string, unknown>) ?? {},
+        existing[key] as Record<string, unknown>,
         val as Record<string, unknown>,
         fieldDef.fields
       );

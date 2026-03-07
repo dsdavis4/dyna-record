@@ -18,12 +18,11 @@ export default defineConfig(
     ]
   },
   eslint.configs.recommended,
-  // Strict for non-test TypeScript files
+  // Strict type checked for non-test TypeScript files
   {
     files: ["**/*.ts"],
     ignores: ["**/*.test.ts"],
-    // TODO use strict type checked also?
-    extends: tseslint.configs.strict
+    extends: tseslint.configs.strictTypeChecked
   },
   // Recommended for test files
   {

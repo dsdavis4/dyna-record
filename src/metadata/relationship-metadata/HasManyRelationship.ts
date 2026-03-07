@@ -17,9 +17,7 @@ class HasManyRelationship extends RelationshipMetadata {
 
   constructor(item: RelationshipMetadata) {
     super();
-    if (item !== undefined) {
-      Object.assign(this, item);
-    }
+    Object.assign(this, item);
   }
 }
 

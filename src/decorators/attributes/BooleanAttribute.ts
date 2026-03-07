@@ -35,16 +35,14 @@ function BooleanAttribute<
     _value: undefined,
     context: AttributeDecoratorContext<T, K, P>
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
-        Metadata.addEntityAttribute(this.constructor.name, {
-          attributeName: context.name.toString(),
-          nullable: props?.nullable,
-          type: z.boolean(),
-          ...props
-        });
+    context.addInitializer(function (this: T) {
+      Metadata.addEntityAttribute(this.constructor.name, {
+        attributeName: context.name.toString(),
+        nullable: props?.nullable,
+        type: z.boolean(),
+        ...props
       });
-    }
+    });
   };
 }
 

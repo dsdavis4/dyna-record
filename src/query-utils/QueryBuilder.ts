@@ -108,7 +108,8 @@ class QueryBuilder {
       ? { ...keyParams.values, ...filterParams?.values }
       : keyParams.values;
 
-    return Object.entries(valueParams).reduce(
+    return Object.entries(valueParams).reduce<Record<string, unknown>>(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
       (params, [attrName, value]) => ({ ...params, [`:${attrName}`]: value }),
       {}
     );
@@ -191,7 +192,7 @@ class QueryBuilder {
    * @returns
    */
   private andFilter(filter: KeyConditions | AndFilter): FilterExpression {
-    const params = Object.entries(filter).reduce(
+    const params = Object.entries(filter).reduce<FilterExpression>(
       (obj, [attr, value]) => {
         const { expression, values } = this.andCondition(attr, value);
         return {
@@ -217,25 +218,30 @@ class QueryBuilder {
     const resolved = this.resolveAttrPath(attr);
 
     let condition;
+
     let values: Record<string, NativeAttributeValue> = {};
     if (Array.isArray(value)) {
-      const mappings = value.reduce<string[]>((acc, val) => {
-        const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      const mappings = (value as unknown[]).reduce<string[]>((acc, val) => {
+        const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+
         values[placeholder] = val;
         return acc.concat(`:${placeholder}`);
       }, []);
       condition = `${resolved.expressionPath} IN (${mappings.join()})`;
     } else if (this.isBeginsWithFilter(value)) {
-      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `begins_with(${resolved.expressionPath}, :${placeholder})`;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
       values = { [placeholder]: value.$beginsWith };
     } else if (this.isContainsFilter(value)) {
-      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `contains(${resolved.expressionPath}, :${placeholder})`;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
       values = { [placeholder]: value.$contains };
     } else {
-      const placeholder = `${resolved.placeholderKey}${++this.#attrCounter}`;
+      const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `${resolved.expressionPath} = :${placeholder}`;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
       values = { [placeholder]: value };
     }
 
@@ -310,10 +316,7 @@ class QueryBuilder {
       ? `(${andParams.expression}) OR `
       : `${andParams.expression} OR `;
 
-    const values = Object.entries(andParams.values).reduce<
-      FilterExpression["values"]
-    >((obj, [key, val]) => ({ ...obj, [key]: val }), {});
-    return { expression, values };
+    return { expression, values: andParams.values };
   }
 
   /**

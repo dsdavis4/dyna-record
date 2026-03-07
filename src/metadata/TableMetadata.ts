@@ -165,7 +165,13 @@ class TableMetadata {
    */
   public toJSON(entities: EntityMetadataStorage): SerializedTableMetadata {
     return TableMetadataTransform.parse({
-      ...this,
+      name: this.name,
+      delimiter: this.delimiter,
+      defaultAttributes: this.defaultAttributes,
+      defaultTableAttributes: this.defaultTableAttributes,
+      partitionKeyAttribute: this.partitionKeyAttribute,
+      sortKeyAttribute: this.sortKeyAttribute,
+      reservedKeys: this.reservedKeys,
       entities
     });
   }

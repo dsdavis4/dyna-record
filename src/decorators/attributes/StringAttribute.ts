@@ -39,16 +39,14 @@ function StringAttribute<
     _value: undefined,
     context: AttributeDecoratorContext<T, NotForeignKey<K>, P>
   ) {
-    if (context.kind === "field") {
-      context.addInitializer(function (this: T) {
-        Metadata.addEntityAttribute(this.constructor.name, {
-          attributeName: context.name.toString(),
-          nullable: props?.nullable,
-          type: z.string(),
-          ...props
-        });
+    context.addInitializer(function (this: T) {
+      Metadata.addEntityAttribute(this.constructor.name, {
+        attributeName: context.name.toString(),
+        nullable: props?.nullable,
+        type: z.string(),
+        ...props
       });
-    }
+    });
   };
 }
 

@@ -14,7 +14,6 @@ import type {
   DynamoTableItem,
   EntityClass,
   ForeignKey,
-  Optional,
   RelationshipMetaObj
 } from "../../types";
 import { isKeyOfObject } from "../../utils";
@@ -50,15 +49,13 @@ export const buildEntityRelationshipMetaObj = (
  * @param entity - instance of DynaRecord
  * @returns
  */
-export const extractForeignKeyFromEntity = <
-  T extends Partial<EntityAttributesOnly<DynaRecord>>
->(
+export const extractForeignKeyFromEntity = (
   relMeta: RelationshipMetadata,
-  entity: T
-): Optional<ForeignKey> => {
+  entity: Partial<EntityAttributesOnly<DynaRecord>>
+): ForeignKey | null | undefined => {
   return isRelationshipMetadataWithForeignKey(relMeta) &&
     isKeyOfObject(entity, relMeta.foreignKey)
-    ? entity[relMeta.foreignKey]
+    ? (entity[relMeta.foreignKey] as ForeignKey | null | undefined)
     : undefined;
 };
 

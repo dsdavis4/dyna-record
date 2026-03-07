@@ -22,7 +22,7 @@ import type AttributeMetadata from "./AttributeMetadata";
 export const isHasManyRelationship = (
   rel: RelationshipMetadata
 ): rel is HasManyRelationship => {
-  return rel.type === "HasMany" && rel.foreignKey !== undefined;
+  return rel.type === "HasMany" && "foreignKey" in rel;
 };
 
 /**
@@ -31,7 +31,7 @@ export const isHasManyRelationship = (
 export const isBelongsToRelationship = (
   rel: RelationshipMetadata
 ): rel is BelongsToRelationship => {
-  return rel.type === "BelongsTo" && rel.foreignKey !== undefined;
+  return rel.type === "BelongsTo" && "foreignKey" in rel;
 };
 
 /**
@@ -40,7 +40,7 @@ export const isBelongsToRelationship = (
 export const isHasOneRelationship = (
   rel: RelationshipMetadata
 ): rel is HasOneRelationship => {
-  return rel.type === "HasOne" && rel.foreignKey !== undefined;
+  return rel.type === "HasOne" && "foreignKey" in rel;
 };
 
 /**
@@ -49,7 +49,7 @@ export const isHasOneRelationship = (
 export const isHasAndBelongsToManyRelationship = (
   rel: RelationshipMetadata
 ): rel is HasAndBelongsToManyRelationship => {
-  return rel.type === "HasAndBelongsToMany" && rel.joinTableName !== undefined;
+  return rel.type === "HasAndBelongsToMany" && "joinTableName" in rel;
 };
 
 /**
