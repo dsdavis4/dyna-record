@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-extraneous-class */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 type LogLevels = "log" | "warn" | "error" | "info";
 

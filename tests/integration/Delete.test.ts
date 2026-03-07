@@ -132,7 +132,6 @@ describe("Delete", () => {
       Items: [mockModel]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await MockModel.delete("123");
 
     expect(res).toEqual(undefined);
@@ -187,7 +186,6 @@ describe("Delete", () => {
       Items: [pet]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await Pet.delete("123");
 
     expect(res).toEqual(undefined);
@@ -249,7 +247,6 @@ describe("Delete", () => {
       Items: [home]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await Home.delete("123");
 
     expect(res).toEqual(undefined);
@@ -537,7 +534,6 @@ describe("Delete", () => {
     it("will nullify foreign keys on the entities that belong to it, as well as update the denormalized links of those entities", async () => {
       expect.assertions(6);
 
-      // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
       const res = await Person.delete("123");
 
       expect(res).toEqual(undefined);
@@ -663,7 +659,6 @@ describe("Delete", () => {
       Items: [book, author]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await Book.delete("123");
 
     expect(res).toEqual(undefined);
@@ -755,7 +750,6 @@ describe("Delete", () => {
       Items: [book, author, owner]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await Book.delete("123");
 
     expect(res).toEqual(undefined);
@@ -849,7 +843,6 @@ describe("Delete", () => {
       Items: [user, website]
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     const res = await User.delete("email@email.com");
 
     expect(res).toEqual(undefined);
@@ -938,7 +931,6 @@ describe("Delete", () => {
         // Get the employee with denormalized records
         mockQuery.mockResolvedValueOnce({ Items: [employee] });
 
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         const res = await Organization.delete("123");
 
         expect(res).toEqual(undefined);
@@ -1096,7 +1088,6 @@ describe("Delete", () => {
       it(" can delete an entity that is owned by a has many uni directional relationship", async () => {
         expect.assertions(6);
 
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         const res = await Employee.delete("123");
 
         expect(res).toEqual(undefined);

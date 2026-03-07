@@ -236,7 +236,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await Customer.update("123", {
           name: "New Name",
           address: "new Address"
@@ -365,7 +364,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await Customer.update("123", {
           // Begin reserved keys
           pk: "2",
@@ -525,7 +523,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await MyClassWithAllAttributeTypes.update("123", {
           stringAttribute: "1",
           nullableStringAttribute: "2",
@@ -797,7 +794,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await MockInformation.update("123", {
           state: "CO"
         })
@@ -981,7 +977,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await ContactInformation.update("123", {
           email: "new@example.com",
           phone: null
@@ -994,7 +989,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await ContactInformation.update("123", {
           email: "new@example.com",
           phone: undefined
@@ -1131,7 +1125,6 @@ describe("Update", () => {
       expect.assertions(5);
 
       expect(
-        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
         await MockInformation.update("123", {
           address: "11 Some St",
           email: "new@example.com",
@@ -2527,7 +2520,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await ContactInformation.update("123", {
               email: "new-email@example.com"
             })
@@ -2689,7 +2681,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await ContactInformation.update("123", {
                 email: "new-email@example.com",
                 customerId: "456"
@@ -3036,7 +3027,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await ContactInformation.update("123", {
                 email: "new-email@example.com",
                 customerId: null
@@ -3214,7 +3204,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await ContactInformation.update("123", {
               email: "new-email@example.com"
             })
@@ -3386,7 +3375,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await ContactInformation.update("123", {
                 email: "new-email@example.com",
                 customerId: "456"
@@ -3819,7 +3807,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await ContactInformation.update("123", {
                 email: "new-email@example.com",
                 customerId: null
@@ -4035,7 +4022,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Pet.update("123", {
               name: "Fido"
             })
@@ -4195,7 +4181,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Pet.update("123", {
                 name: "Fido",
                 ownerId: "456"
@@ -4535,7 +4520,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Pet.update("123", {
                 name: "New Name",
                 ownerId: null
@@ -4708,7 +4692,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Pet.update("123", {
               name: "Fido"
             })
@@ -4878,7 +4861,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Pet.update("123", {
                 name: "Fido",
                 ownerId: "456"
@@ -5313,7 +5295,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Pet.update("123", {
                 name: "New Name",
                 ownerId: null
@@ -5517,7 +5498,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Employee.update("123", {
               name: "Testing"
             })
@@ -5647,7 +5627,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Employee.update("123", {
                 name: "Testing",
                 organizationId: "456"
@@ -5920,7 +5899,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Employee.update("123", {
                 name: "New Name",
                 organizationId: null
@@ -6081,7 +6059,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Employee.update("123", {
               name: "Testing"
             })
@@ -6221,7 +6198,6 @@ describe("Update", () => {
             expect.assertions(5);
 
             expect(
-              // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
               await Employee.update("123", {
                 name: "Testing",
                 organizationId: "456"
@@ -6571,7 +6547,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Employee.update("123", {
               name: "New Name",
               organizationId: null
@@ -6758,7 +6733,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Organization.update("123", {
             name: "New Name"
           })
@@ -7069,7 +7043,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Model3.update("123", {
             name: "newName",
             model1Id: "456",
@@ -7355,7 +7328,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Model3.update("123", {
             name: "newName",
             model1Id: "456",
@@ -7648,7 +7620,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Grade.update("123", {
             gradeValue: "B",
             assignmentId: "456",
@@ -7849,7 +7820,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await PhoneBook.update("123", {
             edition: "2"
           })
@@ -8068,7 +8038,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Desk.update("123", {
             num: 2
           })
@@ -8310,7 +8279,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Website.update("123", {
             name: "testing.com"
           })
@@ -8544,7 +8512,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await Warehouse.update("123", {
             location: { city: "Chicago", state: "IL" }
           })
@@ -8695,7 +8662,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Warehouse.update("123", {
               location: { city: "Chicago" }
             })
@@ -8780,7 +8746,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Warehouse.update("123", {
               location: { zip: null }
             })
@@ -8926,7 +8891,6 @@ describe("Update", () => {
           expect.assertions(4);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Shipment.update("456", {
               dimensions: { weight: 100 }
             })
@@ -9011,7 +8975,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Shipment.update("456", {
               dimensions: { label: null }
             })
@@ -9147,7 +9110,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Catalog.update("123", {
               inventory: { quantity: 200 }
             })
@@ -9232,7 +9194,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Catalog.update("123", {
               inventory: { notes: null }
             })
@@ -9399,7 +9360,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Sponsor.update("123", {
               inventory: { quantity: 1000 }
             })
@@ -9509,7 +9469,6 @@ describe("Update", () => {
           expect.assertions(3);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await Sponsor.update("123", {
               inventory: { notes: null }
             })
@@ -9584,7 +9543,6 @@ describe("Update", () => {
         expect.assertions(5);
 
         expect(
-          // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
           await MyClassWithAllAttributeTypes.update("123", {
             objectAttribute: {
               name: "NewName",
@@ -10626,7 +10584,6 @@ describe("Update", () => {
           expect.assertions(5);
 
           expect(
-            // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
             await MyClassWithAllAttributeTypes.update(
               "123",
               {

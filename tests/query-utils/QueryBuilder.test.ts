@@ -37,7 +37,6 @@ const scaleMetaSchema = {
 } as const satisfies ObjectSchema;
 
 @Entity
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Scale extends MockTable {
   @StringAttribute({ alias: "Name" })
   public name: string;
@@ -50,7 +49,6 @@ class Scale extends MockTable {
 }
 
 @Entity
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Room extends MockTable {
   @StringAttribute({ alias: "Name" })
   public name: string;

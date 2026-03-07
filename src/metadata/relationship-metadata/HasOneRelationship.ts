@@ -10,7 +10,7 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - An instance of `RelationshipMetadata` containing the initial settings for the relationship. This can include the `foreignKey` and other properties relevant to establishing a "HasOne" relationship.
  */
 class HasOneRelationship extends RelationshipMetadata {
-  type: "HasOne" = "HasOne";
+  type: "HasOne" = "HasOne" as const;
   foreignKey: ForeignKeyProperty;
 
   constructor(item: RelationshipMetadata) {

@@ -374,7 +374,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
           Item: { ...tableItem, ...key },
           ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})`
         },
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+
         `${this.EntityClass.name} already has an associated ${relationshipType}`
       );
     });

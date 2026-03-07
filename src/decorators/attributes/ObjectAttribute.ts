@@ -133,7 +133,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
       zodType = z.enum(fieldDef.values);
       break;
     default: {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const _exhaustiveCheck: never = fieldDef;
       throw new Error("Unsupported field type");
     }

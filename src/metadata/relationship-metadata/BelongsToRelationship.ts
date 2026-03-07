@@ -11,7 +11,8 @@ import RelationshipMetadata from "./RelationshipMetadata";
  * @param {RelationshipMetadata} item - The initial relationship metadata to be copied into this "Belongs To" relationship instance. This allows for easy creation and setup of relationship metadata based on existing configurations.
  */
 class BelongsToRelationship extends RelationshipMetadata {
-  type: "BelongsTo" = "BelongsTo";
+  // TODO look for a defined type for this or make one?
+  type: "BelongsTo" = "BelongsTo" as const;
   foreignKey: ForeignKeyProperty;
 
   constructor(item: RelationshipMetadata) {

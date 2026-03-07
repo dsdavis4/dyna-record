@@ -190,7 +190,6 @@ describe("FindById", () => {
 
       const result = await Customer.findById("123");
 
-      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(result?.update).toBeInstanceOf(Function);
     });
 

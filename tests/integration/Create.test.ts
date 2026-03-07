@@ -3610,7 +3610,7 @@ describe("Create", () => {
         public customer: CustomerLocal;
 
         // mock method
-        public static override create(bla: any): any {
+        public static override create(_bla: any): any {
           return "bla " as any;
         }
       }

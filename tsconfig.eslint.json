@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.dev.json",
   "include": [
-    ".eslintrc.js",
+    "eslint.config.mjs",
     "jest.config.js",
     "global-setup.js",
     "**/*.test.ts",
