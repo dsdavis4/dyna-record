@@ -2032,8 +2032,8 @@ describe("Query", () => {
       });
 
       it("when querying on an index the attribute must exist on the entity", async () => {
-        // @ts-expect-error: Key condition attributes must exist on the entity
         await Customer.query(
+          // @ts-expect-error: Key condition attributes must exist on the entity
           { someVal: "Testing" },
           { indexName: "MyIndex" }
         ).catch(_e => {

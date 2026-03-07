@@ -20,6 +20,7 @@ type ThroughFunction<J extends JoinTable<DynaRecord, DynaRecord>> = () => {
    * @param {...any[]} args Constructor arguments for the join table.
    * @returns {J} An instance of the join table.
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   joinTable: new (...args: any[]) => J;
   /**
    * The key representing the foreign key property of the join table.

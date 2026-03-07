@@ -24,7 +24,7 @@ import {
   isForeignKeyAttributeMetadata
 } from "./utils";
 
-type EntityClass = new (...args: any) => DynaRecord;
+type EntityClass = new (...args: unknown[]) => DynaRecord;
 
 /**
  * Represents metadata for an entity within the ORM system, encapsulating information about the entity's attributes, relationships, and its associated database table.

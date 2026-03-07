@@ -25,8 +25,10 @@ export type CapitalizeFirst<T extends string> =
  * - Map Date attributes to ISO strings
  */
 export type MockTableEntityTableItem<T extends MockTable> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
+  [K in keyof T as T[K] extends
+    | ((...args: never[]) => unknown)
+    | DynaRecord
+    | DynaRecord[]
     ? never
     : K extends "pk"
       ? "PK"
@@ -53,8 +55,10 @@ export type MockTableEntityTableItem<T extends MockTable> = {
  * - Map Date attributes to ISO strings
  */
 export type OtherTableEntityTableItem<T> = {
-  // eslint-disable-next-line @typescript-eslint/ban-types
-  [K in keyof T as T[K] extends Function | DynaRecord | DynaRecord[]
+  [K in keyof T as T[K] extends
+    | ((...args: never[]) => unknown)
+    | DynaRecord
+    | DynaRecord[]
     ? never
     : K]: T[K] extends PartitionKey
     ? string

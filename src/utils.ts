@@ -105,7 +105,7 @@ export const isKeyOfEntity = (
  */
 export const isKeyOfObject = <T>(
   entity: Partial<DynaRecord>,
-  key: any
+  key: PropertyKey
 ): key is keyof T => {
   return key in entity;
 };
@@ -128,7 +128,7 @@ export const chunkArray = <T>(array: T[], size: number): T[][] => {
  * @param value - The value to check. This can be any type as the function is meant to validate if it's a string.
  * @returns `true` if `value` is a string; otherwise, `false`.
  */
-export const isString = (value: any): value is string => {
+export const isString = (value: unknown): value is string => {
   return typeof value === "string";
 };
 

@@ -16,7 +16,8 @@ export const dateSerializer = {
     }
     return val;
   },
-  toTableAttribute: (val?: Date) => val?.toISOString() ?? undefined
+  toTableAttribute: (val: unknown) =>
+    val instanceof Date ? val.toISOString() : undefined
 };
 
 /**
@@ -127,9 +128,9 @@ function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
  */
 export function createObjectSerializer(schema: ObjectSchema): Serializers {
   return {
-    toTableAttribute: (val: Record<string, unknown>) =>
-      objectToTableItem(schema, val),
-    toEntityAttribute: (val: Record<string, unknown>) =>
-      tableItemToObject(schema, val)
+    toTableAttribute: (val: unknown) =>
+      objectToTableItem(schema, val as Record<string, unknown>),
+    toEntityAttribute: (val: NativeAttributeValue) =>
+      tableItemToObject(schema, val as Record<string, unknown>)
   };
 }

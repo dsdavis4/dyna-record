@@ -35,7 +35,7 @@ export type SortKeyAttribute<T> = {
  * @returns The names of the function properties as strings if any exist; otherwise, the result is `never`.
  */
 export type FunctionFields<T> = {
-  [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
+  [K in keyof T]: T[K] extends (...args: never[]) => unknown ? K : never;
 }[keyof T];
 
 /**

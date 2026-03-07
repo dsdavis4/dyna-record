@@ -134,12 +134,12 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Query an EntityPartition by EntityId and optional SortKey/Filter conditions.
-   * QueryByIndex not supported. Use Query with keys if indexName is needed
-   * @param {string} id - Entity Id
+   * Query an EntityPartition by EntityId (string) or by PartitionKey/SortKey conditions (object).
+   * QueryByIndex not supported with this overload. Use Query with keys and indexName option if needed.
+   * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
    * @param {Object=} options - QueryOptions. Supports filter, consistentRead and skCondition. indexName is not supported
    *
-   * @example By partition key only
+   * @example By partition key only (string shorthand)
    * ```typescript
    * const user = await User.query("123");
    * ```
@@ -162,41 +162,29 @@ abstract class DynaRecord implements DynaRecordBase {
    *     createdAt: "2023-11-21T12:31:21.148Z"
    *    }
    * });
+   * ```
    *
    * @example Query as consistent read
    * ```typescript
    * const user = await User.query("123", { consistentRead: true })
    * ```
-   * ```
-   */
-  public static async query<T extends DynaRecord>(
-    this: EntityClass<T>,
-    key: string,
-    options?: OptionsWithoutIndex
-  ): Promise<QueryResults<T>>;
-
-  /**
-   * Query by PartitionKey and optional SortKey/Filter/Index conditions without and index
-   * When querying without an index the key conditions must be the PartitionKey and SortKey defined on the entity
-   * @param {Object} key - PartitionKey value and optional SortKey condition. Keys must be attributes defined on the model
-   * @param {Object=} options - QueryBuilderOptions
    *
-   * @example By partition key only
+   * @example By partition key only (object form)
    * ```typescript
    * const user = await User.query({ pk: "User#123" });
    * ```
    *
-   * @example By partition key and sort key exact match
+   * @example By partition key and sort key exact match (object form)
    * ```typescript
    * const user = await User.query({ pk: "User#123", sk: "Profile#123" });
    * ```
    *
-   * @example By partition key and sort key begins with
+   * @example By partition key and sort key begins with (object form)
    * ```typescript
    * const user = await User.query({ pk: "User#123", sk: { $beginsWith: "Profile" } });
    * ```
    *
-   * @example With filter (arbitrary example)
+   * @example With filter (object form, arbitrary example)
    * ```typescript
    * const result = await User.query(
    *  {
@@ -209,7 +197,7 @@ abstract class DynaRecord implements DynaRecordBase {
    *      $or: [
    *        {
    *         name: "John",
-   *         email: { $beginsWith: "testing }
+   *         email: { $beginsWith: "testing" }
    *        },
    *        {
    *          name: "Jane",
@@ -231,7 +219,7 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
-    key: EntityKeyConditions<T>,
+    key: string | EntityKeyConditions<T>,
     options?: OptionsWithoutIndex
   ): Promise<QueryResults<T>>;
 
