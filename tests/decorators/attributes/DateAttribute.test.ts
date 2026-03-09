@@ -2,7 +2,7 @@
 import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators";
 import { MockTable, Order, Profile, Pet } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodDate, ZodNullable, type ZodOptional } from "zod";
+import { ZodDate, ZodNullable, ZodOptional } from "zod";
 
 describe("DateAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {
@@ -30,15 +30,21 @@ describe("DateAttribute", () => {
   });
 
   it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
-    expect(Metadata.getEntityAttributes(Pet.name).adoptedDate).toEqual({
+    const attr = Metadata.getEntityAttributes(Pet.name).adoptedDate;
+    expect(attr).toEqual({
       name: "adoptedDate",
       alias: "AdoptedDate",
       nullable: true,
       serializers: dateSerializer,
-      type: expect.any(ZodNullable<ZodOptional<ZodDate>>)
+      type: expect.any(ZodNullable)
     });
+    expect(attr.type).toBeInstanceOf(ZodNullable);
+    expect((attr.type as ZodNullable).unwrap()).toBeInstanceOf(ZodOptional);
+    expect(
+      ((attr.type as ZodNullable).unwrap() as ZodOptional).unwrap()
+    ).toBeInstanceOf(ZodDate);
   });
 
   describe("types", () => {

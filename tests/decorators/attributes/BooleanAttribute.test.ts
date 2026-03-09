@@ -2,7 +2,7 @@
 import { Entity, BooleanAttribute } from "../../../src/decorators";
 import { MockTable } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodBoolean, ZodNullable, type ZodOptional } from "zod";
+import { ZodBoolean, ZodNullable, ZodOptional } from "zod";
 
 @Entity
 class MyEntity extends MockTable {
@@ -40,16 +40,20 @@ describe("BooleanAttribute", () => {
   });
 
   it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
-    expect(
-      Metadata.getEntityAttributes(MyEntity.name).myNullableBoolean
-    ).toEqual({
+    const attr = Metadata.getEntityAttributes(MyEntity.name).myNullableBoolean;
+    expect(attr).toEqual({
       name: "myNullableBoolean",
       alias: "MyNullableBoolean",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodBoolean>>)
+      type: expect.any(ZodNullable)
     });
+    expect(attr.type).toBeInstanceOf(ZodNullable);
+    expect((attr.type as ZodNullable).unwrap()).toBeInstanceOf(ZodOptional);
+    expect(
+      ((attr.type as ZodNullable).unwrap() as ZodOptional).unwrap()
+    ).toBeInstanceOf(ZodBoolean);
   });
 
   describe("types", () => {

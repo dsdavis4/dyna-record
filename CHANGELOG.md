@@ -1,3 +1,16 @@
+## 0.6.0 - 2026-03-09
+
+### Changed
+
+- **Zod v4 upgrade:** Upgraded from Zod v3 (`^3.23.8`) to Zod v4 (`^4.3.6`). This is the only dependency change and has no effect on the library's public API or runtime behavior for consumers. All exported types, validation semantics, and error handling remain identical.
+- **`z.record()` two-argument form:** Updated all `z.record(schema)` calls in metadata serialization schemas to the required v4 form `z.record(z.string(), schema)`.
+- **`.omit()` strict key validation:** Zod v4 throws when `.omit()` receives keys not present in the schema. Added `filterReservedKeys()` in `EntityMetadata` to filter reserved keys to only those present in the entity's attribute schema before calling `.omit()`.
+- **`ZodSchema` removed:** Replaced `ZodSchema` type references with `ZodType`, as `ZodSchema` was removed in Zod v4.
+
+### Breaking
+
+- **Validation error issue format:** The `cause` array on `ValidationError` contains Zod issue objects whose shape changed in v4. The `received` field is no longer present, `message` strings use a new format (e.g. `"Invalid input: expected string, received undefined"` instead of `"Required"`), and enum validation errors use `code: "invalid_value"` with a `values` array instead of `code: "invalid_enum_value"` with an `options` array. Code that inspects `ValidationError.cause` issue objects directly will need to be updated.
+
 ## 0.5.1 - 2026-03-07
 
 ### Changed

@@ -7,7 +7,7 @@ import {
   Profile
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodNullable, ZodString, type ZodOptional } from "zod";
+import { ZodNullable, ZodOptional, ZodString } from "zod";
 import { type ForeignKey, type NullableForeignKey } from "../../../src";
 
 describe("StringAttribute", () => {
@@ -34,14 +34,20 @@ describe("StringAttribute", () => {
   });
 
   it("zod type is optional if nullable is true", () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
-    expect(Metadata.getEntityAttributes(Profile.name).alternateEmail).toEqual({
+    const attr = Metadata.getEntityAttributes(Profile.name).alternateEmail;
+    expect(attr).toEqual({
       name: "alternateEmail",
       alias: "alternateEmail",
       nullable: true,
-      type: expect.any(ZodNullable<ZodOptional<ZodString>>)
+      type: expect.any(ZodNullable)
     });
+    expect(attr.type).toBeInstanceOf(ZodNullable);
+    expect((attr.type as ZodNullable).unwrap()).toBeInstanceOf(ZodOptional);
+    expect(
+      ((attr.type as ZodNullable).unwrap() as ZodOptional).unwrap()
+    ).toBeInstanceOf(ZodString);
   });
 
   describe("types", () => {
