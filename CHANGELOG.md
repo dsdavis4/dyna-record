@@ -1,3 +1,9 @@
+## 0.5.3 - 2026-03-09
+
+### Fixed
+
+- **Changelog correction:** Fixed version number in 0.5.2 changelog entry (was incorrectly labeled as 0.6.0).
+
 ## 0.5.2 - 2026-03-09
 
 ### Changed
