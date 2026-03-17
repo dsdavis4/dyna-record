@@ -4,7 +4,9 @@ import {
   Customer,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethod
+  PaymentMethod,
+  Teacher,
+  Warehouse
 } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
@@ -1243,8 +1245,8 @@ describe("Query", () => {
               ":Name6": "Some Customer",
               ":PK7": "Customer#123",
               ":SK8": "Order",
-              ":Type4": "Beer",
-              ":Type5": "Brewery",
+              ":Type4": "Order",
+              ":Type5": "PaymentMethod",
               ":CreatedAt3": "2021-09-15T"
             },
             FilterExpression:
@@ -1283,7 +1285,7 @@ describe("Query", () => {
         },
         {
           filter: {
-            type: ["Beer", "Brewery"],
+            type: ["Order", "PaymentMethod"],
             name: "Some Customer",
             $or: [
               {
@@ -1304,7 +1306,7 @@ describe("Query", () => {
       const result = await Customer.query("123", {
         skCondition: { $beginsWith: "Order" },
         filter: {
-          type: ["Beer", "Brewery"],
+          type: ["Order", "PaymentMethod"],
           name: "Some Customer",
           $or: [
             {
@@ -2151,6 +2153,238 @@ describe("Query", () => {
         it("consistentRead can be undefined", async () => {
           // @ts-expect-no-error: Can set consistentRead to undefined
           await Customer.query("123", { consistentRead: undefined });
+        });
+      });
+    });
+  });
+
+  describe("typed filter types", () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+    });
+
+    describe("filter attribute key validation", () => {
+      it("accepts valid keys from root entity", async () => {
+        // @ts-expect-no-error: name and address are Customer attributes
+        await Customer.query("123", {
+          filter: { name: "John", address: "123 Main" }
+        });
+      });
+
+      it("accepts valid keys from relationship entities", async () => {
+        // @ts-expect-no-error: lastFour is PaymentMethod, orderDate is Order, email is ContactInformation
+        await Customer.query("123", {
+          filter: { lastFour: "1234" }
+        });
+      });
+
+      it("accepts default fields as filter keys", async () => {
+        // @ts-expect-no-error: id, type, createdAt, updatedAt are valid on all entities
+        await Customer.query("123", {
+          filter: { id: "abc", createdAt: "2023", updatedAt: "2024" }
+        });
+      });
+
+      it("rejects invalid keys", async () => {
+        // @ts-expect-error: nonExistent is not a valid filter key
+        await Customer.query("123", { filter: { nonExistent: "value" } }).catch(() => {});
+      });
+
+      it("rejects relationship property names", async () => {
+        // @ts-expect-error: orders is a relationship prop, not a filter key
+        await Customer.query("123", { filter: { orders: "value" } }).catch(() => {});
+      });
+
+      it("accepts ForeignKey attributes", async () => {
+        // @ts-expect-no-error: customerId is a ForeignKey on Order
+        await Customer.query("123", {
+          filter: { customerId: "cust-1" }
+        });
+      });
+
+      it("excludes PK/SK from filter keys", async () => {
+        // @ts-expect-error: pk is a PartitionKey attribute, not a filter key
+        await Customer.query("123", { filter: { pk: "value" } });
+      });
+
+      it("accepts dot-path keys for ObjectAttribute fields", async () => {
+        // @ts-expect-no-error: location.city is a valid dot-path on Warehouse
+        await Warehouse.query("123", {
+          filter: { "location.city": "Denver" }
+        });
+      });
+
+      it("rejects invalid dot-paths", async () => {
+        // @ts-expect-error: location.nonExistent is not a valid dot-path
+        await Warehouse.query("123", { filter: { "location.nonExistent": "value" } });
+      });
+
+      it("works for entities with no relationships", async () => {
+        // @ts-expect-no-error: stringAttribute is a valid key on MyClassWithAllAttributeTypes
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { stringAttribute: "val" }
+        });
+      });
+
+      it("works for OtherTable entities", async () => {
+        // @ts-expect-no-error: name is on Teacher, lastLogin is on Profile
+        await Teacher.query("123", {
+          filter: { name: "Smith" }
+        });
+      });
+    });
+
+    describe("type narrowing", () => {
+      it("accepts valid entity class name strings for type", async () => {
+        // @ts-expect-no-error: "Order" is a valid partition entity name for Customer
+        await Customer.query("123", {
+          filter: { type: "Order" }
+        });
+      });
+
+      it("rejects non-entity strings for type", async () => {
+        // @ts-expect-error: "NonExistent" is not a valid entity name in Customer's partition
+        await Customer.query("123", { filter: { type: "NonExistent" } });
+      });
+
+      it("accepts type as array of entity names", async () => {
+        // @ts-expect-no-error: array of valid entity names
+        await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"] }
+        });
+      });
+
+      it("narrows attributes when type is a single entity", async () => {
+        // @ts-expect-no-error: orderDate is valid when type is "Order"
+        await Customer.query("123", {
+          filter: { type: "Order", orderDate: "2023" }
+        });
+      });
+
+      it("allows other entity attributes at top level due to union matching", async () => {
+        // At the top level, TypeScript's union excess property checking allows
+        // keys from other union members. Per-element narrowing works in $or.
+        // @ts-expect-no-error: lastFour exists in another union variant (PaymentMethod)
+        await Customer.query("123", { filter: { type: "Order", lastFour: "1234" } });
+      });
+
+      it("allows all partition attributes when type is an array", async () => {
+        // @ts-expect-no-error: with array type, all partition attrs allowed
+        await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"], createdAt: "2023" }
+        });
+      });
+
+      it("each $or element independently narrowed", async () => {
+        // @ts-expect-no-error: each $or block narrowed by its own type
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("rejects non-matching attrs in $or with type narrowing", async () => {
+        // @ts-expect-error: lastFour is not an Order attribute (narrowed in $or element)
+        await Customer.query("123", { filter: { $or: [{ type: "Order" as const, lastFour: "1234" }] } });
+      });
+
+      it("allows all partition attributes when no type is specified", async () => {
+        // @ts-expect-no-error: without type, all partition attrs allowed
+        await Customer.query("123", {
+          filter: { name: "John", lastFour: "1234", email: "test@test.com" }
+        });
+      });
+    });
+
+    describe("return type narrowing", () => {
+      it("returns full union by default", async () => {
+        const result = await Customer.query("123");
+        // Type is QueryResults<Customer> = Array<EntityAttributesInstance<Customer> | ...>
+        const _check: QueryResults<Customer> = result;
+        Logger.log(_check);
+      });
+
+      it("narrows when filter has type as single entity", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: "Order" }
+        });
+
+        const item = result[0];
+        if (item !== undefined) {
+          // @ts-expect-no-error: orderDate exists on Order
+          Logger.log(item.orderDate);
+        }
+      });
+
+      it("narrows when filter has type as array", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"] }
+        });
+
+        // Result is assignable to the wider QueryResults
+        const _check: QueryResults<Customer> = result;
+        Logger.log(_check);
+      });
+    });
+
+    describe("index query stays untyped", () => {
+      it("index queries accept any filter key", async () => {
+        // @ts-expect-no-error: index queries use untyped FilterParams
+        await Customer.query(
+          { name: "Testing" },
+          { indexName: "MyIndex", filter: { name: "value" } }
+        );
+      });
+    });
+
+    describe("backward compatibility", () => {
+      it("query with empty options still works", async () => {
+        // @ts-expect-no-error: empty options
+        await Customer.query("123", {});
+      });
+
+      it("query with no filter still works", async () => {
+        // @ts-expect-no-error: no filter
+        await Customer.query("123", { consistentRead: true });
+      });
+
+      it("query with skCondition still works", async () => {
+        // @ts-expect-no-error: skCondition
+        await Customer.query("123", { skCondition: "Order" });
+      });
+
+      it("query with beginsWith skCondition still works", async () => {
+        // @ts-expect-no-error: beginsWith skCondition
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" }
+        });
+      });
+
+      it("existing filter patterns still compile", async () => {
+        // @ts-expect-no-error: existing pattern from tests
+        await Course.query("123", {
+          filter: {
+            type: ["Course", "Assignment"],
+            createdAt: { $beginsWith: "202" },
+            $or: [
+              {
+                name: "Defense Against The Dark Arts",
+                updatedAt: { $beginsWith: "2023-02-15" }
+              },
+              {
+                title: ["Assignment-1", "Assignment-2"],
+                createdAt: { $beginsWith: "2023" },
+                type: "Assignment"
+              },
+              {
+                id: "123"
+              }
+            ]
+          }
         });
       });
     });

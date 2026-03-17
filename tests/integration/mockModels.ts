@@ -70,6 +70,8 @@ abstract class MockTable extends DynaRecord {
 
 @Entity
 class Order extends MockTable {
+  declare readonly type: "Order";
+
   @ForeignKeyAttribute(() => Customer, { alias: "CustomerId" })
   public readonly customerId: ForeignKey<Customer>;
 
@@ -88,6 +90,8 @@ class Order extends MockTable {
 
 @Entity
 class PaymentMethodProvider extends MockTable {
+  declare readonly type: "PaymentMethodProvider";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -100,6 +104,8 @@ class PaymentMethodProvider extends MockTable {
 
 @Entity
 class PaymentMethod extends MockTable {
+  declare readonly type: "PaymentMethod";
+
   @StringAttribute({ alias: "LastFour" })
   public readonly lastFour: string;
 
@@ -120,6 +126,8 @@ class PaymentMethod extends MockTable {
 
 @Entity
 class Customer extends MockTable {
+  declare readonly type: "Customer";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -142,6 +150,8 @@ class Customer extends MockTable {
 
 @Entity
 class ContactInformation extends MockTable {
+  declare readonly type: "ContactInformation";
+
   @StringAttribute({ alias: "Email" })
   public readonly email: string;
 
@@ -157,6 +167,8 @@ class ContactInformation extends MockTable {
 
 @Entity
 class Person extends MockTable {
+  declare readonly type: "Person";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -172,6 +184,8 @@ class Person extends MockTable {
 
 @Entity
 class Pet extends MockTable {
+  declare readonly type: "Pet";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -187,6 +201,8 @@ class Pet extends MockTable {
 
 @Entity
 class Home extends MockTable {
+  declare readonly type: "Home";
+
   @StringAttribute({ alias: "MLS#" })
   public readonly mlsNum: string;
 
@@ -205,6 +221,8 @@ class Home extends MockTable {
 
 @Entity
 class Address extends MockTable {
+  declare readonly type: "Address";
+
   @StringAttribute({ alias: "State" })
   public readonly state: string;
 
@@ -223,6 +241,8 @@ class Address extends MockTable {
 
 @Entity
 class PhoneBook extends MockTable {
+  declare readonly type: "PhoneBook";
+
   @StringAttribute({ alias: "Edition" })
   public readonly edition: string;
 
@@ -232,6 +252,8 @@ class PhoneBook extends MockTable {
 
 @Entity
 class Book extends MockTable {
+  declare readonly type: "Book";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -253,6 +275,8 @@ class Book extends MockTable {
 
 @Entity
 class Author extends MockTable {
+  declare readonly type: "Author";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -270,6 +294,8 @@ class AuthorBook extends JoinTable<Author, Book> {
 
 @Entity
 class MyClassWithAllAttributeTypes extends MockTable {
+  declare readonly type: "MyClassWithAllAttributeTypes";
+
   @StringAttribute()
   public stringAttribute: string;
 
@@ -315,6 +341,8 @@ class MyClassWithAllAttributeTypes extends MockTable {
 
 @Entity
 class User extends MockTable {
+  declare readonly type: "User";
+
   @IdAttribute
   @StringAttribute({ alias: "Email" })
   public readonly email: string;
@@ -346,6 +374,8 @@ class User extends MockTable {
 
 @Entity
 class Organization extends MockTable {
+  declare readonly type: "Organization";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -367,6 +397,8 @@ class Organization extends MockTable {
 
 @Entity
 class Founder extends MockTable {
+  declare readonly type: "Founder";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -376,6 +408,8 @@ class Founder extends MockTable {
 
 @Entity
 class Desk extends MockTable {
+  declare readonly type: "Desk";
+
   @NumberAttribute({ alias: "Num" })
   public readonly num: number;
 
@@ -385,6 +419,8 @@ class Desk extends MockTable {
 
 @Entity
 class Website extends MockTable {
+  declare readonly type: "Website";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -402,6 +438,8 @@ class UserWebsite extends JoinTable<User, Website> {
 
 @Entity
 class Employee extends MockTable {
+  declare readonly type: "Employee";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -423,6 +461,8 @@ abstract class OtherTable extends DynaRecord {
 
 @Entity
 class Teacher extends OtherTable {
+  declare readonly type: "Teacher";
+
   @StringAttribute()
   public readonly name: string;
 
@@ -435,6 +475,8 @@ class Teacher extends OtherTable {
 
 @Entity
 class Student extends OtherTable {
+  declare readonly type: "Student";
+
   @StringAttribute()
   public readonly name: string;
 
@@ -453,6 +495,8 @@ class Student extends OtherTable {
 
 @Entity
 class Course extends OtherTable {
+  declare readonly type: "Course";
+
   @StringAttribute()
   public readonly name: string;
 
@@ -474,6 +518,8 @@ class Course extends OtherTable {
 
 @Entity
 class Assignment extends OtherTable {
+  declare readonly type: "Assignment";
+
   @StringAttribute()
   public readonly title: string;
 
@@ -489,6 +535,8 @@ class Assignment extends OtherTable {
 
 @Entity
 class Grade extends OtherTable {
+  declare readonly type: "Grade";
+
   @StringAttribute({ alias: "LetterValue" })
   public readonly gradeValue: string;
 
@@ -507,6 +555,8 @@ class Grade extends OtherTable {
 
 @Entity
 class Profile extends OtherTable {
+  declare readonly type: "Profile";
+
   @DateAttribute()
   public readonly lastLogin: Date;
 
@@ -598,6 +648,8 @@ const arrayOfObjectsSchema = {
 
 @Entity
 class ArrayOfObjectsEntity extends MockTable {
+  declare readonly type: "ArrayOfObjectsEntity";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -607,6 +659,8 @@ class ArrayOfObjectsEntity extends MockTable {
 
 @Entity
 class DeepNestedEntity extends MockTable {
+  declare readonly type: "DeepNestedEntity";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -616,6 +670,8 @@ class DeepNestedEntity extends MockTable {
 
 @Entity
 class DuplicateFieldEntity extends MockTable {
+  declare readonly type: "DuplicateFieldEntity";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -630,6 +686,8 @@ class DuplicateFieldEntity extends MockTable {
 
 @Entity
 class Warehouse extends MockTable {
+  declare readonly type: "Warehouse";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -648,6 +706,8 @@ const dimensionsSchema = {
 
 @Entity
 class Shipment extends MockTable {
+  declare readonly type: "Shipment";
+
   @StringAttribute({ alias: "Destination" })
   public readonly destination: string;
 
@@ -669,6 +729,8 @@ const inventorySchema = {
 
 @Entity
 class Catalog extends MockTable {
+  declare readonly type: "Catalog";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -681,6 +743,8 @@ class Catalog extends MockTable {
 
 @Entity
 class CatalogItem extends MockTable {
+  declare readonly type: "CatalogItem";
+
   @StringAttribute({ alias: "Description" })
   public readonly description: string;
 
@@ -693,6 +757,8 @@ class CatalogItem extends MockTable {
 
 @Entity
 class Sponsor extends MockTable {
+  declare readonly type: "Sponsor";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
@@ -708,6 +774,8 @@ class Sponsor extends MockTable {
 
 @Entity
 class Festival extends MockTable {
+  declare readonly type: "Festival";
+
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 

@@ -18,7 +18,9 @@ import {
   type IndexKeyConditions,
   type OptionsWithoutIndex,
   type OptionsWithIndex,
-  type EntityQueryKeyConditions
+  type EntityQueryKeyConditions,
+  type TypedFilterParams,
+  type InferQueryResults
 } from "./operations";
 import { mergePartialObjectAttributes } from "./operations/utils";
 import type { DynamoTableItem, EntityClass, Optional } from "./types";
@@ -217,11 +219,18 @@ abstract class DynaRecord implements DynaRecordBase {
    * const user = await User.query({ pk: "User#123", consistentRead: true });
    * ```
    */
-  public static async query<T extends DynaRecord>(
+  public static async query<
+    T extends DynaRecord,
+    const F extends TypedFilterParams<T> = TypedFilterParams<T>,
+    SK extends string = string
+  >(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
-    options?: OptionsWithoutIndex
-  ): Promise<QueryResults<T>>;
+    options?: OptionsWithoutIndex<T> & {
+      filter?: F;
+      skCondition?: SK | { $beginsWith: SK };
+    }
+  ): Promise<InferQueryResults<T, F, SK>>;
 
   /**
    * Query by PartitionKey and optional SortKey/Filter/Index conditions with an index
@@ -248,7 +257,7 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async query<T extends DynaRecord>(
     this: EntityClass<T>,
     key: string | EntityQueryKeyConditions<T>,
-    options?: OptionsWithoutIndex | OptionsWithIndex
+    options?: OptionsWithoutIndex<T> | OptionsWithIndex
   ): Promise<QueryResults<T>> {
     const op = new Query<T>(this);
     return await op.run(key, options);

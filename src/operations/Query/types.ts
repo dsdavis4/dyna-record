@@ -2,11 +2,12 @@ import type DynaRecord from "../../DynaRecord";
 import type {
   KeyConditions as QueryKeyConditions,
   QueryOptions as QueryBuilderOptions,
+  FilterTypes,
   SortKeyCondition,
   BeginsWithFilter
 } from "../../query-utils";
 import type { PartitionKey, SortKey } from "../../types";
-import type { EntityAttributesInstance } from "../types";
+import type { EntityAttributesInstance, EntityFilterableKeys } from "../types";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.
@@ -24,7 +25,12 @@ export type QueryOptions = QueryBuilderOptions & {
 /**
  * Options for querying without an index
  */
-export type OptionsWithoutIndex = Omit<QueryOptions, "indexName">;
+export type OptionsWithoutIndex<T extends DynaRecord = DynaRecord> = Omit<
+  QueryOptions,
+  "indexName" | "filter"
+> & {
+  filter?: TypedFilterParams<T>;
+};
 
 /**
  *  Options for querying on an index. Consistent reads are not allowed
@@ -134,3 +140,155 @@ export type QueryResult<T extends DynaRecord> = QueryResults<T>[number];
 export type EntityQueryKeyConditions<T> =
   | EntityKeyConditions<T>
   | IndexKeyConditions<T>;
+
+// ─── Typed Query Filter Types ───────────────────────────────────────────────
+
+/**
+ * Union of T itself and all relationship entity types.
+ * E.g. for Customer: Customer | Order | PaymentMethod | ContactInformation
+ */
+export type PartitionEntities<T extends DynaRecord> =
+  | T
+  | (RelationshipEntities<T> extends infer R
+      ? R extends DynaRecord
+        ? R
+        : never
+      : never);
+
+/**
+ * Union of entity name string literals from PartitionEntities<T>["type"].
+ * Falls back to string if any entity lacks `declare readonly type`.
+ */
+export type PartitionEntityNames<T extends DynaRecord> =
+  PartitionEntities<T>["type"];
+
+/**
+ * Union of EntityFilterableKeys<E> for each entity E in PartitionEntities<T>.
+ * This is the full set of valid filter keys when no `type` narrowing is applied.
+ */
+export type AllPartitionFilterableKeys<T extends DynaRecord> =
+  PartitionEntities<T> extends infer E
+    ? E extends DynaRecord
+      ? EntityFilterableKeys<E>
+      : never
+    : never;
+
+/**
+ * Filter record scoped to a single entity's attributes.
+ */
+export type EntityFilterRecord<E extends DynaRecord> = {
+  [K in EntityFilterableKeys<E>]?: FilterTypes;
+};
+
+/**
+ * Filter record for all entities in a partition (union of all filter keys).
+ */
+type FullPartitionFilterRecord<T extends DynaRecord> = {
+  [K in AllPartitionFilterableKeys<T>]?: FilterTypes;
+};
+
+/**
+ * Discriminated union enabling per-block `type` narrowing.
+ * When type is a single string literal, only that entity's attributes are allowed.
+ * When type is an array or absent, all partition attributes are allowed.
+ * The `type` field is handled separately from other filter keys to enable narrowing.
+ */
+export type TypedAndFilter<T extends DynaRecord> =
+  | (PartitionEntities<T> extends infer E
+      ? E extends DynaRecord
+        ? { type: E["type"] } & EntityFilterRecord<E>
+        : never
+      : never)
+  | ({ type: PartitionEntityNames<T>[] } & FullPartitionFilterRecord<T>)
+  | ({ type?: never } & FullPartitionFilterRecord<T>);
+
+/**
+ * Each $or element is independently narrowed.
+ */
+export type TypedOrFilter<T extends DynaRecord> = {
+  $or?: TypedAndFilter<T>[];
+};
+
+/**
+ * Top-level filter combining AND and OR.
+ */
+export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
+  TypedOrFilter<T>;
+
+// ─── Return Type Narrowing Types ────────────────────────────────────────────
+
+/**
+ * Extracts the `type` value from a filter object.
+ * Returns the literal string if single value, array element types if array, or never.
+ */
+export type ExtractTypeFromFilter<F> = F extends { type: infer V }
+  ? V extends string
+    ? V
+    : V extends Array<infer U>
+      ? U extends string
+        ? U
+        : never
+      : never
+  : never;
+
+/**
+ * Maps entity name string → entity type.
+ */
+export type ResolveEntityByName<
+  T extends DynaRecord,
+  Name extends string
+> = Extract<PartitionEntities<T>, { type: Name }>;
+
+/**
+ * Distributes EntityAttributesInstance over a union of DynaRecord types.
+ */
+type DistributeEntityAttributes<E> = E extends DynaRecord
+  ? EntityAttributesInstance<E>
+  : never;
+
+/**
+ * If ExtractTypeFromFilter<F> resolves to specific entity names, returns
+ * narrowed array. Otherwise falls back to QueryResults<T>.
+ */
+export type NarrowedQueryResults<
+  T extends DynaRecord,
+  F
+> = ExtractTypeFromFilter<F> extends infer Names extends string
+  ? [ResolveEntityByName<T, Names>] extends [never]
+    ? QueryResults<T>
+    : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>
+  : QueryResults<T>;
+
+/**
+ * If SK matches a PartitionEntityNames<T> string, narrows return type.
+ */
+export type NarrowedQueryResultsBySK<
+  T extends DynaRecord,
+  SK extends string
+> = SK extends PartitionEntityNames<T>
+  ? [ResolveEntityByName<T, SK>] extends [never]
+    ? QueryResults<T>
+    : Array<DistributeEntityAttributes<ResolveEntityByName<T, SK>>>
+  : QueryResults<T>;
+
+/**
+ * Detects `any` — resolves to true when T is any, false otherwise.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Infers query results from filter and SK for the string-key overload.
+ */
+export type InferQueryResults<
+  T extends DynaRecord,
+  F,
+  SK extends string
+> = IsAny<ExtractTypeFromFilter<F>> extends true
+  ? SK extends PartitionEntityNames<T>
+    ? NarrowedQueryResultsBySK<T, SK>
+    : QueryResults<T>
+  : [ExtractTypeFromFilter<F>] extends [never]
+    ? SK extends PartitionEntityNames<T>
+      ? NarrowedQueryResultsBySK<T, SK>
+      : QueryResults<T>
+    : NarrowedQueryResults<T, F>;

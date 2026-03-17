@@ -103,3 +103,52 @@ export type EntityDefinedAttributes<T extends DynaRecord> = Omit<
   | PartitionKeyAttribute<T>
   | SortKeyAttribute<T>
 >;
+
+/**
+ * Recursively generates dot-separated key paths for plain object types.
+ * Stops recursion at Date, arrays, DynaRecord, and functions.
+ */
+export type DotPathKeys<T> = T extends
+  | Date
+  | unknown[]
+  | DynaRecord
+  | ((...args: never[]) => unknown)
+  ? never
+  : T extends object
+    ? {
+        [K in keyof T & string]:
+          | K
+          | (DotPathKeys<T[K]> extends infer D extends string
+              ? `${K}.${D}`
+              : never);
+      }[keyof T & string]
+    : never;
+
+/**
+ * For a given entity, produces all dot-path keys for its ObjectAttribute fields.
+ * Checks each property: if it's a plain object (not Date/array/DynaRecord/function),
+ * generates "propName.nestedKey" paths.
+ */
+export type ObjectDotPaths<T extends DynaRecord> = {
+  [K in keyof T & string]: Exclude<T[K], undefined> extends infer V
+    ? V extends Date | unknown[] | DynaRecord | ((...args: never[]) => unknown)
+      ? never
+      : V extends object
+        ? DotPathKeys<V> extends infer D extends string
+          ? `${K}.${D}`
+          : never
+        : never
+    : never;
+}[keyof T & string];
+
+/**
+ * Union of: non-relationship/non-function/non-key attribute names + ObjectDotPaths.
+ * This is the complete set of valid filter keys for a single entity.
+ * Excludes PartitionKeyAttribute and SortKeyAttribute.
+ */
+export type EntityFilterableKeys<T extends DynaRecord> =
+  | Exclude<
+      keyof EntityAttributesOnly<T> & string,
+      PartitionKeyAttribute<T> | SortKeyAttribute<T> | "type"
+    >
+  | ObjectDotPaths<T>;
