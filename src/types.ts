@@ -81,7 +81,11 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
   Partial<Pick<T, K>>;
 
 /**
- * Represents an instance of a class decorated with the `Entity` decorator in DynaRecord, encapsulating entity logic.
+ * Represents the constructor type of a class decorated with the `@Entity` decorator.
+ *
+ * The `@Entity` decorator enforces at compile time that each entity declares
+ * `readonly type` as a string literal matching the class name. If the declaration
+ * is missing, the decorator produces a type error. See {@link Entity} for details.
  */
 export type EntityClass<T> = (new () => T) & typeof DynaRecord;
 

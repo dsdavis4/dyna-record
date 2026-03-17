@@ -52,7 +52,8 @@ interface DynaRecordBase {
  *
  * @Entity
  * class User extends MyTable {
- *  // User implementation
+ *   declare readonly type: "User";
+ *   // User implementation
  * }
  * ```
  */
@@ -64,7 +65,11 @@ abstract class DynaRecord implements DynaRecordBase {
   public readonly id: string;
 
   /**
-   * The type of the Entity
+   * The type of the entity. Set automatically to the class name at runtime.
+   *
+   * Each entity must narrow this field to a string literal matching the class name
+   * via `declare readonly type: "ClassName"`. This enables compile-time type safety
+   * for query filters and return type narrowing.
    */
   @StringAttribute({ alias: tableDefaultFields.type.alias })
   public readonly type: string;
@@ -138,85 +143,66 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * Query an EntityPartition by EntityId (string) or by PartitionKey/SortKey conditions (object).
    * QueryByIndex not supported with this overload. Use Query with keys and indexName option if needed.
+   *
+   * Filter keys are strongly typed to only accept valid attribute names from entities in the
+   * partition. The `type` field only accepts valid entity class names. When `type` is specified
+   * as a single value in a `$or` block, filter keys are narrowed to that entity's attributes.
+   *
+   * The return type is automatically narrowed when the filter specifies a `type` value:
+   * - `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
+   * - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
+   * - No `type` specified → `QueryResults<T>` (union of all partition entity types)
+   *
    * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
-   * @param {Object=} options - QueryOptions. Supports filter, consistentRead and skCondition. indexName is not supported
+   * @param {Object=} options - QueryOptions. Supports typed filter, consistentRead and skCondition. indexName is not supported.
+   * @param {TypedFilterParams<T>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes. The `type` field accepts valid entity class names.
+   * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value.
    *
    * @example By partition key only (string shorthand)
    * ```typescript
-   * const user = await User.query("123");
-   * ```
-   *
-   * @example By partition key and sort key exact match
-   * ```typescript
-   * const user = await User.query("123", { skCondition: "Profile#111" });
+   * const results = await Customer.query("123");
    * ```
    *
    * @example By partition key and sort key begins with
    * ```typescript
-   * const user = await User.query("123", { skCondition: { $beginsWith: "Profile" } })
+   * const results = await Customer.query("123", { skCondition: { $beginsWith: "Order" } });
    * ```
    *
-   * @example With filter (arbitrary example)
+   * @example With typed filter
    * ```typescript
-   * const user = await User.query("123", {
-   *   filter: {
-   *     type: "Profile",
-   *     createdAt: "2023-11-21T12:31:21.148Z"
-   *    }
+   * const orders = await Customer.query("123", {
+   *   filter: { type: "Order", orderDate: "2023-01-01" }
+   * });
+   * // orders is Array<EntityAttributesInstance<Order>>
+   * ```
+   *
+   * @example With type as array (IN operator)
+   * ```typescript
+   * const results = await Customer.query("123", {
+   *   filter: { type: ["Order", "PaymentMethod"] }
    * });
    * ```
    *
-   * @example Query as consistent read
+   * @example With $or filter narrowing
    * ```typescript
-   * const user = await User.query("123", { consistentRead: true })
+   * const results = await Customer.query("123", {
+   *   filter: {
+   *     $or: [
+   *       { type: "Order", orderDate: "2023" },
+   *       { type: "PaymentMethod", lastFour: "1234" }
+   *     ]
+   *   }
+   * });
    * ```
    *
    * @example By partition key only (object form)
    * ```typescript
-   * const user = await User.query({ pk: "User#123" });
+   * const results = await Customer.query({ pk: "Customer#123" });
    * ```
    *
-   * @example By partition key and sort key exact match (object form)
+   * @example Query as consistent read
    * ```typescript
-   * const user = await User.query({ pk: "User#123", sk: "Profile#123" });
-   * ```
-   *
-   * @example By partition key and sort key begins with (object form)
-   * ```typescript
-   * const user = await User.query({ pk: "User#123", sk: { $beginsWith: "Profile" } });
-   * ```
-   *
-   * @example With filter (object form, arbitrary example)
-   * ```typescript
-   * const result = await User.query(
-   *  {
-   *    myPk: "User|123"
-   *  },
-   *  {
-   *    filter: {
-   *      type: ["Profile", "Preferences"],
-   *      createdAt: { $beginsWith: "2023" },
-   *      $or: [
-   *        {
-   *         name: "John",
-   *         email: { $beginsWith: "testing" }
-   *        },
-   *        {
-   *          name: "Jane",
-   *          updatedAt: { $beginsWith: "2024" },
-   *        },
-   *       {
-   *         id: "123"
-   *       }
-   *      ]
-   *    }
-   * }
-   *);
-   * ```
-   *
-   * @example With a consistent read
-   * ```typescript
-   * const user = await User.query({ pk: "User#123", consistentRead: true });
+   * const results = await Customer.query("123", { consistentRead: true });
    * ```
    */
   public static async query<
@@ -242,7 +228,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    *  const result = await User.query(
    *    {
-   *      name: "SomeName" // An attribute that is part of the key condition on an iondex
+   *      name: "SomeName" // An attribute that is part of the key condition on an index
    *    },
    *    { indexName: "myIndex" }
    *  );

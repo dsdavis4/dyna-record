@@ -23,7 +23,13 @@ export type QueryOptions = QueryBuilderOptions & {
 };
 
 /**
- * Options for querying without an index
+ * Options for querying without an index.
+ *
+ * The `filter` property uses {@link TypedFilterParams} which validates filter keys
+ * against attributes of entities in the partition. When no type parameter is provided,
+ * defaults to `DynaRecord` which allows any string key.
+ *
+ * @template T - The entity type being queried.
  */
 export type OptionsWithoutIndex<T extends DynaRecord = DynaRecord> = Omit<
   QueryOptions,
