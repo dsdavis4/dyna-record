@@ -157,11 +157,7 @@ export type EntityQueryKeyConditions<T> =
  */
 export type PartitionEntities<T extends DynaRecord> =
   | T
-  | (RelationshipEntities<T> extends infer R
-      ? R extends DynaRecord
-        ? R
-        : never
-      : never);
+  | RelationshipEntities<T>;
 
 /**
  * Union of entity name string literals from PartitionEntities<T>["type"].
@@ -182,18 +178,26 @@ export type AllPartitionFilterableKeys<T extends DynaRecord> =
     : never;
 
 /**
+ * Maps a union of string keys to an optional FilterTypes record.
+ * Shared helper for building filter records from key unions.
+ */
+type FilterRecord<Keys extends string> = {
+  [K in Keys]?: FilterTypes;
+};
+
+/**
  * Filter record scoped to a single entity's attributes.
  */
-export type EntityFilterRecord<E extends DynaRecord> = {
-  [K in EntityFilterableKeys<E>]?: FilterTypes;
-};
+export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<
+  EntityFilterableKeys<E>
+>;
 
 /**
  * Filter record for all entities in a partition (union of all filter keys).
  */
-type FullPartitionFilterRecord<T extends DynaRecord> = {
-  [K in AllPartitionFilterableKeys<T>]?: FilterTypes;
-};
+type FullPartitionFilterRecord<T extends DynaRecord> = FilterRecord<
+  AllPartitionFilterableKeys<T>
+>;
 
 /**
  * Discriminated union enabling per-block `type` narrowing.
@@ -283,14 +287,6 @@ export type NarrowedQueryResultsBySK<T extends DynaRecord, SK extends string> =
   SK extends PartitionEntityNames<T> ? NarrowByNames<T, SK> : QueryResults<T>;
 
 /**
- * SK fallback: narrows by sort key if it matches an entity name, otherwise full results.
- */
-type SKFallback<T extends DynaRecord, SK extends string> =
-  SK extends PartitionEntityNames<T>
-    ? NarrowedQueryResultsBySK<T, SK>
-    : QueryResults<T>;
-
-/**
  * Infers query results from filter and SK for the non-index query overload.
  *
  * Return type narrowing only applies to the top-level `type` field in the filter.
@@ -302,7 +298,7 @@ type SKFallback<T extends DynaRecord, SK extends string> =
  */
 export type InferQueryResults<T extends DynaRecord, F, SK extends string> =
   IsAny<ExtractTypeFromFilter<F>> extends true
-    ? SKFallback<T, SK>
+    ? NarrowedQueryResultsBySK<T, SK>
     : [ExtractTypeFromFilter<F>] extends [never]
-      ? SKFallback<T, SK>
+      ? NarrowedQueryResultsBySK<T, SK>
       : NarrowedQueryResults<T, F>;
