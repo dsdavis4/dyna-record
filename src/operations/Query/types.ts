@@ -6,7 +6,7 @@ import type {
   SortKeyCondition,
   BeginsWithFilter
 } from "../../query-utils";
-import type { PartitionKey, SortKey } from "../../types";
+import type { IsAny, PartitionKey, SortKey } from "../../types";
 import type { EntityAttributesInstance, EntityFilterableKeys } from "../types";
 
 /**
@@ -25,9 +25,11 @@ export type QueryOptions = QueryBuilderOptions & {
 /**
  * Options for querying without an index.
  *
- * The `filter` property uses {@link TypedFilterParams} which validates filter keys
- * against attributes of entities in the partition. When no type parameter is provided,
- * defaults to `DynaRecord` which allows any string key.
+ * The `filter` property uses {@link TypedFilterParams} for compile-time key validation.
+ * The query overload also re-declares `filter` with a `const F` generic parameter to
+ * enable literal type inference for return type narrowing. Both declarations are required:
+ * this one provides excess property checking on object literals, while the generic
+ * provides literal type capture for return type inference.
  *
  * @template T - The entity type being queried.
  */
@@ -253,41 +255,54 @@ type DistributeEntityAttributes<E> = E extends DynaRecord
   : never;
 
 /**
+ * Narrows query results to specific entity types identified by name.
+ * Falls back to QueryResults<T> if names don't resolve to known entities.
+ *
+ * @template T - The root entity being queried.
+ * @template Names - Union of entity name string literals to narrow to.
+ */
+type NarrowByNames<T extends DynaRecord, Names extends string> = [
+  ResolveEntityByName<T, Names>
+] extends [never]
+  ? QueryResults<T>
+  : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>;
+
+/**
  * If ExtractTypeFromFilter<F> resolves to specific entity names, returns
  * narrowed array. Otherwise falls back to QueryResults<T>.
  */
 export type NarrowedQueryResults<T extends DynaRecord, F> =
   ExtractTypeFromFilter<F> extends infer Names extends string
-    ? [ResolveEntityByName<T, Names>] extends [never]
-      ? QueryResults<T>
-      : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>
+    ? NarrowByNames<T, Names>
     : QueryResults<T>;
 
 /**
  * If SK matches a PartitionEntityNames<T> string, narrows return type.
  */
 export type NarrowedQueryResultsBySK<T extends DynaRecord, SK extends string> =
+  SK extends PartitionEntityNames<T> ? NarrowByNames<T, SK> : QueryResults<T>;
+
+/**
+ * SK fallback: narrows by sort key if it matches an entity name, otherwise full results.
+ */
+type SKFallback<T extends DynaRecord, SK extends string> =
   SK extends PartitionEntityNames<T>
-    ? [ResolveEntityByName<T, SK>] extends [never]
-      ? QueryResults<T>
-      : Array<DistributeEntityAttributes<ResolveEntityByName<T, SK>>>
+    ? NarrowedQueryResultsBySK<T, SK>
     : QueryResults<T>;
 
 /**
- * Detects `any` — resolves to true when T is any, false otherwise.
- */
-type IsAny<T> = 0 extends 1 & T ? true : false;
-
-/**
- * Infers query results from filter and SK for the string-key overload.
+ * Infers query results from filter and SK for the non-index query overload.
+ *
+ * Return type narrowing only applies to the top-level `type` field in the filter.
+ * `$or` elements are narrowed for key validation but do not affect the return type.
+ *
+ * @template T - The root entity being queried.
+ * @template F - The inferred filter type (captured via `const` generic).
+ * @template SK - The inferred sort key condition string.
  */
 export type InferQueryResults<T extends DynaRecord, F, SK extends string> =
   IsAny<ExtractTypeFromFilter<F>> extends true
-    ? SK extends PartitionEntityNames<T>
-      ? NarrowedQueryResultsBySK<T, SK>
-      : QueryResults<T>
+    ? SKFallback<T, SK>
     : [ExtractTypeFromFilter<F>] extends [never]
-      ? SK extends PartitionEntityNames<T>
-        ? NarrowedQueryResultsBySK<T, SK>
-        : QueryResults<T>
+      ? SKFallback<T, SK>
       : NarrowedQueryResults<T, F>;

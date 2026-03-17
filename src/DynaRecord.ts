@@ -195,6 +195,25 @@ abstract class DynaRecord implements DynaRecordBase {
    * });
    * ```
    *
+   * @example By partition key and sort key exact match
+   * ```typescript
+   * const results = await Customer.query("123", { skCondition: "Order#456" });
+   * ```
+   *
+   * @example Return type narrowing does not apply to $or-only filters
+   * ```typescript
+   * // Return type is QueryResults<Customer> (full union), not narrowed,
+   * // because return narrowing only inspects the top-level type field.
+   * const results = await Customer.query("123", {
+   *   filter: {
+   *     $or: [
+   *       { type: "Order", orderDate: "2023" },
+   *       { type: "PaymentMethod", lastFour: "1234" }
+   *     ]
+   *   }
+   * });
+   * ```
+   *
    * @example By partition key only (object form)
    * ```typescript
    * const results = await Customer.query({ pk: "Customer#123" });

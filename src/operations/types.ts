@@ -105,33 +105,49 @@ export type EntityDefinedAttributes<T extends DynaRecord> = Omit<
 >;
 
 /**
- * Recursively generates dot-separated key paths for plain object types.
- * Stops recursion at Date, arrays, DynaRecord, and functions.
+ * Types that terminate dot-path recursion. These are considered leaf types
+ * that should not be recursed into when generating filter key paths.
  */
-export type DotPathKeys<T> = T extends
+export type NonRecursiveLeaf =
   | Date
   | unknown[]
   | DynaRecord
-  | ((...args: never[]) => unknown)
+  | ((...args: never[]) => unknown);
+
+/**
+ * Recursively generates dot-separated key paths for plain object types.
+ * Stops recursion at {@link NonRecursiveLeaf} types and at a maximum depth of 8 levels
+ * to prevent "Type instantiation is excessively deep" errors.
+ *
+ * @template T - The object type to generate paths for.
+ * @template Depth - Internal depth counter (tuple). Do not provide externally.
+ */
+export type DotPathKeys<
+  T,
+  Depth extends unknown[] = []
+> = Depth["length"] extends 8
   ? never
-  : T extends object
-    ? {
-        [K in keyof T & string]:
-          | K
-          | (DotPathKeys<T[K]> extends infer D extends string
-              ? `${K}.${D}`
-              : never);
-      }[keyof T & string]
-    : never;
+  : T extends NonRecursiveLeaf
+    ? never
+    : T extends object
+      ? {
+          [K in keyof T & string]:
+            | K
+            | (DotPathKeys<T[K], [...Depth, unknown]> extends infer D extends
+                string
+                ? `${K}.${D}`
+                : never);
+        }[keyof T & string]
+      : never;
 
 /**
  * For a given entity, produces all dot-path keys for its ObjectAttribute fields.
- * Checks each property: if it's a plain object (not Date/array/DynaRecord/function),
+ * Checks each property: if it's a plain object (not a {@link NonRecursiveLeaf}),
  * generates "propName.nestedKey" paths.
  */
 export type ObjectDotPaths<T extends DynaRecord> = {
   [K in keyof T & string]: Exclude<T[K], undefined> extends infer V
-    ? V extends Date | unknown[] | DynaRecord | ((...args: never[]) => unknown)
+    ? V extends NonRecursiveLeaf
       ? never
       : V extends object
         ? DotPathKeys<V> extends infer D extends string
@@ -144,7 +160,8 @@ export type ObjectDotPaths<T extends DynaRecord> = {
 /**
  * Union of: non-relationship/non-function/non-key attribute names + ObjectDotPaths.
  * This is the complete set of valid filter keys for a single entity.
- * Excludes PartitionKeyAttribute and SortKeyAttribute.
+ * Excludes PartitionKeyAttribute, SortKeyAttribute, and `type` (handled separately
+ * by {@link TypedAndFilter} for discriminated union narrowing).
  */
 export type EntityFilterableKeys<T extends DynaRecord> =
   | Exclude<

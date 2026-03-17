@@ -695,11 +695,11 @@ await Customer.query("123", {
 ```typescript
 // Valid entity names only
 await Customer.query("123", {
-  filter: { type: "Order" }  // OK: "Order" is in Customer's partition
+  filter: { type: "Order" } // OK: "Order" is in Customer's partition
 });
 
 await Customer.query("123", {
-  filter: { type: "NonExistent" }  // Compile error
+  filter: { type: "NonExistent" } // Compile error
 });
 
 // Array form (IN operator) accepts valid entity names
@@ -716,8 +716,8 @@ Each `$or` element narrows independently based on its own `type` value:
 await Customer.query("123", {
   filter: {
     $or: [
-      { type: "Order", orderDate: "2023" },          // OK: orderDate is on Order
-      { type: "PaymentMethod", lastFour: "1234" }    // OK: lastFour is on PaymentMethod
+      { type: "Order", orderDate: "2023" }, // OK: orderDate is on Order
+      { type: "PaymentMethod", lastFour: "1234" } // OK: lastFour is on PaymentMethod
     ]
   }
 });
@@ -726,7 +726,7 @@ await Customer.query("123", {
 await Customer.query("123", {
   filter: {
     $or: [
-      { type: "Order", lastFour: "1234" }  // Compile error
+      { type: "Order", lastFour: "1234" } // Compile error
     ]
   }
 });
@@ -742,13 +742,28 @@ const orders = await Customer.query("123", {
   filter: { type: "Order" }
 });
 
-orders[0]?.orderDate;  // OK: orderDate is accessible
+orders[0]?.orderDate; // OK: orderDate is accessible
 
 // Return type includes both: Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>
 const mixed = await Customer.query("123", {
   filter: { type: ["Order", "PaymentMethod"] }
 });
 ```
+
+##### Sort key condition narrowing
+
+When using `skCondition` with a string that matches an entity class name, the return type is automatically narrowed:
+
+```typescript
+// Return type: Array<EntityAttributesInstance<Order>>
+const orders = await Customer.query("123", {
+  skCondition: "Order"
+});
+
+orders[0]?.orderDate; // OK: orderDate is accessible
+```
+
+> **Note:** Return type narrowing only applies to the top-level `type` filter field and exact `skCondition` string matches. `$or` elements are narrowed for filter key validation but do not affect the return type. `$beginsWith` sort key conditions do not trigger return type narrowing.
 
 > **Note:** Index queries (`{ indexName: "..." }`) use untyped filters since index queries operate across different access patterns.
 

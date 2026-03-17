@@ -81,6 +81,12 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
   Partial<Pick<T, K>>;
 
 /**
+ * Detects the `any` type. Resolves to `true` when T is `any`, `false` otherwise.
+ * Used internally to guard against `any` propagation from AWS SDK's `NativeAttributeValue`.
+ */
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
  * Represents the constructor type of a class decorated with the `@Entity` decorator.
  *
  * The `@Entity` decorator enforces at compile time that each entity declares

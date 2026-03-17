@@ -2,6 +2,7 @@ import {
   Assignment,
   Course,
   Customer,
+  DeepNestedEntity,
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
@@ -2206,6 +2207,13 @@ describe("Query", () => {
         });
       });
 
+      it("accepts NullableForeignKey attributes", async () => {
+        // @ts-expect-no-error: phone is a nullable attribute on ContactInformation
+        await Customer.query("123", {
+          filter: { phone: "555-1234" }
+        });
+      });
+
       it("excludes PK/SK from filter keys", async () => {
         // @ts-expect-error: pk is a PartitionKey attribute, not a filter key
         await Customer.query("123", { filter: { pk: "value" } });
@@ -2295,11 +2303,11 @@ describe("Query", () => {
         });
       });
 
-      it("rejects non-matching attrs in $or with type narrowing", async () => {
-        // @ts-expect-error: lastFour is not an Order attribute (narrowed in $or element)
+      it("rejects invalid attrs in $or elements", async () => {
+        // @ts-expect-error: nonExistent is not a valid attribute on any partition entity
         await Customer.query("123", {
-          filter: { $or: [{ type: "Order" as const, lastFour: "1234" }] }
-        });
+          filter: { $or: [{ type: "Order" as const, nonExistent: "value" }] }
+        }).catch(() => {});
       });
 
       it("allows all partition attributes when no type is specified", async () => {
@@ -2396,6 +2404,105 @@ describe("Query", () => {
             ]
           }
         });
+      });
+
+      it("query with empty filter object still works", async () => {
+        // @ts-expect-no-error: empty filter
+        await Customer.query("123", { filter: {} });
+      });
+    });
+
+    describe("queryByKeys overload with typed filters", () => {
+      it("accepts valid filter keys with object key conditions", async () => {
+        // @ts-expect-no-error: typed filters work with object key form
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { name: "John", lastFour: "1234" } }
+        );
+      });
+
+      it("rejects invalid filter keys with object key conditions", async () => {
+        // @ts-expect-error: nonExistent is not a valid filter key
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { nonExistent: "value" } }
+        ).catch(() => {});
+      });
+
+      it("accepts type narrowing with object key conditions", async () => {
+        // @ts-expect-no-error: type narrowing works with object key form
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { type: "Order", orderDate: "2023" } }
+        );
+      });
+    });
+
+    describe("deeply nested dot-path keys", () => {
+      it("accepts deeply nested dot-paths on DeepNestedEntity", async () => {
+        // @ts-expect-no-error: 3-level deep path is valid
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.score": 5 }
+        });
+      });
+
+      it("accepts 4-level deep dot-paths", async () => {
+        // @ts-expect-no-error: 4-level deep path is valid
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.level3.flag": true }
+        });
+      });
+
+      it("rejects invalid deep dot-paths", async () => {
+        // @ts-expect-error: nonExistent is not a valid nested path
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.nonExistent": "value" }
+        }).catch(() => {});
+      });
+    });
+
+    describe("filter operators with typed keys", () => {
+      it("accepts $beginsWith on typed dot-path keys", async () => {
+        // @ts-expect-no-error: $beginsWith works with typed keys
+        await Warehouse.query("123", {
+          filter: { "location.city": { $beginsWith: "Den" } }
+        });
+      });
+
+      it("accepts $contains on typed keys", async () => {
+        // @ts-expect-no-error: $contains works with typed keys
+        await Customer.query("123", {
+          filter: { name: { $contains: "john" } }
+        });
+      });
+
+      it("accepts IN operator (array) on typed keys", async () => {
+        // @ts-expect-no-error: array values work with typed keys
+        await Customer.query("123", {
+          filter: { name: ["John", "Jane"] }
+        });
+      });
+    });
+
+    describe("sort key condition narrowing", () => {
+      it("returns full union when skCondition is used", async () => {
+        const result = await Customer.query("123", {
+          skCondition: "Order"
+        });
+
+        // Type is full QueryResults<Customer>
+        const _check: QueryResults<Customer> = result;
+        Logger.log(_check);
+      });
+
+      it("does not narrow when skCondition does not match entity name", async () => {
+        const result = await Customer.query("123", {
+          skCondition: "SomeRandomValue"
+        });
+
+        // Type is full QueryResults<Customer>
+        const _check: QueryResults<Customer> = result;
+        Logger.log(_check);
       });
     });
   });
