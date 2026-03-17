@@ -54,6 +54,7 @@ describe("StringAttribute", () => {
     it("can be applied to string attributes", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-no-error: string is a valid type
         @StringAttribute({ alias: "Key1" })
         public key1: string;
@@ -63,6 +64,7 @@ describe("StringAttribute", () => {
     it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-error: StringAttributes cant be optional unless nullable
         @StringAttribute({ alias: "Key1" })
         public key1?: string;
@@ -72,6 +74,7 @@ describe("StringAttribute", () => {
     it("does allow the property its applied to to be optional if its nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-no-error: StringAttributes can be optional if nullable
         @StringAttribute({ alias: "Key1", nullable: true })
         public key1?: string;
@@ -81,6 +84,7 @@ describe("StringAttribute", () => {
     it("does not support non-string fields", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-error: Only string types are allowed
         @StringAttribute({ alias: "Key1" })
         public key1: Date;
@@ -90,6 +94,7 @@ describe("StringAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-no-error: Alias prop is optional
         @StringAttribute()
         public key1: string;
@@ -99,6 +104,7 @@ describe("StringAttribute", () => {
     it("if nullable is false the attribute is required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-no-error: Nullable properties are required
         @StringAttribute({ alias: "Key1", nullable: false })
         public key1: string;
@@ -112,6 +118,7 @@ describe("StringAttribute", () => {
     it("nullable defaults to false and makes the property required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-no-error: Nullable properties are required
         @StringAttribute({ alias: "Key1" })
         public key1: string;
@@ -125,6 +132,7 @@ describe("StringAttribute", () => {
     it("when nullable is true, it will allow the property to be optional", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-no-error: Nullable properties are optional
         @StringAttribute({ alias: "Key1", nullable: true })
         public key1?: string;
@@ -134,6 +142,7 @@ describe("StringAttribute", () => {
     it("ForeignKey is not a valid type to apply the StringAttribute decorator", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-error: ForeignKey is not a valid type for Attribute decorator
         @StringAttribute({ alias: "Key1" })
         public key1: ForeignKey;
@@ -143,6 +152,7 @@ describe("StringAttribute", () => {
     it("NullableForeignKey is not a valid type to apply the StringAttribute decorator", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-error: NullableForeignKey is not a valid type for StringAttribute decorator
         @StringAttribute({ alias: "Key1" })
         public key1: NullableForeignKey;

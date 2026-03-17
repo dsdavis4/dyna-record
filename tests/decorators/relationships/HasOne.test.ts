@@ -13,6 +13,8 @@ describe("HasOne", () => {
     it("will allow the foreign key to be an attribute on the associated entities model", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -22,6 +24,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-no-error: foreign key can only be linked to a key on the associated model
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
@@ -31,6 +35,8 @@ describe("HasOne", () => {
     it("requires the foreign key to be an attribute to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @StringAttribute({ alias: "Key1" })
         public key1: string;
 
@@ -41,6 +47,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-error: foreign key must be of type ForeignKey
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
@@ -50,6 +58,8 @@ describe("HasOne", () => {
     it("will not allow the foreign key to be an attribute defined on itself", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -59,6 +69,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "Key2" })
         public key2: string;
 
@@ -71,6 +83,8 @@ describe("HasOne", () => {
     it("will allow the property to be optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -80,6 +94,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-no-error: HasOne rel can be optional
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel?: ModelOne;
@@ -89,6 +105,8 @@ describe("HasOne", () => {
     it("will not allow relationship attributes as the foreign key", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -98,6 +116,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-error: foreign key must not be linked to a relationship key
         @HasOne(() => ModelOne, { foreignKey: "modelTwoRel" })
         public modelOneRel: ModelOne;
@@ -107,6 +127,8 @@ describe("HasOne", () => {
     it("will not allow function attributes as the foreign key", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -120,6 +142,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-error: foreign key must not be linked to a function key
         @HasOne(() => ModelOne, { foreignKey: "someFunction" })
         public modelOneRel: ModelOne;
@@ -129,6 +153,8 @@ describe("HasOne", () => {
     it("does not allow the attribute of a HasOne to be an array", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -138,6 +164,8 @@ describe("HasOne", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "Key2" })
         public key2: string;
 

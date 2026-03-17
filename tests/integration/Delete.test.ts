@@ -45,6 +45,8 @@ const mockTransact = jest.fn();
 
 @Entity
 class MockModel extends MockTable {
+  declare readonly type: "MockModel";
+
   @StringAttribute({ alias: "MyVar1" })
   public myVar1: string;
 

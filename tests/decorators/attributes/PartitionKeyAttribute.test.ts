@@ -32,6 +32,7 @@ describe("PartitionKeyAttribute", () => {
     it("requires the attribute to be of type PartitionKey", () => {
       @Entity
       class MockClass extends MockTable {
+        declare readonly type: "MockClass";
         // @ts-expect-no-error: attribute must be of type PartitionKey
         @PartitionKeyAttribute({ alias: "PartitionKeyAlias" })
         public partitionKey: PartitionKey;
@@ -39,6 +40,7 @@ describe("PartitionKeyAttribute", () => {
 
       @Entity
       class MockClass2 extends MockTable {
+        declare readonly type: "MockClass2";
         // @ts-expect-error: attribute must be of type PartitionKey
         @PartitionKeyAttribute({ alias: "PartitionKeyAlias" })
         public partitionKey: string;
@@ -48,6 +50,7 @@ describe("PartitionKeyAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class MockClass extends MockTable {
+        declare readonly type: "MockClass";
         // @ts-expect-no-error: Alias prop is optional
         @PartitionKeyAttribute()
         public partitionKey: PartitionKey;
@@ -57,6 +60,7 @@ describe("PartitionKeyAttribute", () => {
     it("nullable is not a valid property because its always non nullable", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-error: nullable property is not valid
         @PartitionKeyAttribute({ alias: "Key1", nullable: true })
         public key1: PartitionKey;
@@ -64,6 +68,7 @@ describe("PartitionKeyAttribute", () => {
 
       @Entity
       class OtherModel extends MockTable {
+        declare readonly type: "OtherModel";
         // @ts-expect-error: nullable property is not valid
         @PartitionKeyAttribute({ alias: "Key1", nullable: false })
         public key1: PartitionKey;

@@ -10,6 +10,8 @@ import { MockTable } from "../../integration/mockModels";
 
 @Entity
 class CustomIdModel extends MockTable {
+  declare readonly type: "CustomIdModel";
+
   @IdAttribute
   @StringAttribute({ alias: "MyAttribute" })
   public myAttribute: string;
@@ -21,6 +23,8 @@ class CustomIdModel extends MockTable {
 
 @Entity
 class DefaultIdModel extends MockTable {
+  declare readonly type: "DefaultIdModel";
+
   @StringAttribute({ alias: "MyAttribute" })
   public myAttribute: string;
 

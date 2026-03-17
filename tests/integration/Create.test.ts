@@ -96,6 +96,8 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
+  declare readonly type: "MyModelNullableAttribute";
+
   @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
@@ -3474,6 +3476,8 @@ describe("Create", () => {
     it("will not accept function attributes on create", async () => {
       @Entity
       class MyModel extends MockTable {
+        declare readonly type: "MyModel";
+
         @StringAttribute({ alias: "MyAttribute" })
         public myAttribute: string;
 
@@ -3498,6 +3502,8 @@ describe("Create", () => {
     it("optional attributes are not required", async () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         @StringAttribute({ alias: "MyAttribute1" })
         public myAttribute1: string;
 
@@ -3542,6 +3548,8 @@ describe("Create", () => {
     it("will allow a NullableForeignKey attribute to be omitted if its defined as optional on the model", async () => {
       @Entity
       class ContactInformationLocal extends MockTable {
+        declare readonly type: "ContactInformationLocal";
+
         @StringAttribute({ alias: "Email" })
         public email: string;
 
@@ -3565,6 +3573,8 @@ describe("Create", () => {
 
       @Entity
       class CustomerLocal extends MockTable {
+        declare readonly type: "CustomerLocal";
+
         @HasOne(() => ContactInformation, { foreignKey: "customerId" })
         public contactInformation?: ContactInformation;
       }

@@ -65,6 +65,8 @@ describe("ForeignKeyAttribute", () => {
     it("does not have an error if the decorator is applied to an attribute of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: Attribute can be applied to an attribute of type ForeignKey
         @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1: ForeignKey<Customer>;
@@ -74,6 +76,8 @@ describe("ForeignKeyAttribute", () => {
     it("has an error if the decorator is applied to an attribute of type NullableForeignKey when its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
         @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1: NullableForeignKey<Customer>;
@@ -83,6 +87,8 @@ describe("ForeignKeyAttribute", () => {
     it("has an error if the decorator is applied to an attribute of type ForeignKey when its nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: Attribute can not be applied to an attribute of type NullableForeignKey
         @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: true })
         public key1: ForeignKey<Customer>;
@@ -92,6 +98,8 @@ describe("ForeignKeyAttribute", () => {
     it("has an error if the decorator is applied to an attribute of type string", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: Attribute can not be applied to an attribute of type string
         @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1: string;
@@ -101,6 +109,8 @@ describe("ForeignKeyAttribute", () => {
     it("has an error if the decorator is applied to an attribute of type ForeignKey but its optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: Attribute cannot be applied to an optional property
         @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1?: ForeignKey<Customer>;
@@ -110,6 +120,8 @@ describe("ForeignKeyAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: 'alias' is optional
         @ForeignKeyAttribute(() => Customer)
         public key1: ForeignKey<Customer>;
@@ -119,6 +131,8 @@ describe("ForeignKeyAttribute", () => {
     it("if nullable is false the attribute can is required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: false })
         public key1: ForeignKey<Customer>;
@@ -132,6 +146,8 @@ describe("ForeignKeyAttribute", () => {
     it("nullable defaults to false and makes the property required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @ForeignKeyAttribute(() => Customer, { alias: "Key1" })
         public key1: ForeignKey<Customer>;
@@ -145,6 +161,8 @@ describe("ForeignKeyAttribute", () => {
     it("when nullable is true, it will allow the property to be optional and be NullableForeignKey", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are optional
         @ForeignKeyAttribute(() => Customer, { alias: "Key1", nullable: true })
         public key1?: NullableForeignKey<Customer>;
@@ -158,6 +176,8 @@ describe("ForeignKeyAttribute", () => {
 
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-error: Target must be of type DynaRecord"
         @ForeignKeyAttribute(() => TargetTest1, { alias: "Key1" })
         // @ts-expect-error: Target must be of type DynaRecord"
@@ -168,18 +188,24 @@ describe("ForeignKeyAttribute", () => {
     it("ForeignKey target match decorator target", () => {
       @Entity
       class OtherModel1 extends MockTable {
+        declare readonly type: "OtherModel1";
+
         @StringAttribute({ alias: "TheKey1" })
         public theKey1: string;
       }
 
       @Entity
       class OtherModel2 extends MockTable {
+        declare readonly type: "OtherModel2";
+
         @StringAttribute({ alias: "TheKey2" })
         public theKey2: string;
       }
 
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-error: target match decorator target
         @ForeignKeyAttribute(() => OtherModel1, { alias: "Key1" })
         public key1: ForeignKey<OtherModel2>;
@@ -193,6 +219,8 @@ describe("ForeignKeyAttribute", () => {
 
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-error: Target must be of type DynaRecord"
         @ForeignKeyAttribute(() => TargetTest2, {
           alias: "Key1",
@@ -206,18 +234,24 @@ describe("ForeignKeyAttribute", () => {
     it("NullableForeignKey target match decorator target", () => {
       @Entity
       class OtherModel1 extends MockTable {
+        declare readonly type: "OtherModel1";
+
         @StringAttribute({ alias: "TheKey1" })
         public theKey1: string;
       }
 
       @Entity
       class OtherModel2 extends MockTable {
+        declare readonly type: "OtherModel2";
+
         @StringAttribute({ alias: "TheKey2" })
         public theKey2: string;
       }
 
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-error: target match decorator target
         @ForeignKeyAttribute(() => OtherModel1, {
           alias: "Key1",

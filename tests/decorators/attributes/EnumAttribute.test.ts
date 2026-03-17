@@ -9,6 +9,8 @@ type EnumValues = "val-1" | "val-2";
 
 @Entity
 class MyEntity extends MockTable {
+  declare readonly type: "MyEntity";
+
   @EnumAttribute({ alias: "SomeEnum", values: ["val-1", "val-2"] })
   public readonly someEnum: EnumValues;
 
@@ -67,6 +69,8 @@ describe("EnumAttribute", () => {
     it("can be applied to enum attributes", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: EnumValues is a valid type
         @EnumAttribute({ alias: "Key1", values: ["1", "2"] })
         public key1: "1" | "2";
@@ -74,6 +78,8 @@ describe("EnumAttribute", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-no-error: EnumValues is a valid type
         @EnumAttribute({ alias: "Key1", values: ["val-1", "val-2"] })
         public key1: EnumValues;
@@ -83,6 +89,8 @@ describe("EnumAttribute", () => {
     it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: EnumAttributes cant be optional unless nullable
         @EnumAttribute({ alias: "Key1", values: ["val-1", "val-2"] })
         public key1?: EnumValues;
@@ -92,6 +100,8 @@ describe("EnumAttribute", () => {
     it("does allow the property its applied to to be optional if its nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: EnumAttributes can be optional if nullable
         @EnumAttribute({
           alias: "Key1",
@@ -105,6 +115,8 @@ describe("EnumAttribute", () => {
     it("does not support values that are not part of the enum", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: Only enum values types are allowed
         @EnumAttribute({ alias: "Key1", values: ["1", "2"] })
         public key1: "1" | "3";
@@ -112,6 +124,8 @@ describe("EnumAttribute", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-error: Only enum values types are allowed
         @EnumAttribute({ alias: "Key1", values: ["val-1", "val-3"] })
         public key1: EnumValues;
@@ -119,6 +133,8 @@ describe("EnumAttribute", () => {
 
       @Entity
       class ModelThree extends MockTable {
+        declare readonly type: "ModelThree";
+
         // @ts-expect-error: Only enum values types are allowed
         @EnumAttribute({ alias: "Key1", values: ["1", "2"] })
         public key1: string;
@@ -128,6 +144,8 @@ describe("EnumAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: Alias prop is optional
         @EnumAttribute({ values: ["1", "2"] })
         public key1: "1" | "2";
@@ -137,6 +155,8 @@ describe("EnumAttribute", () => {
     it("if nullable is false the attribute is required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @EnumAttribute({
           alias: "Key1",
@@ -158,6 +178,8 @@ describe("EnumAttribute", () => {
     it("nullable defaults to false and makes the property required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @EnumAttribute({ values: ["val-1", "val-2"] })
         public key1: EnumValues;
@@ -171,6 +193,8 @@ describe("EnumAttribute", () => {
     it("when nullable is true, it will allow the property to be optional", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are optional
         @EnumAttribute({ values: ["val-1", "val-2"], nullable: true })
         public key1?: EnumValues;
@@ -180,6 +204,8 @@ describe("EnumAttribute", () => {
     it("ForeignKey is not a valid type to apply the EnumAttribute decorator", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: ForeignKey is not a valid type for Attribute decorator
         @EnumAttribute({ values: ["val-1", "val-2"] })
         public key1: ForeignKey;
@@ -189,6 +215,8 @@ describe("EnumAttribute", () => {
     it("NullableForeignKey is not a valid type to apply the EnumAttribute decorator", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: NullableForeignKey is not a valid type for EnumAttribute decorator
         @EnumAttribute({
           alias: "Key1",

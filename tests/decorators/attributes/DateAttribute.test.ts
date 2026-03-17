@@ -51,6 +51,8 @@ describe("DateAttribute", () => {
     it("can be applied to Date attributes", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: Date is a valid type
         @DateAttribute({ alias: "Key1" })
         public key1: Date;
@@ -60,6 +62,8 @@ describe("DateAttribute", () => {
     it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: DateAttributes cant be optional unless nullable
         @DateAttribute({ alias: "Key1" })
         public key1?: Date;
@@ -69,6 +73,8 @@ describe("DateAttribute", () => {
     it("does allow the property its applied to to be optional if its nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: DateAttributes can be optional if nullable
         @DateAttribute({ alias: "Key1", nullable: true })
         public key1?: Date;
@@ -78,6 +84,8 @@ describe("DateAttribute", () => {
     it("does not support non-Date fields", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: string is not a valid type. Only Date is allowed
         @DateAttribute({ alias: "Key1" })
         public key1: string;
@@ -87,6 +95,8 @@ describe("DateAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: Alias prop is optional
         @DateAttribute()
         public key1: Date;
@@ -96,6 +106,8 @@ describe("DateAttribute", () => {
     it("if nullable is false the attribute is required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @DateAttribute({ alias: "Key1", nullable: false })
         public key1: Date;
@@ -109,6 +121,8 @@ describe("DateAttribute", () => {
     it("nullable defaults to false and makes the property required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @DateAttribute({ alias: "Key1" })
         public key1: Date;
@@ -122,6 +136,8 @@ describe("DateAttribute", () => {
     it("when nullable is true, it will allow the property to be optional", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are optional
         @DateAttribute({ alias: "Key1", nullable: true })
         public key1?: Date;
