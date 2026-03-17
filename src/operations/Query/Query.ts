@@ -31,8 +31,12 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
    */
   public async run(
     key: string | EntityQueryKeyConditions<T>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts both typed and untyped filter options
-    options?: QueryBuilderOptions | Omit<QueryOptions, "indexName">| Record<string, any>
+     
+    options?:
+      | QueryBuilderOptions
+      | Omit<QueryOptions, "indexName">
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts both typed and untyped filter options
+      | Record<string, any>
   ): Promise<QueryResults<T>> {
     if (typeof key === "string") {
       return await this.queryEntity(key, options);

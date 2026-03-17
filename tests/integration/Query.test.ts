@@ -2187,12 +2187,16 @@ describe("Query", () => {
 
       it("rejects invalid keys", async () => {
         // @ts-expect-error: nonExistent is not a valid filter key
-        await Customer.query("123", { filter: { nonExistent: "value" } }).catch(() => {});
+        await Customer.query("123", { filter: { nonExistent: "value" } }).catch(
+          () => {}
+        );
       });
 
       it("rejects relationship property names", async () => {
         // @ts-expect-error: orders is a relationship prop, not a filter key
-        await Customer.query("123", { filter: { orders: "value" } }).catch(() => {});
+        await Customer.query("123", { filter: { orders: "value" } }).catch(
+          () => {}
+        );
       });
 
       it("accepts ForeignKey attributes", async () => {
@@ -2216,7 +2220,9 @@ describe("Query", () => {
 
       it("rejects invalid dot-paths", async () => {
         // @ts-expect-error: location.nonExistent is not a valid dot-path
-        await Warehouse.query("123", { filter: { "location.nonExistent": "value" } });
+        await Warehouse.query("123", {
+          filter: { "location.nonExistent": "value" }
+        });
       });
 
       it("works for entities with no relationships", async () => {
@@ -2265,7 +2271,9 @@ describe("Query", () => {
         // At the top level, TypeScript's union excess property checking allows
         // keys from other union members. Per-element narrowing works in $or.
         // @ts-expect-no-error: lastFour exists in another union variant (PaymentMethod)
-        await Customer.query("123", { filter: { type: "Order", lastFour: "1234" } });
+        await Customer.query("123", {
+          filter: { type: "Order", lastFour: "1234" }
+        });
       });
 
       it("allows all partition attributes when type is an array", async () => {
@@ -2289,7 +2297,9 @@ describe("Query", () => {
 
       it("rejects non-matching attrs in $or with type narrowing", async () => {
         // @ts-expect-error: lastFour is not an Order attribute (narrowed in $or element)
-        await Customer.query("123", { filter: { $or: [{ type: "Order" as const, lastFour: "1234" }] } });
+        await Customer.query("123", {
+          filter: { $or: [{ type: "Order" as const, lastFour: "1234" }] }
+        });
       });
 
       it("allows all partition attributes when no type is specified", async () => {

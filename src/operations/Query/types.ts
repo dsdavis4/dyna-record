@@ -250,26 +250,22 @@ type DistributeEntityAttributes<E> = E extends DynaRecord
  * If ExtractTypeFromFilter<F> resolves to specific entity names, returns
  * narrowed array. Otherwise falls back to QueryResults<T>.
  */
-export type NarrowedQueryResults<
-  T extends DynaRecord,
-  F
-> = ExtractTypeFromFilter<F> extends infer Names extends string
-  ? [ResolveEntityByName<T, Names>] extends [never]
-    ? QueryResults<T>
-    : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>
-  : QueryResults<T>;
+export type NarrowedQueryResults<T extends DynaRecord, F> =
+  ExtractTypeFromFilter<F> extends infer Names extends string
+    ? [ResolveEntityByName<T, Names>] extends [never]
+      ? QueryResults<T>
+      : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>
+    : QueryResults<T>;
 
 /**
  * If SK matches a PartitionEntityNames<T> string, narrows return type.
  */
-export type NarrowedQueryResultsBySK<
-  T extends DynaRecord,
-  SK extends string
-> = SK extends PartitionEntityNames<T>
-  ? [ResolveEntityByName<T, SK>] extends [never]
-    ? QueryResults<T>
-    : Array<DistributeEntityAttributes<ResolveEntityByName<T, SK>>>
-  : QueryResults<T>;
+export type NarrowedQueryResultsBySK<T extends DynaRecord, SK extends string> =
+  SK extends PartitionEntityNames<T>
+    ? [ResolveEntityByName<T, SK>] extends [never]
+      ? QueryResults<T>
+      : Array<DistributeEntityAttributes<ResolveEntityByName<T, SK>>>
+    : QueryResults<T>;
 
 /**
  * Detects `any` — resolves to true when T is any, false otherwise.
@@ -279,16 +275,13 @@ type IsAny<T> = 0 extends 1 & T ? true : false;
 /**
  * Infers query results from filter and SK for the string-key overload.
  */
-export type InferQueryResults<
-  T extends DynaRecord,
-  F,
-  SK extends string
-> = IsAny<ExtractTypeFromFilter<F>> extends true
-  ? SK extends PartitionEntityNames<T>
-    ? NarrowedQueryResultsBySK<T, SK>
-    : QueryResults<T>
-  : [ExtractTypeFromFilter<F>] extends [never]
+export type InferQueryResults<T extends DynaRecord, F, SK extends string> =
+  IsAny<ExtractTypeFromFilter<F>> extends true
     ? SK extends PartitionEntityNames<T>
       ? NarrowedQueryResultsBySK<T, SK>
       : QueryResults<T>
-    : NarrowedQueryResults<T, F>;
+    : [ExtractTypeFromFilter<F>] extends [never]
+      ? SK extends PartitionEntityNames<T>
+        ? NarrowedQueryResultsBySK<T, SK>
+        : QueryResults<T>
+      : NarrowedQueryResults<T, F>;
