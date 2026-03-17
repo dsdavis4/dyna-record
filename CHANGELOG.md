@@ -1,3 +1,30 @@
+## 0.6.0 - 2026-03-17
+
+### Breaking
+
+- **`@Entity` requires `declare readonly type`:** All entity classes must now declare their `type` property as a string literal matching the class name (e.g., `declare readonly type: "Order"`). This is a pure type annotation with zero runtime impact — the ORM continues to set `type` automatically. Entities missing this declaration will produce a compile error at the `@Entity` decorator. This change enables compile-time type safety for query filters and return types.
+- **Typed query filters:** The `query` method's `filter` option now validates filter keys at compile time. Only attributes that exist on entities in the queried partition are accepted. Invalid keys, relationship property names, and partition/sort key attributes produce compile errors. Existing code that passes arbitrary string keys in filters will need to be updated. Filter values remain untyped (`FilterTypes` / `any` from AWS SDK's `NativeAttributeValue`).
+- **Typed `type` filter field:** The `type` field in query filters now only accepts valid entity class names from the partition. Previously any string was accepted. Code that filters by `type` with values that are not entity class names (e.g., `type: ["Beer", "Brewery"]`) must be updated to use valid entity names.
+
+### Added
+
+- **Strongly-typed query filters:** Query filter keys are validated against the attributes of all entities in the queried partition. This includes entity-defined attributes, default fields (`id`, `createdAt`, `updatedAt`), `ForeignKey` and `NullableForeignKey` attributes, and dot-path keys for `@ObjectAttribute` nested fields (e.g., `"address.city"`, `"address.geo.lat"`).
+- **`type` field narrowing:** When filtering by `type` with a single entity name (e.g., `type: "Order"`), filter keys in `$or` elements are narrowed to only that entity's attributes. When `type` is an array (IN operator), all partition entity attributes are accepted.
+- **Return type narrowing:** When the filter specifies a `type` value, the return type is automatically narrowed from the full `QueryResults<T>` union to only the matching entity types:
+  - `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
+  - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
+  - No `type` specified → `QueryResults<T>` (full union)
+- **Sort key condition return type narrowing:** When `skCondition` is an exact string matching an entity class name (e.g., `skCondition: "Order"`), the return type narrows to that entity type.
+- **New utility types:** `DotPathKeys<T>`, `ObjectDotPaths<T>`, `EntityFilterableKeys<T>`, `NonRecursiveLeaf`, `PartitionEntities<T>`, `PartitionEntityNames<T>`, `TypedAndFilter<T>`, `TypedFilterParams<T>`, `NarrowedQueryResults<T, F>`, `InferQueryResults<T, F, SK>`, and supporting types for filter validation and return type inference.
+- **`IsAny<T>` utility type:** General-purpose type-level `any` detection, exported from `src/types.ts`.
+
+### Changed
+
+- **`@Entity` decorator is now generic:** Uses a conditional intersection type to enforce the `declare readonly type` requirement at compile time. Runtime behavior is unchanged.
+- **`OptionsWithoutIndex` is now generic:** Accepts a type parameter `T extends DynaRecord` to scope the `filter` property to `TypedFilterParams<T>`. Defaults to `DynaRecord` for backward compatibility in generic contexts.
+- **`DotPathKeys<T>` has a depth limiter:** Recursion stops at 8 levels to prevent "Type instantiation is excessively deep" errors with deeply nested `@ObjectAttribute` schemas.
+- **Query method overload updated:** The non-index query overload now uses `const F` and `SK` generic parameters for literal type inference, enabling return type narrowing. The index query overload is unchanged and continues to use untyped `FilterParams`.
+
 ## 0.5.3 - 2026-03-09
 
 ### Fixed
