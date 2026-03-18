@@ -1,5 +1,22 @@
 # Dyna-Record
 
+// TODO START HERE... review local changes
+
+// TODO here review and test PR
+// TODO check test cases throughly
+// TODO make sure that filter narrowing in query contract is tested very well
+// TODO make sure to est complicated bombinations of filter and return type narrowing
+// TODO make sure both possible sort key condition paths are accounted for. Also make sure that sk filtering works wth beginsWtih for full entities or on a full equal `skCondition: "Order"` and `skCondition: { $beginsWith: "Order" }`
+// TODO is it possible to write the narrowing tests to use exhaustive checks? Instead of testing each success and error case?
+//. ex can this be exhausetive instead?
+// TODO make sure docs for sk narrowing is updated
+
+ <!-- // @ts-expect-no-error: top-level type: "Order" narrows return
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded by top-level type
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result; -->
+
 [API Documentation](https://dyna-record.com/)
 
 [Medium Article](https://medium.com/@drewdavis888/unlock-relational-data-modeling-in-dynamodb-with-dyna-record-5b9cce27c3ce)
@@ -750,22 +767,36 @@ const mixed = await Customer.query("123", {
 });
 ```
 
-##### Sort key condition narrowing
+##### Sort key condition validation and narrowing
 
-When using `skCondition` with a string that matches an entity class name, the return type is automatically narrowed:
+`skCondition` values are typed to only accept valid entity names from the partition. In dyna-record's single-table design, sort key values always start with an entity class name:
+
+```typescript
+// Valid: entity names and entity name prefixes
+await Customer.query("123", { skCondition: "Order" }); // OK
+await Customer.query("123", { skCondition: "Order#123" }); // OK
+await Customer.query("123", { skCondition: { $beginsWith: "Order" } }); // OK
+
+// Invalid: not an entity name in Customer's partition
+await Customer.query("123", { skCondition: "NonExistent" }); // Compile error
+```
+
+When `skCondition` is an exact entity name or `$beginsWith` with an exact entity name, the return type is automatically narrowed:
 
 ```typescript
 // Return type: Array<EntityAttributesInstance<Order>>
-const orders = await Customer.query("123", {
-  skCondition: "Order"
+const orders = await Customer.query("123", { skCondition: "Order" });
+
+// Return type: Array<EntityAttributesInstance<Order>>
+const orders2 = await Customer.query("123", {
+  skCondition: { $beginsWith: "Order" }
 });
 
-orders[0]?.orderDate; // OK: orderDate is accessible
+// Return type: QueryResults<Customer> (full union — suffix prevents narrowing)
+const specific = await Customer.query("123", { skCondition: "Order#123" });
 ```
 
-> **Note:** Return type narrowing only applies to the top-level `type` filter field and exact `skCondition` string matches. `$or` elements are narrowed for filter key validation but do not affect the return type. `$beginsWith` sort key conditions do not trigger return type narrowing.
-
-> **Note:** Index queries (`{ indexName: "..." }`) use untyped filters since index queries operate across different access patterns.
+> **Note:** Return type narrowing applies to the top-level `type` filter field and to `skCondition` when it matches an exact entity name or uses `$beginsWith` with an entity name. `$or` elements are narrowed for filter key validation but do not affect the return type. Index queries (`{ indexName: "..." }`) use untyped filters since index queries operate across different access patterns.
 
 ### Querying on an index
 

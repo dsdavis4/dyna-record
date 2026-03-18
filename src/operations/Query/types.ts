@@ -35,7 +35,7 @@ export type QueryOptions = QueryBuilderOptions & {
  */
 export type OptionsWithoutIndex<T extends DynaRecord = DynaRecord> = Omit<
   QueryOptions,
-  "indexName" | "filter"
+  "indexName" | "filter" | "skCondition"
 > & {
   filter?: TypedFilterParams<T>;
 };
@@ -227,6 +227,48 @@ export type TypedOrFilter<T extends DynaRecord> = {
 export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
   TypedOrFilter<T>;
 
+// ─── Typed Sort Key Condition ───────────────────────────────────────────────
+
+/**
+ * Typed sort key condition for querying within an entity's partition.
+ *
+ * In dyna-record's single-table design, sort key values always start with an entity
+ * class name from the partition:
+ * - Self/HasOne records: `SK = "EntityName"` (exact entity name)
+ * - HasMany records: `SK = "EntityName#id"` (entity name + delimiter + id)
+ *
+ * This type restricts `skCondition` to only accept valid entity names or entity name
+ * prefixes, catching typos at compile time. It also enables return type narrowing
+ * when the SK value is an exact entity name or a `$beginsWith` with an entity name.
+ *
+ * @template T - The entity type being queried.
+ */
+export type TypedSortKeyCondition<T extends DynaRecord> =
+  | PartitionEntityNames<T>
+  | `${PartitionEntityNames<T>}${string}`
+  | { $beginsWith: PartitionEntityNames<T> | `${PartitionEntityNames<T>}${string}` };
+
+/**
+ * Extracts the entity name from a typed sort key condition for return type narrowing.
+ *
+ * Narrows when:
+ * - SK is an exact entity name: `"Order"` → `"Order"`
+ * - SK is `{ $beginsWith: "Order" }` → `"Order"`
+ *
+ * Does not narrow when:
+ * - SK is a prefixed string like `"Order#123"` (can't parse the delimiter at type level)
+ * - SK is `{ $beginsWith: "Order#..." }` (specific prefix, not just entity name)
+ *
+ * @template T - The entity type being queried.
+ * @template SK - The inferred sort key condition literal type.
+ */
+export type ExtractEntityFromSK<T extends DynaRecord, SK> =
+  SK extends { $beginsWith: infer V extends PartitionEntityNames<T> }
+    ? V
+    : SK extends PartitionEntityNames<T>
+      ? SK
+      : never;
+
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 
 /**
@@ -281,24 +323,31 @@ export type NarrowedQueryResults<T extends DynaRecord, F> =
     : QueryResults<T>;
 
 /**
- * If SK matches a PartitionEntityNames<T> string, narrows return type.
- */
-export type NarrowedQueryResultsBySK<T extends DynaRecord, SK extends string> =
-  SK extends PartitionEntityNames<T> ? NarrowByNames<T, SK> : QueryResults<T>;
-
-/**
  * Infers query results from filter and SK for the non-index query overload.
  *
- * Return type narrowing only applies to the top-level `type` field in the filter.
- * `$or` elements are narrowed for key validation but do not affect the return type.
+ * Narrowing priority:
+ * 1. If the filter specifies a `type` value, narrow by that.
+ * 2. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
+ * 3. Otherwise, return the full `QueryResults<T>` union.
  *
  * @template T - The root entity being queried.
  * @template F - The inferred filter type (captured via `const` generic).
- * @template SK - The inferred sort key condition string.
+ * @template SK - The inferred sort key condition type.
  */
-export type InferQueryResults<T extends DynaRecord, F, SK extends string> =
-  IsAny<ExtractTypeFromFilter<F>> extends true
-    ? NarrowedQueryResultsBySK<T, SK>
-    : [ExtractTypeFromFilter<F>] extends [never]
-      ? NarrowedQueryResultsBySK<T, SK>
+export type InferQueryResults<
+  T extends DynaRecord,
+  F,
+  SK = unknown
+> = IsAny<ExtractTypeFromFilter<F>> extends true
+  ? [ExtractEntityFromSK<T, SK>] extends [never]
+    ? QueryResults<T>
+    : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
+  : [ExtractTypeFromFilter<F>] extends [never]
+    ? [ExtractEntityFromSK<T, SK>] extends [never]
+      ? QueryResults<T>
+      : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
+    : [PartitionEntityNames<T>] extends [ExtractTypeFromFilter<F>]
+      ? [ExtractEntityFromSK<T, SK>] extends [never]
+        ? QueryResults<T>
+        : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
       : NarrowedQueryResults<T, F>;

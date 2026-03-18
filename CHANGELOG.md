@@ -14,8 +14,8 @@
   - `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
   - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
   - No `type` specified → `QueryResults<T>` (full union)
-- **Sort key condition return type narrowing:** When `skCondition` is an exact string matching an entity class name (e.g., `skCondition: "Order"`), the return type narrows to that entity type.
-- **New utility types:** `DotPathKeys<T>`, `ObjectDotPaths<T>`, `EntityFilterableKeys<T>`, `NonRecursiveLeaf`, `PartitionEntities<T>`, `PartitionEntityNames<T>`, `TypedAndFilter<T>`, `TypedFilterParams<T>`, `NarrowedQueryResults<T, F>`, `InferQueryResults<T, F, SK>`, and supporting types for filter validation and return type inference.
+- **Sort key condition validation:** `skCondition` values are typed to only accept valid entity names from the partition (exact entity name or entity name prefix). Invalid sort key values produce compile errors. When `skCondition` is an exact entity name or `$beginsWith` with an exact entity name, the return type is automatically narrowed to that entity type.
+- **New utility types:** `DotPathKeys<T>`, `ObjectDotPaths<T>`, `EntityFilterableKeys<T>`, `NonRecursiveLeaf`, `PartitionEntities<T>`, `PartitionEntityNames<T>`, `TypedAndFilter<T>`, `TypedFilterParams<T>`, `NarrowedQueryResults<T, F>`, `InferQueryResults<T, F>`, and supporting types for filter validation and return type inference.
 - **`IsAny<T>` utility type:** General-purpose type-level `any` detection, exported from `src/types.ts`.
 
 ### Changed

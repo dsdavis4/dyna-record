@@ -20,6 +20,7 @@ import {
   type OptionsWithIndex,
   type EntityQueryKeyConditions,
   type TypedFilterParams,
+  type TypedSortKeyCondition,
   type InferQueryResults
 } from "./operations";
 import { mergePartialObjectAttributes } from "./operations/utils";
@@ -227,13 +228,13 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async query<
     T extends DynaRecord,
     const F extends TypedFilterParams<T> = TypedFilterParams<T>,
-    SK extends string = string
+    const SK extends TypedSortKeyCondition<T> = TypedSortKeyCondition<T>
   >(
     this: EntityClass<T>,
     key: string | EntityKeyConditions<T>,
     options?: OptionsWithoutIndex<T> & {
       filter?: F;
-      skCondition?: SK | { $beginsWith: SK };
+      skCondition?: SK;
     }
   ): Promise<InferQueryResults<T, F, SK>>;
 

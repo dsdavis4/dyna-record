@@ -1,5 +1,6 @@
 import {
   Assignment,
+  ContactInformation,
   Course,
   Customer,
   DeepNestedEntity,
@@ -14,7 +15,10 @@ import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
-import { type QueryResults } from "../../src/operations";
+import {
+  type QueryResults,
+  type EntityAttributesInstance
+} from "../../src/operations";
 import Logger from "../../src/Logger";
 
 const mockSend = jest.fn();
@@ -2117,16 +2121,16 @@ describe("Query", () => {
       });
 
       it("allows query with sort", async () => {
-        // @ts-expect-no-error: Can query with sort
+        // @ts-expect-no-error: Can query with sort using a valid entity name
         await Customer.query("123", {
-          skCondition: "SomeVal"
+          skCondition: "Order"
         });
       });
 
       it("allows query on sort key with a condition", async () => {
-        // @ts-expect-no-error: Can query on sort key with a condition
+        // @ts-expect-no-error: Can query on sort key with a beginsWith condition
         await Customer.query("123", {
-          skCondition: { $beginsWith: "SomeVal" }
+          skCondition: { $beginsWith: "Order" }
         });
       });
 
@@ -2319,33 +2323,82 @@ describe("Query", () => {
     });
 
     describe("return type narrowing", () => {
-      it("returns full union by default", async () => {
+      it("default return type is the full partition union", async () => {
         const result = await Customer.query("123");
-        // Type is QueryResults<Customer> = Array<EntityAttributesInstance<Customer> | ...>
-        const _check: QueryResults<Customer> = result;
-        Logger.log(_check);
+
+        // @ts-expect-no-error: assignable to full union (Customer + all related entities)
+        const _full: QueryResults<Customer> = result;
+
+        // @ts-expect-error: NOT assignable to just one entity — result includes the full union
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_full, _notNarrowed);
       });
 
-      it("narrows when filter has type as single entity", async () => {
+      it("type: 'Order' narrows to only Order", async () => {
         const result = await Customer.query("123", {
           filter: { type: "Order" }
         });
 
-        const item = result[0];
-        if (item !== undefined) {
-          // @ts-expect-no-error: orderDate exists on Order
-          Logger.log(item.orderDate);
-        }
+        // @ts-expect-no-error: narrowed to exactly Order
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer is excluded — result only contains Order
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
       });
 
-      it("narrows when filter has type as array", async () => {
+      it("type: 'Customer' narrows to only Customer", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: "Customer" }
+        });
+
+        // @ts-expect-no-error: narrowed to exactly Customer
+        const _match: Array<EntityAttributesInstance<Customer>> = result;
+
+        // @ts-expect-error: Order is excluded — result only contains Customer
+        const _excludedOrder: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod is excluded — result only contains Customer
+        const _excludedPM: Array<EntityAttributesInstance<PaymentMethod>> =
+          result;
+
+        Logger.log(_match, _excludedOrder, _excludedPM);
+      });
+
+      it("type: ['Order', 'PaymentMethod'] narrows to exactly that union", async () => {
         const result = await Customer.query("123", {
           filter: { type: ["Order", "PaymentMethod"] }
         });
 
-        // Result is assignable to the wider QueryResults
-        const _check: QueryResults<Customer> = result;
-        Logger.log(_check);
+        // @ts-expect-no-error: assignable to the exact union of the filtered types
+        const _match: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-no-error: narrowed result is still assignable to the wider full union
+        const _wider: QueryResults<Customer> = result;
+
+        // @ts-expect-error: Customer is excluded — not in the type array
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _wider, _excluded);
+      });
+
+      it("no type filter does not narrow — returns full union", async () => {
+        const result = await Customer.query("123", {
+          filter: { createdAt: "2023" }
+        });
+
+        // @ts-expect-no-error: un-narrowed result is the full union
+        const _full: QueryResults<Customer> = result;
+
+        // @ts-expect-error: NOT assignable to just one entity — not narrowed
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_full, _notNarrowed);
       });
     });
 
@@ -2484,25 +2537,242 @@ describe("Query", () => {
       });
     });
 
-    describe("sort key condition narrowing", () => {
-      it("returns full union when skCondition is used", async () => {
-        const result = await Customer.query("123", {
-          skCondition: "Order"
+    describe("sort key condition", () => {
+      describe("skCondition value validation", () => {
+        it("accepts exact entity name", async () => {
+          // @ts-expect-no-error: "Order" is a valid partition entity name
+          await Customer.query("123", { skCondition: "Order" });
         });
 
-        // Type is full QueryResults<Customer>
-        const _check: QueryResults<Customer> = result;
-        Logger.log(_check);
+        it("accepts entity name with suffix", async () => {
+          // @ts-expect-no-error: "Order#123" starts with valid entity name
+          await Customer.query("123", { skCondition: "Order#123" });
+        });
+
+        it("accepts $beginsWith with entity name", async () => {
+          // @ts-expect-no-error: $beginsWith with valid entity name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" }
+          });
+        });
+
+        it("accepts $beginsWith with entity name prefix", async () => {
+          // @ts-expect-no-error: $beginsWith with "Order#abc" starts with valid name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Order#abc" }
+          });
+        });
+
+        it("accepts self entity name", async () => {
+          // @ts-expect-no-error: "Customer" is the queried entity itself
+          await Customer.query("123", { skCondition: "Customer" });
+        });
+
+        it("rejects invalid entity name", async () => {
+          // @ts-expect-error: "NonExistent" is not a valid partition entity name
+          await Customer.query("123", { skCondition: "NonExistent" });
+        });
+
+        it("rejects invalid $beginsWith entity name", async () => {
+          // @ts-expect-error: "Fake" is not a valid partition entity name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Fake" }
+          });
+        });
       });
 
-      it("does not narrow when skCondition does not match entity name", async () => {
-        const result = await Customer.query("123", {
-          skCondition: "SomeRandomValue"
+      describe("return type narrowing by skCondition", () => {
+        it("exact entity name narrows return type", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Order"
+          });
+
+          // @ts-expect-no-error: narrowed to Order
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded by SK narrowing
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
         });
 
-        // Type is full QueryResults<Customer>
-        const _check: QueryResults<Customer> = result;
-        Logger.log(_check);
+        it("exact self entity name narrows to self", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Customer"
+          });
+
+          // @ts-expect-no-error: narrowed to Customer
+          const _match: Array<EntityAttributesInstance<Customer>> = result;
+
+          // @ts-expect-error: Order excluded
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("$beginsWith entity name narrows return type", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" }
+          });
+
+          // @ts-expect-no-error: narrowed to Order
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("entity name with suffix does NOT narrow (delimiter is ambiguous)", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Order#some-id"
+          });
+
+          // @ts-expect-no-error: not narrowed — full union
+          const _full: QueryResults<Customer> = result;
+
+          // @ts-expect-error: NOT narrowed to just Order
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("$beginsWith with suffix does NOT narrow", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order#abc" }
+          });
+
+          // @ts-expect-no-error: not narrowed — full union
+          const _full: QueryResults<Customer> = result;
+
+          // @ts-expect-error: NOT narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("filter type takes precedence over SK narrowing", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" },
+            filter: { type: "PaymentMethod" }
+          });
+
+          // @ts-expect-no-error: filter type "PaymentMethod" takes precedence
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded despite SK matching
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("no skCondition returns full union", async () => {
+          const result = await Customer.query("123");
+
+          // @ts-expect-no-error: full union
+          const _full: QueryResults<Customer> = result;
+
+          // @ts-expect-error: NOT narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+      });
+    });
+
+    describe("complex $or with type narrowing", () => {
+      it("$or with mixed types narrows filter keys per block", async () => {
+        // Each $or block independently validates keys based on its type
+        // @ts-expect-no-error: each block uses attributes from its own entity
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023-01-01", customerId: "c1" },
+              { type: "PaymentMethod", lastFour: "4242" },
+              { type: "Customer", name: "Alice", address: "123 Main St" },
+              { type: "ContactInformation", email: "alice@example.com" }
+            ]
+          }
+        });
+      });
+
+      it("$or without type allows all partition attributes per block", async () => {
+        // When $or blocks don't specify type, all partition keys are valid
+        // @ts-expect-no-error: mixing attributes from different entities in untyped $or
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { name: "Alice", orderDate: "2023" },
+              { lastFour: "4242", email: "test@test.com" }
+            ]
+          }
+        });
+      });
+
+      it("top-level type + $or with different types", async () => {
+        // Top-level type narrows the return type, $or blocks narrow their own keys
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ orderDate: "2023-01-01" }, { orderDate: "2024-01-01" }]
+          }
+        });
+
+        // @ts-expect-no-error: top-level type: "Order" narrows return
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded by top-level type
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("$or-only filter does NOT narrow return type", async () => {
+        // When only $or is specified (no top-level type), return type is full union
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: return type is the full union — $or doesn't narrow returns
+        const _full: QueryResults<Customer> = result;
+
+        // @ts-expect-error: NOT narrowed to just Order — $or alone doesn't narrow
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_full, _notNarrowed);
+      });
+
+      it("top-level type array + $or with entity-specific filters", async () => {
+        const result = await Customer.query("123", {
+          filter: {
+            type: ["Order", "ContactInformation"],
+            $or: [{ orderDate: "2023" }, { email: "test@example.com" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | ContactInformation
+        const _match: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: Customer is excluded
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("$or rejects invalid keys even without type narrowing", async () => {
+        // @ts-expect-error: nonExistent is not valid on any entity
+        await Customer.query("123", {
+          filter: { $or: [{ nonExistent: "x" }] }
+        }).catch(() => {});
       });
     });
   });
