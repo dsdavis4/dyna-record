@@ -2672,48 +2672,59 @@ describe("Query", () => {
     });
 
     describe("return type narrowing", () => {
-      it("default return type is the full partition union", async () => {
+      it("default return type is the exact full partition union", async () => {
         const result = await Customer.query("123");
 
-        // @ts-expect-no-error: assignable to full union (Customer + all related entities)
-        const _full: QueryResults<Customer> = result;
+        // Exhaustive: assignable to the exact union of all partition entities
+        // @ts-expect-no-error
+        const _exact: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
 
-        // @ts-expect-error: NOT assignable to just one entity — result includes the full union
+        // @ts-expect-error: NOT assignable to just one entity
         const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
-        Logger.log(_full, _notNarrowed);
+        Logger.log(_exact, _notNarrowed);
       });
 
-      it("type: 'Order' narrows to only Order", async () => {
+      it("type: 'Order' narrows to exactly Array<EAI<Order>>", async () => {
         const result = await Customer.query("123", {
           filter: { type: "Order" }
         });
 
-        // @ts-expect-no-error: narrowed to exactly Order
-        const _match: Array<EntityAttributesInstance<Order>> = result;
+        // Exhaustive: exactly Order, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<EntityAttributesInstance<Order>> = result;
 
-        // @ts-expect-error: Customer is excluded — result only contains Order
-        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+        // @ts-expect-error: PaymentMethod excluded
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+        // @ts-expect-error: ContactInformation excluded
+        const _noCI: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
 
-        Logger.log(_match, _excluded);
+        Logger.log(_exact, _noCustomer, _noPM, _noCI);
       });
 
-      it("type: 'Customer' narrows to only Customer", async () => {
+      it("type: 'Customer' narrows to exactly Array<EAI<Customer>>", async () => {
         const result = await Customer.query("123", {
           filter: { type: "Customer" }
         });
 
-        // @ts-expect-no-error: narrowed to exactly Customer
-        const _match: Array<EntityAttributesInstance<Customer>> = result;
+        // Exhaustive: exactly Customer, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<EntityAttributesInstance<Customer>> = result;
 
-        // @ts-expect-error: Order is excluded — result only contains Customer
-        const _excludedOrder: Array<EntityAttributesInstance<Order>> = result;
+        // @ts-expect-error: Order excluded
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+        // @ts-expect-error: PaymentMethod excluded
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
 
-        // @ts-expect-error: PaymentMethod is excluded — result only contains Customer
-        const _excludedPM: Array<EntityAttributesInstance<PaymentMethod>> =
-          result;
-
-        Logger.log(_match, _excludedOrder, _excludedPM);
+        Logger.log(_exact, _noOrder, _noPM);
       });
 
       it("type: ['Order', 'PaymentMethod'] narrows to exactly that union", async () => {
@@ -2721,33 +2732,40 @@ describe("Query", () => {
           filter: { type: ["Order", "PaymentMethod"] }
         });
 
-        // @ts-expect-no-error: assignable to the exact union of the filtered types
-        const _match: Array<
+        // Exhaustive: exactly Order | PaymentMethod, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<
           | EntityAttributesInstance<Order>
           | EntityAttributesInstance<PaymentMethod>
         > = result;
 
-        // @ts-expect-no-error: narrowed result is still assignable to the wider full union
-        const _wider: QueryResults<Customer> = result;
+        // @ts-expect-error: Customer excluded — not in the type array
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+        // @ts-expect-error: ContactInformation excluded
+        const _noCI: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
 
-        // @ts-expect-error: Customer is excluded — not in the type array
-        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
-
-        Logger.log(_match, _wider, _excluded);
+        Logger.log(_exact, _noCustomer, _noCI);
       });
 
-      it("no type filter does not narrow — returns full union", async () => {
+      it("no type filter does not narrow — returns exact full union", async () => {
         const result = await Customer.query("123", {
           filter: { createdAt: "2023" }
         });
 
-        // @ts-expect-no-error: un-narrowed result is the full union
-        const _full: QueryResults<Customer> = result;
+        // Exhaustive: exact full union
+        // @ts-expect-no-error
+        const _exact: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
 
         // @ts-expect-error: NOT assignable to just one entity — not narrowed
         const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
-        Logger.log(_full, _notNarrowed);
+        Logger.log(_exact, _notNarrowed);
       });
     });
 
@@ -2979,7 +2997,12 @@ describe("Query", () => {
           });
 
           // @ts-expect-no-error: not narrowed — full union
-          const _full: QueryResults<Customer> = result;
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
 
           // @ts-expect-error: NOT narrowed to just Order
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
@@ -2993,7 +3016,12 @@ describe("Query", () => {
           });
 
           // @ts-expect-no-error: not narrowed — full union
-          const _full: QueryResults<Customer> = result;
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
 
           // @ts-expect-error: NOT narrowed
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
@@ -3020,7 +3048,12 @@ describe("Query", () => {
           const result = await Customer.query("123");
 
           // @ts-expect-no-error: full union
-          const _full: QueryResults<Customer> = result;
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
 
           // @ts-expect-error: NOT narrowed
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
@@ -3080,7 +3113,12 @@ describe("Query", () => {
           });
 
           // @ts-expect-no-error: return type is the full partition union
-          const _full: QueryResults<Customer> = result;
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
 
           // @ts-expect-error: NOT narrowed — use skCondition or filter type for narrowing
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
@@ -3180,7 +3218,12 @@ describe("Query", () => {
         });
 
         // @ts-expect-no-error: return type is the full union — $or doesn't narrow returns
-        const _full: QueryResults<Customer> = result;
+        const _full: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
 
         // @ts-expect-error: NOT narrowed to just Order — $or alone doesn't narrow
         const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
