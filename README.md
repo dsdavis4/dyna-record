@@ -1,22 +1,5 @@
 # Dyna-Record
 
-// TODO START HERE... review local changes
-
-// TODO here review and test PR
-// TODO check test cases throughly
-// TODO make sure that filter narrowing in query contract is tested very well
-// TODO make sure to est complicated bombinations of filter and return type narrowing
-// TODO make sure both possible sort key condition paths are accounted for. Also make sure that sk filtering works wth beginsWtih for full entities or on a full equal `skCondition: "Order"` and `skCondition: { $beginsWith: "Order" }`
-// TODO is it possible to write the narrowing tests to use exhaustive checks? Instead of testing each success and error case?
-//. ex can this be exhausetive instead?
-// TODO make sure docs for sk narrowing is updated
-
- <!-- // @ts-expect-no-error: top-level type: "Order" narrows return
-        const _match: Array<EntityAttributesInstance<Order>> = result;
-
-        // @ts-expect-error: Customer excluded by top-level type
-        const _excluded: Array<EntityAttributesInstance<Customer>> = result; -->
-
 [API Documentation](https://dyna-record.com/)
 
 [Medium Article](https://medium.com/@drewdavis888/unlock-relational-data-modeling-in-dynamodb-with-dyna-record-5b9cce27c3ce)
