@@ -3106,7 +3106,7 @@ describe("Query", () => {
     });
 
     describe("complex $or with type narrowing", () => {
-      it("$or with mixed types narrows filter keys per block", async () => {
+      it("$or with mixed types narrows filter keys per block (happy)", async () => {
         // Each $or block independently validates keys based on its type
         // @ts-expect-no-error: each block uses attributes from its own entity
         await Customer.query("123", {
@@ -3121,7 +3121,16 @@ describe("Query", () => {
         });
       });
 
-      it("$or without type allows all partition attributes per block", async () => {
+      it("$or with mixed types rejects unrelated entity type (error)", async () => {
+        // @ts-expect-error: "Person" is not related to Customer
+        await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { type: "Person" }]
+          }
+        });
+      });
+
+      it("$or without type allows all partition attributes (happy)", async () => {
         // When $or blocks don't specify type, all partition keys are valid
         // @ts-expect-no-error: mixing attributes from different entities in untyped $or
         await Customer.query("123", {
@@ -3132,6 +3141,13 @@ describe("Query", () => {
             ]
           }
         });
+      });
+
+      it("$or without type rejects invalid attribute (error)", async () => {
+        // @ts-expect-error: nonExistent is not an attribute on any partition entity
+        await Customer.query("123", {
+          filter: { $or: [{ name: "Alice", nonExistent: "x" }] }
+        }).catch(() => {});
       });
 
       it("top-level type + $or with different types", async () => {
@@ -3197,6 +3213,155 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: { $or: [{ nonExistent: "x" }] }
         }).catch(() => {});
+      });
+
+      it("$or rejects invalid attribute for a typed block (nonExistent key)", async () => {
+        // @ts-expect-error: nonExistent doesn't exist on Order or any partition entity
+        await Customer.query("123", {
+          filter: { $or: [{ type: "Order", nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("multiple $or blocks each with distinct types and valid attributes (happy)", async () => {
+        // @ts-expect-no-error: each block uses its own entity's attributes
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023", customerId: "c1" },
+              { type: "PaymentMethod", lastFour: "4242", customerId: "c1" },
+              { type: "ContactInformation", email: "a@b.com", phone: "555" },
+              { type: "Customer", name: "Alice" }
+            ]
+          }
+        });
+      });
+
+      it("multiple $or blocks rejects nonExistent attribute in one block (error)", async () => {
+        // @ts-expect-error: nonExistent not valid on Order or any entity
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023", nonExistent: "x" },
+              { type: "PaymentMethod", lastFour: "4242" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("$or with typed block and untyped block in same filter (happy)", async () => {
+        // @ts-expect-no-error: one typed block, one untyped (all keys allowed)
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { name: "Alice", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("$or with typed block and untyped block rejects invalid key (error)", async () => {
+        // @ts-expect-error: nonExistent not valid on any entity
+        await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { nonExistent: "x" }]
+          }
+        }).catch(() => {});
+      });
+    });
+
+    describe("skCondition + filter combination", () => {
+      it("skCondition with filter type: both valid related entities (happy)", async () => {
+        // @ts-expect-no-error: skCondition and filter type can be different related entities
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: { type: "PaymentMethod", lastFour: "1234" }
+        });
+      });
+
+      it("skCondition with invalid filter type: rejects unrelated entity (error)", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { type: "Person" }
+        });
+      });
+
+      it("skCondition with filter type: return type narrows by filter type", async () => {
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: { type: "PaymentMethod" }
+        });
+
+        // @ts-expect-no-error: filter type: "PaymentMethod" narrows return
+        const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        // @ts-expect-error: Order is excluded — filter type takes precedence
+        const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("skCondition with untyped filter: return type narrows by skCondition", async () => {
+        const result = await Customer.query("123", {
+          skCondition: "Order",
+          filter: { createdAt: "2023" }
+        });
+
+        // @ts-expect-no-error: skCondition "Order" narrows return type
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded by SK narrowing
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("skCondition with $or filter: $or blocks validate independently (happy)", async () => {
+        // @ts-expect-no-error: skCondition and $or are independent concerns
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("skCondition with $or filter: rejects unrelated type in $or (error)", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: {
+            $or: [{ type: "Person" }]
+          }
+        });
+      });
+
+      it("skCondition with $or: invalid attribute in typed $or block rejected", async () => {
+        // @ts-expect-error: nonExistent not valid on any entity
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { $or: [{ type: "Order", nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("skCondition rejects unrelated entity even with valid filter", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Person",
+          filter: { type: "Order" }
+        });
+      });
+
+      it("filter type rejects unrelated entity even with valid skCondition", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { type: "Person" }
+        });
       });
     });
   });
