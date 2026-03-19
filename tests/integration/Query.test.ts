@@ -2201,9 +2201,37 @@ describe("Query", () => {
         );
       });
 
-      it("rejects relationship property names", async () => {
-        // @ts-expect-error: orders is a relationship prop, not a filter key
+      it("rejects HasMany relationship property name", async () => {
+        // @ts-expect-error: 'orders' is a HasMany relationship on Customer, not a filterable attribute
         await Customer.query("123", { filter: { orders: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("rejects another HasMany relationship property name", async () => {
+        // @ts-expect-error: 'paymentMethods' is a HasMany relationship on Customer
+        await Customer.query("123", {
+          filter: { paymentMethods: "value" }
+        }).catch(() => {});
+      });
+
+      it("rejects HasOne relationship property name", async () => {
+        // @ts-expect-error: 'contactInformation' is a HasOne relationship on Customer
+        await Customer.query("123", {
+          filter: { contactInformation: "value" }
+        }).catch(() => {});
+      });
+
+      it("rejects BelongsTo relationship property name", async () => {
+        // @ts-expect-error: 'customer' is a BelongsTo relationship on Order
+        await Order.query("123", { filter: { customer: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("rejects HasAndBelongsToMany relationship property name", async () => {
+        // @ts-expect-error: 'authors' is a HasAndBelongsToMany relationship on Book
+        await Book.query("123", { filter: { authors: "value" } }).catch(
           () => {}
         );
       });
