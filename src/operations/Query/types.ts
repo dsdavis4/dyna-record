@@ -478,6 +478,36 @@ type FallbackToSK<T extends DynaRecord, SK> =
     : QueryResults<T>;
 
 /**
+ * Narrows by names, but returns `never[]` when names resolve to no known entities.
+ * Unlike {@link NarrowByNames} which falls back to `QueryResults<T>` when names
+ * don't resolve, this returns an empty array type — used when an intersection of
+ * AND-combined narrowing signals is empty (no entity can satisfy all conditions).
+ */
+type StrictNarrowByNames<T extends DynaRecord, Names extends string> = [
+  ResolveEntityByName<T, Names>
+] extends [never]
+  ? never[]
+  : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>;
+
+/**
+ * When top-level filter keys narrow to `KeyNames`, also checks if `$or` blocks
+ * narrow independently. Since DynamoDB ANDs top-level conditions with `$or`,
+ * a record must satisfy both — so the matching entities are the intersection.
+ *
+ * - If `$or` also narrows → intersect with `KeyNames`. Empty intersection → `never[]`.
+ * - If `$or` does not narrow → use `KeyNames` alone.
+ */
+type IntersectKeysWithOr<
+  T extends DynaRecord,
+  KeyNames extends string,
+  F
+> = ResolveOrBlockEntityNames<T, F> extends infer OrNames
+  ? ShouldNarrow<T, OrNames> extends true
+    ? StrictNarrowByNames<T, Extract<KeyNames, OrNames & string>>
+    : NarrowByNames<T, KeyNames>
+  : NarrowByNames<T, KeyNames>;
+
+/**
  * Falls back to `$or` block resolution (by type or filter keys), then SK, then full union.
  */
 type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
@@ -489,23 +519,47 @@ type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
 
 /**
  * Falls back to top-level filter key resolution, then `$or`, then SK, then full union.
+ *
+ * When top-level keys narrow, also intersects with `$or` block narrowing (if any)
+ * because DynamoDB ANDs them — a record must satisfy both the top-level filter
+ * and at least one `$or` block.
  */
 type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
   EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer Names
     ? ShouldNarrow<T, Names> extends true
-      ? NarrowByNames<T, Names & string>
+      ? IntersectKeysWithOr<T, Names & string, F>
       : FallbackToOrBlocks<T, F, SK>
     : FallbackToOrBlocks<T, F, SK>;
 
 /**
+ * When a top-level `type` filter narrows, also checks if `$or` blocks narrow
+ * to a disjoint set. Since DynamoDB ANDs them, the result is the intersection.
+ */
+type IntersectTypeWithOr<T extends DynaRecord, F> =
+  ResolveOrBlockEntityNames<T, F> extends infer OrNames
+    ? ShouldNarrow<T, OrNames> extends true
+      ? StrictNarrowByNames<
+          T,
+          Extract<ExtractTypeFromFilter<F> & string, OrNames & string>
+        >
+      : NarrowedQueryResults<T, F>
+    : NarrowedQueryResults<T, F>;
+
+/**
  * Infers query results from filter and SK for the non-index query overload.
  *
- * Narrowing priority:
- * 1. If the filter specifies a top-level `type` value, narrow by that.
- * 2. Otherwise, if top-level filter keys narrow to specific entities, use that.
+ * Narrowing strategy (respects DynamoDB's AND semantics):
+ * 1. If the filter specifies a top-level `type` value, narrow by that — then intersect
+ *    with `$or` narrowing if present (since DynamoDB ANDs them).
+ * 2. Otherwise, if top-level filter keys narrow to specific entities, use that — then
+ *    intersect with `$or` narrowing if present.
  * 3. Otherwise, if `$or` blocks resolve to specific entities (by type or keys), use that.
  * 4. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
  * 5. Otherwise, return the full `QueryResults<T>` union.
+ *
+ * When both top-level (type or keys) and `$or` narrow to different entity sets,
+ * the intersection is taken. An empty intersection produces `never[]`, reflecting
+ * that no DynamoDB record can satisfy both AND-combined conditions.
  *
  * @template T - The root entity being queried.
  * @template F - The inferred filter type (captured via `const` generic).
@@ -517,6 +571,6 @@ export type InferQueryResults<
   SK = unknown
 > = ExtractTypeFromFilter<F> extends infer Names
   ? ShouldNarrow<T, Names> extends true
-    ? NarrowedQueryResults<T, F>
+    ? IntersectTypeWithOr<T, F>
     : FallbackToFilterKeys<T, F, SK>
   : FallbackToFilterKeys<T, F, SK>;

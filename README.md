@@ -808,6 +808,8 @@ const orders = await Customer.query(
 > **Note:** Return type narrowing applies to the top-level `type` filter field, `type` values within `$or` elements, and to the `skCondition` option. When `$or` elements specify `type` values, the return type narrows to the union of those entity types. The `sk` property in key conditions validates values but does not narrow return types. Index queries (`{ indexName: "..." }`) use untyped filters.
 >
 > **Filter key narrowing:** When no `type` is specified, the return type automatically narrows based on which entities have the filtered attributes. For example, `filter: { orderDate: "2023" }` narrows to `Order` if only `Order` has `orderDate`. In `$or` blocks, each element narrows independently — by `type` if present, or by filter keys otherwise — and the return type is the union across all blocks.
+>
+> **AND intersection:** Since DynamoDB ANDs top-level filter conditions with `$or` blocks, the return type reflects this. When both top-level conditions and `$or` blocks independently narrow to specific entity sets, the return type is their intersection. If no entity satisfies both (e.g., `{ orderDate: "2023", $or: [{ lastFour: "1234" }] }` where `orderDate` is on `Order` and `lastFour` is on `PaymentMethod`), the return type is `never[]` — correctly indicating that no records can match.
 
 ### Querying on an index
 

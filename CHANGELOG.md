@@ -15,6 +15,7 @@
   - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
   - Filter keys: `{ orderDate: "2023" }` → narrows to entities that have `orderDate` (e.g., `Order`)
   - `$or` blocks: each element narrows by `type` or by filter keys; return type is the union across blocks
+  - AND intersection: when both top-level conditions (type or keys) and `$or` blocks narrow to specific entities, the return type is the intersection. If no entity satisfies both, the return type is `never[]`.
   - No type/keys specified → `QueryResults<T>` (full union)
 - **Sort key condition validation:** `skCondition` values are typed to only accept valid entity names from the partition (exact entity name or entity name prefix). Invalid sort key values produce compile errors. When `skCondition` is an exact entity name or `$beginsWith` with an exact entity name, the return type is automatically narrowed to that entity type.
 - **New utility types:** `DotPathKeys<T>`, `ObjectDotPaths<T>`, `EntityFilterableKeys<T>`, `NonRecursiveLeaf`, `PartitionEntities<T>`, `PartitionEntityNames<T>`, `TypedAndFilter<T>`, `TypedFilterParams<T>`, `NarrowedQueryResults<T, F>`, `InferQueryResults<T, F, SK>`, and supporting types for filter validation and return type inference.

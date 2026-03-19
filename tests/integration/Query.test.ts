@@ -3691,10 +3691,10 @@ describe("Query", () => {
       });
     });
 
-    describe("filter key narrowing priority over $or", () => {
-      it("top-level filter keys take priority over $or blocks", async () => {
-        // orderDate is only on Order → top-level key narrows to Order
-        // $or has lastFour (PaymentMethod), but top-level keys have higher priority
+    describe("AND intersection of filter keys and $or", () => {
+      it("disjoint top-level keys and $or produce never[] (no entity can match)", async () => {
+        // orderDate → only Order. $or lastFour → only PaymentMethod.
+        // DynamoDB ANDs them: must satisfy both. No entity has both → never[].
         const result = await Customer.query("123", {
           filter: {
             orderDate: "2023",
@@ -3702,13 +3702,75 @@ describe("Query", () => {
           }
         });
 
-        // @ts-expect-no-error: narrowed to Order (top-level key priority)
+        // @ts-expect-no-error: intersection is empty → never[]
+        const _never: never[] = result;
+
+        Logger.log(_never);
+      });
+
+      it("overlapping top-level keys and $or produce the intersection", async () => {
+        // customerId → Order, PaymentMethod, ContactInformation
+        // $or orderDate → Order
+        // Intersection: Order (has both customerId and orderDate)
+        const result = await Customer.query("123", {
+          filter: {
+            customerId: "c1",
+            $or: [{ orderDate: "2023" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is Order
         const _narrowed: Array<EntityAttributesInstance<Order>> = result;
 
-        // @ts-expect-error: PaymentMethod excluded — top-level keys win
+        // @ts-expect-error: PaymentMethod excluded by intersection
         const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
 
         Logger.log(_narrowed, _noPM);
+      });
+
+      it("top-level type and $or with disjoint types produce never[]", async () => {
+        // type: "Order" + $or type: "PaymentMethod"
+        // DynamoDB ANDs: type = Order AND type = PaymentMethod → impossible
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ type: "PaymentMethod", lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is empty → never[]
+        const _never: never[] = result;
+
+        Logger.log(_never);
+      });
+
+      it("top-level type and $or with same type produce narrowed result", async () => {
+        // type: "Order" + $or type: "Order" → intersection is Order
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ type: "Order", orderDate: "2023" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("top-level keys without $or still narrow normally", async () => {
+        const result = await Customer.query("123", {
+          filter: { orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order (no $or to intersect with)
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed);
       });
     });
 

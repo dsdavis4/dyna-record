@@ -162,6 +162,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * - Top-level filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
    * - Top-level filter keys: `{ orderDate: "2023" }` → narrows to entities that have `orderDate`
    * - `$or` elements: each block narrows by `type` (if present) or by filter keys; return type is the union
+   * - AND intersection: when top-level conditions and `$or` both narrow, the return type is their intersection. Empty intersection → `never[]`.
    * - `skCondition` option: `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
    * - No type/keys/SK specified → `QueryResults<T>` (full partition union)
    *
