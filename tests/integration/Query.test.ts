@@ -3206,8 +3206,7 @@ describe("Query", () => {
         Logger.log(_match, _excluded);
       });
 
-      it("$or-only filter does NOT narrow return type", async () => {
-        // When only $or is specified (no top-level type), return type is full union
+      it("$or-only filter narrows return type to union of $or types", async () => {
         const result = await Customer.query("123", {
           filter: {
             $or: [
@@ -3217,18 +3216,17 @@ describe("Query", () => {
           }
         });
 
-        // @ts-expect-no-error: return type is the full union — $or doesn't narrow returns
-        const _full: Array<
-          | EntityAttributesInstance<Customer>
+        // Exhaustive: narrowed to exactly Order | PaymentMethod from $or types
+        // @ts-expect-no-error
+        const _exact: Array<
           | EntityAttributesInstance<Order>
           | EntityAttributesInstance<PaymentMethod>
-          | EntityAttributesInstance<ContactInformation>
         > = result;
 
-        // @ts-expect-error: NOT narrowed to just Order — $or alone doesn't narrow
-        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+        // @ts-expect-error: Customer excluded — not in any $or block's type
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
 
-        Logger.log(_full, _notNarrowed);
+        Logger.log(_exact, _noCustomer);
       });
 
       it("top-level type array + $or with entity-specific filters", async () => {

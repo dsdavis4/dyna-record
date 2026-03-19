@@ -314,6 +314,25 @@ export type ExtractTypeFromFilter<F> = F extends { type: infer V }
   : never;
 
 /**
+ * Extracts `type` values from `$or` elements in a filter.
+ * Returns the union of all `type` values found across all `$or` blocks.
+ * Returns `never` if no `$or` exists or no `$or` elements have `type`.
+ */
+export type ExtractTypeFromOrFilter<F> = F extends {
+  $or?: Array<infer OrElement>;
+}
+  ? OrElement extends { type: infer V }
+    ? V extends string
+      ? V
+      : V extends Array<infer U>
+        ? U extends string
+          ? U
+          : never
+        : never
+    : never
+  : never;
+
+/**
  * Maps entity name string → entity type.
  */
 export type ResolveEntityByName<
@@ -351,12 +370,37 @@ export type NarrowedQueryResults<T extends DynaRecord, F> =
     : QueryResults<T>;
 
 /**
+ * Falls back to SK narrowing, then to full union.
+ */
+type FallbackToSK<T extends DynaRecord, SK> = [
+  ExtractEntityFromSK<T, SK>
+] extends [never]
+  ? QueryResults<T>
+  : NarrowByNames<T, ExtractEntityFromSK<T, SK>>;
+
+/**
+ * Falls back to $or type narrowing, then SK narrowing, then full union.
+ * Checks that $or types don't equal the full PartitionEntityNames (which indicates
+ * the default type was used, not a user-provided $or).
+ */
+type FallbackToOr<T extends DynaRecord, F, SK> = IsAny<
+  ExtractTypeFromOrFilter<F>
+> extends true
+  ? FallbackToSK<T, SK>
+  : [ExtractTypeFromOrFilter<F>] extends [never]
+    ? FallbackToSK<T, SK>
+    : [PartitionEntityNames<T>] extends [ExtractTypeFromOrFilter<F>]
+      ? FallbackToSK<T, SK>
+      : NarrowByNames<T, ExtractTypeFromOrFilter<F>>;
+
+/**
  * Infers query results from filter and SK for the non-index query overload.
  *
  * Narrowing priority:
- * 1. If the filter specifies a `type` value, narrow by that.
- * 2. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
- * 3. Otherwise, return the full `QueryResults<T>` union.
+ * 1. If the filter specifies a top-level `type` value, narrow by that.
+ * 2. Otherwise, if `$or` elements specify `type` values, narrow by the union of those.
+ * 3. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
+ * 4. Otherwise, return the full `QueryResults<T>` union.
  *
  * @template T - The root entity being queried.
  * @template F - The inferred filter type (captured via `const` generic).
@@ -367,15 +411,9 @@ export type InferQueryResults<
   F,
   SK = unknown
 > = IsAny<ExtractTypeFromFilter<F>> extends true
-  ? [ExtractEntityFromSK<T, SK>] extends [never]
-    ? QueryResults<T>
-    : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
+  ? FallbackToOr<T, F, SK>
   : [ExtractTypeFromFilter<F>] extends [never]
-    ? [ExtractEntityFromSK<T, SK>] extends [never]
-      ? QueryResults<T>
-      : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
+    ? FallbackToOr<T, F, SK>
     : [PartitionEntityNames<T>] extends [ExtractTypeFromFilter<F>]
-      ? [ExtractEntityFromSK<T, SK>] extends [never]
-        ? QueryResults<T>
-        : NarrowByNames<T, ExtractEntityFromSK<T, SK>>
+      ? FallbackToOr<T, F, SK>
       : NarrowedQueryResults<T, F>;

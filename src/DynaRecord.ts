@@ -158,9 +158,10 @@ abstract class DynaRecord implements DynaRecordBase {
    * and entities from other tables are rejected at compile time.
    *
    * **Return type narrowing:** The return type narrows automatically based on:
-   * - Filter `type` value: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
-   * - Filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
-   * - `skCondition` option (string form only): `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
+   * - Top-level filter `type`: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
+   * - Top-level filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
+   * - `$or` element `type` values: `$or: [{ type: "Order" }, { type: "PaymentMethod" }]` → union of those types
+   * - `skCondition` option: `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
    * - No type/SK specified → `QueryResults<T>` (full partition union)
    *
    * Note: When using the object key form (`{ pk: "...", sk: "Order" }`), the `sk` value is

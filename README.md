@@ -822,7 +822,7 @@ const orders = await Customer.query(
 // orders is Array<EntityAttributesInstance<Order>>
 ```
 
-> **Note:** Return type narrowing applies to the top-level `type` filter field and to the `skCondition` option. The `sk` property in key conditions validates values but does not narrow return types. `$or` elements are narrowed for filter key validation but do not affect the return type. Index queries (`{ indexName: "..." }`) use untyped filters.
+> **Note:** Return type narrowing applies to the top-level `type` filter field, `type` values within `$or` elements, and to the `skCondition` option. When `$or` elements specify `type` values, the return type narrows to the union of those entity types. The `sk` property in key conditions validates values but does not narrow return types. Index queries (`{ indexName: "..." }`) use untyped filters.
 
 ### Querying on an index
 
