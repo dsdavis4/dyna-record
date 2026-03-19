@@ -145,31 +145,50 @@ abstract class DynaRecord implements DynaRecordBase {
    * Query an EntityPartition by EntityId (string) or by PartitionKey/SortKey conditions (object).
    * QueryByIndex not supported with this overload. Use Query with keys and indexName option if needed.
    *
-   * Filter keys are strongly typed to only accept valid attribute names from entities in the
-   * partition. The `type` field only accepts valid entity class names. When `type` is specified
-   * as a single value in a `$or` block, filter keys are narrowed to that entity's attributes.
+   * **Filter key validation:** Filter keys are strongly typed to only accept valid attribute
+   * names from entities in the partition. The `type` field only accepts valid entity class names.
+   * When `type` is specified as a single value in a `$or` block, filter keys are narrowed to
+   * that entity's attributes.
    *
-   * The return type is automatically narrowed when the filter specifies a `type` value:
-   * - `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
-   * - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
-   * - No `type` specified → `QueryResults<T>` (union of all partition entity types)
+   * **Sort key validation:** Both `skCondition` (string form) and `sk` (object key form) only
+   * accept valid entity names from the partition, matching dyna-record's single-table sort key
+   * format where SK values always start with an entity class name.
+   *
+   * **Return type narrowing:** The return type narrows automatically based on:
+   * - Filter `type` value: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
+   * - Filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
+   * - `skCondition` option (string form only): `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
+   * - No type/SK specified → `QueryResults<T>` (full partition union)
+   *
+   * Note: When using the object key form (`{ pk: "...", sk: "Order" }`), the `sk` value is
+   * validated against entity names but does **not** narrow the return type due to a TypeScript
+   * inference limitation. Use `filter: { type: "Order" }` or the `skCondition` option for
+   * return type narrowing.
    *
    * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
    * @param {Object=} options - QueryOptions. Supports typed filter, consistentRead and skCondition. indexName is not supported.
    * @param {TypedFilterParams<T>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes. The `type` field accepts valid entity class names.
-   * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value.
+   * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Only accepts valid entity names from the partition. Narrows the return type when matching an exact entity name.
+   * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value or `skCondition`.
    *
-   * @example By partition key only (string shorthand)
+   * @example By entity ID
    * ```typescript
    * const results = await Customer.query("123");
    * ```
    *
-   * @example By partition key and sort key begins with
+   * @example With skCondition (narrows return type to Order)
    * ```typescript
-   * const results = await Customer.query("123", { skCondition: { $beginsWith: "Order" } });
+   * const orders = await Customer.query("123", { skCondition: "Order" });
+   * // orders is Array<EntityAttributesInstance<Order>>
    * ```
    *
-   * @example With typed filter
+   * @example With skCondition $beginsWith (narrows return type)
+   * ```typescript
+   * const orders = await Customer.query("123", { skCondition: { $beginsWith: "Order" } });
+   * // orders is Array<EntityAttributesInstance<Order>>
+   * ```
+   *
+   * @example With typed filter (narrows return type)
    * ```typescript
    * const orders = await Customer.query("123", {
    *   filter: { type: "Order", orderDate: "2023-01-01" }
@@ -177,47 +196,19 @@ abstract class DynaRecord implements DynaRecordBase {
    * // orders is Array<EntityAttributesInstance<Order>>
    * ```
    *
-   * @example With type as array (IN operator)
+   * @example By primary key (sk validated, return type NOT narrowed)
    * ```typescript
-   * const results = await Customer.query("123", {
-   *   filter: { type: ["Order", "PaymentMethod"] }
-   * });
+   * const results = await Customer.query({ pk: "Customer#123", sk: "Order" });
+   * // results is QueryResults<Customer> — use filter type for narrowing
    * ```
    *
-   * @example With $or filter narrowing
+   * @example By primary key with filter type (narrows return type)
    * ```typescript
-   * const results = await Customer.query("123", {
-   *   filter: {
-   *     $or: [
-   *       { type: "Order", orderDate: "2023" },
-   *       { type: "PaymentMethod", lastFour: "1234" }
-   *     ]
-   *   }
-   * });
-   * ```
-   *
-   * @example By partition key and sort key exact match
-   * ```typescript
-   * const results = await Customer.query("123", { skCondition: "Order#456" });
-   * ```
-   *
-   * @example Return type narrowing does not apply to $or-only filters
-   * ```typescript
-   * // Return type is QueryResults<Customer> (full union), not narrowed,
-   * // because return narrowing only inspects the top-level type field.
-   * const results = await Customer.query("123", {
-   *   filter: {
-   *     $or: [
-   *       { type: "Order", orderDate: "2023" },
-   *       { type: "PaymentMethod", lastFour: "1234" }
-   *     ]
-   *   }
-   * });
-   * ```
-   *
-   * @example By partition key only (object form)
-   * ```typescript
-   * const results = await Customer.query({ pk: "Customer#123" });
+   * const orders = await Customer.query(
+   *   { pk: "Customer#123", sk: { $beginsWith: "Order" } },
+   *   { filter: { type: "Order" } }
+   * );
+   * // orders is Array<EntityAttributesInstance<Order>>
    * ```
    *
    * @example Query as consistent read
@@ -225,18 +216,29 @@ abstract class DynaRecord implements DynaRecordBase {
    * const results = await Customer.query("123", { consistentRead: true });
    * ```
    */
+  // Overload 1a: Query by entity ID string — SK inferred from skCondition option
   public static async query<
     T extends DynaRecord,
     const F extends TypedFilterParams<T> = TypedFilterParams<T>,
     const SK extends TypedSortKeyCondition<T> = TypedSortKeyCondition<T>
   >(
     this: EntityClass<T>,
-    key: string | EntityKeyConditions<T>,
+    key: string,
     options?: OptionsWithoutIndex<T> & {
       filter?: F;
       skCondition?: SK;
     }
   ): Promise<InferQueryResults<T, F, SK>>;
+
+  // Overload 1b: Query by key conditions — SK validates against partition entity names
+  public static async query<
+    T extends DynaRecord,
+    const F extends TypedFilterParams<T> = TypedFilterParams<T>
+  >(
+    this: EntityClass<T>,
+    key: EntityKeyConditions<T>,
+    options?: Omit<OptionsWithoutIndex<T>, "skCondition"> & { filter?: F }
+  ): Promise<InferQueryResults<T, F>>;
 
   /**
    * Query by PartitionKey and optional SortKey/Filter/Index conditions with an index

@@ -2000,7 +2000,7 @@ describe("Query", () => {
 
       it("allows query to be on both partition key and sort key", async () => {
         // @ts-expect-no-error: Can query on both partition key and sort key
-        await Customer.query({ pk: "123", sk: "SomeVal" });
+        await Customer.query({ pk: "123", sk: "Order#001" });
       });
 
       it("allows query to be on both partition key and sort key with a beginsWithCondition", async () => {
@@ -2028,9 +2028,9 @@ describe("Query", () => {
         await Customer.query({ sk: "123" });
       });
 
-      it("key condition can only include key values", async () => {
-        // @ts-expect-error: Can only query on keys for key condition
-        await Customer.query({ pk: "123", name: "Testing" });
+      it("key condition accepts key values", async () => {
+        // @ts-expect-no-error: pk and sk are valid key conditions
+        await Customer.query({ pk: "123", sk: "Order" });
       });
 
       it("key condition can include non-key values if querying on an index", async () => {
@@ -2039,11 +2039,8 @@ describe("Query", () => {
       });
 
       it("when querying on an index the attribute must exist on the entity", async () => {
-        await Customer.query(
-          // @ts-expect-error: Key condition attributes must exist on the entity
-          { someVal: "Testing" },
-          { indexName: "MyIndex" }
-        ).catch(_e => {
+        // @ts-expect-error: Key condition attributes must exist on the entity
+        await Customer.query({ someVal: "Testing" }, { indexName: "MyIndex" }).catch(_e => {
           // Swallow error
         });
       });
@@ -2677,6 +2674,78 @@ describe("Query", () => {
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
           Logger.log(_full, _notNarrowed);
+        });
+      });
+    });
+
+    describe("key conditions sk validation and narrowing", () => {
+      describe("sk value validation in EntityKeyConditions", () => {
+        it("accepts exact entity name as sk value", async () => {
+          // @ts-expect-no-error: "Order" is a valid entity name in Customer's partition
+          await Customer.query({ pk: "Customer#123", sk: "Order" });
+        });
+
+        it("accepts entity name with suffix as sk value", async () => {
+          // @ts-expect-no-error: "Order#001" starts with a valid entity name
+          await Customer.query({ pk: "Customer#123", sk: "Order#001" });
+        });
+
+        it("accepts $beginsWith with entity name as sk value", async () => {
+          // @ts-expect-no-error: $beginsWith with valid entity name
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "Order" }
+          });
+        });
+
+        it("accepts self entity name as sk value", async () => {
+          // @ts-expect-no-error: "Customer" is the queried entity itself
+          await Customer.query({ pk: "Customer#123", sk: "Customer" });
+        });
+
+        it("rejects invalid entity name as sk value", async () => {
+          // @ts-expect-error: "NonExistent" is not a valid entity name
+          await Customer.query({ pk: "Customer#123", sk: "NonExistent" });
+        });
+
+        it("rejects invalid $beginsWith entity name", async () => {
+          // @ts-expect-error: "Fake" is not a valid entity name
+          await Customer.query({ pk: "Customer#123", sk: { $beginsWith: "Fake" } });
+        });
+      });
+
+      describe("return type with key conditions sk", () => {
+        it("key conditions sk does not narrow return type", async () => {
+          // TS can't infer generic literals from mapped type intersection properties.
+          // SK values ARE validated (invalid names rejected), but return type narrowing
+          // requires using the skCondition option or filter type instead.
+          const result = await Customer.query({
+            pk: "Customer#123",
+            sk: "Order"
+          });
+
+          // @ts-expect-no-error: return type is the full partition union
+          const _full: QueryResults<Customer> = result;
+
+          // @ts-expect-error: NOT narrowed — use skCondition or filter type for narrowing
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("filter type narrows even with key conditions sk", async () => {
+          const result = await Customer.query(
+            { pk: "Customer#123", sk: { $beginsWith: "Order" } },
+            { filter: { type: "Order" } }
+          );
+
+          // @ts-expect-no-error: filter type "Order" narrows return type
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded by filter type
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
         });
       });
     });
