@@ -2038,6 +2038,11 @@ describe("Query", () => {
         await Customer.query({ pk: "123", sk: "Order" });
       });
 
+      it("key condition can only include key values", async () => {
+        // @ts-expect-error: Can only query on keys for key condition
+        await Customer.query({ pk: "123", name: "Testing" });
+      });
+
       it("key condition can include non-key values if querying on an index", async () => {
         // @ts-expect-no-error: Key condition can include non key values if querying on an index
         await Customer.query({ name: "Testing" }, { indexName: "MyIndex" });
@@ -2251,9 +2256,14 @@ describe("Query", () => {
         });
       });
 
-      it("excludes PK/SK from filter keys", async () => {
+      it("excludes PK from filter keys", async () => {
         // @ts-expect-error: pk is a PartitionKey attribute, not a filter key
         await Customer.query("123", { filter: { pk: "value" } });
+      });
+
+      it("excludes SK from filter keys", async () => {
+        // @ts-expect-error: sk is a SortKey attribute, not a filter key
+        await Customer.query("123", { filter: { sk: "value" } });
       });
 
       it("accepts dot-path keys for ObjectAttribute fields", async () => {
@@ -2343,7 +2353,7 @@ describe("Query", () => {
       it("rejects invalid attrs in $or elements", async () => {
         // @ts-expect-error: nonExistent is not a valid attribute on any partition entity
         await Customer.query("123", {
-          filter: { $or: [{ type: "Order" as const, nonExistent: "value" }] }
+          filter: { $or: [{ type: "Order", nonExistent: "value" }] }
         }).catch(() => {});
       });
 
