@@ -5,6 +5,8 @@ import {
   Course,
   Customer,
   DeepNestedEntity,
+  Employee,
+  Founder,
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
@@ -3568,6 +3570,161 @@ describe("Query", () => {
           skCondition: "Order",
           filter: { type: "Person" }
         });
+      });
+    });
+
+    describe("empty $or array", () => {
+      it("empty $or compiles and returns full union (no narrowing)", async () => {
+        const result = await Customer.query("123", {
+          filter: { $or: [] }
+        });
+
+        // @ts-expect-no-error: empty $or means no narrowing — full union
+        const _full: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: NOT narrowed — still the full union
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_full, _notNarrowed);
+      });
+    });
+
+    describe("entity with no relationships", () => {
+      it("Employee (no relationships) accepts own attributes as filter keys", async () => {
+        // @ts-expect-no-error: name is a valid attribute on Employee
+        await Employee.query("123", { filter: { name: "John" } });
+      });
+
+      it("Employee (no relationships) accepts organizationId as filter key", async () => {
+        // @ts-expect-no-error: organizationId is a NullableForeignKey on Employee
+        await Employee.query("123", {
+          filter: { organizationId: "org-1" }
+        });
+      });
+
+      it("Employee type filter only accepts 'Employee'", async () => {
+        // @ts-expect-no-error: Employee is the only entity in its own partition
+        await Employee.query("123", { filter: { type: "Employee" } });
+      });
+
+      it("Employee type filter rejects other entity names", async () => {
+        // @ts-expect-error: "Order" is not in Employee's partition
+        await Employee.query("123", { filter: { type: "Order" } });
+      });
+
+      it("Employee return type narrows to Employee when type filter specified", async () => {
+        const result = await Employee.query("123", {
+          filter: { type: "Employee" }
+        });
+
+        // @ts-expect-no-error: narrowed to Employee
+        const _narrowed: Array<EntityAttributesInstance<Employee>> = result;
+
+        Logger.log(_narrowed);
+      });
+
+      it("Founder (no relationships) accepts own attributes", async () => {
+        // @ts-expect-no-error: name is valid on Founder
+        await Founder.query("123", { filter: { name: "Jane" } });
+      });
+    });
+
+    describe("queryByKeys overload return type narrowing", () => {
+      it("queryByKeys with filter type narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { type: "Order" } }
+        );
+
+        // @ts-expect-no-error: filter type "Order" narrows return type
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("queryByKeys with filter key narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { orderDate: "2023" } }
+        );
+
+        // @ts-expect-no-error: orderDate only on Order → narrows
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("queryByKeys with $or narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          {
+            filter: {
+              $or: [
+                { type: "Order", orderDate: "2023" },
+                { type: "PaymentMethod", lastFour: "1234" }
+              ]
+            }
+          }
+        );
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+    });
+
+    describe("filter key narrowing priority over $or", () => {
+      it("top-level filter keys take priority over $or blocks", async () => {
+        // orderDate is only on Order → top-level key narrows to Order
+        // $or has lastFour (PaymentMethod), but top-level keys have higher priority
+        const result = await Customer.query("123", {
+          filter: {
+            orderDate: "2023",
+            $or: [{ lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order (top-level key priority)
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod excluded — top-level keys win
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        Logger.log(_narrowed, _noPM);
+      });
+    });
+
+    describe("OtherTable return type narrowing", () => {
+      it("Teacher.query with type 'Course' narrows return type", async () => {
+        const result = await Teacher.query("123", {
+          filter: { type: "Course" }
+        });
+
+        // @ts-expect-no-error: narrowed to Course
+        const _narrowed: Array<EntityAttributesInstance<Course>> = result;
+
+        // @ts-expect-error: Teacher excluded
+        const _noTeacher: Array<EntityAttributesInstance<Teacher>> = result;
+
+        Logger.log(_narrowed, _noTeacher);
       });
     });
   });

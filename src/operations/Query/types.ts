@@ -27,13 +27,19 @@ export type QueryOptions = QueryBuilderOptions & {
 /**
  * Options for querying without an index.
  *
- * The `filter` property uses {@link TypedFilterParams} for compile-time key validation.
+ * Omits `indexName`, `filter`, and `skCondition` from {@link QueryOptions}.
+ * The `filter` property is re-declared using {@link TypedFilterParams} for compile-time
+ * key validation. The `skCondition` property is omitted here and re-added at the query
+ * overload level with a `const SK` generic parameter for literal type inference and
+ * return type narrowing.
+ *
  * The query overload also re-declares `filter` with a `const F` generic parameter to
  * enable literal type inference for return type narrowing. Both declarations are required:
  * this one provides excess property checking on object literals, while the generic
  * provides literal type capture for return type inference.
  *
- * @template T - The entity type being queried.
+ * @template T - The entity type being queried. Defaults to `DynaRecord` for backward
+ * compatibility in generic contexts.
  */
 export type OptionsWithoutIndex<T extends DynaRecord = DynaRecord> = Omit<
   QueryOptions,
@@ -235,7 +241,11 @@ export type TypedAndFilter<T extends DynaRecord> =
   | ({ type?: never } & FullPartitionFilterRecord<T>);
 
 /**
- * Each $or element is independently narrowed.
+ * Typed `$or` filter block for partition queries.
+ * Each `$or` element is independently narrowed: when a block specifies
+ * `type: "Order"`, only Order's attributes are accepted in that block.
+ *
+ * @template T - The root entity whose partition defines valid filter keys and type values.
  */
 export type TypedOrFilter<T extends DynaRecord> = {
   $or?: TypedAndFilter<T>[];
@@ -432,40 +442,59 @@ type ResolveOrBlockEntityNames<T extends DynaRecord, F> = F extends {
 // ─── Inference Chain ────────────────────────────────────────────────────────
 
 /**
+ * Determines whether `Names` represents a meaningful narrowing of the partition.
+ * Returns `true` if `Names` is a specific subset of partition entity names,
+ * `false` otherwise.
+ *
+ * A narrowing is meaningful when `Names` is:
+ * - Not `any` (from AWS SDK's `NativeAttributeValue` propagation)
+ * - Not `never` (no resolution)
+ * - Not the full partition union (no narrowing effect)
+ *
+ * This guard is shared across the inference chain to avoid duplicating the
+ * three-check pattern (IsAny / never / full-union) at each fallback level.
+ *
+ * @template T - The root entity being queried.
+ * @template Names - The resolved entity name union to check.
+ */
+type ShouldNarrow<T extends DynaRecord, Names> = IsAny<Names> extends true
+  ? false
+  : [Names] extends [never]
+    ? false
+    : [Names] extends [string]
+      ? [PartitionEntityNames<T>] extends [Names]
+        ? false
+        : true
+      : false;
+
+/**
  * Falls back to SK narrowing, then to full union.
  */
-type FallbackToSK<T extends DynaRecord, SK> = [
-  ExtractEntityFromSK<T, SK>
-] extends [never]
-  ? QueryResults<T>
-  : NarrowByNames<T, ExtractEntityFromSK<T, SK>>;
+type FallbackToSK<T extends DynaRecord, SK> =
+  ExtractEntityFromSK<T, SK> extends infer Names
+    ? ShouldNarrow<T, Names> extends true
+      ? NarrowByNames<T, Names & string>
+      : QueryResults<T>
+    : QueryResults<T>;
 
 /**
  * Falls back to `$or` block resolution (by type or filter keys), then SK, then full union.
  */
 type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
-  ResolveOrBlockEntityNames<T, F> extends infer OrNames extends string
-    ? IsAny<OrNames> extends true
-      ? FallbackToSK<T, SK>
-      : [OrNames] extends [never]
-        ? FallbackToSK<T, SK>
-        : [PartitionEntityNames<T>] extends [OrNames]
-          ? FallbackToSK<T, SK>
-          : NarrowByNames<T, OrNames>
+  ResolveOrBlockEntityNames<T, F> extends infer Names
+    ? ShouldNarrow<T, Names> extends true
+      ? NarrowByNames<T, Names & string>
+      : FallbackToSK<T, SK>
     : FallbackToSK<T, SK>;
 
 /**
  * Falls back to top-level filter key resolution, then `$or`, then SK, then full union.
  */
 type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
-  EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer KeyNames extends string
-    ? IsAny<KeyNames> extends true
-      ? FallbackToOrBlocks<T, F, SK>
-      : [KeyNames] extends [never]
-        ? FallbackToOrBlocks<T, F, SK>
-        : [PartitionEntityNames<T>] extends [KeyNames]
-          ? FallbackToOrBlocks<T, F, SK>
-          : NarrowByNames<T, KeyNames>
+  EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer Names
+    ? ShouldNarrow<T, Names> extends true
+      ? NarrowByNames<T, Names & string>
+      : FallbackToOrBlocks<T, F, SK>
     : FallbackToOrBlocks<T, F, SK>;
 
 /**
@@ -486,10 +515,8 @@ export type InferQueryResults<
   T extends DynaRecord,
   F,
   SK = unknown
-> = IsAny<ExtractTypeFromFilter<F>> extends true
-  ? FallbackToFilterKeys<T, F, SK>
-  : [ExtractTypeFromFilter<F>] extends [never]
-    ? FallbackToFilterKeys<T, F, SK>
-    : [PartitionEntityNames<T>] extends [ExtractTypeFromFilter<F>]
-      ? FallbackToFilterKeys<T, F, SK>
-      : NarrowedQueryResults<T, F>;
+> = ExtractTypeFromFilter<F> extends infer Names
+  ? ShouldNarrow<T, Names> extends true
+    ? NarrowedQueryResults<T, F>
+    : FallbackToFilterKeys<T, F, SK>
+  : FallbackToFilterKeys<T, F, SK>;

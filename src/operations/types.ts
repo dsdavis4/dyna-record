@@ -115,8 +115,16 @@ export type NonRecursiveLeaf =
   | ((...args: never[]) => unknown);
 
 /**
+ * Maximum recursion depth for {@link DotPathKeys}.
+ * Set to 5 to cover realistic DynamoDB Map attribute nesting (typically 2-3 levels)
+ * while staying well below TypeScript's internal instantiation depth limit of 50.
+ * Higher values risk combinatorial explosion with wide object schemas.
+ */
+type MaxDotPathDepth = 5;
+
+/**
  * Recursively generates dot-separated key paths for plain object types.
- * Stops recursion at {@link NonRecursiveLeaf} types and at a maximum depth of 8 levels
+ * Stops recursion at {@link NonRecursiveLeaf} types and at {@link MaxDotPathDepth} levels
  * to prevent "Type instantiation is excessively deep" errors.
  *
  * @template T - The object type to generate paths for.
@@ -125,7 +133,7 @@ export type NonRecursiveLeaf =
 export type DotPathKeys<
   T,
   Depth extends unknown[] = []
-> = Depth["length"] extends 8
+> = Depth["length"] extends MaxDotPathDepth
   ? never
   : T extends NonRecursiveLeaf
     ? never
@@ -160,8 +168,12 @@ export type ObjectDotPaths<T extends DynaRecord> = {
 /**
  * Union of: non-relationship/non-function/non-key attribute names + ObjectDotPaths.
  * This is the complete set of valid filter keys for a single entity.
- * Excludes PartitionKeyAttribute, SortKeyAttribute, and `type` (handled separately
- * by {@link TypedAndFilter} for discriminated union narrowing).
+ *
+ * Excludes:
+ * - Relationship properties (via {@link EntityAttributesOnly})
+ * - Function fields (via {@link EntityAttributesOnly})
+ * - PartitionKeyAttribute and SortKeyAttribute
+ * - `type` (handled separately by {@link TypedAndFilter} for discriminated union narrowing)
  */
 export type EntityFilterableKeys<T extends DynaRecord> =
   | Exclude<
