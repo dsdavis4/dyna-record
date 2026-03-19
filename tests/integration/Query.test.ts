@@ -1,5 +1,6 @@
 import {
   Assignment,
+  Book,
   ContactInformation,
   Course,
   Customer,
@@ -7,6 +8,7 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
+  Sponsor,
   Teacher,
   Warehouse
 } from "./mockModels";
@@ -2040,7 +2042,10 @@ describe("Query", () => {
 
       it("when querying on an index the attribute must exist on the entity", async () => {
         // @ts-expect-error: Key condition attributes must exist on the entity
-        await Customer.query({ someVal: "Testing" }, { indexName: "MyIndex" }).catch(_e => {
+        await Customer.query(
+          { someVal: "Testing" },
+          { indexName: "MyIndex" }
+        ).catch(_e => {
           // Swallow error
         });
       });
@@ -2315,6 +2320,194 @@ describe("Query", () => {
         // @ts-expect-no-error: without type, all partition attrs allowed
         await Customer.query("123", {
           filter: { name: "John", lastFour: "1234", email: "test@test.com" }
+        });
+      });
+    });
+
+    describe("only partition entities accepted in type, skCondition, and sk", () => {
+      // Tests verify that type filter, skCondition, and key conditions sk
+      // only accept entities that are related to the queried entity.
+      // Covers all relationship types: HasMany, HasOne, BelongsTo, HasAndBelongsToMany
+
+      describe("HasMany + HasOne (Customer: HasMany Order/PaymentMethod, HasOne ContactInformation)", () => {
+        it("type filter accepts self and related entities", async () => {
+          // @ts-expect-no-error: Customer + its HasMany/HasOne relationships
+          await Customer.query("123", { filter: { type: "Customer" } });
+          await Customer.query("123", { filter: { type: "Order" } });
+          await Customer.query("123", { filter: { type: "PaymentMethod" } });
+          await Customer.query("123", {
+            filter: { type: "ContactInformation" }
+          });
+        });
+
+        it("type filter rejects unrelated entity from same table", async () => {
+          // @ts-expect-error: Person is on MockTable but not related to Customer
+          await Customer.query("123", { filter: { type: "Persons" } });
+        });
+
+        it("skCondition accepts related entities", async () => {
+          mockQuery.mockResolvedValue({ Items: [] });
+          // @ts-expect-no-error: all are in Customer's partition
+          await Customer.query("123", { skCondition: "Customer" });
+          await Customer.query("123", { skCondition: "Order" });
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "PaymentMethod" }
+          });
+          await Customer.query("123", { skCondition: "ContactInformation" });
+        });
+
+        it("skCondition rejects unrelated entity", async () => {
+          // @ts-expect-error: Person is not related to Customer
+          await Customer.query("123", { skCondition: "Person" });
+        });
+
+        it("key conditions sk accepts related entities", async () => {
+          mockQuery.mockResolvedValue({ Items: [] });
+          // @ts-expect-no-error: all are in Customer's partition
+          await Customer.query({ pk: "Customer#123", sk: "Order#001" });
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "PaymentMethod" }
+          });
+          await Customer.query({
+            pk: "Customer#123",
+            sk: "ContactInformation"
+          });
+        });
+
+        it("key conditions sk rejects unrelated entity", async () => {
+          // @ts-expect-error: Person is not related to Customer
+          await Customer.query({ pk: "Customer#123", sk: "Person" });
+        });
+      });
+
+      describe("BelongsTo (Order: BelongsTo Customer, BelongsTo PaymentMethod)", () => {
+        it("type filter accepts self and BelongsTo targets", async () => {
+          // @ts-expect-no-error: Order + its BelongsTo relationships
+          await Order.query("123", { filter: { type: "Order" } });
+          await Order.query("123", { filter: { type: "Customer" } });
+          await Order.query("123", { filter: { type: "PaymentMethod" } });
+        });
+
+        it("type filter rejects entity not in Order's relationships", async () => {
+          // @ts-expect-error: ContactInformation is not related to Order
+          await Order.query("123", { filter: { type: "ContactInformation" } });
+        });
+
+        it("skCondition accepts BelongsTo targets", async () => {
+          mockQuery.mockResolvedValue({ Items: [] });
+          // @ts-expect-no-error: Order + its BelongsTo targets
+          await Order.query("123", { skCondition: "Order" });
+          await Order.query("123", {
+            skCondition: { $beginsWith: "Customer" }
+          });
+          await Order.query("123", { skCondition: "PaymentMethod" });
+        });
+
+        it("skCondition rejects unrelated entity", async () => {
+          // @ts-expect-error: ContactInformation is not related to Order
+          await Order.query("123", { skCondition: "ContactInformation" });
+        });
+      });
+
+      describe("HasAndBelongsToMany (Book: HABTM Author, BelongsTo Person)", () => {
+        it("type filter accepts self, HABTM, and BelongsTo targets", async () => {
+          // @ts-expect-no-error: Book + Author (HABTM) + Person (BelongsTo)
+          await Book.query("123", { filter: { type: "Book" } });
+          await Book.query("123", { filter: { type: "Author" } });
+          await Book.query("123", { filter: { type: "Person" } });
+        });
+
+        it("type filter rejects entity not in Book's relationships", async () => {
+          // @ts-expect-error: Customer is not related to Book
+          await Book.query("123", { filter: { type: "Customer" } });
+        });
+
+        it("skCondition accepts HABTM and BelongsTo targets", async () => {
+          mockQuery.mockResolvedValue({ Items: [] });
+          // @ts-expect-no-error: Book + its relationship targets
+          await Book.query("123", { skCondition: { $beginsWith: "Author" } });
+          await Book.query("123", { skCondition: "Person" });
+        });
+
+        it("skCondition rejects unrelated entity", async () => {
+          // @ts-expect-error: Customer is not related to Book
+          await Book.query("123", { skCondition: "Customer" });
+        });
+      });
+
+      describe("Pure HABTM (Sponsor: HABTM Festival)", () => {
+        it("type filter accepts self and HABTM target", async () => {
+          // @ts-expect-no-error: Sponsor + Festival (HABTM)
+          await Sponsor.query("123", { filter: { type: "Sponsor" } });
+          await Sponsor.query("123", { filter: { type: "Festival" } });
+        });
+
+        it("type filter rejects non-HABTM entity", async () => {
+          // @ts-expect-error: Customer is not related to Sponsor
+          await Sponsor.query("123", { filter: { type: "Customer" } });
+        });
+
+        it("skCondition accepts HABTM target", async () => {
+          // @ts-expect-no-error: Festival is Sponsor's HABTM partner
+          await Sponsor.query("123", {
+            skCondition: { $beginsWith: "Festival" }
+          });
+        });
+
+        it("skCondition rejects non-HABTM entity", async () => {
+          // @ts-expect-error: Order is not related to Sponsor
+          await Sponsor.query("123", { skCondition: "Order" });
+        });
+      });
+
+      describe("OtherTable entity (Teacher: HasMany Course, HasOne Profile)", () => {
+        it("type filter accepts self and related entities", async () => {
+          // @ts-expect-no-error: Teacher + Course (HasMany) + Profile (HasOne)
+          await Teacher.query("123", { filter: { type: "Teacher" } });
+          await Teacher.query("123", { filter: { type: "Course" } });
+          await Teacher.query("123", { filter: { type: "Profile" } });
+        });
+
+        it("type filter rejects entity from different table", async () => {
+          // @ts-expect-error: Customer is on MockTable, not related to Teacher
+          await Teacher.query("123", { filter: { type: "Customer" } });
+        });
+
+        it("skCondition accepts related entities on OtherTable", async () => {
+          mockQuery.mockResolvedValue({ Items: [] });
+          // @ts-expect-no-error: Teacher + its relationships
+          await Teacher.query("123", { skCondition: "Teacher" });
+          await Teacher.query("123", {
+            skCondition: { $beginsWith: "Course" }
+          });
+          await Teacher.query("123", { skCondition: "Profile" });
+        });
+
+        it("skCondition rejects entity from different table", async () => {
+          // @ts-expect-error: Customer is not related to Teacher
+          await Teacher.query("123", { skCondition: "Customer" });
+        });
+      });
+
+      describe("type array (IN operator) respects partition boundaries", () => {
+        it("accepts array of related entities", async () => {
+          // @ts-expect-no-error: all are in Customer's partition
+          await Customer.query("123", {
+            filter: { type: ["Order", "PaymentMethod", "ContactInformation"] }
+          });
+        });
+
+        it("rejects array containing unrelated entity", async () => {
+          // @ts-expect-error: "Course" is not in Customer's partition
+          await Customer.query("123", {
+            filter: { type: ["Order", "Course"] }
+          });
+        });
+
+        it("rejects completely unknown entity name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist anywhere
+          await Customer.query("123", { filter: { type: "FakeEntity" } });
         });
       });
     });
@@ -2710,7 +2903,10 @@ describe("Query", () => {
 
         it("rejects invalid $beginsWith entity name", async () => {
           // @ts-expect-error: "Fake" is not a valid entity name
-          await Customer.query({ pk: "Customer#123", sk: { $beginsWith: "Fake" } });
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "Fake" }
+          });
         });
       });
 
