@@ -6,7 +6,11 @@ export * from "./dynamo-utils/errors";
 export type {
   EntityAttributesOnly,
   EntityAttributesInstance as EntityInstance,
-  FindByIdIncludesRes
+  FindByIdIncludesRes,
+  TypedFilterParams,
+  TypedSortKeyCondition,
+  InferQueryResults,
+  PartitionEntityNames
 } from "./operations";
 export type {
   PartitionKey,

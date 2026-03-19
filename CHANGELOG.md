@@ -2,7 +2,7 @@
 
 ### Breaking
 
-- **`@Entity` requires `declare readonly type`:** All entity classes must now declare their `type` property as a string literal matching the class name (e.g., `declare readonly type: "Order"`). This is a pure type annotation with zero runtime impact — the ORM continues to set `type` automatically. Entities missing this declaration will produce a compile error at the `@Entity` decorator. This change enables compile-time type safety for query filters and return types.
+- **`@Entity` requires `declare readonly type`:** All entity classes must now declare their `type` property as a string literal matching the class name (e.g., `declare readonly type: "Order"`). This is a pure type annotation with zero runtime impact — the ORM continues to set `type` automatically. Entities missing this declaration will produce a compile error at the `@Entity` decorator. This change enables compile-time type safety for query filters and return types. To migrate, add `declare readonly type: "ClassName";` to each entity class body.
 - **Typed query filters:** The `query` method's `filter` option now validates filter keys at compile time. Only attributes that exist on entities in the queried partition are accepted. Invalid keys, relationship property names, and partition/sort key attributes produce compile errors. Existing code that passes arbitrary string keys in filters will need to be updated. Filter values remain untyped (`FilterTypes` / `any` from AWS SDK's `NativeAttributeValue`).
 - **Typed `type` filter field:** The `type` field in query filters now only accepts valid entity class names from the partition. Previously any string was accepted. Code that filters by `type` with values that are not entity class names (e.g., `type: ["Beer", "Brewery"]`) must be updated to use valid entity names.
 
@@ -10,10 +10,12 @@
 
 - **Strongly-typed query filters:** Query filter keys are validated against the attributes of all entities in the queried partition. This includes entity-defined attributes, default fields (`id`, `createdAt`, `updatedAt`), `ForeignKey` and `NullableForeignKey` attributes, and dot-path keys for `@ObjectAttribute` nested fields (e.g., `"address.city"`, `"address.geo.lat"`).
 - **`type` field narrowing:** When filtering by `type` with a single entity name (e.g., `type: "Order"`), filter keys in `$or` elements are narrowed to only that entity's attributes. When `type` is an array (IN operator), all partition entity attributes are accepted.
-- **Return type narrowing:** When the filter specifies a `type` value, the return type is automatically narrowed from the full `QueryResults<T>` union to only the matching entity types:
+- **Return type narrowing:** The return type is automatically narrowed based on the filter:
   - `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
   - `type: ["Order", "PaymentMethod"]` → `Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>`
-  - No `type` specified → `QueryResults<T>` (full union)
+  - Filter keys: `{ orderDate: "2023" }` → narrows to entities that have `orderDate` (e.g., `Order`)
+  - `$or` blocks: each element narrows by `type` or by filter keys; return type is the union across blocks
+  - No type/keys specified → `QueryResults<T>` (full union)
 - **Sort key condition validation:** `skCondition` values are typed to only accept valid entity names from the partition (exact entity name or entity name prefix). Invalid sort key values produce compile errors. When `skCondition` is an exact entity name or `$beginsWith` with an exact entity name, the return type is automatically narrowed to that entity type.
 - **New utility types:** `DotPathKeys<T>`, `ObjectDotPaths<T>`, `EntityFilterableKeys<T>`, `NonRecursiveLeaf`, `PartitionEntities<T>`, `PartitionEntityNames<T>`, `TypedAndFilter<T>`, `TypedFilterParams<T>`, `NarrowedQueryResults<T, F>`, `InferQueryResults<T, F>`, and supporting types for filter validation and return type inference.
 - **`IsAny<T>` utility type:** General-purpose type-level `any` detection, exported from `src/types.ts`.

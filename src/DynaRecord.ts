@@ -160,15 +160,19 @@ abstract class DynaRecord implements DynaRecordBase {
    * **Return type narrowing:** The return type narrows automatically based on:
    * - Top-level filter `type`: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
    * - Top-level filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
-   * - `$or` element `type` values: `$or: [{ type: "Order" }, { type: "PaymentMethod" }]` → union of those types
+   * - Top-level filter keys: `{ orderDate: "2023" }` → narrows to entities that have `orderDate`
+   * - `$or` elements: each block narrows by `type` (if present) or by filter keys; return type is the union
    * - `skCondition` option: `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
-   * - No type/SK specified → `QueryResults<T>` (full partition union)
+   * - No type/keys/SK specified → `QueryResults<T>` (full partition union)
    *
    * Note: When using the object key form (`{ pk: "...", sk: "Order" }`), the `sk` value is
    * validated against entity names but does **not** narrow the return type due to a TypeScript
    * inference limitation. Use `filter: { type: "Order" }` or the `skCondition` option for
    * return type narrowing.
    *
+   * @template T - The entity type being queried.
+   * @template F - The inferred filter type, captured via `const` generic for literal type inference.
+   * @template SK - The inferred sort key condition type, captured via `const` generic for literal type inference.
    * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
    * @param {Object=} options - QueryOptions. Supports typed filter, consistentRead and skCondition. indexName is not supported.
    * @param {TypedFilterParams<T>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes. The `type` field accepts valid entity class names.

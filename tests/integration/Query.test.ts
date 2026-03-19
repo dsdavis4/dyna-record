@@ -2748,7 +2748,8 @@ describe("Query", () => {
         Logger.log(_exact, _noCustomer, _noCI);
       });
 
-      it("no type filter does not narrow — returns exact full union", async () => {
+      it("shared attribute filter does not narrow — returns full union", async () => {
+        // createdAt exists on ALL entities, so no narrowing occurs
         const result = await Customer.query("123", {
           filter: { createdAt: "2023" }
         });
@@ -2766,6 +2767,82 @@ describe("Query", () => {
         const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
         Logger.log(_exact, _notNarrowed);
+      });
+
+      it("entity-specific filter key narrows return type by key", async () => {
+        // orderDate only exists on Order → narrows to Order
+        const result = await Customer.query("123", {
+          filter: { orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded — doesn't have orderDate
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("multiple entity-specific keys narrow to entities with ALL keys", async () => {
+        // customerId is on Order, PaymentMethod, ContactInformation
+        // orderDate is only on Order
+        // Intersection: only Order has both → narrows to Order
+        const result = await Customer.query("123", {
+          filter: { customerId: "c1", orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order (only entity with both keys)
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod has customerId but not orderDate
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        Logger.log(_narrowed, _noPM);
+      });
+
+      it("filter key narrows with lastFour to PaymentMethod", async () => {
+        // lastFour only exists on PaymentMethod
+        const result = await Customer.query("123", {
+          filter: { lastFour: "1234" }
+        });
+
+        // @ts-expect-no-error: narrowed to PaymentMethod
+        const _narrowed: Array<EntityAttributesInstance<PaymentMethod>> =
+          result;
+
+        // @ts-expect-error: Order excluded
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed, _noOrder);
+      });
+
+      it("filter key narrows with email to ContactInformation", async () => {
+        // email only exists on ContactInformation (in Customer's partition)
+        const result = await Customer.query("123", {
+          filter: { email: "test@example.com" }
+        });
+
+        // @ts-expect-no-error: narrowed to ContactInformation
+        const _narrowed: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("type field takes priority over key-based narrowing", async () => {
+        // type: "Order" takes priority, even though orderDate also narrows to Order
+        const result = await Customer.query("123", {
+          filter: { type: "Order", orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed);
       });
     });
 
@@ -3308,6 +3385,94 @@ describe("Query", () => {
             $or: [{ type: "Order", orderDate: "2023" }, { nonExistent: "x" }]
           }
         }).catch(() => {});
+      });
+
+      it("$or with mixed typed/untyped blocks narrows by type AND by keys", async () => {
+        // Block 1: type "Order" → Order
+        // Block 2: no type, but lastFour only exists on PaymentMethod → PaymentMethod
+        // Union: Order | PaymentMethod
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { lastFour: "1234" }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not matched by any $or block
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with all typed blocks DOES narrow return type", async () => {
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to union of typed blocks
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not in any $or block's type
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with untyped blocks narrows by filter keys", async () => {
+        // Block 1: orderDate only on Order → Order
+        // Block 2: lastFour only on PaymentMethod → PaymentMethod
+        // Union: Order | PaymentMethod
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with shared-attribute blocks does not narrow", async () => {
+        // name exists on Customer (and all entities may have id/createdAt)
+        // but within Customer's partition, only Customer has `name`
+        // so this narrows to Customer
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [{ name: "Alice" }, { name: "Bob" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Customer (only entity with 'name' in partition)
+        const _narrowed: Array<EntityAttributesInstance<Customer>> = result;
+
+        // @ts-expect-error: Order excluded — doesn't have name
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed, _noOrder);
       });
     });
 

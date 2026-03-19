@@ -806,6 +806,8 @@ const orders = await Customer.query(
 ```
 
 > **Note:** Return type narrowing applies to the top-level `type` filter field, `type` values within `$or` elements, and to the `skCondition` option. When `$or` elements specify `type` values, the return type narrows to the union of those entity types. The `sk` property in key conditions validates values but does not narrow return types. Index queries (`{ indexName: "..." }`) use untyped filters.
+>
+> **Filter key narrowing:** When no `type` is specified, the return type automatically narrows based on which entities have the filtered attributes. For example, `filter: { orderDate: "2023" }` narrows to `Order` if only `Order` has `orderDate`. In `$or` blocks, each element narrows independently — by `type` if present, or by filter keys otherwise — and the return type is the union across all blocks.
 
 ### Querying on an index
 

@@ -8,8 +8,7 @@ import type {
 import type { IsAny, PartitionKey, SortKey } from "../../types";
 import type {
   EntityAttributesInstance,
-  EntityFilterableKeys,
-  SortKeyAttribute
+  EntityFilterableKeys
 } from "../types";
 
 /**
@@ -195,6 +194,8 @@ export type AllPartitionFilterableKeys<T extends DynaRecord> =
 /**
  * Maps a union of string keys to an optional FilterTypes record.
  * Shared helper for building filter records from key unions.
+ *
+ * @template Keys - The union of string keys to include in the record.
  */
 type FilterRecord<Keys extends string> = {
   [K in Keys]?: FilterTypes;
@@ -202,6 +203,8 @@ type FilterRecord<Keys extends string> = {
 
 /**
  * Filter record scoped to a single entity's attributes.
+ *
+ * @template E - The entity type whose attributes form the record keys.
  */
 export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<
   EntityFilterableKeys<E>
@@ -209,6 +212,8 @@ export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<
 
 /**
  * Filter record for all entities in a partition (union of all filter keys).
+ *
+ * @template T - The root entity whose partition defines the filter keys.
  */
 type FullPartitionFilterRecord<T extends DynaRecord> = FilterRecord<
   AllPartitionFilterableKeys<T>
@@ -285,55 +290,35 @@ export type ExtractEntityFromSK<T extends DynaRecord, SK> =
       ? SK
       : never;
 
-/**
- * Extracts the sort key value from an EntityKeyConditions object by looking up
- * the entity's SortKey property name and reading its value from the key object.
- *
- * @template T - The entity type being queried.
- * @template K - The key conditions object type (captured via `const` generic).
- */
-export type ExtractSKFromKeyConditions<
-  T extends DynaRecord,
-  K
-> = SortKeyAttribute<T> extends keyof K ? K[SortKeyAttribute<T>] : unknown;
-
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 
 /**
- * Extracts the `type` value from a filter object.
- * Returns the literal string if single value, array element types if array, or never.
+ * Extracts string values from a type that may be a string or an array of strings.
+ * Returns the literal string if single value, array element types if array, or `never`.
+ *
+ * @template V - The value to extract strings from.
  */
-export type ExtractTypeFromFilter<F> = F extends { type: infer V }
-  ? V extends string
-    ? V
-    : V extends Array<infer U>
-      ? U extends string
-        ? U
-        : never
-      : never
-  : never;
+type ExtractStringOrArrayStrings<V> = V extends string
+  ? V
+  : V extends Array<infer U extends string>
+    ? U
+    : never;
 
 /**
- * Extracts `type` values from `$or` elements in a filter.
- * Returns the union of all `type` values found across all `$or` blocks.
- * Returns `never` if no `$or` exists or no `$or` elements have `type`.
+ * Extracts the `type` value from a filter object.
+ * Returns the literal string if single value, array element types if array, or `never`.
+ *
+ * @template F - The filter object to extract from.
  */
-export type ExtractTypeFromOrFilter<F> = F extends {
-  $or?: Array<infer OrElement>;
-}
-  ? OrElement extends { type: infer V }
-    ? V extends string
-      ? V
-      : V extends Array<infer U>
-        ? U extends string
-          ? U
-          : never
-        : never
-    : never
+export type ExtractTypeFromFilter<F> = F extends { type: infer V }
+  ? ExtractStringOrArrayStrings<V>
   : never;
 
 /**
  * Maps entity name string → entity type.
+ *
+ * @template T - The root entity being queried.
+ * @template Name - The entity name string literal to resolve.
  */
 export type ResolveEntityByName<
   T extends DynaRecord,
@@ -361,13 +346,90 @@ type NarrowByNames<T extends DynaRecord, Names extends string> = [
   : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>;
 
 /**
- * If ExtractTypeFromFilter<F> resolves to specific entity names, returns
- * narrowed array. Otherwise falls back to QueryResults<T>.
+ * Narrows query results based on the `type` value extracted from a filter object.
+ * If the filter's `type` resolves to specific entity names, returns an array of
+ * those entity attribute types. Otherwise falls back to the full `QueryResults<T>` union.
+ *
+ * @template T - The root entity being queried.
+ * @template F - The filter object from which `type` is extracted.
  */
 export type NarrowedQueryResults<T extends DynaRecord, F> =
   ExtractTypeFromFilter<F> extends infer Names extends string
     ? NarrowByNames<T, Names>
     : QueryResults<T>;
+
+// ─── Filter Key Resolution ──────────────────────────────────────────────────
+
+/**
+ * Extracts non-special filter keys from a filter object (excludes `type` and `$or`).
+ *
+ * @template F - The filter object to extract keys from.
+ */
+type FilterKeysOf<F> = Exclude<keyof F & string, "type" | "$or">;
+
+/**
+ * Finds partition entities that have ALL the specified filter keys as filterable attributes.
+ * Returns the full `PartitionEntities` when Keys is `never` (no filter keys specified).
+ *
+ * @template T - The root entity being queried.
+ * @template Keys - Union of filter key strings that must all be present on the entity.
+ */
+type EntitiesWithAllKeys<T extends DynaRecord, Keys extends string> = [
+  Keys
+] extends [never]
+  ? PartitionEntities<T>
+  : PartitionEntities<T> extends infer E
+    ? E extends DynaRecord
+      ? [Keys] extends [EntityFilterableKeys<E>]
+        ? E
+        : never
+      : never
+    : never;
+
+/**
+ * Resolves the entity name strings for entities that have ALL the specified filter keys.
+ *
+ * @template T - The root entity being queried.
+ * @template Keys - Union of filter key strings.
+ */
+type EntityNamesFromKeys<
+  T extends DynaRecord,
+  Keys extends string
+> = EntitiesWithAllKeys<T, Keys>["type"];
+
+/**
+ * Resolves a single filter block to entity name strings.
+ * If the block has a `type` field with specific entity names, uses those.
+ * Otherwise, narrows by finding entities that have ALL the block's non-special filter keys.
+ *
+ * @template T - The root entity being queried.
+ * @template Block - The filter block object.
+ */
+type ResolveBlockEntityNames<T extends DynaRecord, Block> = IsAny<
+  ExtractTypeFromFilter<Block>
+> extends true
+  ? EntityNamesFromKeys<T, FilterKeysOf<Block>>
+  : [ExtractTypeFromFilter<Block>] extends [never]
+    ? EntityNamesFromKeys<T, FilterKeysOf<Block>>
+    : ExtractTypeFromFilter<Block>;
+
+/**
+ * Resolves `$or` blocks to entity name strings. For each `$or` element, resolves
+ * to entity names by `type` (if present) or by filter keys (if no `type`).
+ * Returns the union of entity names across all `$or` blocks.
+ *
+ * @template T - The root entity being queried.
+ * @template F - The filter object containing `$or`.
+ */
+type ResolveOrBlockEntityNames<T extends DynaRecord, F> = F extends {
+  $or?: Array<infer OrElement>;
+}
+  ? OrElement extends infer Block extends object
+    ? ResolveBlockEntityNames<T, Block>
+    : never
+  : never;
+
+// ─── Inference Chain ────────────────────────────────────────────────────────
 
 /**
  * Falls back to SK narrowing, then to full union.
@@ -379,28 +441,42 @@ type FallbackToSK<T extends DynaRecord, SK> = [
   : NarrowByNames<T, ExtractEntityFromSK<T, SK>>;
 
 /**
- * Falls back to $or type narrowing, then SK narrowing, then full union.
- * Checks that $or types don't equal the full PartitionEntityNames (which indicates
- * the default type was used, not a user-provided $or).
+ * Falls back to `$or` block resolution (by type or filter keys), then SK, then full union.
  */
-type FallbackToOr<T extends DynaRecord, F, SK> = IsAny<
-  ExtractTypeFromOrFilter<F>
-> extends true
-  ? FallbackToSK<T, SK>
-  : [ExtractTypeFromOrFilter<F>] extends [never]
-    ? FallbackToSK<T, SK>
-    : [PartitionEntityNames<T>] extends [ExtractTypeFromOrFilter<F>]
+type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
+  ResolveOrBlockEntityNames<T, F> extends infer OrNames extends string
+    ? IsAny<OrNames> extends true
       ? FallbackToSK<T, SK>
-      : NarrowByNames<T, ExtractTypeFromOrFilter<F>>;
+      : [OrNames] extends [never]
+        ? FallbackToSK<T, SK>
+        : [PartitionEntityNames<T>] extends [OrNames]
+          ? FallbackToSK<T, SK>
+          : NarrowByNames<T, OrNames>
+    : FallbackToSK<T, SK>;
+
+/**
+ * Falls back to top-level filter key resolution, then `$or`, then SK, then full union.
+ */
+type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
+  EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer KeyNames extends string
+    ? IsAny<KeyNames> extends true
+      ? FallbackToOrBlocks<T, F, SK>
+      : [KeyNames] extends [never]
+        ? FallbackToOrBlocks<T, F, SK>
+        : [PartitionEntityNames<T>] extends [KeyNames]
+          ? FallbackToOrBlocks<T, F, SK>
+          : NarrowByNames<T, KeyNames>
+    : FallbackToOrBlocks<T, F, SK>;
 
 /**
  * Infers query results from filter and SK for the non-index query overload.
  *
  * Narrowing priority:
  * 1. If the filter specifies a top-level `type` value, narrow by that.
- * 2. Otherwise, if `$or` elements specify `type` values, narrow by the union of those.
- * 3. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
- * 4. Otherwise, return the full `QueryResults<T>` union.
+ * 2. Otherwise, if top-level filter keys narrow to specific entities, use that.
+ * 3. Otherwise, if `$or` blocks resolve to specific entities (by type or keys), use that.
+ * 4. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
+ * 5. Otherwise, return the full `QueryResults<T>` union.
  *
  * @template T - The root entity being queried.
  * @template F - The inferred filter type (captured via `const` generic).
@@ -411,9 +487,9 @@ export type InferQueryResults<
   F,
   SK = unknown
 > = IsAny<ExtractTypeFromFilter<F>> extends true
-  ? FallbackToOr<T, F, SK>
+  ? FallbackToFilterKeys<T, F, SK>
   : [ExtractTypeFromFilter<F>] extends [never]
-    ? FallbackToOr<T, F, SK>
+    ? FallbackToFilterKeys<T, F, SK>
     : [PartitionEntityNames<T>] extends [ExtractTypeFromFilter<F>]
-      ? FallbackToOr<T, F, SK>
+      ? FallbackToFilterKeys<T, F, SK>
       : NarrowedQueryResults<T, F>;
