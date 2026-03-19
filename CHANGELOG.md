@@ -1,3 +1,9 @@
+## 0.6.1 - 2026-03-19
+
+### Changed
+
+- **Documentation URL update:** Updated all API documentation links in the README from `dyna-record.com` to `docs.dyna-record.com`.
+
 ## 0.6.0 - 2026-03-17
 
 ### Breaking
