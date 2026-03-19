@@ -146,13 +146,16 @@ abstract class DynaRecord implements DynaRecordBase {
    * QueryByIndex not supported with this overload. Use Query with keys and indexName option if needed.
    *
    * **Filter key validation:** Filter keys are strongly typed to only accept valid attribute
-   * names from entities in the partition. The `type` field only accepts valid entity class names.
+   * names from the entity and its declared relationships (`@HasMany`, `@HasOne`, `@BelongsTo`,
+   * `@HasAndBelongsToMany`). The `type` field only accepts the entity itself or its related
+   * entity names — entities from other tables or unrelated entities are rejected.
    * When `type` is specified as a single value in a `$or` block, filter keys are narrowed to
    * that entity's attributes.
    *
    * **Sort key validation:** Both `skCondition` (string form) and `sk` (object key form) only
-   * accept valid entity names from the partition, matching dyna-record's single-table sort key
-   * format where SK values always start with an entity class name.
+   * accept the entity itself or its related entity names, matching dyna-record's single-table
+   * sort key format where SK values always start with an entity class name. Unrelated entities
+   * and entities from other tables are rejected at compile time.
    *
    * **Return type narrowing:** The return type narrows automatically based on:
    * - Filter `type` value: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`

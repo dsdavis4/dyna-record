@@ -156,16 +156,27 @@ export type EntityQueryKeyConditions<T extends DynaRecord = DynaRecord> =
 // ─── Typed Query Filter Types ───────────────────────────────────────────────
 
 /**
- * Union of T itself and all relationship entity types.
- * E.g. for Customer: Customer | Order | PaymentMethod | ContactInformation
+ * Union of T itself and all entity types reachable through its declared relationships
+ * (`@HasMany`, `@HasOne`, `@BelongsTo`, `@HasAndBelongsToMany`).
+ *
+ * This defines which entities can appear in a partition query's `type` filter,
+ * `skCondition`, and `sk` key conditions. Only the entity itself and its direct
+ * relationships are included — entities from other tables or unrelated entities
+ * on the same table are excluded.
+ *
+ * E.g. for Customer with HasMany Order/PaymentMethod and HasOne ContactInformation:
+ * `Customer | Order | PaymentMethod | ContactInformation`
  */
 export type PartitionEntities<T extends DynaRecord> =
   | T
   | RelationshipEntities<T>;
 
 /**
- * Union of entity name string literals from PartitionEntities<T>["type"].
- * Falls back to string if any entity lacks `declare readonly type`.
+ * Union of entity name string literals for the entity and its related entities.
+ * These are the only valid values for the `type` filter field, `skCondition`, and
+ * the `sk` property in key conditions.
+ *
+ * Falls back to `string` if any entity lacks `declare readonly type`.
  */
 export type PartitionEntityNames<T extends DynaRecord> =
   PartitionEntities<T>["type"];
@@ -237,13 +248,14 @@ export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
  * Typed sort key condition for querying within an entity's partition.
  *
  * In dyna-record's single-table design, sort key values always start with an entity
- * class name from the partition:
+ * class name — either the entity itself or one of its declared relationships
+ * (`@HasMany`, `@HasOne`, `@BelongsTo`, `@HasAndBelongsToMany`):
  * - Self/HasOne records: `SK = "EntityName"` (exact entity name)
  * - HasMany records: `SK = "EntityName#id"` (entity name + delimiter + id)
  *
- * This type restricts `skCondition` to only accept valid entity names or entity name
- * prefixes, catching typos at compile time. It also enables return type narrowing
- * when the SK value is an exact entity name or a `$beginsWith` with an entity name.
+ * This type restricts `skCondition` and the `sk` key condition to only accept the
+ * entity's own name or its related entity names (or prefixes thereof). Unrelated
+ * entities and entities from other tables are rejected at compile time.
  *
  * @template T - The entity type being queried.
  */

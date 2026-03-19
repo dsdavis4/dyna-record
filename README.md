@@ -681,10 +681,13 @@ const result = await Store.query("123", {
 
 #### Typed Query Filters
 
-Query filters are strongly typed based on the entities in the queried partition. The type system validates:
+Query filters are strongly typed based on the entities in the queried partition. A partition includes the entity itself plus all entities reachable through its declared relationships (`@HasMany`, `@HasOne`, `@BelongsTo`, `@HasAndBelongsToMany`). For example, if `Customer` has `@HasMany(() => Order)` and `@HasOne(() => ContactInformation)`, then Customer's partition entities are `Customer`, `Order`, and `ContactInformation`.
 
-- **Filter attribute keys**: Only attributes that exist on entities in the partition are accepted. Relationship property names, partition keys, and sort keys are excluded.
-- **`type` field values**: When filtering by `type`, only valid entity class names from the partition are accepted.
+The type system validates:
+
+- **Filter attribute keys**: Only attributes that exist on the entity or its related entities are accepted. Relationship property names, partition keys, and sort keys are excluded.
+- **`type` field values**: The `type` field only accepts entity names from the partition — the entity itself and its declared relationships. Entities from other tables or unrelated entities on the same table are rejected.
+- **Sort key values**: Both `skCondition` and the `sk` property in key conditions only accept entity names from the partition. This matches dyna-record's single-table design where sort key values always start with an entity class name.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
 
