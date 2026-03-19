@@ -3395,10 +3395,7 @@ describe("Query", () => {
         // Union: Order | PaymentMethod
         const result = await Customer.query("123", {
           filter: {
-            $or: [
-              { type: "Order", orderDate: "2023" },
-              { lastFour: "1234" }
-            ]
+            $or: [{ type: "Order", orderDate: "2023" }, { lastFour: "1234" }]
           }
         });
 

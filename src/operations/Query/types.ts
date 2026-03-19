@@ -6,10 +6,7 @@ import type {
   SortKeyCondition
 } from "../../query-utils";
 import type { IsAny, PartitionKey, SortKey } from "../../types";
-import type {
-  EntityAttributesInstance,
-  EntityFilterableKeys
-} from "../types";
+import type { EntityAttributesInstance, EntityFilterableKeys } from "../types";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.
@@ -277,7 +274,11 @@ export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
 export type TypedSortKeyCondition<T extends DynaRecord> =
   | PartitionEntityNames<T>
   | `${PartitionEntityNames<T>}${string}`
-  | { $beginsWith: PartitionEntityNames<T> | `${PartitionEntityNames<T>}${string}` };
+  | {
+      $beginsWith:
+        | PartitionEntityNames<T>
+        | `${PartitionEntityNames<T>}${string}`;
+    };
 
 /**
  * Extracts the entity name from a typed sort key condition for return type narrowing.
@@ -293,12 +294,13 @@ export type TypedSortKeyCondition<T extends DynaRecord> =
  * @template T - The entity type being queried.
  * @template SK - The inferred sort key condition literal type.
  */
-export type ExtractEntityFromSK<T extends DynaRecord, SK> =
-  SK extends { $beginsWith: infer V extends PartitionEntityNames<T> }
-    ? V
-    : SK extends PartitionEntityNames<T>
-      ? SK
-      : never;
+export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
+  $beginsWith: infer V extends PartitionEntityNames<T>;
+}
+  ? V
+  : SK extends PartitionEntityNames<T>
+    ? SK
+    : never;
 
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 
@@ -415,13 +417,12 @@ type EntityNamesFromKeys<
  * @template T - The root entity being queried.
  * @template Block - The filter block object.
  */
-type ResolveBlockEntityNames<T extends DynaRecord, Block> = IsAny<
-  ExtractTypeFromFilter<Block>
-> extends true
-  ? EntityNamesFromKeys<T, FilterKeysOf<Block>>
-  : [ExtractTypeFromFilter<Block>] extends [never]
+type ResolveBlockEntityNames<T extends DynaRecord, Block> =
+  IsAny<ExtractTypeFromFilter<Block>> extends true
     ? EntityNamesFromKeys<T, FilterKeysOf<Block>>
-    : ExtractTypeFromFilter<Block>;
+    : [ExtractTypeFromFilter<Block>] extends [never]
+      ? EntityNamesFromKeys<T, FilterKeysOf<Block>>
+      : ExtractTypeFromFilter<Block>;
 
 /**
  * Resolves `$or` blocks to entity name strings. For each `$or` element, resolves
@@ -457,15 +458,16 @@ type ResolveOrBlockEntityNames<T extends DynaRecord, F> = F extends {
  * @template T - The root entity being queried.
  * @template Names - The resolved entity name union to check.
  */
-type ShouldNarrow<T extends DynaRecord, Names> = IsAny<Names> extends true
-  ? false
-  : [Names] extends [never]
+type ShouldNarrow<T extends DynaRecord, Names> =
+  IsAny<Names> extends true
     ? false
-    : [Names] extends [string]
-      ? [PartitionEntityNames<T>] extends [Names]
-        ? false
-        : true
-      : false;
+    : [Names] extends [never]
+      ? false
+      : [Names] extends [string]
+        ? [PartitionEntityNames<T>] extends [Names]
+          ? false
+          : true
+        : false;
 
 /**
  * Falls back to SK narrowing, then to full union.
@@ -497,15 +499,12 @@ type StrictNarrowByNames<T extends DynaRecord, Names extends string> = [
  * - If `$or` also narrows → intersect with `KeyNames`. Empty intersection → `never[]`.
  * - If `$or` does not narrow → use `KeyNames` alone.
  */
-type IntersectKeysWithOr<
-  T extends DynaRecord,
-  KeyNames extends string,
-  F
-> = ResolveOrBlockEntityNames<T, F> extends infer OrNames
-  ? ShouldNarrow<T, OrNames> extends true
-    ? StrictNarrowByNames<T, Extract<KeyNames, OrNames & string>>
-    : NarrowByNames<T, KeyNames>
-  : NarrowByNames<T, KeyNames>;
+type IntersectKeysWithOr<T extends DynaRecord, KeyNames extends string, F> =
+  ResolveOrBlockEntityNames<T, F> extends infer OrNames
+    ? ShouldNarrow<T, OrNames> extends true
+      ? StrictNarrowByNames<T, Extract<KeyNames, OrNames & string>>
+      : NarrowByNames<T, KeyNames>
+    : NarrowByNames<T, KeyNames>;
 
 /**
  * Falls back to `$or` block resolution (by type or filter keys), then SK, then full union.
@@ -565,12 +564,9 @@ type IntersectTypeWithOr<T extends DynaRecord, F> =
  * @template F - The inferred filter type (captured via `const` generic).
  * @template SK - The inferred sort key condition type.
  */
-export type InferQueryResults<
-  T extends DynaRecord,
-  F,
-  SK = unknown
-> = ExtractTypeFromFilter<F> extends infer Names
-  ? ShouldNarrow<T, Names> extends true
-    ? IntersectTypeWithOr<T, F>
-    : FallbackToFilterKeys<T, F, SK>
-  : FallbackToFilterKeys<T, F, SK>;
+export type InferQueryResults<T extends DynaRecord, F, SK = unknown> =
+  ExtractTypeFromFilter<F> extends infer Names
+    ? ShouldNarrow<T, Names> extends true
+      ? IntersectTypeWithOr<T, F>
+      : FallbackToFilterKeys<T, F, SK>
+    : FallbackToFilterKeys<T, F, SK>;
