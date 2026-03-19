@@ -6,6 +6,7 @@ import {
   Customer,
   DeepNestedEntity,
   Employee,
+  Festival,
   Founder,
   MyClassWithAllAttributeTypes,
   Order,
@@ -2702,11 +2703,14 @@ describe("Query", () => {
     });
 
     describe("return type narrowing", () => {
-      it("default return type is the exact full partition union", async () => {
+      it("no filter or skCondition returns union of entity + all related entities", async () => {
+        // When querying a partition with no filter or sort key condition,
+        // the return type is the entity itself unioned with all its
+        // relationship entities (HasMany, HasOne, BelongsTo, HABTM).
+        // For Customer: Customer | Order | PaymentMethod | ContactInformation
         const result = await Customer.query("123");
 
-        // Exhaustive: assignable to the exact union of all partition entities
-        // @ts-expect-no-error
+        // @ts-expect-no-error: exact union of Customer + all related entities
         const _exact: Array<
           | EntityAttributesInstance<Customer>
           | EntityAttributesInstance<Order>
@@ -2714,10 +2718,26 @@ describe("Query", () => {
           | EntityAttributesInstance<ContactInformation>
         > = result;
 
-        // @ts-expect-error: NOT assignable to just one entity
+        // @ts-expect-error: NOT assignable to just one entity — result is the full union
         const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
         Logger.log(_exact, _notNarrowed);
+      });
+
+      it("no filter or skCondition returns entity with all related entities", async () => {
+        // Sponsor only has HABTM Festival, so the union is Sponsor | Festival
+        const result = await Sponsor.query("123");
+
+        // @ts-expect-no-error: exact union of Sponsor + Festival
+        const _exact: Array<
+          EntityAttributesInstance<Sponsor> | EntityAttributesInstance<Festival>
+        > = result;
+
+        // @ts-expect-error: Customer is not in Sponsor's partition
+        const _notInPartition: Array<EntityAttributesInstance<Customer>> =
+          result;
+
+        Logger.log(_exact, _notInPartition);
       });
 
       it("type: 'Order' narrows to exactly Array<EAI<Order>>", async () => {

@@ -737,7 +737,15 @@ await Customer.query("123", {
 
 ##### Return type narrowing
 
-When the filter specifies a `type` value, the return type is automatically narrowed:
+When querying a partition with no filter or sort key condition, the return type is a union of the entity itself and all its related entities:
+
+```typescript
+// Return type: Array<EntityAttributesInstance<Customer> | EntityAttributesInstance<Order>
+//   | EntityAttributesInstance<PaymentMethod> | EntityAttributesInstance<ContactInformation>>
+const results = await Customer.query("123");
+```
+
+When the filter specifies a `type` value, the return type automatically narrows to only the matching entities:
 
 ```typescript
 // Return type: Array<EntityAttributesInstance<Order>>
@@ -747,7 +755,7 @@ const orders = await Customer.query("123", {
 
 orders[0]?.orderDate; // OK: orderDate is accessible
 
-// Return type includes both: Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>
+// Return type: Array<EntityAttributesInstance<Order> | EntityAttributesInstance<PaymentMethod>>
 const mixed = await Customer.query("123", {
   filter: { type: ["Order", "PaymentMethod"] }
 });

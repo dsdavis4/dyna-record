@@ -164,7 +164,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * - `$or` elements: each block narrows by `type` (if present) or by filter keys; return type is the union
    * - AND intersection: when top-level conditions and `$or` both narrow, the return type is their intersection. Empty intersection → `never[]`.
    * - `skCondition` option: `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
-   * - No type/keys/SK specified → `QueryResults<T>` (full partition union)
+   * - No type/keys/SK specified → union of T and all related entities (e.g., `Customer | Order | PaymentMethod | ContactInformation`)
    *
    * Note: When using the object key form (`{ pk: "...", sk: "Order" }`), the `sk` value is
    * validated against entity names but does **not** narrow the return type due to a TypeScript
