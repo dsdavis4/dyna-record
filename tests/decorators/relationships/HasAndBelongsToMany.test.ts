@@ -21,6 +21,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @HasAndBelongsToMany(() => ModelTwo, {
           // @ts-expect-no-error: targetKey 'modelOnes' exists on ModelTwo as type of ModelOne[]
           targetKey: "modelOnes",
@@ -37,6 +39,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasAndBelongsToMany(() => ModelOne, {
           // @ts-expect-no-error: targetKey 'modelTwos' exists on ModelOne as type of ModelTwo[]
           targetKey: "modelTwos",
@@ -60,6 +64,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @HasAndBelongsToMany(() => ModelTwo, {
           // @ts-expect-error: targetKey on ModelTwo is not an array of ModelOne
           targetKey: "someVal",
@@ -74,6 +80,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "SomeVal" })
         public someVal: string;
 
@@ -98,6 +106,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @HasAndBelongsToMany(() => ModelTwo, {
           // @ts-expect-error: targetKey on ModelTwo is not an array of ModelOne
           targetKey: "modelOnes",
@@ -111,6 +121,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "SomeVal" })
         public someVal: string;
 
@@ -134,6 +146,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @HasAndBelongsToMany(() => ModelTwo, {
           targetKey: "modelOnes",
           through: () => ({
@@ -149,6 +163,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasAndBelongsToMany(() => ModelOne, {
           targetKey: "modelTwos",
           through: () => ({
@@ -169,6 +185,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @HasAndBelongsToMany(() => ModelTwo, {
           targetKey: "modelOnes",
           through: () => ({
@@ -182,6 +200,8 @@ describe("HasAndBelongsToMany", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasAndBelongsToMany(() => ModelOne, {
           targetKey: "modelTwos",
           through: () => ({

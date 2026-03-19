@@ -1,17 +1,29 @@
 import {
   Assignment,
+  Book,
+  ContactInformation,
   Course,
   Customer,
+  DeepNestedEntity,
+  Employee,
+  Festival,
+  Founder,
   MyClassWithAllAttributeTypes,
   Order,
-  PaymentMethod
+  PaymentMethod,
+  Sponsor,
+  Teacher,
+  Warehouse
 } from "./mockModels";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
 } from "./utils";
-import { type QueryResults } from "../../src/operations";
+import {
+  type QueryResults,
+  type EntityAttributesInstance
+} from "../../src/operations";
 import Logger from "../../src/Logger";
 
 const mockSend = jest.fn();
@@ -1243,8 +1255,8 @@ describe("Query", () => {
               ":Name6": "Some Customer",
               ":PK7": "Customer#123",
               ":SK8": "Order",
-              ":Type4": "Beer",
-              ":Type5": "Brewery",
+              ":Type4": "Order",
+              ":Type5": "PaymentMethod",
               ":CreatedAt3": "2021-09-15T"
             },
             FilterExpression:
@@ -1283,7 +1295,7 @@ describe("Query", () => {
         },
         {
           filter: {
-            type: ["Beer", "Brewery"],
+            type: ["Order", "PaymentMethod"],
             name: "Some Customer",
             $or: [
               {
@@ -1304,7 +1316,7 @@ describe("Query", () => {
       const result = await Customer.query("123", {
         skCondition: { $beginsWith: "Order" },
         filter: {
-          type: ["Beer", "Brewery"],
+          type: ["Order", "PaymentMethod"],
           name: "Some Customer",
           $or: [
             {
@@ -1993,7 +2005,7 @@ describe("Query", () => {
 
       it("allows query to be on both partition key and sort key", async () => {
         // @ts-expect-no-error: Can query on both partition key and sort key
-        await Customer.query({ pk: "123", sk: "SomeVal" });
+        await Customer.query({ pk: "123", sk: "Order#001" });
       });
 
       it("allows query to be on both partition key and sort key with a beginsWithCondition", async () => {
@@ -2021,6 +2033,11 @@ describe("Query", () => {
         await Customer.query({ sk: "123" });
       });
 
+      it("key condition accepts key values", async () => {
+        // @ts-expect-no-error: pk and sk are valid key conditions
+        await Customer.query({ pk: "123", sk: "Order" });
+      });
+
       it("key condition can only include key values", async () => {
         // @ts-expect-error: Can only query on keys for key condition
         await Customer.query({ pk: "123", name: "Testing" });
@@ -2032,8 +2049,8 @@ describe("Query", () => {
       });
 
       it("when querying on an index the attribute must exist on the entity", async () => {
+        // @ts-expect-error: Key condition attributes must exist on the entity
         await Customer.query(
-          // @ts-expect-error: Key condition attributes must exist on the entity
           { someVal: "Testing" },
           { indexName: "MyIndex" }
         ).catch(_e => {
@@ -2114,16 +2131,16 @@ describe("Query", () => {
       });
 
       it("allows query with sort", async () => {
-        // @ts-expect-no-error: Can query with sort
+        // @ts-expect-no-error: Can query with sort using a valid entity name
         await Customer.query("123", {
-          skCondition: "SomeVal"
+          skCondition: "Order"
         });
       });
 
       it("allows query on sort key with a condition", async () => {
-        // @ts-expect-no-error: Can query on sort key with a condition
+        // @ts-expect-no-error: Can query on sort key with a beginsWith condition
         await Customer.query("123", {
-          skCondition: { $beginsWith: "SomeVal" }
+          skCondition: { $beginsWith: "Order" }
         });
       });
 
@@ -2152,6 +2169,1679 @@ describe("Query", () => {
           // @ts-expect-no-error: Can set consistentRead to undefined
           await Customer.query("123", { consistentRead: undefined });
         });
+      });
+    });
+  });
+
+  describe("typed filter types", () => {
+    beforeEach(() => {
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+    });
+
+    describe("filter attribute key validation", () => {
+      it("accepts valid keys from root entity", async () => {
+        // @ts-expect-no-error: name and address are Customer attributes
+        await Customer.query("123", {
+          filter: { name: "John", address: "123 Main" }
+        });
+      });
+
+      it("accepts valid keys from relationship entities", async () => {
+        // @ts-expect-no-error: lastFour is PaymentMethod, orderDate is Order, email is ContactInformation
+        await Customer.query("123", {
+          filter: { lastFour: "1234" }
+        });
+      });
+
+      it("accepts default fields as filter keys", async () => {
+        // @ts-expect-no-error: id, type, createdAt, updatedAt are valid on all entities
+        await Customer.query("123", {
+          filter: { id: "abc", createdAt: "2023", updatedAt: "2024" }
+        });
+      });
+
+      it("rejects invalid keys", async () => {
+        // @ts-expect-error: nonExistent is not a valid filter key
+        await Customer.query("123", { filter: { nonExistent: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("rejects HasMany relationship property name", async () => {
+        // @ts-expect-error: 'orders' is a HasMany relationship on Customer, not a filterable attribute
+        await Customer.query("123", { filter: { orders: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("rejects another HasMany relationship property name", async () => {
+        // @ts-expect-error: 'paymentMethods' is a HasMany relationship on Customer
+        await Customer.query("123", {
+          filter: { paymentMethods: "value" }
+        }).catch(() => {});
+      });
+
+      it("rejects HasOne relationship property name", async () => {
+        // @ts-expect-error: 'contactInformation' is a HasOne relationship on Customer
+        await Customer.query("123", {
+          filter: { contactInformation: "value" }
+        }).catch(() => {});
+      });
+
+      it("rejects BelongsTo relationship property name", async () => {
+        // @ts-expect-error: 'customer' is a BelongsTo relationship on Order
+        await Order.query("123", { filter: { customer: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("rejects HasAndBelongsToMany relationship property name", async () => {
+        // @ts-expect-error: 'authors' is a HasAndBelongsToMany relationship on Book
+        await Book.query("123", { filter: { authors: "value" } }).catch(
+          () => {}
+        );
+      });
+
+      it("accepts ForeignKey attributes", async () => {
+        // @ts-expect-no-error: customerId is a ForeignKey on Order
+        await Customer.query("123", {
+          filter: { customerId: "cust-1" }
+        });
+      });
+
+      it("accepts NullableForeignKey attributes", async () => {
+        // @ts-expect-no-error: phone is a nullable attribute on ContactInformation
+        await Customer.query("123", {
+          filter: { phone: "555-1234" }
+        });
+      });
+
+      it("excludes PK from filter keys", async () => {
+        // @ts-expect-error: pk is a PartitionKey attribute, not a filter key
+        await Customer.query("123", { filter: { pk: "value" } });
+      });
+
+      it("excludes SK from filter keys", async () => {
+        // @ts-expect-error: sk is a SortKey attribute, not a filter key
+        await Customer.query("123", { filter: { sk: "value" } });
+      });
+
+      it("accepts dot-path keys for ObjectAttribute fields", async () => {
+        // @ts-expect-no-error: location.city is a valid dot-path on Warehouse
+        await Warehouse.query("123", {
+          filter: { "location.city": "Denver" }
+        });
+      });
+
+      it("rejects invalid dot-paths", async () => {
+        // @ts-expect-error: location.nonExistent is not a valid dot-path
+        await Warehouse.query("123", {
+          filter: { "location.nonExistent": "value" }
+        });
+      });
+
+      it("works for entities with no relationships", async () => {
+        // @ts-expect-no-error: stringAttribute is a valid key on MyClassWithAllAttributeTypes
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { stringAttribute: "val" }
+        });
+      });
+
+      it("works for OtherTable entities", async () => {
+        // @ts-expect-no-error: name is on Teacher, lastLogin is on Profile
+        await Teacher.query("123", {
+          filter: { name: "Smith" }
+        });
+      });
+    });
+
+    describe("type narrowing", () => {
+      it("accepts valid entity class name strings for type", async () => {
+        // @ts-expect-no-error: "Order" is a valid partition entity name for Customer
+        await Customer.query("123", {
+          filter: { type: "Order" }
+        });
+      });
+
+      it("rejects non-entity strings for type", async () => {
+        // @ts-expect-error: "NonExistent" is not a valid entity name in Customer's partition
+        await Customer.query("123", { filter: { type: "NonExistent" } });
+      });
+
+      it("accepts type as array of entity names", async () => {
+        // @ts-expect-no-error: array of valid entity names
+        await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"] }
+        });
+      });
+
+      it("narrows attributes when type is a single entity", async () => {
+        // @ts-expect-no-error: orderDate is valid when type is "Order"
+        await Customer.query("123", {
+          filter: { type: "Order", orderDate: "2023" }
+        });
+      });
+
+      it("allows other entity attributes at top level due to union matching", async () => {
+        // At the top level, TypeScript's union excess property checking allows
+        // keys from other union members. Per-element narrowing works in $or.
+        // @ts-expect-no-error: lastFour exists in another union variant (PaymentMethod)
+        await Customer.query("123", {
+          filter: { type: "Order", lastFour: "1234" }
+        });
+      });
+
+      it("allows all partition attributes when type is an array", async () => {
+        // @ts-expect-no-error: with array type, all partition attrs allowed
+        await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"], createdAt: "2023" }
+        });
+      });
+
+      it("each $or element independently narrowed", async () => {
+        // @ts-expect-no-error: each $or block narrowed by its own type
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("rejects invalid attrs in $or elements", async () => {
+        // @ts-expect-error: nonExistent is not a valid attribute on any partition entity
+        await Customer.query("123", {
+          filter: { $or: [{ type: "Order", nonExistent: "value" }] }
+        }).catch(() => {});
+      });
+
+      it("allows all partition attributes when no type is specified", async () => {
+        // @ts-expect-no-error: without type, all partition attrs allowed
+        await Customer.query("123", {
+          filter: { name: "John", lastFour: "1234", email: "test@test.com" }
+        });
+      });
+    });
+
+    describe("only related entities accepted in type filter, skCondition, and sk", () => {
+      // Each describe covers one relationship type pattern.
+      // Within each, we test every operator variant: equality, $beginsWith, IN array, suffix.
+      // For both happy paths (accepts related) and error paths (rejects unrelated).
+
+      describe("HasMany + HasOne (Customer → Order, PaymentMethod, ContactInformation)", () => {
+        describe("type filter", () => {
+          it("equality: accepts related entity", async () => {
+            // @ts-expect-no-error: Order is a HasMany target on Customer
+            await Customer.query("123", { filter: { type: "Order" } });
+          });
+
+          it("equality: rejects unrelated entity from same table", async () => {
+            // @ts-expect-error: Person is on MockTable but not related to Customer
+            await Customer.query("123", { filter: { type: "Person" } });
+          });
+
+          it("IN array: accepts related entities", async () => {
+            // @ts-expect-no-error: all are Customer's relationships
+            await Customer.query("123", {
+              filter: { type: ["Order", "PaymentMethod", "ContactInformation"] }
+            });
+          });
+
+          it("IN array: rejects array containing unrelated entity", async () => {
+            // @ts-expect-error: Person is not related to Customer
+            await Customer.query("123", {
+              filter: { type: ["Order", "Person"] }
+            });
+          });
+        });
+
+        describe("skCondition", () => {
+          it("exact match: accepts related entity", async () => {
+            // @ts-expect-no-error: "Order" is a related entity
+            await Customer.query("123", { skCondition: "Order" });
+          });
+
+          it("exact match: rejects unrelated entity", async () => {
+            // @ts-expect-error: "Person" is not related to Customer
+            await Customer.query("123", { skCondition: "Person" });
+          });
+
+          it("$beginsWith: accepts related entity", async () => {
+            // @ts-expect-no-error: "PaymentMethod" is a related entity
+            await Customer.query("123", {
+              skCondition: { $beginsWith: "PaymentMethod" }
+            });
+          });
+
+          it("$beginsWith: rejects unrelated entity", async () => {
+            // @ts-expect-error: "Person" is not related to Customer
+            await Customer.query("123", {
+              skCondition: { $beginsWith: "Person" }
+            });
+          });
+
+          it("entity name with suffix: accepts related entity prefix", async () => {
+            // @ts-expect-no-error: "Order#001" starts with related entity name
+            await Customer.query("123", { skCondition: "Order#001" });
+          });
+
+          it("$beginsWith with suffix: accepts related entity prefix", async () => {
+            // @ts-expect-no-error: "ContactInformation#abc" starts with related entity name
+            await Customer.query("123", {
+              skCondition: { $beginsWith: "ContactInformation#abc" }
+            });
+          });
+        });
+
+        describe("key conditions sk", () => {
+          it("exact match: accepts related entity", async () => {
+            // @ts-expect-no-error: "Order" is a related entity
+            await Customer.query({ pk: "Customer#123", sk: "Order" });
+          });
+
+          it("exact match: rejects unrelated entity", async () => {
+            // @ts-expect-error: "Person" is not related to Customer
+            await Customer.query({ pk: "Customer#123", sk: "Person" });
+          });
+
+          it("$beginsWith: accepts related entity", async () => {
+            // @ts-expect-no-error: "PaymentMethod" is a related entity
+            await Customer.query({
+              pk: "Customer#123",
+              sk: { $beginsWith: "PaymentMethod" }
+            });
+          });
+
+          it("$beginsWith: rejects unrelated entity", async () => {
+            // @ts-expect-error: "Person" is not related to Customer
+            await Customer.query({
+              pk: "Customer#123",
+              sk: { $beginsWith: "Person" }
+            });
+          });
+
+          it("entity name with suffix: accepts related entity prefix", async () => {
+            // @ts-expect-no-error: "Order#001" starts with related entity name
+            await Customer.query({ pk: "Customer#123", sk: "Order#001" });
+          });
+        });
+      });
+
+      describe("BelongsTo (Order → Customer, PaymentMethod)", () => {
+        describe("type filter", () => {
+          it("equality: accepts BelongsTo target", async () => {
+            // @ts-expect-no-error: Customer is a BelongsTo target of Order
+            await Order.query("123", { filter: { type: "Customer" } });
+          });
+
+          it("equality: rejects non-BelongsTo entity", async () => {
+            // @ts-expect-error: ContactInformation is not related to Order
+            await Order.query("123", {
+              filter: { type: "ContactInformation" }
+            });
+          });
+
+          it("IN array: accepts BelongsTo targets", async () => {
+            // @ts-expect-no-error: both are BelongsTo targets of Order
+            await Order.query("123", {
+              filter: { type: ["Customer", "PaymentMethod"] }
+            });
+          });
+
+          it("IN array: rejects array with non-BelongsTo entity", async () => {
+            // @ts-expect-error: ContactInformation is not related to Order
+            await Order.query("123", {
+              filter: { type: ["Customer", "ContactInformation"] }
+            });
+          });
+        });
+
+        describe("skCondition", () => {
+          it("exact match: accepts BelongsTo target", async () => {
+            // @ts-expect-no-error: Customer is a BelongsTo target
+            await Order.query("123", { skCondition: "Customer" });
+          });
+
+          it("exact match: rejects non-BelongsTo entity", async () => {
+            // @ts-expect-error: ContactInformation is not related to Order
+            await Order.query("123", { skCondition: "ContactInformation" });
+          });
+
+          it("$beginsWith: accepts BelongsTo target", async () => {
+            // @ts-expect-no-error: PaymentMethod is a BelongsTo target
+            await Order.query("123", {
+              skCondition: { $beginsWith: "PaymentMethod" }
+            });
+          });
+
+          it("$beginsWith: rejects non-BelongsTo entity", async () => {
+            // @ts-expect-error: ContactInformation is not related to Order
+            await Order.query("123", {
+              skCondition: { $beginsWith: "ContactInformation" }
+            });
+          });
+        });
+      });
+
+      describe("HasAndBelongsToMany + BelongsTo (Book → Author [HABTM], Person [BelongsTo])", () => {
+        describe("type filter", () => {
+          it("equality: accepts HasAndBelongsToMany target", async () => {
+            // @ts-expect-no-error: Author is a HasAndBelongsToMany target of Book
+            await Book.query("123", { filter: { type: "Author" } });
+          });
+
+          it("equality: accepts BelongsTo target", async () => {
+            // @ts-expect-no-error: Person is a BelongsTo target of Book
+            await Book.query("123", { filter: { type: "Person" } });
+          });
+
+          it("equality: rejects unrelated entity", async () => {
+            // @ts-expect-error: Customer is not related to Book
+            await Book.query("123", { filter: { type: "Customer" } });
+          });
+
+          it("IN array: accepts mixed relationship types", async () => {
+            // @ts-expect-no-error: Author (HABTM) + Person (BelongsTo)
+            await Book.query("123", {
+              filter: { type: ["Author", "Person"] }
+            });
+          });
+        });
+
+        describe("skCondition", () => {
+          it("exact match: accepts HasAndBelongsToMany target", async () => {
+            // @ts-expect-no-error: Author is a HABTM target
+            await Book.query("123", { skCondition: "Author" });
+          });
+
+          it("$beginsWith: accepts HasAndBelongsToMany target", async () => {
+            // @ts-expect-no-error: Author is a HABTM target
+            await Book.query("123", {
+              skCondition: { $beginsWith: "Author" }
+            });
+          });
+
+          it("exact match: rejects unrelated entity", async () => {
+            // @ts-expect-error: Customer is not related to Book
+            await Book.query("123", { skCondition: "Customer" });
+          });
+
+          it("$beginsWith: rejects unrelated entity", async () => {
+            // @ts-expect-error: Customer is not related to Book
+            await Book.query("123", {
+              skCondition: { $beginsWith: "Customer" }
+            });
+          });
+        });
+      });
+
+      describe("Pure HasAndBelongsToMany (Sponsor → Festival [HABTM])", () => {
+        describe("type filter", () => {
+          it("equality: accepts HABTM target", async () => {
+            // @ts-expect-no-error: Festival is Sponsor's HABTM partner
+            await Sponsor.query("123", { filter: { type: "Festival" } });
+          });
+
+          it("equality: rejects non-HABTM entity", async () => {
+            // @ts-expect-error: Customer is not related to Sponsor
+            await Sponsor.query("123", { filter: { type: "Customer" } });
+          });
+
+          it("IN array: accepts self + HABTM target", async () => {
+            // @ts-expect-no-error: Sponsor (self) + Festival (HABTM)
+            await Sponsor.query("123", {
+              filter: { type: ["Sponsor", "Festival"] }
+            });
+          });
+        });
+
+        describe("skCondition", () => {
+          it("exact match: accepts HABTM target", async () => {
+            // @ts-expect-no-error: Festival is Sponsor's HABTM partner
+            await Sponsor.query("123", { skCondition: "Festival" });
+          });
+
+          it("$beginsWith: accepts HABTM target", async () => {
+            // @ts-expect-no-error: Festival is Sponsor's HABTM partner
+            await Sponsor.query("123", {
+              skCondition: { $beginsWith: "Festival" }
+            });
+          });
+
+          it("exact match: rejects non-HABTM entity", async () => {
+            // @ts-expect-error: Order is not related to Sponsor
+            await Sponsor.query("123", { skCondition: "Order" });
+          });
+
+          it("$beginsWith: rejects non-HABTM entity", async () => {
+            // @ts-expect-error: Order is not related to Sponsor
+            await Sponsor.query("123", {
+              skCondition: { $beginsWith: "Order" }
+            });
+          });
+        });
+      });
+
+      describe("OtherTable (Teacher → Course [HasMany], Profile [HasOne])", () => {
+        describe("type filter", () => {
+          it("equality: accepts related entities", async () => {
+            // @ts-expect-no-error: Course (HasMany) + Profile (HasOne)
+            await Teacher.query("123", { filter: { type: "Course" } });
+            await Teacher.query("123", { filter: { type: "Profile" } });
+          });
+
+          it("equality: rejects entity from different table", async () => {
+            // @ts-expect-error: Customer is on MockTable, not related to Teacher
+            await Teacher.query("123", { filter: { type: "Customer" } });
+          });
+
+          it("IN array: accepts related entities", async () => {
+            // @ts-expect-no-error: Teacher (self) + Course + Profile
+            await Teacher.query("123", {
+              filter: { type: ["Teacher", "Course", "Profile"] }
+            });
+          });
+        });
+
+        describe("skCondition", () => {
+          it("exact match: accepts related entity", async () => {
+            // @ts-expect-no-error: Course is a HasMany target
+            await Teacher.query("123", { skCondition: "Course" });
+          });
+
+          it("$beginsWith: accepts related entity", async () => {
+            // @ts-expect-no-error: Profile is a HasOne target
+            await Teacher.query("123", {
+              skCondition: { $beginsWith: "Profile" }
+            });
+          });
+
+          it("exact match: rejects entity from different table", async () => {
+            // @ts-expect-error: Customer is not related to Teacher
+            await Teacher.query("123", { skCondition: "Customer" });
+          });
+
+          it("$beginsWith: rejects entity from different table", async () => {
+            // @ts-expect-error: Order is not related to Teacher
+            await Teacher.query("123", {
+              skCondition: { $beginsWith: "Order" }
+            });
+          });
+        });
+      });
+
+      describe("unknown and non-existent entity names", () => {
+        it("type filter: rejects unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query("123", { filter: { type: "FakeEntity" } });
+        });
+
+        it("type IN array: rejects array with unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query("123", {
+            filter: { type: ["Order", "FakeEntity"] }
+          });
+        });
+
+        it("skCondition exact: rejects unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query("123", { skCondition: "FakeEntity" });
+        });
+
+        it("skCondition $beginsWith: rejects unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "FakeEntity" }
+          });
+        });
+
+        it("key conditions sk: rejects unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query({ pk: "Customer#123", sk: "FakeEntity" });
+        });
+
+        it("key conditions sk $beginsWith: rejects unknown name", async () => {
+          // @ts-expect-error: "FakeEntity" does not exist
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "FakeEntity" }
+          });
+        });
+      });
+    });
+
+    describe("return type narrowing", () => {
+      it("no filter or skCondition returns union of entity + all related entities", async () => {
+        // When querying a partition with no filter or sort key condition,
+        // the return type is the entity itself unioned with all its
+        // relationship entities (HasMany, HasOne, BelongsTo, HABTM).
+        // For Customer: Customer | Order | PaymentMethod | ContactInformation
+        const result = await Customer.query("123");
+
+        // @ts-expect-no-error: exact union of Customer + all related entities
+        const _exact: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: NOT assignable to just one entity — result is the full union
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_exact, _notNarrowed);
+      });
+
+      it("no filter or skCondition returns entity with all related entities", async () => {
+        // Sponsor only has HABTM Festival, so the union is Sponsor | Festival
+        const result = await Sponsor.query("123");
+
+        // @ts-expect-no-error: exact union of Sponsor + Festival
+        const _exact: Array<
+          EntityAttributesInstance<Sponsor> | EntityAttributesInstance<Festival>
+        > = result;
+
+        // @ts-expect-error: Customer is not in Sponsor's partition
+        const _notInPartition: Array<EntityAttributesInstance<Customer>> =
+          result;
+
+        Logger.log(_exact, _notInPartition);
+      });
+
+      it("type: 'Order' narrows to exactly Array<EAI<Order>>", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: "Order" }
+        });
+
+        // Exhaustive: exactly Order, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+        // @ts-expect-error: PaymentMethod excluded
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+        // @ts-expect-error: ContactInformation excluded
+        const _noCI: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
+
+        Logger.log(_exact, _noCustomer, _noPM, _noCI);
+      });
+
+      it("type: 'Customer' narrows to exactly Array<EAI<Customer>>", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: "Customer" }
+        });
+
+        // Exhaustive: exactly Customer, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<EntityAttributesInstance<Customer>> = result;
+
+        // @ts-expect-error: Order excluded
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+        // @ts-expect-error: PaymentMethod excluded
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        Logger.log(_exact, _noOrder, _noPM);
+      });
+
+      it("type: ['Order', 'PaymentMethod'] narrows to exactly that union", async () => {
+        const result = await Customer.query("123", {
+          filter: { type: ["Order", "PaymentMethod"] }
+        });
+
+        // Exhaustive: exactly Order | PaymentMethod, nothing else
+        // @ts-expect-no-error
+        const _exact: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not in the type array
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+        // @ts-expect-error: ContactInformation excluded
+        const _noCI: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
+
+        Logger.log(_exact, _noCustomer, _noCI);
+      });
+
+      it("shared attribute filter does not narrow — returns full union", async () => {
+        // createdAt exists on ALL entities, so no narrowing occurs
+        const result = await Customer.query("123", {
+          filter: { createdAt: "2023" }
+        });
+
+        // Exhaustive: exact full union
+        // @ts-expect-no-error
+        const _exact: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: NOT assignable to just one entity — not narrowed
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_exact, _notNarrowed);
+      });
+
+      it("entity-specific filter key narrows return type by key", async () => {
+        // orderDate only exists on Order → narrows to Order
+        const result = await Customer.query("123", {
+          filter: { orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded — doesn't have orderDate
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("multiple entity-specific keys narrow to entities with ALL keys", async () => {
+        // customerId is on Order, PaymentMethod, ContactInformation
+        // orderDate is only on Order
+        // Intersection: only Order has both → narrows to Order
+        const result = await Customer.query("123", {
+          filter: { customerId: "c1", orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order (only entity with both keys)
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod has customerId but not orderDate
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        Logger.log(_narrowed, _noPM);
+      });
+
+      it("filter key narrows with lastFour to PaymentMethod", async () => {
+        // lastFour only exists on PaymentMethod
+        const result = await Customer.query("123", {
+          filter: { lastFour: "1234" }
+        });
+
+        // @ts-expect-no-error: narrowed to PaymentMethod
+        const _narrowed: Array<EntityAttributesInstance<PaymentMethod>> =
+          result;
+
+        // @ts-expect-error: Order excluded
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed, _noOrder);
+      });
+
+      it("filter key narrows with email to ContactInformation", async () => {
+        // email only exists on ContactInformation (in Customer's partition)
+        const result = await Customer.query("123", {
+          filter: { email: "test@example.com" }
+        });
+
+        // @ts-expect-no-error: narrowed to ContactInformation
+        const _narrowed: Array<EntityAttributesInstance<ContactInformation>> =
+          result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("type field takes priority over key-based narrowing", async () => {
+        // type: "Order" takes priority, even though orderDate also narrows to Order
+        const result = await Customer.query("123", {
+          filter: { type: "Order", orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed);
+      });
+    });
+
+    describe("index query stays untyped", () => {
+      it("index queries accept any filter key", async () => {
+        // @ts-expect-no-error: index queries use untyped FilterParams
+        await Customer.query(
+          { name: "Testing" },
+          { indexName: "MyIndex", filter: { name: "value" } }
+        );
+      });
+    });
+
+    describe("backward compatibility", () => {
+      it("query with empty options still works", async () => {
+        // @ts-expect-no-error: empty options
+        await Customer.query("123", {});
+      });
+
+      it("query with no filter still works", async () => {
+        // @ts-expect-no-error: no filter
+        await Customer.query("123", { consistentRead: true });
+      });
+
+      it("query with skCondition still works", async () => {
+        // @ts-expect-no-error: skCondition
+        await Customer.query("123", { skCondition: "Order" });
+      });
+
+      it("query with beginsWith skCondition still works", async () => {
+        // @ts-expect-no-error: beginsWith skCondition
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" }
+        });
+      });
+
+      it("existing filter patterns still compile", async () => {
+        // @ts-expect-no-error: existing pattern from tests
+        await Course.query("123", {
+          filter: {
+            type: ["Course", "Assignment"],
+            createdAt: { $beginsWith: "202" },
+            $or: [
+              {
+                name: "Defense Against The Dark Arts",
+                updatedAt: { $beginsWith: "2023-02-15" }
+              },
+              {
+                title: ["Assignment-1", "Assignment-2"],
+                createdAt: { $beginsWith: "2023" },
+                type: "Assignment"
+              },
+              {
+                id: "123"
+              }
+            ]
+          }
+        });
+      });
+
+      it("query with empty filter object still works", async () => {
+        // @ts-expect-no-error: empty filter
+        await Customer.query("123", { filter: {} });
+      });
+    });
+
+    describe("queryByKeys overload with typed filters", () => {
+      it("accepts valid filter keys with object key conditions", async () => {
+        // @ts-expect-no-error: typed filters work with object key form
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { name: "John", lastFour: "1234" } }
+        );
+      });
+
+      it("rejects invalid filter keys with object key conditions", async () => {
+        // @ts-expect-error: nonExistent is not a valid filter key
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { nonExistent: "value" } }
+        ).catch(() => {});
+      });
+
+      it("accepts type narrowing with object key conditions", async () => {
+        // @ts-expect-no-error: type narrowing works with object key form
+        await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { type: "Order", orderDate: "2023" } }
+        );
+      });
+    });
+
+    describe("deeply nested dot-path keys", () => {
+      it("accepts deeply nested dot-paths on DeepNestedEntity", async () => {
+        // @ts-expect-no-error: 3-level deep path is valid
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.score": 5 }
+        });
+      });
+
+      it("accepts 4-level deep dot-paths", async () => {
+        // @ts-expect-no-error: 4-level deep path is valid
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.level3.flag": true }
+        });
+      });
+
+      it("rejects invalid deep dot-paths", async () => {
+        // @ts-expect-error: nonExistent is not a valid nested path
+        await DeepNestedEntity.query("123", {
+          filter: { "data.level1.level2.nonExistent": "value" }
+        }).catch(() => {});
+      });
+    });
+
+    describe("filter operators with typed keys", () => {
+      it("accepts $beginsWith on typed dot-path keys", async () => {
+        // @ts-expect-no-error: $beginsWith works with typed keys
+        await Warehouse.query("123", {
+          filter: { "location.city": { $beginsWith: "Den" } }
+        });
+      });
+
+      it("accepts $contains on typed keys", async () => {
+        // @ts-expect-no-error: $contains works with typed keys
+        await Customer.query("123", {
+          filter: { name: { $contains: "john" } }
+        });
+      });
+
+      it("accepts IN operator (array) on typed keys", async () => {
+        // @ts-expect-no-error: array values work with typed keys
+        await Customer.query("123", {
+          filter: { name: ["John", "Jane"] }
+        });
+      });
+    });
+
+    describe("sort key condition", () => {
+      describe("skCondition value validation", () => {
+        it("accepts exact entity name", async () => {
+          // @ts-expect-no-error: "Order" is a valid partition entity name
+          await Customer.query("123", { skCondition: "Order" });
+        });
+
+        it("accepts entity name with suffix", async () => {
+          // @ts-expect-no-error: "Order#123" starts with valid entity name
+          await Customer.query("123", { skCondition: "Order#123" });
+        });
+
+        it("accepts $beginsWith with entity name", async () => {
+          // @ts-expect-no-error: $beginsWith with valid entity name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" }
+          });
+        });
+
+        it("accepts $beginsWith with entity name prefix", async () => {
+          // @ts-expect-no-error: $beginsWith with "Order#abc" starts with valid name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Order#abc" }
+          });
+        });
+
+        it("accepts self entity name", async () => {
+          // @ts-expect-no-error: "Customer" is the queried entity itself
+          await Customer.query("123", { skCondition: "Customer" });
+        });
+
+        it("rejects invalid entity name", async () => {
+          // @ts-expect-error: "NonExistent" is not a valid partition entity name
+          await Customer.query("123", { skCondition: "NonExistent" });
+        });
+
+        it("rejects invalid $beginsWith entity name", async () => {
+          // @ts-expect-error: "Fake" is not a valid partition entity name
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Fake" }
+          });
+        });
+      });
+
+      describe("return type narrowing by skCondition", () => {
+        it("exact entity name narrows return type", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Order"
+          });
+
+          // @ts-expect-no-error: narrowed to Order
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded by SK narrowing
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("exact self entity name narrows to self", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Customer"
+          });
+
+          // @ts-expect-no-error: narrowed to Customer
+          const _match: Array<EntityAttributesInstance<Customer>> = result;
+
+          // @ts-expect-error: Order excluded
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("$beginsWith entity name narrows return type", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" }
+          });
+
+          // @ts-expect-no-error: narrowed to Order
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("entity name with suffix does NOT narrow (delimiter is ambiguous)", async () => {
+          const result = await Customer.query("123", {
+            skCondition: "Order#some-id"
+          });
+
+          // @ts-expect-no-error: not narrowed — full union
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: NOT narrowed to just Order
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("$beginsWith with suffix does NOT narrow", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order#abc" }
+          });
+
+          // @ts-expect-no-error: not narrowed — full union
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: NOT narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("filter type takes precedence over SK narrowing", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" },
+            filter: { type: "PaymentMethod" }
+          });
+
+          // @ts-expect-no-error: filter type "PaymentMethod" takes precedence
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded despite SK matching
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("no skCondition returns full union", async () => {
+          const result = await Customer.query("123");
+
+          // @ts-expect-no-error: full union
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: NOT narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+      });
+    });
+
+    describe("key conditions sk validation and narrowing", () => {
+      describe("sk value validation in EntityKeyConditions", () => {
+        it("accepts exact entity name as sk value", async () => {
+          // @ts-expect-no-error: "Order" is a valid entity name in Customer's partition
+          await Customer.query({ pk: "Customer#123", sk: "Order" });
+        });
+
+        it("accepts entity name with suffix as sk value", async () => {
+          // @ts-expect-no-error: "Order#001" starts with a valid entity name
+          await Customer.query({ pk: "Customer#123", sk: "Order#001" });
+        });
+
+        it("accepts $beginsWith with entity name as sk value", async () => {
+          // @ts-expect-no-error: $beginsWith with valid entity name
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "Order" }
+          });
+        });
+
+        it("accepts self entity name as sk value", async () => {
+          // @ts-expect-no-error: "Customer" is the queried entity itself
+          await Customer.query({ pk: "Customer#123", sk: "Customer" });
+        });
+
+        it("rejects invalid entity name as sk value", async () => {
+          // @ts-expect-error: "NonExistent" is not a valid entity name
+          await Customer.query({ pk: "Customer#123", sk: "NonExistent" });
+        });
+
+        it("rejects invalid $beginsWith entity name", async () => {
+          // @ts-expect-error: "Fake" is not a valid entity name
+          await Customer.query({
+            pk: "Customer#123",
+            sk: { $beginsWith: "Fake" }
+          });
+        });
+      });
+
+      describe("return type with key conditions sk", () => {
+        it("key conditions sk does not narrow return type", async () => {
+          // TS can't infer generic literals from mapped type intersection properties.
+          // SK values ARE validated (invalid names rejected), but return type narrowing
+          // requires using the skCondition option or filter type instead.
+          const result = await Customer.query({
+            pk: "Customer#123",
+            sk: "Order"
+          });
+
+          // @ts-expect-no-error: return type is the full partition union
+          const _full: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<Order>
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: NOT narrowed — use skCondition or filter type for narrowing
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_full, _notNarrowed);
+        });
+
+        it("filter type narrows even with key conditions sk", async () => {
+          const result = await Customer.query(
+            { pk: "Customer#123", sk: { $beginsWith: "Order" } },
+            { filter: { type: "Order" } }
+          );
+
+          // @ts-expect-no-error: filter type "Order" narrows return type
+          const _match: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer excluded by filter type
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+      });
+    });
+
+    describe("complex $or with type narrowing", () => {
+      it("$or with mixed types narrows filter keys per block (happy)", async () => {
+        // Each $or block independently validates keys based on its type
+        // @ts-expect-no-error: each block uses attributes from its own entity
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023-01-01", customerId: "c1" },
+              { type: "PaymentMethod", lastFour: "4242" },
+              { type: "Customer", name: "Alice", address: "123 Main St" },
+              { type: "ContactInformation", email: "alice@example.com" }
+            ]
+          }
+        });
+      });
+
+      it("$or with mixed types rejects unrelated entity type (error)", async () => {
+        // @ts-expect-error: "Person" is not related to Customer
+        await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { type: "Person" }]
+          }
+        });
+      });
+
+      it("$or without type allows all partition attributes (happy)", async () => {
+        // When $or blocks don't specify type, all partition keys are valid
+        // @ts-expect-no-error: mixing attributes from different entities in untyped $or
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { name: "Alice", orderDate: "2023" },
+              { lastFour: "4242", email: "test@test.com" }
+            ]
+          }
+        });
+      });
+
+      it("$or without type rejects invalid attribute (error)", async () => {
+        // @ts-expect-error: nonExistent is not an attribute on any partition entity
+        await Customer.query("123", {
+          filter: { $or: [{ name: "Alice", nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("top-level type + $or with different types", async () => {
+        // Top-level type narrows the return type, $or blocks narrow their own keys
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ orderDate: "2023-01-01" }, { orderDate: "2024-01-01" }]
+          }
+        });
+
+        // @ts-expect-no-error: top-level type: "Order" narrows return
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded by top-level type
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("$or-only filter narrows return type to union of $or types", async () => {
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+
+        // Exhaustive: narrowed to exactly Order | PaymentMethod from $or types
+        // @ts-expect-no-error
+        const _exact: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not in any $or block's type
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_exact, _noCustomer);
+      });
+
+      it("top-level type array + $or with entity-specific filters", async () => {
+        const result = await Customer.query("123", {
+          filter: {
+            type: ["Order", "ContactInformation"],
+            $or: [{ orderDate: "2023" }, { email: "test@example.com" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | ContactInformation
+        const _match: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: Customer is excluded
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("$or rejects invalid keys even without type narrowing", async () => {
+        // @ts-expect-error: nonExistent is not valid on any entity
+        await Customer.query("123", {
+          filter: { $or: [{ nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("$or rejects invalid attribute for a typed block (nonExistent key)", async () => {
+        // @ts-expect-error: nonExistent doesn't exist on Order or any partition entity
+        await Customer.query("123", {
+          filter: { $or: [{ type: "Order", nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("multiple $or blocks each with distinct types and valid attributes (happy)", async () => {
+        // @ts-expect-no-error: each block uses its own entity's attributes
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023", customerId: "c1" },
+              { type: "PaymentMethod", lastFour: "4242", customerId: "c1" },
+              { type: "ContactInformation", email: "a@b.com", phone: "555" },
+              { type: "Customer", name: "Alice" }
+            ]
+          }
+        });
+      });
+
+      it("multiple $or blocks rejects nonExistent attribute in one block (error)", async () => {
+        // @ts-expect-error: nonExistent not valid on Order or any entity
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023", nonExistent: "x" },
+              { type: "PaymentMethod", lastFour: "4242" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("$or with typed block and untyped block in same filter (happy)", async () => {
+        // @ts-expect-no-error: one typed block, one untyped (all keys allowed)
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { name: "Alice", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("$or with typed block and untyped block rejects invalid key (error)", async () => {
+        // @ts-expect-error: nonExistent not valid on any entity
+        await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { nonExistent: "x" }]
+          }
+        }).catch(() => {});
+      });
+
+      it("$or with mixed typed/untyped blocks narrows by type AND by keys", async () => {
+        // Block 1: type "Order" → Order
+        // Block 2: no type, but lastFour only exists on PaymentMethod → PaymentMethod
+        // Union: Order | PaymentMethod
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not matched by any $or block
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with all typed blocks DOES narrow return type", async () => {
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to union of typed blocks
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded — not in any $or block's type
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with untyped blocks narrows by filter keys", async () => {
+        // Block 1: orderDate only on Order → Order
+        // Block 2: lastFour only on PaymentMethod → PaymentMethod
+        // Union: Order | PaymentMethod
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("$or with shared-attribute blocks does not narrow", async () => {
+        // name exists on Customer (and all entities may have id/createdAt)
+        // but within Customer's partition, only Customer has `name`
+        // so this narrows to Customer
+        const result = await Customer.query("123", {
+          filter: {
+            $or: [{ name: "Alice" }, { name: "Bob" }]
+          }
+        });
+
+        // @ts-expect-no-error: narrowed to Customer (only entity with 'name' in partition)
+        const _narrowed: Array<EntityAttributesInstance<Customer>> = result;
+
+        // @ts-expect-error: Order excluded — doesn't have name
+        const _noOrder: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed, _noOrder);
+      });
+    });
+
+    describe("skCondition + filter combination", () => {
+      it("skCondition with filter type: both valid related entities (happy)", async () => {
+        // @ts-expect-no-error: skCondition and filter type can be different related entities
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: { type: "PaymentMethod", lastFour: "1234" }
+        });
+      });
+
+      it("skCondition with invalid filter type: rejects unrelated entity (error)", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { type: "Person" }
+        });
+      });
+
+      it("skCondition with filter type: return type narrows by filter type", async () => {
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: { type: "PaymentMethod" }
+        });
+
+        // @ts-expect-no-error: filter type: "PaymentMethod" narrows return
+        const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        // @ts-expect-error: Order is excluded — filter type takes precedence
+        const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("skCondition with untyped filter: return type narrows by skCondition", async () => {
+        const result = await Customer.query("123", {
+          skCondition: "Order",
+          filter: { createdAt: "2023" }
+        });
+
+        // @ts-expect-no-error: skCondition "Order" narrows return type
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded by SK narrowing
+        const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("skCondition with $or filter: $or blocks validate independently (happy)", async () => {
+        // @ts-expect-no-error: skCondition and $or are independent concerns
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: {
+            $or: [
+              { type: "Order", orderDate: "2023" },
+              { type: "PaymentMethod", lastFour: "1234" }
+            ]
+          }
+        });
+      });
+
+      it("skCondition with $or filter: rejects unrelated type in $or (error)", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: {
+            $or: [{ type: "Person" }]
+          }
+        });
+      });
+
+      it("skCondition with $or: invalid attribute in typed $or block rejected", async () => {
+        // @ts-expect-error: nonExistent not valid on any entity
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { $or: [{ type: "Order", nonExistent: "x" }] }
+        }).catch(() => {});
+      });
+
+      it("skCondition rejects unrelated entity even with valid filter", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Person",
+          filter: { type: "Order" }
+        });
+      });
+
+      it("filter type rejects unrelated entity even with valid skCondition", async () => {
+        // @ts-expect-error: "Person" is not a related entity of Customer
+        await Customer.query("123", {
+          skCondition: "Order",
+          filter: { type: "Person" }
+        });
+      });
+    });
+
+    describe("empty $or array", () => {
+      it("empty $or compiles and returns full union (no narrowing)", async () => {
+        const result = await Customer.query("123", {
+          filter: { $or: [] }
+        });
+
+        // @ts-expect-no-error: empty $or means no narrowing — full union
+        const _full: Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        > = result;
+
+        // @ts-expect-error: NOT narrowed — still the full union
+        const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_full, _notNarrowed);
+      });
+    });
+
+    describe("entity with no relationships", () => {
+      it("Employee (no relationships) accepts own attributes as filter keys", async () => {
+        // @ts-expect-no-error: name is a valid attribute on Employee
+        await Employee.query("123", { filter: { name: "John" } });
+      });
+
+      it("Employee (no relationships) accepts organizationId as filter key", async () => {
+        // @ts-expect-no-error: organizationId is a NullableForeignKey on Employee
+        await Employee.query("123", {
+          filter: { organizationId: "org-1" }
+        });
+      });
+
+      it("Employee type filter only accepts 'Employee'", async () => {
+        // @ts-expect-no-error: Employee is the only entity in its own partition
+        await Employee.query("123", { filter: { type: "Employee" } });
+      });
+
+      it("Employee type filter rejects other entity names", async () => {
+        // @ts-expect-error: "Order" is not in Employee's partition
+        await Employee.query("123", { filter: { type: "Order" } });
+      });
+
+      it("Employee return type narrows to Employee when type filter specified", async () => {
+        const result = await Employee.query("123", {
+          filter: { type: "Employee" }
+        });
+
+        // @ts-expect-no-error: narrowed to Employee
+        const _narrowed: Array<EntityAttributesInstance<Employee>> = result;
+
+        Logger.log(_narrowed);
+      });
+
+      it("Founder (no relationships) accepts own attributes", async () => {
+        // @ts-expect-no-error: name is valid on Founder
+        await Founder.query("123", { filter: { name: "Jane" } });
+      });
+    });
+
+    describe("queryByKeys overload return type narrowing", () => {
+      it("queryByKeys with filter type narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { type: "Order" } }
+        );
+
+        // @ts-expect-no-error: filter type "Order" narrows return type
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("queryByKeys with filter key narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          { filter: { orderDate: "2023" } }
+        );
+
+        // @ts-expect-no-error: orderDate only on Order → narrows
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("queryByKeys with $or narrows return type", async () => {
+        const result = await Customer.query(
+          { pk: "Customer#123" },
+          {
+            filter: {
+              $or: [
+                { type: "Order", orderDate: "2023" },
+                { type: "PaymentMethod", lastFour: "1234" }
+              ]
+            }
+          }
+        );
+
+        // @ts-expect-no-error: narrowed to Order | PaymentMethod
+        const _narrowed: Array<
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+        > = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+    });
+
+    describe("AND intersection of filter keys and $or", () => {
+      it("disjoint top-level keys and $or produce never[] (no entity can match)", async () => {
+        // orderDate → only Order. $or lastFour → only PaymentMethod.
+        // DynamoDB ANDs them: must satisfy both. No entity has both → never[].
+        const result = await Customer.query("123", {
+          filter: {
+            orderDate: "2023",
+            $or: [{ lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is empty → never[]
+        const _never: never[] = result;
+
+        Logger.log(_never);
+      });
+
+      it("overlapping top-level keys and $or produce the intersection", async () => {
+        // customerId → Order, PaymentMethod, ContactInformation
+        // $or orderDate → Order
+        // Intersection: Order (has both customerId and orderDate)
+        const result = await Customer.query("123", {
+          filter: {
+            customerId: "c1",
+            $or: [{ orderDate: "2023" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod excluded by intersection
+        const _noPM: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+        Logger.log(_narrowed, _noPM);
+      });
+
+      it("top-level type and $or with disjoint types produce never[]", async () => {
+        // type: "Order" + $or type: "PaymentMethod"
+        // DynamoDB ANDs: type = Order AND type = PaymentMethod → impossible
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ type: "PaymentMethod", lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is empty → never[]
+        const _never: never[] = result;
+
+        Logger.log(_never);
+      });
+
+      it("top-level type and $or with same type produce narrowed result", async () => {
+        // type: "Order" + $or type: "Order" → intersection is Order
+        const result = await Customer.query("123", {
+          filter: {
+            type: "Order",
+            $or: [{ type: "Order", orderDate: "2023" }]
+          }
+        });
+
+        // @ts-expect-no-error: intersection is Order
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: Customer excluded
+        const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+        Logger.log(_narrowed, _noCustomer);
+      });
+
+      it("top-level keys without $or still narrow normally", async () => {
+        const result = await Customer.query("123", {
+          filter: { orderDate: "2023" }
+        });
+
+        // @ts-expect-no-error: narrowed to Order (no $or to intersect with)
+        const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+
+        Logger.log(_narrowed);
+      });
+    });
+
+    describe("OtherTable return type narrowing", () => {
+      it("Teacher.query with type 'Course' narrows return type", async () => {
+        const result = await Teacher.query("123", {
+          filter: { type: "Course" }
+        });
+
+        // @ts-expect-no-error: narrowed to Course
+        const _narrowed: Array<EntityAttributesInstance<Course>> = result;
+
+        // @ts-expect-error: Teacher excluded
+        const _noTeacher: Array<EntityAttributesInstance<Teacher>> = result;
+
+        Logger.log(_narrowed, _noTeacher);
       });
     });
   });

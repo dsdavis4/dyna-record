@@ -15,6 +15,8 @@ describe("BelongsTo", () => {
     it("the foreign key attribute must be defined on itself", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -25,6 +27,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
@@ -33,6 +37,8 @@ describe("BelongsTo", () => {
     it("requires the foreign key attribute to be of type ForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @StringAttribute({ alias: "Key1" })
         public key1: string; // This has to be ForeignKey
 
@@ -43,6 +49,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         // @ts-expect-error: foreign key must be of type ForeignKey
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
@@ -52,6 +60,8 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasOne: The BelongsTo can be defined as optional if linked through a NullableForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1", nullable: true })
         public key1?: NullableForeignKey<ModelTwo>;
 
@@ -62,6 +72,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
@@ -70,6 +82,8 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasOne: The BelongsTo can not be defined as optional if linked through a ForeignKey (non nullable)", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -80,6 +94,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
@@ -88,6 +104,8 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasMany: The BelongsTo can be defined as optional if linked through a NullableForeignKey", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1", nullable: true })
         public key1?: NullableForeignKey<ModelTwo>;
 
@@ -98,6 +116,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasMany(() => ModelOne, { foreignKey: "key1" })
         public modelOneRels: ModelOne[];
       }
@@ -106,6 +126,8 @@ describe("BelongsTo", () => {
     it("BelongsTo -> HasMany: The BelongsTo can not be defined as optional if linked through a ForeignKey (non nullable)", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -116,6 +138,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasMany(() => ModelOne, { foreignKey: "key1" })
         public modelOneRels: ModelOne[];
       }
@@ -124,6 +148,8 @@ describe("BelongsTo", () => {
     it("enforces the foreign key target to match the BelongsTo target", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -134,17 +160,23 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "OnlyOnTwo" })
         public readonly onlyOnTwo: string;
       }
 
       @Entity
-      class ModelThree extends MockTable {}
+      class ModelThree extends MockTable {
+        declare readonly type: "ModelThree";
+      }
     });
 
     it("enforces the foreign key target to match the BelongsTo target when nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1", nullable: true })
         public key1?: NullableForeignKey<ModelTwo>;
 
@@ -155,17 +187,23 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "OnlyOnTwo" })
         public readonly onlyOnTwo: string;
       }
 
       @Entity
-      class ModelThree extends MockTable {}
+      class ModelThree extends MockTable {
+        declare readonly type: "ModelThree";
+      }
     });
 
     it("does not all the foreign key attribute to be defined on the associated model", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -176,6 +214,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @StringAttribute({ alias: "Key2" })
         public key2: string;
 
@@ -187,6 +227,8 @@ describe("BelongsTo", () => {
     it("does not all the foreign key attribute to be a relationship attribute", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -203,12 +245,16 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
 
       @Entity
       class ModelThree extends MockTable {
+        declare readonly type: "ModelThree";
+
         @HasOne(() => ModelOne, { foreignKey: "key3" })
         public modelOneRel: ModelOne;
       }
@@ -217,6 +263,8 @@ describe("BelongsTo", () => {
     it("does not allow the foreign key to be a function key", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -231,6 +279,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }
@@ -239,6 +289,8 @@ describe("BelongsTo", () => {
     it("does not allow the attribute of BelongsTo to be an array", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         @ForeignKeyAttribute(() => ModelTwo, { alias: "Key1" })
         public key1: ForeignKey<ModelTwo>;
 
@@ -249,6 +301,8 @@ describe("BelongsTo", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
+
         @HasOne(() => ModelOne, { foreignKey: "key1" })
         public modelOneRel: ModelOne;
       }

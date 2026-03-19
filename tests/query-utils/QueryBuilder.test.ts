@@ -38,6 +38,8 @@ const scaleMetaSchema = {
 
 @Entity
 class Scale extends MockTable {
+  declare readonly type: "Scale";
+
   @StringAttribute({ alias: "Name" })
   public name: string;
 
@@ -50,6 +52,8 @@ class Scale extends MockTable {
 
 @Entity
 class Room extends MockTable {
+  declare readonly type: "Room";
+
   @StringAttribute({ alias: "Name" })
   public name: string;
 

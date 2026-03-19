@@ -103,3 +103,81 @@ export type EntityDefinedAttributes<T extends DynaRecord> = Omit<
   | PartitionKeyAttribute<T>
   | SortKeyAttribute<T>
 >;
+
+/**
+ * Types that terminate dot-path recursion. These are considered leaf types
+ * that should not be recursed into when generating filter key paths.
+ */
+export type NonRecursiveLeaf =
+  | Date
+  | unknown[]
+  | DynaRecord
+  | ((...args: never[]) => unknown);
+
+/**
+ * Maximum recursion depth for {@link DotPathKeys}.
+ * Set to 5 to cover realistic DynamoDB Map attribute nesting (typically 2-3 levels)
+ * while staying well below TypeScript's internal instantiation depth limit of 50.
+ * Higher values risk combinatorial explosion with wide object schemas.
+ */
+type MaxDotPathDepth = 5;
+
+/**
+ * Recursively generates dot-separated key paths for plain object types.
+ * Stops recursion at {@link NonRecursiveLeaf} types and at {@link MaxDotPathDepth} levels
+ * to prevent "Type instantiation is excessively deep" errors.
+ *
+ * @template T - The object type to generate paths for.
+ * @template Depth - Internal depth counter (tuple). Do not provide externally.
+ */
+export type DotPathKeys<
+  T,
+  Depth extends unknown[] = []
+> = Depth["length"] extends MaxDotPathDepth
+  ? never
+  : T extends NonRecursiveLeaf
+    ? never
+    : T extends object
+      ? {
+          [K in keyof T & string]:
+            | K
+            | (DotPathKeys<T[K], [...Depth, unknown]> extends infer D extends
+                string
+                ? `${K}.${D}`
+                : never);
+        }[keyof T & string]
+      : never;
+
+/**
+ * For a given entity, produces all dot-path keys for its ObjectAttribute fields.
+ * Checks each property: if it's a plain object (not a {@link NonRecursiveLeaf}),
+ * generates "propName.nestedKey" paths.
+ */
+export type ObjectDotPaths<T extends DynaRecord> = {
+  [K in keyof T & string]: Exclude<T[K], undefined> extends infer V
+    ? V extends NonRecursiveLeaf
+      ? never
+      : V extends object
+        ? DotPathKeys<V> extends infer D extends string
+          ? `${K}.${D}`
+          : never
+        : never
+    : never;
+}[keyof T & string];
+
+/**
+ * Union of: non-relationship/non-function/non-key attribute names + ObjectDotPaths.
+ * This is the complete set of valid filter keys for a single entity.
+ *
+ * Excludes:
+ * - Relationship properties (via {@link EntityAttributesOnly})
+ * - Function fields (via {@link EntityAttributesOnly})
+ * - PartitionKeyAttribute and SortKeyAttribute
+ * - `type` (handled separately by {@link TypedAndFilter} for discriminated union narrowing)
+ */
+export type EntityFilterableKeys<T extends DynaRecord> =
+  | Exclude<
+      keyof EntityAttributesOnly<T> & string,
+      PartitionKeyAttribute<T> | SortKeyAttribute<T> | "type"
+    >
+  | ObjectDotPaths<T>;

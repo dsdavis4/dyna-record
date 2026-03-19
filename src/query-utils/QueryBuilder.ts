@@ -261,6 +261,14 @@ class QueryBuilder {
   private resolveAttrPath(key: string): ResolvedPath {
     const segments = key.split(".");
     const topLevelKey = segments[0];
+
+    if (!(topLevelKey in this.#attributeMetadata)) {
+      throw new Error(
+        `Invalid filter key "${key}": attribute "${topLevelKey}" does not exist on this entity. ` +
+          `Valid attributes are: ${Object.keys(this.#attributeMetadata).join(", ")}`
+      );
+    }
+
     const tableKey = this.#attributeMetadata[topLevelKey].alias;
 
     const names: StringObj = { [`#${tableKey}`]: tableKey };

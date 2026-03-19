@@ -152,6 +152,7 @@ describe("ObjectAttribute", () => {
     it("requires the schema and type to be the same", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-no-error: InferObjectSchema is a valid type
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema>;
@@ -159,6 +160,7 @@ describe("ObjectAttribute", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
         // @ts-expect-error: type of attribute and schema are not the same
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema2>;
@@ -172,6 +174,7 @@ describe("ObjectAttribute", () => {
     it("nullable is not a valid property because its always non nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         @ObjectAttribute({
           alias: "Key1",
           schema: testSchema,
@@ -183,6 +186,7 @@ describe("ObjectAttribute", () => {
 
       @Entity
       class ModelTwo extends MockTable {
+        declare readonly type: "ModelTwo";
         @ObjectAttribute({
           alias: "Key1",
           schema: testSchema,
@@ -196,6 +200,7 @@ describe("ObjectAttribute", () => {
     it("does not support wrong types", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-error: string is not a valid type. Only InferObjectSchema is allowed
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: string;
@@ -205,6 +210,7 @@ describe("ObjectAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
         // @ts-expect-no-error: Alias prop is optional
         @ObjectAttribute({ schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema>;
@@ -214,6 +220,7 @@ describe("ObjectAttribute", () => {
     it("ObjectAttribute is always required (never optional)", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-no-error: ObjectAttribute properties are always required
         @ObjectAttribute({ alias: "Key1", schema: testSchema })
         public key1: InferObjectSchema<typeof testSchema>;
@@ -243,6 +250,7 @@ describe("ObjectAttribute", () => {
 
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: date field infers Date type
           @ObjectAttribute({ schema: dateSchema })
           public key1: InferObjectSchema<typeof dateSchema>;
@@ -389,6 +397,7 @@ describe("ObjectAttribute", () => {
 
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: enum field infers union type
           @ObjectAttribute({ schema: enumSchema })
           public key1: InferObjectSchema<typeof enumSchema>;
@@ -496,6 +505,7 @@ describe("ObjectAttribute", () => {
       it("supports array of primitives", () => {
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: string[] matches array of string items
           @ObjectAttribute({ schema: arraySchema })
           public key1: InferObjectSchema<typeof arraySchema>;
@@ -510,6 +520,7 @@ describe("ObjectAttribute", () => {
 
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-error: arraySchema expects string[] for tags, but wrongArraySchema infers number[]
           @ObjectAttribute({ schema: arraySchema })
           public key1: InferObjectSchema<typeof wrongArraySchema>;
@@ -519,6 +530,7 @@ describe("ObjectAttribute", () => {
       it("supports array of objects", () => {
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: array of objects matches schema
           @ObjectAttribute({ schema: arrayOfObjectsSchema })
           public key1: InferObjectSchema<typeof arrayOfObjectsSchema>;
@@ -528,6 +540,7 @@ describe("ObjectAttribute", () => {
       it("supports nested arrays", () => {
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: number[][] matches nested array schema
           @ObjectAttribute({ schema: nestedArraySchema })
           public key1: InferObjectSchema<typeof nestedArraySchema>;
@@ -541,6 +554,7 @@ describe("ObjectAttribute", () => {
 
         @Entity
         class ModelOne extends MockTable {
+          declare readonly type: "ModelOne";
           // @ts-expect-no-error: nullable array fields are optional
           @ObjectAttribute({ schema: nullableArraySchema })
           public key1: InferObjectSchema<typeof nullableArraySchema>;

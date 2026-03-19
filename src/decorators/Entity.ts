@@ -6,28 +6,37 @@ import type DynaRecord from "../DynaRecord";
  *
  * IMPORTANT - All entity classes should extend a table class decorated by {@link Table}
  *
- * @template T The class being decorated, which extends from the base `DynaRecord` entity class. This ensures that only classes that are part of the ORM system can be decorated as entities.
- * @param target The constructor function of the class being decorated. This function is used to instantiate objects of the class.
- * @param context The context in which the decorator is applied, provided by the TypeScript runtime. This includes metadata about the class, such as its kind and other relevant information. The decorator uses this context to perform its registration logic.
- * @returns {void} The decorator does not return a value. Instead, it performs side effects by registering the class with the ORM's metadata system.
+ * Entities MUST declare their `type` property as a string literal matching the class name.
+ * This enables compile-time type safety for query filters and return types.
+ *
+ * @template C The constructor of the class being decorated. The class must extend `DynaRecord`
+ * and declare `readonly type` as a string literal (e.g., `declare readonly type: "Order"`).
+ * @param target The constructor function of the class being decorated.
+ * @param context The context in which the decorator is applied, provided by the TypeScript runtime.
+ * @returns {void} The decorator does not return a value.
  *
  * Usage example:
  * ```typescript
  * @Entity
  * class User extends MyTable {
+ *   declare readonly type: "User";
  *   // User entity implementation
  * }
  * ```
- * In this example, the `User` class is marked as an entity using the `@Entity` decorator. This designation registers the `User` class within the ORM's metadata system, making it a recognized entity for the ORM to manage. The registration process involves associating the class with its corresponding table name and any additional metadata required by the ORM to handle instances of this class effectively.
  */
-function Entity(
-  target: new () => DynaRecord,
-  _context: ClassDecoratorContext
+function Entity<C extends abstract new (...args: never[]) => DynaRecord>(
+  target: C &
+    (string extends InstanceType<C>["type"]
+      ? {
+          __entityTypeError: 'Entity must declare: declare readonly type: "ClassName"';
+        }
+      : unknown),
+  _context: ClassDecoratorContext<C>
 ): void {
   const tableClassName: string = (
     Object.getPrototypeOf(target) as { name: string }
   ).name;
-  Metadata.addEntity(target, tableClassName);
+  Metadata.addEntity(target as unknown as new () => DynaRecord, tableClassName);
 }
 
 export default Entity;

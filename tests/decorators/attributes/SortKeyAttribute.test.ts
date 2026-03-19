@@ -54,6 +54,7 @@ describe("SortKeyAttribute", () => {
     it("nullable is not a valid property because its always non nullable", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
         // @ts-expect-error: nullable property is not valid
         @SortKeyAttribute({ alias: "Key1", nullable: true })
         public key1: SortKey;
@@ -61,6 +62,7 @@ describe("SortKeyAttribute", () => {
 
       @Entity
       class OtherModel extends MockTable {
+        declare readonly type: "OtherModel";
         // @ts-expect-error: nullable property is not valid
         @SortKeyAttribute({ alias: "Key1", nullable: false })
         public key1: SortKey;

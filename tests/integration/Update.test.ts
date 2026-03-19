@@ -116,18 +116,24 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
+  declare readonly type: "MyModelNullableAttribute";
+
   @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
 }
 
 @Entity
 class MyModelNonNullableAttribute extends MockTable {
+  declare readonly type: "MyModelNonNullableAttribute";
+
   @DateAttribute({ alias: "DateAttribute", nullable: false })
   public myAttribute: Date;
 }
 
 @Entity
 class MockInformation extends MockTable {
+  declare readonly type: "MockInformation";
+
   @StringAttribute({ alias: "Address" })
   public address: string;
 
@@ -6732,6 +6738,8 @@ describe("Update", () => {
   describe("A model is updating multiple ForeignKeys of different relationship types", () => {
     @Entity
     class Model1 extends MockTable {
+      declare readonly type: "Model1";
+
       @StringAttribute({ alias: "SomeAttr" })
       public someAttr: string;
 
@@ -6741,6 +6749,8 @@ describe("Update", () => {
 
     @Entity
     class Model2 extends MockTable {
+      declare readonly type: "Model2";
+
       @StringAttribute({ alias: "OtherAttr" })
       public otherAttr: string;
 
@@ -6750,6 +6760,8 @@ describe("Update", () => {
 
     @Entity
     class Model3 extends MockTable {
+      declare readonly type: "Model3";
+
       @StringAttribute({ alias: "Name" })
       public name: string;
 
@@ -10730,6 +10742,8 @@ describe("Update", () => {
       it("will not accept function attributes on update", async () => {
         @Entity
         class MyModel extends MockTable {
+          declare readonly type: "MyModel";
+
           @StringAttribute({ alias: "MyAttribute" })
           public myAttribute: string;
 
@@ -11111,6 +11125,8 @@ describe("Update", () => {
       it("will not accept function attributes on update", async () => {
         @Entity
         class MyModel extends MockTable {
+          declare readonly type: "MyModel";
+
           @StringAttribute({ alias: "MyAttribute" })
           public myAttribute: string;
 

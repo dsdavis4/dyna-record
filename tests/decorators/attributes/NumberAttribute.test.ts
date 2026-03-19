@@ -6,6 +6,8 @@ import { ZodNullable, ZodNumber, ZodOptional } from "zod";
 
 @Entity
 class MyEntity extends MockTable {
+  declare readonly type: "MyEntity";
+
   @NumberAttribute({ alias: "MyNumber" })
   public readonly myNumber: number;
 
@@ -60,6 +62,8 @@ describe("NumberAttribute", () => {
     it("can be applied to number attributes", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: number is a valid type
         @NumberAttribute({ alias: "Key1" })
         public key1: number;
@@ -69,6 +73,8 @@ describe("NumberAttribute", () => {
     it("does not allow the property its applied to to be optional if its not nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: NumberAttributes cant be optional unless nullable
         @NumberAttribute({ alias: "Key1" })
         public key1?: number;
@@ -78,6 +84,8 @@ describe("NumberAttribute", () => {
     it("does allow the property its applied to to be optional if its nullable", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: NumberAttributes can be optional if nullable
         @NumberAttribute({ alias: "Key1", nullable: true })
         public key1?: number;
@@ -87,6 +95,8 @@ describe("NumberAttribute", () => {
     it("does not support non-number fields", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-error: string is not a valid type. Only number is allowed
         @NumberAttribute({ alias: "Key1" })
         public key1: string;
@@ -96,6 +106,8 @@ describe("NumberAttribute", () => {
     it("'alias' is optional", () => {
       @Entity
       class ModelOne extends MockTable {
+        declare readonly type: "ModelOne";
+
         // @ts-expect-no-error: Alias prop is optional
         @NumberAttribute()
         public key1: number;
@@ -105,6 +117,8 @@ describe("NumberAttribute", () => {
     it("if nullable is false the attribute is required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @NumberAttribute({ alias: "Key1", nullable: false })
         public key1: number;
@@ -118,6 +132,8 @@ describe("NumberAttribute", () => {
     it("nullable defaults to false and makes the property required", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are required
         @NumberAttribute({ alias: "Key1" })
         public key1: number;
@@ -131,6 +147,8 @@ describe("NumberAttribute", () => {
     it("when nullable is true, it will allow the property to be optional", () => {
       @Entity
       class SomeModel extends MockTable {
+        declare readonly type: "SomeModel";
+
         // @ts-expect-no-error: Nullable properties are optional
         @NumberAttribute({ alias: "Key1", nullable: true })
         public key1?: number;
