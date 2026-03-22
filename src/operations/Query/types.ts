@@ -237,28 +237,7 @@ type FilterParamsForEntities<Entities extends DynaRecord> =
   AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
 
 /**
- * Discriminated union enabling per-block `type` narrowing for a full partition.
- * Alias for {@link AndFilterForEntities} applied to {@link PartitionEntities}.
- */
-export type TypedAndFilter<T extends DynaRecord> = AndFilterForEntities<
-  PartitionEntities<T>
->;
-
-/**
- * Typed `$or` filter block for partition queries.
- * Each `$or` element is independently narrowed: when a block specifies
- * `type: "Order"`, only Order's attributes are accepted in that block.
- *
- * Alias for {@link OrFilterForEntities} applied to {@link PartitionEntities}.
- *
- * @template T - The root entity whose partition defines valid filter keys and type values.
- */
-export type TypedOrFilter<T extends DynaRecord> = OrFilterForEntities<
-  PartitionEntities<T>
->;
-
-/**
- * Top-level filter combining AND and OR.
+ * Top-level filter combining AND and OR for a full partition.
  * Alias for {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
  */
 export type TypedFilterParams<T extends DynaRecord> = FilterParamsForEntities<
@@ -277,10 +256,12 @@ export type TypedFilterParams<T extends DynaRecord> = FilterParamsForEntities<
  * names should stay under this limit to avoid "Type instantiation is
  * excessively deep" errors.
  */
-type Prefixes<S extends string, Acc extends string = ""> =
-  S extends `${infer Head}${infer Tail}`
-    ? `${Acc}${Head}` | Prefixes<Tail, `${Acc}${Head}`>
-    : never;
+type Prefixes<
+  S extends string,
+  Acc extends string = ""
+> = S extends `${infer Head}${infer Tail}`
+  ? `${Acc}${Head}` | Prefixes<Tail, `${Acc}${Head}`>
+  : never;
 
 /**
  * Finds partition entity names that start with a given prefix string.
@@ -358,9 +339,7 @@ export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
 export type SKScopedFilterParams<T extends DynaRecord, SK> =
   ExtractEntityFromSK<T, SK> extends infer Names
     ? ShouldNarrow<T, Names> extends true
-      ? FilterParamsForEntities<
-          Extract<PartitionEntities<T>, { type: Names & string }>
-        >
+      ? FilterParamsForEntities<ResolveEntityByName<T, Names & string>>
       : TypedFilterParams<T>
     : TypedFilterParams<T>;
 

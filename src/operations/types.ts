@@ -173,7 +173,7 @@ export type ObjectDotPaths<T extends DynaRecord> = {
  * - Relationship properties (via {@link EntityAttributesOnly})
  * - Function fields (via {@link EntityAttributesOnly})
  * - PartitionKeyAttribute and SortKeyAttribute
- * - `type` (handled separately by {@link TypedAndFilter} for discriminated union narrowing)
+ * - `type` (handled separately by {@link AndFilterForEntities} for discriminated union narrowing)
  */
 export type EntityFilterableKeys<T extends DynaRecord> =
   | Exclude<
