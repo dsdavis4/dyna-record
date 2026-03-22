@@ -158,13 +158,24 @@ abstract class DynaRecord implements DynaRecordBase {
    * sort key format where SK values always start with an entity class name. Unrelated entities
    * and entities from other tables are rejected at compile time.
    *
+   * **SK-scoped filter:** When `skCondition` narrows to specific entities, the `filter`
+   * parameter is scoped to only those entities' attributes. For example,
+   * `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes —
+   * using attributes from other entities (e.g., `lastFour` from PaymentMethod) produces a
+   * compile error.
+   *
+   * **`$beginsWith` prefix matching:** `$beginsWith` accepts partial entity name prefixes
+   * that match multiple entity types. For example, `$beginsWith: "Inv"` matches both
+   * "Invoice" and "Inventory". The return type and filter are scoped to the union of
+   * all matching entities.
+   *
    * **Return type narrowing:** The return type narrows automatically based on:
    * - Top-level filter `type`: `type: "Order"` → `Array<EntityAttributesInstance<Order>>`
    * - Top-level filter `type` array: `type: ["Order", "PaymentMethod"]` → union of both
    * - Top-level filter keys: `{ orderDate: "2023" }` → narrows to entities that have `orderDate`
    * - `$or` elements: each block narrows by `type` (if present) or by filter keys; return type is the union
    * - AND intersection: when top-level conditions and `$or` both narrow, the return type is their intersection. Empty intersection → `never[]`.
-   * - `skCondition` option: `skCondition: "Order"` or `skCondition: { $beginsWith: "Order" }` → narrows to Order
+   * - `skCondition` option: always intersected with filter narrowing. `skCondition: "Order"` or `{ $beginsWith: "Order" }` → narrows to Order. `{ $beginsWith: "Inv" }` → narrows to all entities starting with "Inv".
    * - No type/keys/SK specified → union of T and all related entities (e.g., `Customer | Order | PaymentMethod | ContactInformation`)
    *
    * Note: When using the object key form (`{ pk: "...", sk: "Order" }`), the `sk` value is
@@ -173,20 +184,20 @@ abstract class DynaRecord implements DynaRecordBase {
    * return type narrowing.
    *
    * @template T - The entity type being queried.
-   * @template F - The inferred filter type, captured via `const` generic for literal type inference.
    * @template SK - The inferred sort key condition type, captured via `const` generic for literal type inference.
+   * @template F - The inferred filter type, captured via `const` generic. Constrained by {@link SKScopedFilterParams} — when SK narrows, only matched entities' attributes are accepted.
    * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
    * @param {Object=} options - QueryOptions. Supports typed filter, consistentRead and skCondition. indexName is not supported.
-   * @param {TypedFilterParams<T>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes. The `type` field accepts valid entity class names.
-   * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Only accepts valid entity names from the partition. Narrows the return type when matching an exact entity name.
-   * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value or `skCondition`.
+   * @param {SKScopedFilterParams<T, SK>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes, scoped by `skCondition` when present. The `type` field accepts valid entity class names within the SK scope.
+   * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Accepts entity names, entity-name-prefixed strings, or `$beginsWith` with exact names or partial prefixes. Narrows the return type and scopes the filter to matched entities.
+   * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value, filter keys, and `skCondition`.
    *
    * @example By entity ID
    * ```typescript
    * const results = await Customer.query("123");
    * ```
    *
-   * @example With skCondition (narrows return type to Order)
+   * @example With skCondition (narrows return type and scopes filter to Order)
    * ```typescript
    * const orders = await Customer.query("123", { skCondition: "Order" });
    * // orders is Array<EntityAttributesInstance<Order>>
@@ -198,12 +209,21 @@ abstract class DynaRecord implements DynaRecordBase {
    * // orders is Array<EntityAttributesInstance<Order>>
    * ```
    *
-   * @example With typed filter (narrows return type)
+   * @example $beginsWith prefix matching multiple entities
+   * ```typescript
+   * const results = await Customer.query("123", { skCondition: { $beginsWith: "C" } });
+   * // results includes Customer and ContactInformation (both start with "C")
+   * // filter accepts attributes from both entities
+   * ```
+   *
+   * @example SK-scoped filter (only Order attributes accepted)
    * ```typescript
    * const orders = await Customer.query("123", {
+   *   skCondition: { $beginsWith: "Order" },
    *   filter: { type: "Order", orderDate: "2023-01-01" }
    * });
    * // orders is Array<EntityAttributesInstance<Order>>
+   * // filter: { lastFour: "1234" } would be a compile error (PaymentMethod attribute)
    * ```
    *
    * @example By primary key (sk validated, return type NOT narrowed)

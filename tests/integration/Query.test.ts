@@ -1314,13 +1314,22 @@ describe("Query", () => {
     });
 
     it("queryByEntity", async () => {
-      expect.assertions(2);
+      expect.assertions(4);
 
       const result = await Customer.query("123", {
         skCondition: { $beginsWith: "Order" },
         filter: {
           type: "Order",
-          orderDate: "2023"
+          customerId: "cust-1",
+          $or: [
+            {
+              orderDate: "2023-01-15",
+              paymentMethodId: "pm-1"
+            },
+            {
+              createdAt: { $beginsWith: "2021-09-15T" }
+            }
+          ]
         }
       });
 
@@ -1335,6 +1344,39 @@ describe("Query", () => {
           createdAt: new Date("2021-09-15T04:26:31.148Z"),
           updatedAt: new Date("2022-09-15T04:26:31.148Z")
         }
+      ]);
+      result.forEach(res => {
+        expect(res).toBeInstanceOf(Customer);
+      });
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK6 AND begins_with(#SK, :SK7)",
+            ExpressionAttributeNames: {
+              "#CreatedAt": "CreatedAt",
+              "#CustomerId": "CustomerId",
+              "#OrderDate": "OrderDate",
+              "#PK": "PK",
+              "#PaymentMethodId": "PaymentMethodId",
+              "#SK": "SK",
+              "#Type": "Type"
+            },
+            ExpressionAttributeValues: {
+              ":CreatedAt3": "2021-09-15T",
+              ":CustomerId5": "cust-1",
+              ":OrderDate1": "2023-01-15",
+              ":PK6": "Customer#123",
+              ":PaymentMethodId2": "pm-1",
+              ":SK7": "Order",
+              ":Type4": "Order"
+            },
+            FilterExpression:
+              "((#OrderDate = :OrderDate1 AND #PaymentMethodId = :PaymentMethodId2) OR begins_with(#CreatedAt, :CreatedAt3)) AND (#Type = :Type4 AND #CustomerId = :CustomerId5)",
+            ConsistentRead: false
+          }
+        ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
