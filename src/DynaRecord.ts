@@ -21,7 +21,8 @@ import {
   type EntityQueryKeyConditions,
   type TypedFilterParams,
   type TypedSortKeyCondition,
-  type InferQueryResults
+  type InferQueryResults,
+  type SKScopedFilterParams
 } from "./operations";
 import { mergePartialObjectAttributes } from "./operations/utils";
 import type { DynamoTableItem, EntityClass, Optional } from "./types";
@@ -228,12 +229,12 @@ abstract class DynaRecord implements DynaRecordBase {
   // Overload 1a: Query by entity ID string — SK inferred from skCondition option
   public static async query<
     T extends DynaRecord,
-    const F extends TypedFilterParams<T> = TypedFilterParams<T>,
-    const SK extends TypedSortKeyCondition<T> = TypedSortKeyCondition<T>
+    const SK extends TypedSortKeyCondition<T> = TypedSortKeyCondition<T>,
+    const F extends SKScopedFilterParams<T, SK> = SKScopedFilterParams<T, SK>
   >(
     this: EntityClass<T>,
     key: string,
-    options?: OptionsWithoutIndex<T> & {
+    options?: OptionsWithoutIndex<T, SK> & {
       filter?: F;
       skCondition?: SK;
     }

@@ -38,11 +38,11 @@ export type QueryOptions = QueryBuilderOptions & {
  * @template T - The entity type being queried. Defaults to `DynaRecord` for backward
  * compatibility in generic contexts.
  */
-export type OptionsWithoutIndex<T extends DynaRecord = DynaRecord> = Omit<
-  QueryOptions,
-  "indexName" | "filter" | "skCondition"
-> & {
-  filter?: TypedFilterParams<T>;
+export type OptionsWithoutIndex<
+  T extends DynaRecord = DynaRecord,
+  SK = unknown
+> = Omit<QueryOptions, "indexName" | "filter" | "skCondition"> & {
+  filter?: SKScopedFilterParams<T, SK>;
 };
 
 /**
@@ -257,6 +257,26 @@ export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
 // ─── Typed Sort Key Condition ───────────────────────────────────────────────
 
 /**
+ * Generates all non-empty prefixes of a string literal type.
+ * E.g. `Prefixes<"Order">` → `"O" | "Or" | "Ord" | "Orde" | "Order"`.
+ * Distributes over unions: `Prefixes<"A" | "B">` → prefixes of both.
+ */
+type Prefixes<S extends string, Acc extends string = ""> =
+  S extends `${infer Head}${infer Tail}`
+    ? `${Acc}${Head}` | Prefixes<Tail, `${Acc}${Head}`>
+    : never;
+
+/**
+ * Finds partition entity names that start with a given prefix string.
+ * E.g. if partition has "Invoice" and "Inventory", `EntityNamesStartingWith<T, "Inv">`
+ * returns `"Invoice" | "Inventory"`.
+ */
+type EntityNamesStartingWith<
+  T extends DynaRecord,
+  Prefix extends string
+> = Extract<PartitionEntityNames<T>, `${Prefix}${string}`>;
+
+/**
  * Typed sort key condition for querying within an entity's partition.
  *
  * In dyna-record's single-table design, sort key values always start with an entity
@@ -269,6 +289,10 @@ export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
  * entity's own name or its related entity names (or prefixes thereof). Unrelated
  * entities and entities from other tables are rejected at compile time.
  *
+ * The `$beginsWith` variant also accepts partial entity name prefixes — e.g.
+ * `$beginsWith: "Inv"` is valid when the partition contains "Invoice" and "Inventory",
+ * since DynamoDB's `begins_with` would match both entity types.
+ *
  * @template T - The entity type being queried.
  */
 export type TypedSortKeyCondition<T extends DynaRecord> =
@@ -277,30 +301,85 @@ export type TypedSortKeyCondition<T extends DynaRecord> =
   | {
       $beginsWith:
         | PartitionEntityNames<T>
-        | `${PartitionEntityNames<T>}${string}`;
+        | `${PartitionEntityNames<T>}${string}`
+        | Prefixes<PartitionEntityNames<T>>;
     };
 
 /**
- * Extracts the entity name from a typed sort key condition for return type narrowing.
+ * Extracts entity names from a typed sort key condition for return type narrowing.
  *
  * Narrows when:
  * - SK is an exact entity name: `"Order"` → `"Order"`
  * - SK is `{ $beginsWith: "Order" }` → `"Order"`
+ * - SK is `{ $beginsWith: "Inv" }` → `"Invoice" | "Inventory"` (prefix matches multiple)
+ * - SK is `{ $beginsWith: "PaymentMethod" }` → `"PaymentMethod" | "PaymentMethodProvider"`
+ *   (when one entity name is a prefix of another)
  *
  * Does not narrow when:
  * - SK is a prefixed string like `"Order#123"` (can't parse the delimiter at type level)
- * - SK is `{ $beginsWith: "Order#..." }` (specific prefix, not just entity name)
+ * - SK is `{ $beginsWith: "Order#..." }` (specific prefix past entity name boundary)
  *
  * @template T - The entity type being queried.
  * @template SK - The inferred sort key condition literal type.
  */
 export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
-  $beginsWith: infer V extends PartitionEntityNames<T>;
+  $beginsWith: infer V extends string;
 }
-  ? V
+  ? EntityNamesStartingWith<T, V>
   : SK extends PartitionEntityNames<T>
     ? SK
     : never;
+
+// ─── SK-Scoped Filter Types ────────────────────────────────────────────────
+
+/**
+ * Union of filterable keys across a set of entities (distributive).
+ */
+type FilterableKeysFor<Entities extends DynaRecord> =
+  Entities extends DynaRecord ? EntityFilterableKeys<Entities> : never;
+
+/**
+ * Discriminated union enabling per-block `type` narrowing, scoped to a subset
+ * of entities. Mirrors {@link TypedAndFilter} but uses the provided entity union
+ * instead of the full partition.
+ */
+type AndFilterForEntities<Entities extends DynaRecord> =
+  | (Entities extends infer E extends DynaRecord
+      ? { type: E["type"] } & EntityFilterRecord<E>
+      : never)
+  | ({ type: Entities["type"][] } & FilterRecord<FilterableKeysFor<Entities>>)
+  | ({ type?: never } & FilterRecord<FilterableKeysFor<Entities>>);
+
+/**
+ * Typed `$or` filter scoped to a subset of entities.
+ */
+type OrFilterForEntities<Entities extends DynaRecord> = {
+  $or?: AndFilterForEntities<Entities>[];
+};
+
+/**
+ * Full filter params (AND + OR) scoped to a subset of entities.
+ */
+type FilterParamsForEntities<Entities extends DynaRecord> =
+  AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
+
+/**
+ * Computes the filter type based on SK narrowing. When `skCondition` narrows to
+ * specific entities, only those entities' attributes are accepted in the filter.
+ * When SK doesn't narrow (no skCondition, suffixed string, etc.), falls back to
+ * the full {@link TypedFilterParams}.
+ *
+ * @template T - The root entity being queried.
+ * @template SK - The inferred sort key condition type.
+ */
+export type SKScopedFilterParams<T extends DynaRecord, SK> =
+  ExtractEntityFromSK<T, SK> extends infer Names
+    ? ShouldNarrow<T, Names> extends true
+      ? FilterParamsForEntities<
+          Extract<PartitionEntities<T>, { type: Names & string }>
+        >
+      : TypedFilterParams<T>
+    : TypedFilterParams<T>;
 
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 

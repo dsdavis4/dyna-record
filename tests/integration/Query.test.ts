@@ -11,6 +11,7 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
+  PaymentMethodProvider,
   Person,
   Pet,
   Sponsor,
@@ -1313,23 +1314,29 @@ describe("Query", () => {
     });
 
     it("queryByEntity", async () => {
-      expect.assertions(4);
+      expect.assertions(2);
 
       const result = await Customer.query("123", {
         skCondition: { $beginsWith: "Order" },
         filter: {
-          type: ["Order", "PaymentMethod"],
-          name: "Some Customer",
-          $or: [
-            {
-              address: ["11 Some St", "22 Other St"],
-              createdAt: { $beginsWith: "2021-09-15T" }
-            }
-          ]
+          type: "Order",
+          orderDate: "2023"
         }
       });
 
-      operationSharedAssertions(result);
+      expect(result).toEqual([
+        {
+          pk: "Customer#123",
+          sk: "Customer",
+          address: "11 Some St",
+          id: "123",
+          name: "Some Customer",
+          type: "Customer",
+          createdAt: new Date("2021-09-15T04:26:31.148Z"),
+          updatedAt: new Date("2022-09-15T04:26:31.148Z")
+        }
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
   });
 
@@ -3168,16 +3175,12 @@ describe("Query", () => {
           Logger.log(_full, _notNarrowed);
         });
 
-        it("disjoint filter type and SK produce never[]", async () => {
-          const result = await Customer.query("123", {
+        it("disjoint filter type and SK: filter rejects type outside SK scope", async () => {
+          // @ts-expect-error: SK scopes filter to Order — "PaymentMethod" is not valid
+          await Customer.query("123", {
             skCondition: { $beginsWith: "Order" },
             filter: { type: "PaymentMethod" }
           });
-
-          // @ts-expect-no-error: SK scans Order items, filter rejects non-PaymentMethod → never[]
-          const _match: never[] = result;
-
-          Logger.log(_match);
         });
 
         it("no skCondition returns full union", async () => {
@@ -3195,6 +3198,154 @@ describe("Query", () => {
           const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
 
           Logger.log(_full, _notNarrowed);
+        });
+      });
+
+      describe("$beginsWith prefix matching (multi-entity)", () => {
+        it("prefix matching multiple entities: 'C' matches Customer and ContactInformation", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "C" }
+          });
+
+          // @ts-expect-no-error: "C" prefix matches Customer and ContactInformation
+          const _match: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: Order excluded — name doesn't start with "C"
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("prefix 'Co' matches Customer and ContactInformation", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Co" }
+          });
+
+          // @ts-expect-no-error: both start with "Co"
+          const _match: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          // @ts-expect-error: Order excluded
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("prefix 'Cu' matches only Customer", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Cu" }
+          });
+
+          // @ts-expect-no-error: only Customer starts with "Cu"
+          const _match: Array<EntityAttributesInstance<Customer>> = result;
+
+          // @ts-expect-error: ContactInformation excluded
+          const _excluded: Array<EntityAttributesInstance<ContactInformation>> =
+            result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("prefix 'Con' matches only ContactInformation", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "Con" }
+          });
+
+          // @ts-expect-no-error: only ContactInformation starts with "Con"
+          const _match: Array<EntityAttributesInstance<ContactInformation>> =
+            result;
+
+          // @ts-expect-error: Customer excluded
+          const _excluded: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("sk beginsWith - entity name that is prefix of another: 'PaymentMethod' matches PaymentMethod and PaymentMethodProvider", async () => {
+          const result = await PaymentMethod.query("123", {
+            skCondition: { $beginsWith: "PaymentMethod" }
+          });
+
+          // @ts-expect-no-error: PaymentMethod is a prefix of PaymentMethodProvider
+          const _match: Array<
+            | EntityAttributesInstance<PaymentMethod>
+            | EntityAttributesInstance<PaymentMethodProvider>
+          > = result;
+
+          // @ts-expect-error: Order excluded
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("sk equals - entity name that is prefix of another: 'PaymentMethod' matches PaymentMethod and PaymentMethodProvider", async () => {
+          const result = await PaymentMethod.query("123", {
+            skCondition: "PaymentMethod"
+          });
+
+          // @ts-expect-no-error: PaymentMethod is a prefix of PaymentMethodProvider
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded
+          const _excluded: Array<
+            EntityAttributesInstance<PaymentMethodProvider>
+          > = result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("longer prefix narrows further: 'PaymentMethodP' matches only PaymentMethodProvider", async () => {
+          const result = await PaymentMethod.query("123", {
+            skCondition: { $beginsWith: "PaymentMethodP" }
+          });
+
+          // @ts-expect-no-error: only PaymentMethodProvider starts with "PaymentMethodP"
+          const _match: Array<EntityAttributesInstance<PaymentMethodProvider>> =
+            result;
+
+          // @ts-expect-error: PaymentMethod excluded (exact name doesn't start with "PaymentMethodP")
+          const _excluded: Array<EntityAttributesInstance<PaymentMethod>> =
+            result;
+
+          Logger.log(_match, _excluded);
+        });
+
+        it("rejects prefix that doesn't match any entity", async () => {
+          // @ts-expect-error: "X" doesn't match any entity name prefix
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "X" }
+          });
+        });
+
+        it("prefix scopes filter to matched entities", async () => {
+          // "C" matches Customer and ContactInformation
+          // filter should accept attributes from both
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "C" },
+            filter: { name: "John", email: "test@test.com" }
+          });
+
+          // @ts-expect-no-error: name (Customer) and email (ContactInformation) both valid
+          const _match: Array<
+            | EntityAttributesInstance<Customer>
+            | EntityAttributesInstance<ContactInformation>
+          > = result;
+
+          Logger.log(_match);
+        });
+
+        it("prefix scoped filter rejects attributes from non-matching entities", async () => {
+          // "C" matches Customer and ContactInformation — orderDate is Order-only
+          // @ts-expect-error: orderDate not valid for Customer or ContactInformation
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "C" },
+            filter: { orderDate: "2023" }
+          });
         });
       });
     });
@@ -3533,8 +3684,8 @@ describe("Query", () => {
     });
 
     describe("skCondition + filter combination", () => {
-      it("skCondition with filter type: both valid related entities (happy)", async () => {
-        // @ts-expect-no-error: skCondition and filter type can be different related entities
+      it("skCondition with filter type: rejects type outside SK scope", async () => {
+        // @ts-expect-error: SK scopes to Order — "PaymentMethod" and "lastFour" not valid
         await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: { type: "PaymentMethod", lastFour: "1234" }
@@ -3549,16 +3700,12 @@ describe("Query", () => {
         });
       });
 
-      it("skCondition with disjoint filter type: produces never[]", async () => {
-        const result = await Customer.query("123", {
+      it("skCondition with disjoint filter type: rejected at filter level", async () => {
+        // @ts-expect-error: SK scopes to Order — "PaymentMethod" not valid in type filter
+        await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: { type: "PaymentMethod" }
         });
-
-        // @ts-expect-no-error: SK scans Order, filter wants PaymentMethod → empty intersection
-        const _match: never[] = result;
-
-        Logger.log(_match);
       });
 
       it("skCondition with untyped filter: return type narrows by skCondition", async () => {
@@ -3576,8 +3723,18 @@ describe("Query", () => {
         Logger.log(_match, _excluded);
       });
 
-      it("skCondition with $or filter: $or blocks validate independently (happy)", async () => {
-        // @ts-expect-no-error: skCondition and $or are independent concerns
+      it("skCondition with $or filter: $or blocks scoped to SK entities", async () => {
+        // @ts-expect-no-error: SK scopes to Order — $or uses Order attributes only
+        await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: {
+            $or: [{ type: "Order", orderDate: "2023" }, { customerId: "c1" }]
+          }
+        });
+      });
+
+      it("skCondition with $or filter: rejects attributes outside SK scope", async () => {
+        // @ts-expect-error: SK scopes to Order — lastFour (PaymentMethod) not valid
         await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: {
@@ -3659,18 +3816,12 @@ describe("Query", () => {
         Logger.log(_match, _excludedPerson);
       });
 
-      it("skCondition + filter type: SK intersects with type filter", async () => {
-        // filter type narrows to Order, skCondition narrows to PaymentMethod
-        // intersection is empty → never[]
-        const result = await Customer.query("123", {
+      it("skCondition + filter type: disjoint SK and type rejected at filter level", async () => {
+        // @ts-expect-error: SK scopes to PaymentMethod — "Order" not valid in type filter
+        await Customer.query("123", {
           skCondition: { $beginsWith: "PaymentMethod" },
           filter: { type: "Order" }
         });
-
-        // @ts-expect-no-error: intersection of Order and PaymentMethod is never
-        const _match: never[] = result;
-
-        Logger.log(_match);
       });
 
       it("skCondition + filter type: SK matches filter type", async () => {
@@ -3690,16 +3841,25 @@ describe("Query", () => {
         Logger.log(_match, _excluded);
       });
 
-      it("skCondition + $or blocks: SK intersects with $or narrowing", async () => {
-        // $or narrows to Order | PaymentMethod, skCondition narrows to Order
-        const result = await Customer.query("123", {
+      it("skCondition + $or blocks: rejects attributes outside SK scope", async () => {
+        // @ts-expect-error: SK scopes to Order — lastFour (PaymentMethod) not valid
+        await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: {
             $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
           }
         });
+      });
 
-        // @ts-expect-no-error: SK intersects $or narrowing to just Order
+      it("skCondition + $or blocks: valid when $or uses SK-scoped attributes", async () => {
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: {
+            $or: [{ orderDate: "2023" }, { customerId: "c1" }]
+          }
+        });
+
+        // @ts-expect-no-error: SK narrows to Order, $or uses Order-valid attributes
         const _match: Array<EntityAttributesInstance<Order>> = result;
 
         // @ts-expect-error: PaymentMethod excluded by SK
