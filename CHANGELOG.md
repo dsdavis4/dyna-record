@@ -9,7 +9,11 @@
 ### Changed
 
 - **`OptionsWithoutIndex` is now generic on SK:** Accepts an optional `SK` type parameter (defaults to `unknown`) to scope the `filter` property based on sort key narrowing. When SK narrows to specific entities, only those entities' attributes are accepted in the filter. Backward compatible — existing code without SK defaults to the full `TypedFilterParams<T>`.
-- **Query overload generic parameter order:** The non-index query overload now declares `SK` before `F` (was `F` before `SK`) because `F`'s constraint depends on `SK`.
+- **`TypedAndFilter`, `TypedOrFilter`, `TypedFilterParams` are now aliases:** These types are now defined as aliases over the new entity-parameterized `AndFilterForEntities`, `OrFilterForEntities`, and `FilterParamsForEntities` types applied to the full partition. Resolved types are identical — no behavioral change.
+
+### Breaking (type-level only)
+
+- **Query overload generic parameter order:** The non-index query overload now declares `SK` before `F` (was `F` before `SK`) because `F`'s constraint depends on `SK`. Code that explicitly specifies these type parameters (e.g., `Customer.query<Customer, FilterType, SKType>(...)`) must reorder them. This does not affect callers who rely on type inference (the vast majority of usage).
 
 ## 0.6.2 - 2026-03-21
 

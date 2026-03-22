@@ -3325,15 +3325,15 @@ describe("Query", () => {
           Logger.log(_match, _excluded);
         });
 
-        it("sk equals - entity name that is prefix of another: 'PaymentMethod' matches PaymentMethod and PaymentMethodProvider", async () => {
+        it("sk equals - exact match does NOT prefix-expand: 'PaymentMethod' excludes PaymentMethodProvider", async () => {
           const result = await PaymentMethod.query("123", {
             skCondition: "PaymentMethod"
           });
 
-          // @ts-expect-no-error: PaymentMethod is a prefix of PaymentMethodProvider
+          // @ts-expect-no-error: exact match narrows to PaymentMethod only
           const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
 
-          // @ts-expect-error: Order excluded
+          // @ts-expect-error: PaymentMethodProvider excluded — exact match, not prefix
           const _excluded: Array<
             EntityAttributesInstance<PaymentMethodProvider>
           > = result;
@@ -3387,6 +3387,30 @@ describe("Query", () => {
           await Customer.query("123", {
             skCondition: { $beginsWith: "C" },
             filter: { orderDate: "2023" }
+          });
+        });
+
+        it("default fields accepted under SK scoping", async () => {
+          // @ts-expect-no-error: id, createdAt, updatedAt are default fields on all entities
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "Order" },
+            filter: { id: "order-1", createdAt: "2023", updatedAt: "2024" }
+          });
+        });
+
+        it("multi-block $or with mixed valid/invalid attrs under SK prefix", async () => {
+          // "C" matches Customer (name) and ContactInformation (email)
+          // orderDate is Order-only — invalid under "C" scope
+          // @ts-expect-error: orderDate not valid for Customer or ContactInformation
+          await Customer.query("123", {
+            skCondition: { $beginsWith: "C" },
+            filter: {
+              $or: [
+                { name: "Alice" },
+                { email: "a@b.com" },
+                { orderDate: "2023" }
+              ]
+            }
           });
         });
       });

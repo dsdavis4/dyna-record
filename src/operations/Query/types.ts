@@ -184,17 +184,6 @@ export type PartitionEntityNames<T extends DynaRecord> =
   PartitionEntities<T>["type"];
 
 /**
- * Union of EntityFilterableKeys<E> for each entity E in PartitionEntities<T>.
- * This is the full set of valid filter keys when no `type` narrowing is applied.
- */
-export type AllPartitionFilterableKeys<T extends DynaRecord> =
-  PartitionEntities<T> extends infer E
-    ? E extends DynaRecord
-      ? EntityFilterableKeys<E>
-      : never
-    : never;
-
-/**
  * Maps a union of string keys to an optional FilterTypes record.
  * Shared helper for building filter records from key unions.
  *
@@ -214,45 +203,67 @@ export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<
 >;
 
 /**
- * Filter record for all entities in a partition (union of all filter keys).
- *
- * @template T - The root entity whose partition defines the filter keys.
+ * Union of filterable keys across a set of entities (distributive).
  */
-type FullPartitionFilterRecord<T extends DynaRecord> = FilterRecord<
-  AllPartitionFilterableKeys<T>
->;
+type FilterableKeysFor<Entities extends DynaRecord> =
+  Entities extends DynaRecord ? EntityFilterableKeys<Entities> : never;
 
 /**
- * Discriminated union enabling per-block `type` narrowing.
- * When type is a single string literal, only that entity's attributes are allowed.
- * When type is an array or absent, all partition attributes are allowed.
- * The `type` field is handled separately from other filter keys to enable narrowing.
+ * Discriminated union enabling per-block `type` narrowing, scoped to a set
+ * of entities. When type is a single string literal, only that entity's
+ * attributes are allowed. When type is an array or absent, all scoped
+ * entity attributes are allowed.
+ *
+ * @template Entities - The union of entity types whose attributes are accepted.
  */
-export type TypedAndFilter<T extends DynaRecord> =
-  | (PartitionEntities<T> extends infer E
-      ? E extends DynaRecord
-        ? { type: E["type"] } & EntityFilterRecord<E>
-        : never
+type AndFilterForEntities<Entities extends DynaRecord> =
+  | (Entities extends infer E extends DynaRecord
+      ? { type: E["type"] } & EntityFilterRecord<E>
       : never)
-  | ({ type: PartitionEntityNames<T>[] } & FullPartitionFilterRecord<T>)
-  | ({ type?: never } & FullPartitionFilterRecord<T>);
+  | ({ type: Entities["type"][] } & FilterRecord<FilterableKeysFor<Entities>>)
+  | ({ type?: never } & FilterRecord<FilterableKeysFor<Entities>>);
+
+/**
+ * Typed `$or` filter scoped to a set of entities.
+ */
+type OrFilterForEntities<Entities extends DynaRecord> = {
+  $or?: AndFilterForEntities<Entities>[];
+};
+
+/**
+ * Full filter params (AND + OR) scoped to a set of entities.
+ */
+type FilterParamsForEntities<Entities extends DynaRecord> =
+  AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
+
+/**
+ * Discriminated union enabling per-block `type` narrowing for a full partition.
+ * Alias for {@link AndFilterForEntities} applied to {@link PartitionEntities}.
+ */
+export type TypedAndFilter<T extends DynaRecord> = AndFilterForEntities<
+  PartitionEntities<T>
+>;
 
 /**
  * Typed `$or` filter block for partition queries.
  * Each `$or` element is independently narrowed: when a block specifies
  * `type: "Order"`, only Order's attributes are accepted in that block.
  *
+ * Alias for {@link OrFilterForEntities} applied to {@link PartitionEntities}.
+ *
  * @template T - The root entity whose partition defines valid filter keys and type values.
  */
-export type TypedOrFilter<T extends DynaRecord> = {
-  $or?: TypedAndFilter<T>[];
-};
+export type TypedOrFilter<T extends DynaRecord> = OrFilterForEntities<
+  PartitionEntities<T>
+>;
 
 /**
  * Top-level filter combining AND and OR.
+ * Alias for {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
  */
-export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
-  TypedOrFilter<T>;
+export type TypedFilterParams<T extends DynaRecord> = FilterParamsForEntities<
+  PartitionEntities<T>
+>;
 
 // ─── Typed Sort Key Condition ───────────────────────────────────────────────
 
@@ -260,6 +271,11 @@ export type TypedFilterParams<T extends DynaRecord> = TypedAndFilter<T> &
  * Generates all non-empty prefixes of a string literal type.
  * E.g. `Prefixes<"Order">` → `"O" | "Or" | "Ord" | "Orde" | "Order"`.
  * Distributes over unions: `Prefixes<"A" | "B">` → prefixes of both.
+ *
+ * **Recursion limit:** This type recurses once per character. TypeScript's
+ * template literal recursion limit is ~24 characters per string. Entity class
+ * names should stay under this limit to avoid "Type instantiation is
+ * excessively deep" errors.
  */
 type Prefixes<S extends string, Acc extends string = ""> =
   S extends `${infer Head}${infer Tail}`
@@ -329,39 +345,6 @@ export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
   : SK extends PartitionEntityNames<T>
     ? SK
     : never;
-
-// ─── SK-Scoped Filter Types ────────────────────────────────────────────────
-
-/**
- * Union of filterable keys across a set of entities (distributive).
- */
-type FilterableKeysFor<Entities extends DynaRecord> =
-  Entities extends DynaRecord ? EntityFilterableKeys<Entities> : never;
-
-/**
- * Discriminated union enabling per-block `type` narrowing, scoped to a subset
- * of entities. Mirrors {@link TypedAndFilter} but uses the provided entity union
- * instead of the full partition.
- */
-type AndFilterForEntities<Entities extends DynaRecord> =
-  | (Entities extends infer E extends DynaRecord
-      ? { type: E["type"] } & EntityFilterRecord<E>
-      : never)
-  | ({ type: Entities["type"][] } & FilterRecord<FilterableKeysFor<Entities>>)
-  | ({ type?: never } & FilterRecord<FilterableKeysFor<Entities>>);
-
-/**
- * Typed `$or` filter scoped to a subset of entities.
- */
-type OrFilterForEntities<Entities extends DynaRecord> = {
-  $or?: AndFilterForEntities<Entities>[];
-};
-
-/**
- * Full filter params (AND + OR) scoped to a subset of entities.
- */
-type FilterParamsForEntities<Entities extends DynaRecord> =
-  AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
 
 /**
  * Computes the filter type based on SK narrowing. When `skCondition` narrows to
@@ -520,6 +503,26 @@ type ResolveOrBlockEntityNames<T extends DynaRecord, F> = F extends {
   : never;
 
 // ─── Inference Chain ────────────────────────────────────────────────────────
+//
+// Decision tree for InferQueryResults<T, F, SK>:
+//
+//   filter has `type`?
+//   ├─ yes → IntersectTypeWithOr
+//   │         ├─ $or narrows? → strict intersect type ∩ $or ∩ SK
+//   │         └─ no           → intersect type ∩ SK
+//   └─ no  → FallbackToFilterKeys
+//             ├─ filter keys narrow?
+//             │   └─ yes → IntersectKeysWithOr
+//             │             ├─ $or narrows? → strict intersect keys ∩ $or ∩ SK
+//             │             └─ no           → intersect keys ∩ SK
+//             └─ no  → FallbackToOrBlocks
+//                       ├─ $or narrows? → intersect $or ∩ SK
+//                       └─ no           → FallbackToSK
+//                                         ├─ SK narrows? → NarrowByNames(SK)
+//                                         └─ no          → QueryResults<T>
+//
+// "strict" variants preserve never[] for empty intersections.
+// "non-strict" variants fall back to QueryResults<T>.
 
 /**
  * Determines whether `Names` represents a meaningful narrowing of the partition.
