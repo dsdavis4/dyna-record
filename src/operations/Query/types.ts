@@ -492,27 +492,62 @@ type StrictNarrowByNames<T extends DynaRecord, Names extends string> = [
   : Array<DistributeEntityAttributes<ResolveEntityByName<T, Names>>>;
 
 /**
- * When top-level filter keys narrow to `KeyNames`, also checks if `$or` blocks
- * narrow independently. Since DynamoDB ANDs top-level conditions with `$or`,
- * a record must satisfy both — so the matching entities are the intersection.
+ * Intersects resolved entity names with SK-derived entity names.
+ * Since `skCondition` is a DynamoDB key condition that physically limits which
+ * items are scanned, it always constrains the result — it's not just a filter.
  *
- * - If `$or` also narrows → intersect with `KeyNames`. Empty intersection → `never[]`.
- * - If `$or` does not narrow → use `KeyNames` alone.
+ * - If SK narrows → intersect `Names` with SK entities. Empty intersection → `never[]`.
+ * - If SK does not narrow → use `Names` alone via {@link NarrowByNames}.
  */
-type IntersectKeysWithOr<T extends DynaRecord, KeyNames extends string, F> =
+type IntersectWithSK<T extends DynaRecord, Names extends string, SK> =
+  ExtractEntityFromSK<T, SK> extends infer SKNames
+    ? ShouldNarrow<T, SKNames> extends true
+      ? StrictNarrowByNames<T, Extract<Names, SKNames & string>>
+      : NarrowByNames<T, Names>
+    : NarrowByNames<T, Names>;
+
+/**
+ * Strict variant of {@link IntersectWithSK} that preserves `never[]` for empty
+ * name sets. Used when `Names` is already the result of an intersection (e.g.
+ * filter keys ∩ $or blocks) and may be `never` — in that case the result must
+ * stay `never[]`, not fall back to `QueryResults<T>`.
+ */
+type StrictIntersectWithSK<T extends DynaRecord, Names extends string, SK> =
+  ExtractEntityFromSK<T, SK> extends infer SKNames
+    ? ShouldNarrow<T, SKNames> extends true
+      ? StrictNarrowByNames<T, Extract<Names, SKNames & string>>
+      : StrictNarrowByNames<T, Names>
+    : StrictNarrowByNames<T, Names>;
+
+/**
+ * When top-level filter keys narrow to `KeyNames`, also checks if `$or` blocks
+ * and `skCondition` narrow independently. Since DynamoDB ANDs top-level conditions
+ * with `$or`, a record must satisfy both — so the matching entities are the intersection.
+ * Additionally, `skCondition` is a key condition that always constrains the result.
+ *
+ * - If `$or` also narrows → intersect with `KeyNames`, then intersect with SK (strict).
+ * - If `$or` does not narrow → intersect `KeyNames` with SK.
+ */
+type IntersectKeysWithOr<
+  T extends DynaRecord,
+  KeyNames extends string,
+  F,
+  SK = unknown
+> =
   ResolveOrBlockEntityNames<T, F> extends infer OrNames
     ? ShouldNarrow<T, OrNames> extends true
-      ? StrictNarrowByNames<T, Extract<KeyNames, OrNames & string>>
-      : NarrowByNames<T, KeyNames>
-    : NarrowByNames<T, KeyNames>;
+      ? StrictIntersectWithSK<T, Extract<KeyNames, OrNames & string>, SK>
+      : IntersectWithSK<T, KeyNames, SK>
+    : IntersectWithSK<T, KeyNames, SK>;
 
 /**
  * Falls back to `$or` block resolution (by type or filter keys), then SK, then full union.
+ * When `$or` narrows, also intersects with SK since it always constrains the result.
  */
 type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
   ResolveOrBlockEntityNames<T, F> extends infer Names
     ? ShouldNarrow<T, Names> extends true
-      ? NarrowByNames<T, Names & string>
+      ? IntersectWithSK<T, Names & string, SK>
       : FallbackToSK<T, SK>
     : FallbackToSK<T, SK>;
 
@@ -520,45 +555,52 @@ type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
  * Falls back to top-level filter key resolution, then `$or`, then SK, then full union.
  *
  * When top-level keys narrow, also intersects with `$or` block narrowing (if any)
- * because DynamoDB ANDs them — a record must satisfy both the top-level filter
- * and at least one `$or` block.
+ * and `skCondition` narrowing because DynamoDB ANDs them — a record must satisfy
+ * the key condition, the top-level filter, and at least one `$or` block.
  */
 type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
   EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer Names
     ? ShouldNarrow<T, Names> extends true
-      ? IntersectKeysWithOr<T, Names & string, F>
+      ? IntersectKeysWithOr<T, Names & string, F, SK>
       : FallbackToOrBlocks<T, F, SK>
     : FallbackToOrBlocks<T, F, SK>;
 
 /**
- * When a top-level `type` filter narrows, also checks if `$or` blocks narrow
- * to a disjoint set. Since DynamoDB ANDs them, the result is the intersection.
+ * When a top-level `type` filter narrows, also checks if `$or` blocks and
+ * `skCondition` narrow to a disjoint set. Since DynamoDB ANDs them, the
+ * result is the intersection of all narrowing signals.
  */
-type IntersectTypeWithOr<T extends DynaRecord, F> =
+type IntersectTypeWithOr<T extends DynaRecord, F, SK = unknown> =
   ResolveOrBlockEntityNames<T, F> extends infer OrNames
     ? ShouldNarrow<T, OrNames> extends true
-      ? StrictNarrowByNames<
+      ? StrictIntersectWithSK<
           T,
-          Extract<ExtractTypeFromFilter<F> & string, OrNames & string>
+          Extract<ExtractTypeFromFilter<F> & string, OrNames & string>,
+          SK
         >
-      : NarrowedQueryResults<T, F>
-    : NarrowedQueryResults<T, F>;
+      : IntersectWithSK<T, ExtractTypeFromFilter<F> & string, SK>
+    : IntersectWithSK<T, ExtractTypeFromFilter<F> & string, SK>;
 
 /**
  * Infers query results from filter and SK for the non-index query overload.
  *
  * Narrowing strategy (respects DynamoDB's AND semantics):
  * 1. If the filter specifies a top-level `type` value, narrow by that — then intersect
- *    with `$or` narrowing if present (since DynamoDB ANDs them).
+ *    with `$or` narrowing and `skCondition` narrowing if present.
  * 2. Otherwise, if top-level filter keys narrow to specific entities, use that — then
- *    intersect with `$or` narrowing if present.
- * 3. Otherwise, if `$or` blocks resolve to specific entities (by type or keys), use that.
+ *    intersect with `$or` narrowing and `skCondition` narrowing if present.
+ * 3. Otherwise, if `$or` blocks resolve to specific entities (by type or keys), use that —
+ *    then intersect with `skCondition` narrowing if present.
  * 4. Otherwise, if `skCondition` matches an exact entity name or `$beginsWith` an entity name, narrow by that.
  * 5. Otherwise, return the full `QueryResults<T>` union.
  *
- * When both top-level (type or keys) and `$or` narrow to different entity sets,
- * the intersection is taken. An empty intersection produces `never[]`, reflecting
- * that no DynamoDB record can satisfy both AND-combined conditions.
+ * `skCondition` is always intersected with other narrowing signals because it is a
+ * DynamoDB key condition that physically limits which items are scanned, unlike
+ * filter expressions which are applied post-scan.
+ *
+ * When multiple narrowing signals resolve to different entity sets, the intersection
+ * is taken. An empty intersection produces `never[]`, reflecting that no DynamoDB
+ * record can satisfy all combined conditions.
  *
  * @template T - The root entity being queried.
  * @template F - The inferred filter type (captured via `const` generic).
@@ -567,6 +609,6 @@ type IntersectTypeWithOr<T extends DynaRecord, F> =
 export type InferQueryResults<T extends DynaRecord, F, SK = unknown> =
   ExtractTypeFromFilter<F> extends infer Names
     ? ShouldNarrow<T, Names> extends true
-      ? IntersectTypeWithOr<T, F>
+      ? IntersectTypeWithOr<T, F, SK>
       : FallbackToFilterKeys<T, F, SK>
     : FallbackToFilterKeys<T, F, SK>;

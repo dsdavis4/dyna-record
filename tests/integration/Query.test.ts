@@ -11,6 +11,8 @@ import {
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
+  Person,
+  Pet,
   Sponsor,
   Teacher,
   Warehouse
@@ -3166,19 +3168,16 @@ describe("Query", () => {
           Logger.log(_full, _notNarrowed);
         });
 
-        it("filter type takes precedence over SK narrowing", async () => {
+        it("disjoint filter type and SK produce never[]", async () => {
           const result = await Customer.query("123", {
             skCondition: { $beginsWith: "Order" },
             filter: { type: "PaymentMethod" }
           });
 
-          // @ts-expect-no-error: filter type "PaymentMethod" takes precedence
-          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+          // @ts-expect-no-error: SK scans Order items, filter rejects non-PaymentMethod → never[]
+          const _match: never[] = result;
 
-          // @ts-expect-error: Order excluded despite SK matching
-          const _excluded: Array<EntityAttributesInstance<Order>> = result;
-
-          Logger.log(_match, _excluded);
+          Logger.log(_match);
         });
 
         it("no skCondition returns full union", async () => {
@@ -3550,19 +3549,16 @@ describe("Query", () => {
         });
       });
 
-      it("skCondition with filter type: return type narrows by filter type", async () => {
+      it("skCondition with disjoint filter type: produces never[]", async () => {
         const result = await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: { type: "PaymentMethod" }
         });
 
-        // @ts-expect-no-error: filter type: "PaymentMethod" narrows return
-        const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+        // @ts-expect-no-error: SK scans Order, filter wants PaymentMethod → empty intersection
+        const _match: never[] = result;
 
-        // @ts-expect-error: Order is excluded — filter type takes precedence
-        const _excluded: Array<EntityAttributesInstance<Order>> = result;
-
-        Logger.log(_match, _excluded);
+        Logger.log(_match);
       });
 
       it("skCondition with untyped filter: return type narrows by skCondition", async () => {
@@ -3625,6 +3621,92 @@ describe("Query", () => {
           skCondition: "Order",
           filter: { type: "Person" }
         });
+      });
+
+      it("skCondition narrows filter-key-based narrowing to a single entity", async () => {
+        // Person has HasMany Pet (name), HasOne Home, HasMany Book (name)
+        // "name" matches Person, Pet, and Book — but skCondition $beginsWith "Pet" constrains to Pet only
+        const result = await Person.query("123", {
+          skCondition: { $beginsWith: "Pet" },
+          filter: { name: "Buddy" }
+        });
+
+        // @ts-expect-no-error: skCondition constrains filter-key narrowing to Pet only
+        const _match: Array<EntityAttributesInstance<Pet>> = result;
+
+        // @ts-expect-error: Person excluded — skCondition limits to Pet
+        const _excludedPerson: Array<EntityAttributesInstance<Person>> = result;
+
+        // @ts-expect-error: Book excluded — skCondition limits to Pet
+        const _excludedBook: Array<EntityAttributesInstance<Book>> = result;
+
+        Logger.log(_match, _excludedPerson, _excludedBook);
+      });
+
+      it("skCondition with exact match narrows filter-key-based narrowing", async () => {
+        // "name" matches Person, Pet, and Book — skCondition "Book" constrains to Book only
+        const result = await Person.query("123", {
+          skCondition: "Book",
+          filter: { name: "Great Expectations" }
+        });
+
+        // @ts-expect-no-error: skCondition constrains to Book only
+        const _match: Array<EntityAttributesInstance<Book>> = result;
+
+        // @ts-expect-error: Person excluded by SK
+        const _excludedPerson: Array<EntityAttributesInstance<Person>> = result;
+
+        Logger.log(_match, _excludedPerson);
+      });
+
+      it("skCondition + filter type: SK intersects with type filter", async () => {
+        // filter type narrows to Order, skCondition narrows to PaymentMethod
+        // intersection is empty → never[]
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "PaymentMethod" },
+          filter: { type: "Order" }
+        });
+
+        // @ts-expect-no-error: intersection of Order and PaymentMethod is never
+        const _match: never[] = result;
+
+        Logger.log(_match);
+      });
+
+      it("skCondition + filter type: SK matches filter type", async () => {
+        // Both filter type and skCondition agree on Order
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: { type: "Order" }
+        });
+
+        // @ts-expect-no-error: both agree on Order
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod excluded
+        const _excluded: Array<EntityAttributesInstance<PaymentMethod>> =
+          result;
+
+        Logger.log(_match, _excluded);
+      });
+
+      it("skCondition + $or blocks: SK intersects with $or narrowing", async () => {
+        // $or narrows to Order | PaymentMethod, skCondition narrows to Order
+        const result = await Customer.query("123", {
+          skCondition: { $beginsWith: "Order" },
+          filter: {
+            $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
+          }
+        });
+
+        // @ts-expect-no-error: SK intersects $or narrowing to just Order
+        const _match: Array<EntityAttributesInstance<Order>> = result;
+
+        // @ts-expect-error: PaymentMethod excluded by SK
+        const _excluded: Array<EntityAttributesInstance<PaymentMethod>> =
+          result;
+
+        Logger.log(_match, _excluded);
       });
     });
 

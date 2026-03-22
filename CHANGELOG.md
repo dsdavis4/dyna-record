@@ -1,3 +1,9 @@
+## 0.6.2 - 2026-03-21
+
+### Fixed
+
+- **`skCondition` now intersects with filter narrowing instead of being overridden by it:** Previously, `skCondition` was only used for return type narrowing as a fallback — when no filter-based narrowing applied. This meant that a query like `{ skCondition: { $beginsWith: 'Insight' }, filter: { status: 'active' } }` would incorrectly widen the return type to all entities with a `status` attribute (e.g., `Insight | VendorProfile`), ignoring that `skCondition` physically limits the scan to only `Insight` items. Now, `skCondition` is always intersected with filter-based narrowing at every level of the type inference chain (top-level `type`, filter keys, and `$or` blocks). When `skCondition` and filter narrowing are disjoint (e.g., SK targets `Order` but filter type targets `PaymentMethod`), the return type correctly resolves to `never[]`.
+
 ## 0.6.1 - 2026-03-19
 
 ### Changed
