@@ -671,6 +671,7 @@ The type system validates:
 - **Filter attribute keys**: Only attributes that exist on the entity or its related entities are accepted. Relationship property names, partition keys, and sort keys are excluded.
 - **`type` field values**: The `type` field only accepts entity names from the partition — the entity itself and its declared relationships. Entities from other tables or unrelated entities on the same table are rejected.
 - **Sort key values**: Both `skCondition` and the `sk` property in key conditions only accept entity names from the partition. This matches dyna-record's single-table design where sort key values always start with an entity class name.
+- **SK-scoped filters**: When `skCondition` narrows to specific entities, the `filter` parameter is scoped to only those entities' attributes. For example, `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes — using `lastFour` (a PaymentMethod attribute) produces a compile error.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
 
@@ -798,7 +799,73 @@ const specific = await Customer.query("123", { skCondition: "Order#123" });
 // specific is QueryResults<Customer> (full union)
 ```
 
-When using the object key form (`{ pk: "...", sk: "..." }`), sort key values are **validated** but the return type is **not narrowed**. Use `filter: { type: "Order" }` alongside key conditions for return type narrowing:
+##### `$beginsWith` prefix matching
+
+`$beginsWith` also accepts partial entity name prefixes that match multiple entity types. When a prefix matches more than one entity name, the return type and filter are scoped to the union of all matching entities:
+
+```typescript
+// "C" matches both "Customer" and "ContactInformation"
+const results = await Customer.query("123", {
+  skCondition: { $beginsWith: "C" }
+});
+// results is Array<EntityAttributesInstance<Customer> | EntityAttributesInstance<ContactInformation>>
+
+// When one entity name is a prefix of another (e.g., PaymentMethod / PaymentMethodProvider):
+const results = await PaymentMethod.query("123", {
+  skCondition: { $beginsWith: "PaymentMethod" }
+});
+// results includes both PaymentMethod and PaymentMethodProvider
+
+// Longer prefix narrows further
+const results = await PaymentMethod.query("123", {
+  skCondition: { $beginsWith: "PaymentMethodP" }
+});
+// results is Array<EntityAttributesInstance<PaymentMethodProvider>>
+
+// Prefixes that don't match any entity name are rejected
+await Customer.query("123", {
+  skCondition: { $beginsWith: "X" } // Compile error
+});
+```
+
+##### SK-scoped filter validation
+
+When `skCondition` narrows to specific entities, the `filter` parameter is automatically scoped to only those entities' attributes. This prevents filtering on attributes from entities that can't appear in the results:
+
+```typescript
+// SK narrows to Order — filter accepts only Order attributes (+ default fields)
+await Customer.query("123", {
+  skCondition: { $beginsWith: "Order" },
+  filter: { orderDate: "2023", customerId: "c1" } // OK: both are Order attributes
+});
+
+// Error: lastFour is a PaymentMethod attribute, not available when SK scopes to Order
+await Customer.query("123", {
+  skCondition: { $beginsWith: "Order" },
+  filter: { lastFour: "1234" } // Compile error
+});
+
+// $or blocks are also scoped by SK
+await Customer.query("123", {
+  skCondition: { $beginsWith: "Order" },
+  filter: {
+    $or: [
+      { type: "Order", orderDate: "2023" }, // OK
+      { type: "PaymentMethod", lastFour: "1234" } // Compile error: PaymentMethod outside SK scope
+    ]
+  }
+});
+
+// When $beginsWith matches multiple entities, filter accepts attributes from all matches
+await Customer.query("123", {
+  skCondition: { $beginsWith: "C" }, // matches Customer and ContactInformation
+  filter: { name: "John", email: "j@test.com" } // OK: name is on Customer, email on ContactInformation
+});
+```
+
+##### Object key form (`{ pk, sk }`)
+
+When using the object key form, sort key values are **validated** but the return type is **not narrowed**. Use `filter: { type: "Order" }` alongside key conditions for return type narrowing:
 
 ```typescript
 // sk is validated but does NOT narrow the return type
@@ -818,6 +885,8 @@ const orders = await Customer.query(
 > **Filter key narrowing:** When no `type` is specified, the return type automatically narrows based on which entities have the filtered attributes. For example, `filter: { orderDate: "2023" }` narrows to `Order` if only `Order` has `orderDate`. In `$or` blocks, each element narrows independently — by `type` if present, or by filter keys otherwise — and the return type is the union across all blocks.
 >
 > **AND intersection:** Since DynamoDB ANDs top-level filter conditions with `$or` blocks, the return type reflects this. When both top-level conditions and `$or` blocks independently narrow to specific entity sets, the return type is their intersection. If no entity satisfies both (e.g., `{ orderDate: "2023", $or: [{ lastFour: "1234" }] }` where `orderDate` is on `Order` and `lastFour` is on `PaymentMethod`), the return type is `never[]` — correctly indicating that no records can match.
+>
+> **SK intersection:** `skCondition` is always intersected with filter-based narrowing because it is a DynamoDB key condition that physically limits which items are scanned. When both `skCondition` and a filter narrow to different entity sets, the return type is their intersection.
 
 ### Querying on an index
 

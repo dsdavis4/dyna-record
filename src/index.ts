@@ -9,6 +9,7 @@ export type {
   FindByIdIncludesRes,
   TypedFilterParams,
   TypedSortKeyCondition,
+  SKScopedFilterParams,
   InferQueryResults,
   PartitionEntityNames
 } from "./operations";
