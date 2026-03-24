@@ -4287,5 +4287,101 @@ describe("Query", () => {
         Logger.log(net);
       }
     });
+
+    describe("typed filter keys for discriminated union dot-paths", () => {
+      it("accepts discriminator dot-path as a filter key", async () => {
+        // @ts-expect-no-error: payment.method.type is a valid dot-path (discriminator)
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.type": "creditCard" }
+        }).catch(() => {});
+      });
+
+      it("accepts variant-specific dot-paths as filter keys", async () => {
+        // @ts-expect-no-error: payment.method.cardNumber is from creditCard variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.cardNumber": "4111" }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: payment.method.walletAddress is from crypto variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.walletAddress": "0xabc" }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: payment.method.bankName is from bankTransfer variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.bankName": "Chase" }
+        }).catch(() => {});
+      });
+
+      it("accepts non-union fields alongside union dot-paths", async () => {
+        // @ts-expect-no-error: payment.amount is a non-union field in the same schema
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.amount": 100 }
+        }).catch(() => {});
+      });
+
+      it("accepts nullable union dot-paths", async () => {
+        // @ts-expect-no-error: nullableUnion.preference.channel is a valid dot-path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "nullableUnion.preference.channel": "email" }
+        }).catch(() => {});
+      });
+
+      it("rejects invalid dot-paths within discriminated union", async () => {
+        // @ts-expect-error: payment.method.nonExistent is not a valid path in any variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.nonExistent": "value" }
+        }).catch(() => {});
+      });
+
+      it("accepts discriminator dot-path in $or blocks", async () => {
+        // @ts-expect-no-error: $or with discriminator path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            $or: [
+              { "payment.method.type": "creditCard" },
+              { "payment.method.type": "crypto" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts variant-specific dot-paths in $or blocks", async () => {
+        // @ts-expect-no-error: each $or block uses variant-specific paths
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            $or: [
+              { "payment.method.cardNumber": "4111" },
+              { "payment.method.walletAddress": "0xabc" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts mixed top-level and $or filters with union dot-paths", async () => {
+        // @ts-expect-no-error: top-level AND with $or
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            "payment.amount": { $gt: 50 },
+            $or: [
+              { "payment.method.type": "creditCard" },
+              { "payment.method.type": "bankTransfer" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts filter operators on discriminated union dot-paths", async () => {
+        // @ts-expect-no-error: $beginsWith on a string dot-path from a variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.cardNumber": { $beginsWith: "41" } }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: IN operator on a union dot-path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.network": ["ethereum", "bitcoin"] }
+        }).catch(() => {});
+      });
+    });
   });
 });
