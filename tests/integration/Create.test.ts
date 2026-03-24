@@ -4665,6 +4665,42 @@ describe("Create", () => {
         });
       });
 
+      it("rejects invalid discriminator value on create", async () => {
+        await DiscriminatedUnionEntity.create({
+          payment: {
+            // @ts-expect-error: "paypal" is not a valid discriminator value
+            method: { type: "paypal", email: "a@b.com" },
+            amount: 100
+          },
+          nullableUnion: {}
+        }).catch(() => {});
+      });
+
+      it("rejects missing required variant fields on create", async () => {
+        await DiscriminatedUnionEntity.create({
+          payment: {
+            // @ts-expect-error: creditCard variant requires cardNumber, expiry, expiryDate
+            method: { type: "creditCard" },
+            amount: 100
+          },
+          nullableUnion: {}
+        }).catch(() => {});
+      });
+
+      it("rejects wrong fields for variant on create", async () => {
+        await DiscriminatedUnionEntity.create({
+          payment: {
+            method: {
+              type: "creditCard",
+              // @ts-expect-error: walletAddress does not exist on creditCard variant
+              walletAddress: "0xabc"
+            },
+            amount: 100
+          },
+          nullableUnion: {}
+        }).catch(() => {});
+      });
+
       it("type narrows discriminated union on result", async () => {
         const result = await DiscriminatedUnionEntity.create({
           payment: {

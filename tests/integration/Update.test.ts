@@ -12156,6 +12156,41 @@ describe("Update", () => {
       ]);
     });
 
+    it("accepts a valid complete variant on update", async () => {
+      // @ts-expect-no-error: full creditCard variant is valid on update
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date()
+          }
+        }
+      });
+    });
+
+    it("rejects invalid discriminator value on update", async () => {
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          // @ts-expect-error: "paypal" is not a valid discriminator value
+          method: { type: "paypal", email: "a@b.com" }
+        }
+      }).catch(() => {});
+    });
+
+    it("rejects wrong fields for variant on update", async () => {
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          method: {
+            type: "creditCard",
+            // @ts-expect-error: walletAddress does not exist on creditCard variant
+            walletAddress: "0xabc"
+          }
+        }
+      }).catch(() => {});
+    });
+
     it("will error if discriminated union variant is missing required fields", async () => {
       expect.assertions(5);
 
