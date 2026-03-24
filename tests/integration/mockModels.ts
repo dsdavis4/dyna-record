@@ -799,7 +799,8 @@ const paymentSchema = {
       creditCard: {
         cardNumber: { type: "string" },
         expiry: { type: "string" },
-        expiryDate: { type: "date" }
+        expiryDate: { type: "date" },
+        nickname: { type: "string", nullable: true }
       },
       bankTransfer: {
         bankName: { type: "string" },

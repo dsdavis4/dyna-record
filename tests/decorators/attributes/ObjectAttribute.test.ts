@@ -876,6 +876,41 @@ describe("ObjectAttribute", () => {
         // @ts-expect-error: partial variant missing required field
         const partial: Inferred = { shape: { kind: "circle" } };
       });
+
+      it("supports nullable fields within variant schemas", () => {
+        const duSchema = {
+          payment: {
+            type: "discriminatedUnion",
+            discriminator: "type",
+            variants: {
+              card: {
+                number: { type: "string" },
+                label: { type: "string", nullable: true }
+              },
+              cash: {
+                currency: { type: "string" }
+              }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof duSchema>;
+
+        // @ts-expect-no-error: nullable field can be omitted
+        const withoutLabel: Inferred = {
+          payment: { type: "card", number: "4111" }
+        };
+
+        // @ts-expect-no-error: nullable field can be provided
+        const withLabel: Inferred = {
+          payment: { type: "card", number: "4111", label: "My Card" }
+        };
+
+        // @ts-expect-no-error: nullable field can be undefined
+        const withUndefined: Inferred = {
+          payment: { type: "card", number: "4111", label: undefined }
+        };
+      });
     });
   });
 
@@ -1104,6 +1139,105 @@ describe("ObjectAttribute", () => {
           preference: { channel: "pigeon" }
         }).success
       ).toBe(false);
+    });
+
+    it("serializers strip nullable variant fields set to null", () => {
+      expect.assertions(2);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const input = {
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z"),
+          nickname: null
+        },
+        amount: 100
+      };
+
+      // Nullable field set to null is stripped from serialized output
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: "2024-06-15T12:00:00.000Z"
+        },
+        amount: 100
+      });
+
+      // Round-trip: deserialization also strips absent fields
+      const tableItem = {
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: "2024-06-15T12:00:00.000Z"
+        },
+        amount: 100
+      };
+      expect(attr.serializers?.toEntityAttribute(tableItem)).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z")
+        },
+        amount: 100
+      });
+    });
+
+    it("Zod schema accepts variant with nullable field omitted", () => {
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const zodSchema = attr.type;
+
+      // Valid: creditCard variant with nullable nickname omitted
+      expect(
+        zodSchema.safeParse({
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date()
+          },
+          amount: 100
+        }).success
+      ).toBe(true);
+
+      // Valid: creditCard variant with nullable nickname provided
+      expect(
+        zodSchema.safeParse({
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date(),
+            nickname: "My Card"
+          },
+          amount: 100
+        }).success
+      ).toBe(true);
+
+      // Valid: creditCard variant with nullable nickname set to null
+      expect(
+        zodSchema.safeParse({
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date(),
+            nickname: null
+          },
+          amount: 100
+        }).success
+      ).toBe(true);
     });
 
     it("serializers pass through discriminated union with unknown discriminator value", () => {
