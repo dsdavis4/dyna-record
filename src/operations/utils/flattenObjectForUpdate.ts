@@ -10,7 +10,8 @@ import type { DocumentPathOperation } from "./types";
  * - `undefined` → skip (not being updated)
  * - `null` → REMOVE operation
  * - Nested object (`fieldDef.type === "object"`) → recurse, prepending parent path
- * - Everything else (primitives, arrays, dates, enums) → serialize and SET
+ * - Everything else (primitives, arrays, dates, enums, discriminated unions) → serialize and SET
+ *
  *
  * @param parentPath Path segments leading to this object (e.g. ["address"] or ["address", "geo"])
  * @param schema The ObjectSchema describing the object shape
@@ -50,14 +51,6 @@ export function flattenObjectForUpdate(
       continue;
     }
 
-    if (fieldDef.type === "discriminatedUnion") {
-      // Discriminated unions always use full replacement
-      const serialized = convertFieldToTableItem(fieldDef, val);
-      ops.push({ type: "set", path: fieldPath, value: serialized });
-      continue;
-    }
-
-    // Primitives, arrays, dates, enums → serialize and SET
     const serialized = convertFieldToTableItem(fieldDef, val);
     ops.push({ type: "set", path: fieldPath, value: serialized });
   }

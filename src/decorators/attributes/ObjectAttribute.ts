@@ -22,7 +22,7 @@ import { createObjectSerializer } from "./serializers";
  * `ValidationException: The document path provided in the update expression is invalid for update`.
  * To avoid this, `@ObjectAttribute` fields always exist as at least an empty object `{}`.
  *
- * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, and arrays.
+ * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, arrays, and discriminated unions.
  * Non-object fields within the schema may still be nullable.
  *
  * @template S The specific ObjectSchema type used for type inference
@@ -113,6 +113,10 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 function discriminatedUnionToZod(
   fieldDef: DiscriminatedUnionFieldDef
 ): ZodType {
+  if (Object.keys(fieldDef.variants).length === 0) {
+    throw new Error("DiscriminatedUnionFieldDef requires at least one variant");
+  }
+
   const variantSchemas = Object.entries(fieldDef.variants).map(
     ([variantKey, variantObjectSchema]) => {
       const variantZod = objectSchemaToZod(variantObjectSchema) as z.ZodObject;
@@ -124,7 +128,7 @@ function discriminatedUnionToZod(
 
   let zodType: ZodType = z.discriminatedUnion(
     fieldDef.discriminator,
-    variantSchemas as [z.ZodObject, z.ZodObject, ...z.ZodObject[]]
+    variantSchemas as [z.ZodObject, ...z.ZodObject[]]
   );
 
   if (fieldDef.nullable === true) {
@@ -215,6 +219,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * - `"date"` — dates stored as ISO strings (support `nullable: true`)
  * - `"object"` — nested objects, arbitrarily deep (**never nullable**)
  * - `"array"` — lists of any field type (support `nullable: true`, full replacement on update)
+ * - `"discriminatedUnion"` — tagged unions via `discriminator` + `variants` (support `nullable: true`, full replacement on update)
  *
  * Objects within arrays are not subject to the document path limitation because arrays
  * use full replacement on update. Partial updates of individual objects within arrays
@@ -270,6 +275,10 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * await MyEntity.update("id", { address: { zip: null } });
  * ```
  *
+ * **Discriminated union fields** always use **full replacement** on update — the user
+ * must provide a complete variant object. See {@link DiscriminatedUnionFieldDef} for
+ * the rationale.
+ *
  * Object attributes support filtering in queries using dot-path notation for nested fields
  * and the {@link ContainsFilter | $contains} operator for List membership checks.
  *
@@ -294,12 +303,13 @@ function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
       ObjectAttributeOptions<S>
     >
   ) {
-    context.addInitializer(function (this: T) {
-      const { schema, ...restProps } = props;
-      const zodSchema = objectSchemaToZod(schema);
-      const partialZodSchema = objectSchemaToZodPartial(schema);
-      const serializers = createObjectSerializer(schema);
+    // Fail fast: surface schema validation errors at class definition time.
+    const { schema, ...restProps } = props;
+    const zodSchema = objectSchemaToZod(schema);
+    const partialZodSchema = objectSchemaToZodPartial(schema);
+    const serializers = createObjectSerializer(schema);
 
+    context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
         type: zodSchema,

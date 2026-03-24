@@ -12,9 +12,11 @@ export type { ObjectAttributeOptions } from "./ObjectAttribute";
 export * from "./serializers";
 export type {
   ObjectSchema,
+  NonUnionObjectSchema,
   InferObjectSchema,
   InferDiscriminatedUnion,
   FieldDef,
+  NonUnionFieldDef,
   PrimitiveFieldDef,
   ObjectFieldDef,
   ArrayFieldDef,

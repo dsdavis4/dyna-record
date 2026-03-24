@@ -12155,5 +12155,146 @@ describe("Update", () => {
         ]
       ]);
     });
+
+    it("will error if discriminated union variant is missing required fields", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "creditCard"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "cardNumber"]
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "expiry"]
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Invalid input: expected date, received undefined",
+            path: ["payment", "method", "expiryDate"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union has an invalid discriminator value", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "paypal",
+              email: "a@b.com"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union variant has wrong fields for its discriminator", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "creditCard",
+              bankName: "Chase",
+              accountNumber: "123"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "cardNumber"]
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "expiry"]
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Invalid input: expected date, received undefined",
+            path: ["payment", "method", "expiryDate"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union is missing the discriminator key", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              cardNumber: "4111",
+              expiry: "12/25",
+              expiryDate: new Date()
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
   });
 });

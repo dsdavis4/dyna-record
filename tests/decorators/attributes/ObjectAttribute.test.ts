@@ -799,6 +799,83 @@ describe("ObjectAttribute", () => {
           public key1: InferObjectSchema<typeof otherSchema>;
         }
       });
+
+      it("does not allow discriminated union as array items", () => {
+        const badSchema = {
+          items: {
+            type: "array",
+            items: {
+              // @ts-expect-error: "discriminatedUnion" is not assignable to NonUnionFieldDef
+              type: "discriminatedUnion",
+              discriminator: "kind",
+              variants: {
+                a: { val: { type: "string" } }
+              }
+            }
+          }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("does not allow discriminated union nested inside another discriminated union variant", () => {
+        const badSchema = {
+          outer: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              a: {
+                inner: {
+                  // @ts-expect-error: "discriminatedUnion" is not assignable to NonUnionFieldDef
+                  type: "discriminatedUnion",
+                  discriminator: "subKind",
+                  variants: {
+                    x: { val: { type: "string" } }
+                  }
+                }
+              }
+            }
+          }
+        } as const satisfies ObjectSchema;
+      });
+
+      it("throws at class definition time if discriminated union has zero variants", () => {
+        expect(() => {
+          @Entity
+          class ModelEmpty extends MockTable {
+            declare readonly type: "ModelEmpty";
+            @ObjectAttribute({
+              schema: {
+                field: {
+                  type: "discriminatedUnion",
+                  discriminator: "kind",
+                  variants: {}
+                }
+              }
+            })
+            public field: never;
+          }
+        }).toThrow("DiscriminatedUnionFieldDef requires at least one variant");
+      });
+
+      it("discriminated union fields require full replacement (not partial) on update type", () => {
+        const duSchema = {
+          shape: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              circle: { radius: { type: "number" } },
+              square: { side: { type: "number" } }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof duSchema>;
+
+        // @ts-expect-no-error: full variant is valid
+        const full: Inferred = { shape: { kind: "circle", radius: 5 } };
+
+        // @ts-expect-error: partial variant missing required field
+        const partial: Inferred = { shape: { kind: "circle" } };
+      });
     });
   });
 
@@ -999,6 +1076,68 @@ describe("ObjectAttribute", () => {
           method: { cardNumber: "4111" }
         }).success
       ).toBe(false);
+    });
+
+    it("Zod schema accepts null for nullable discriminated union fields", () => {
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).nullableUnion;
+
+      const zodSchema = attr.type;
+
+      // Valid: preference is null
+      expect(zodSchema.safeParse({ preference: null }).success).toBe(true);
+
+      // Valid: preference is undefined (omitted)
+      expect(zodSchema.safeParse({}).success).toBe(true);
+
+      // Valid: preference is a valid variant
+      expect(
+        zodSchema.safeParse({
+          preference: { channel: "email", address: "a@b.com" }
+        }).success
+      ).toBe(true);
+
+      // Invalid: preference is not a valid variant
+      expect(
+        zodSchema.safeParse({
+          preference: { channel: "pigeon" }
+        }).success
+      ).toBe(false);
+    });
+
+    it("serializers pass through discriminated union with unknown discriminator value", () => {
+      expect.assertions(2);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const input = {
+        method: {
+          type: "unknownMethod",
+          someField: "value"
+        },
+        amount: 10
+      };
+
+      // Unknown variant passes through without transformation
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        method: {
+          type: "unknownMethod",
+          someField: "value"
+        },
+        amount: 10
+      });
+
+      // Same for deserialization
+      expect(attr.serializers?.toEntityAttribute(input)).toEqual({
+        method: {
+          type: "unknownMethod",
+          someField: "value"
+        },
+        amount: 10
+      });
     });
   });
 });

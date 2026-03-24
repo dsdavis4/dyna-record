@@ -1,3 +1,10 @@
+## 0.6.4 - 2026-03-24
+
+### Added
+
+- **Discriminated union fields in `@ObjectAttribute` schemas:** A new `"discriminatedUnion"` field type allows defining tagged unions within object schemas. Each variant is described by an `ObjectSchema` keyed by its discriminator value. The discriminator key is automatically added to each variant's inferred TypeScript type as a string literal. Discriminated unions support `nullable: true` and always use full replacement on update. See `DiscriminatedUnionFieldDef`.
+- **`InferDiscriminatedUnion` utility type:** Infers the TypeScript union type from a `DiscriminatedUnionFieldDef`, producing `{ [discriminator]: VariantKey } & InferObjectSchema<VariantSchema>` for each variant.
+
 ## 0.6.3 - 2026-03-21
 
 ### Added

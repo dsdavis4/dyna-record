@@ -21,12 +21,35 @@ export const dateSerializer = {
 };
 
 /**
+ * Resolves the variant schema for a discriminated union value by reading the
+ * discriminator key and looking up the corresponding variant in the field definition.
+ *
+ * Uses `Object.hasOwn` to guard against prototype property pollution — only
+ * own-enumerable variant keys are matched.
+ */
+function resolveVariantSchema(
+  fieldDef: {
+    discriminator: string;
+    variants: Readonly<Record<string, ObjectSchema>>;
+  },
+  value: Record<string, unknown>
+): ObjectSchema | undefined {
+  const discriminatorValue = value[fieldDef.discriminator] as string;
+  if (!Object.hasOwn(fieldDef.variants, discriminatorValue)) {
+    return undefined;
+  }
+  return fieldDef.variants[discriminatorValue];
+}
+
+/**
  * Recursively walks an {@link ObjectSchema} and converts the entity value to its
  * DynamoDB representation.
  *
  * - `"date"` fields are converted from `Date` objects to ISO 8601 strings.
  * - `"object"` fields recurse into their nested schema.
  * - `"array"` fields map each item through the same conversion.
+ * - `"discriminatedUnion"` fields look up the variant schema by discriminator value
+ *   and recurse into that variant's object schema, preserving the discriminator key.
  * - `null` and `undefined` values are stripped from the result so that nullable
  *   fields set to `null` are removed from the stored object rather than persisted
  *   as `null` in DynamoDB.
@@ -51,6 +74,21 @@ export function objectToTableItem(
   return result;
 }
 
+/**
+ * Converts a single field value to its DynamoDB table representation based on
+ * the field definition.
+ *
+ * - `"date"` → ISO 8601 string
+ * - `"object"` → recursively converts via {@link objectToTableItem}
+ * - `"array"` → maps each item through the same conversion
+ * - `"discriminatedUnion"` → looks up the variant schema by discriminator value,
+ *   converts via {@link objectToTableItem}, and preserves the discriminator key
+ * - All other types pass through unchanged
+ *
+ * @param fieldDef The {@link FieldDef} describing the field's type
+ * @param val The entity-level value to convert
+ * @returns The DynamoDB-compatible value
+ */
 export function convertFieldToTableItem(
   fieldDef: FieldDef,
   val: unknown
@@ -66,13 +104,10 @@ export function convertFieldToTableItem(
       );
     case "discriminatedUnion": {
       const value = val as Record<string, unknown>;
-      const discriminatorValue = value[fieldDef.discriminator] as string;
-      const variantSchema = fieldDef.variants[discriminatorValue] as
-        | ObjectSchema
-        | undefined;
+      const variantSchema = resolveVariantSchema(fieldDef, value);
       if (variantSchema === undefined) return val;
       const result = objectToTableItem(variantSchema, value);
-      result[fieldDef.discriminator] = discriminatorValue;
+      result[fieldDef.discriminator] = value[fieldDef.discriminator];
       return result;
     }
     default:
@@ -87,6 +122,8 @@ export function convertFieldToTableItem(
  * - `"date"` fields are converted from ISO 8601 strings to `Date` objects.
  * - `"object"` fields recurse into their nested schema.
  * - `"array"` fields map each item through the same conversion.
+ * - `"discriminatedUnion"` fields look up the variant schema by discriminator value
+ *   and recurse into that variant's object schema, preserving the discriminator key.
  * - `null` and `undefined` values are stripped from the result so that absent
  *   fields are represented as `undefined` (omitted) on the entity, consistent
  *   with root-level nullable attribute behaviour.
@@ -111,6 +148,13 @@ export function tableItemToObject(
   return result;
 }
 
+/**
+ * Converts a single DynamoDB field value back to its entity representation.
+ *
+ * Mirrors {@link convertFieldToTableItem} in reverse: dates become `Date` objects,
+ * objects and discriminated unions recurse through their schemas, arrays map each item,
+ * and all other types pass through unchanged.
+ */
 function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
   switch (fieldDef.type) {
     case "date":
@@ -123,13 +167,10 @@ function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
       );
     case "discriminatedUnion": {
       const value = val as Record<string, unknown>;
-      const discriminatorValue = value[fieldDef.discriminator] as string;
-      const variantSchema = fieldDef.variants[discriminatorValue] as
-        | ObjectSchema
-        | undefined;
+      const variantSchema = resolveVariantSchema(fieldDef, value);
       if (variantSchema === undefined) return val;
       const result = tableItemToObject(variantSchema, value);
-      result[fieldDef.discriminator] = discriminatorValue;
+      result[fieldDef.discriminator] = value[fieldDef.discriminator];
       return result;
     }
     default:
