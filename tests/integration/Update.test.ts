@@ -30,7 +30,8 @@ import {
   Website,
   Warehouse,
   ArrayOfObjectsEntity,
-  DeepNestedEntity
+  DeepNestedEntity,
+  DiscriminatedUnionEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -11913,6 +11914,422 @@ describe("Update", () => {
             Logger.log("Testing types");
           });
       });
+    });
+  });
+
+  describe("discriminated union attributes", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    it("updates a discriminated union field with full replacement", async () => {
+      expect.assertions(2);
+
+      const testDate = new Date("2024-06-15T12:00:00.000Z");
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-1", {
+          payment: {
+            method: {
+              type: "creditCard",
+              cardNumber: "4111",
+              expiry: "12/25",
+              expiryDate: testDate
+            },
+            amount: 200
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#amount": "amount",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_amount": 200,
+                    ":Payment_method": {
+                      type: "creditCard",
+                      cardNumber: "4111",
+                      expiry: "12/25",
+                      expiryDate: "2024-06-15T12:00:00.000Z"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-1",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#method = :Payment_method, #Payment.#amount = :Payment_amount"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can switch discriminated union variants on update", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-2", {
+          payment: {
+            method: {
+              type: "crypto",
+              walletAddress: "0xdef456",
+              network: "bitcoin"
+            }
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_method": {
+                      type: "crypto",
+                      walletAddress: "0xdef456",
+                      network: "bitcoin"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-2",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#method = :Payment_method"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can update nullable discriminated union to null", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-3", {
+          nullableUnion: {
+            preference: null
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#NullableUnion": "NullableUnion",
+                    "#preference": "preference"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-3",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #NullableUnion.#preference"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("updates only non-union fields without touching the union field", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-4", {
+          payment: {
+            amount: 500,
+            note: "updated note"
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#amount": "amount",
+                    "#note": "note"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_amount": 500,
+                    ":Payment_note": "updated note"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-4",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#amount = :Payment_amount, #Payment.#note = :Payment_note"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("removes a nullable non-union field within the same schema as a union field", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-5", {
+          payment: {
+            note: null
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#note": "note"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-5",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #Payment.#note"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("accepts a valid complete variant on update", async () => {
+      // @ts-expect-no-error: full creditCard variant is valid on update
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date()
+          }
+        }
+      });
+    });
+
+    it("rejects invalid discriminator value on update", async () => {
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          // @ts-expect-error: "paypal" is not a valid discriminator value
+          method: { type: "paypal", email: "a@b.com" }
+        }
+      }).catch(() => {});
+    });
+
+    it("rejects wrong fields for variant on update", async () => {
+      await DiscriminatedUnionEntity.update("du-id-type", {
+        payment: {
+          method: {
+            type: "creditCard",
+            // @ts-expect-error: walletAddress does not exist on creditCard variant
+            walletAddress: "0xabc"
+          }
+        }
+      }).catch(() => {});
+    });
+
+    it("will error if discriminated union variant is missing required fields", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "creditCard"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "cardNumber"]
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "expiry"]
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Invalid input: expected date, received undefined",
+            path: ["payment", "method", "expiryDate"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union has an invalid discriminator value", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "paypal",
+              email: "a@b.com"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union variant has wrong fields for its discriminator", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              type: "creditCard",
+              bankName: "Chase",
+              accountNumber: "123"
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "cardNumber"]
+          },
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["payment", "method", "expiry"]
+          },
+          {
+            code: "invalid_type",
+            expected: "date",
+            message: "Invalid input: expected date, received undefined",
+            path: ["payment", "method", "expiryDate"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if discriminated union is missing the discriminator key", async () => {
+      expect.assertions(5);
+
+      try {
+        await DiscriminatedUnionEntity.update("du-id-val", {
+          payment: {
+            method: {
+              cardNumber: "4111",
+              expiry: "12/25",
+              expiryDate: new Date()
+            } as never
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
     });
   });
 });

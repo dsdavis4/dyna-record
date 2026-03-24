@@ -18,7 +18,8 @@ import {
   User,
   MyClassWithAllAttributeTypes,
   Warehouse,
-  Shipment
+  Shipment,
+  DiscriminatedUnionEntity
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -2033,6 +2034,106 @@ describe("FindById", () => {
 
         // @ts-expect-no-error: included HasMany relationships only have attributes of the included relationship entity class instance
         Logger.log(phoneBook.addresses.some(address => address.homeId));
+      }
+    });
+  });
+
+  describe("discriminated union attributes", () => {
+    it("deserializes discriminated union fields with date conversion on findById", async () => {
+      expect.assertions(3);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "DiscriminatedUnionEntity#du-find-1",
+          SK: "DiscriminatedUnionEntity",
+          Id: "du-find-1",
+          Type: "DiscriminatedUnionEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Payment: {
+            method: {
+              type: "creditCard",
+              cardNumber: "4111",
+              expiry: "12/25",
+              expiryDate: "2024-06-15T12:00:00.000Z"
+            },
+            amount: 99.99,
+            note: "test payment"
+          },
+          NullableUnion: {
+            preference: {
+              channel: "sms",
+              phoneNumber: "+1234567890"
+            }
+          }
+        }
+      });
+
+      const result = await DiscriminatedUnionEntity.findById("du-find-1");
+
+      expect(result).toBeInstanceOf(DiscriminatedUnionEntity);
+      expect(result?.payment).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z")
+        },
+        amount: 99.99,
+        note: "test payment"
+      });
+      expect(result?.nullableUnion).toEqual({
+        preference: {
+          channel: "sms",
+          phoneNumber: "+1234567890"
+        }
+      });
+    });
+
+    it("supports type narrowing on findById result", async () => {
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "DiscriminatedUnionEntity#du-find-2",
+          SK: "DiscriminatedUnionEntity",
+          Id: "du-find-2",
+          Type: "DiscriminatedUnionEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Payment: {
+            method: {
+              type: "bankTransfer",
+              bankName: "Chase",
+              accountNumber: "123456",
+              routingNumber: "789012"
+            },
+            amount: 500
+          },
+          NullableUnion: {}
+        }
+      });
+
+      const result = await DiscriminatedUnionEntity.findById("du-find-2");
+
+      if (result !== undefined) {
+        if (result.payment.method.type === "bankTransfer") {
+          // @ts-expect-no-error: after narrowing, bankName is accessible
+          const bank: string = result.payment.method.bankName;
+          Logger.log(bank);
+
+          // @ts-expect-error: after narrowing, cardNumber is not accessible
+          const cardNumber: string = result.payment.method.cardNumber;
+          Logger.log(cardNumber);
+        }
+
+        if (result.payment.method.type === "creditCard") {
+          // @ts-expect-no-error: after narrowing, cardNumber is accessible
+          const card: string = result.payment.method.cardNumber;
+          Logger.log(card);
+
+          // @ts-expect-error: after narrowing, bankName is not accessible
+          const bank: string = result.payment.method.bankName;
+          Logger.log(bank);
+        }
       }
     });
   });

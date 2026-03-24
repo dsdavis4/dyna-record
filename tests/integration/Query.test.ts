@@ -5,6 +5,7 @@ import {
   Course,
   Customer,
   DeepNestedEntity,
+  DiscriminatedUnionEntity,
   Employee,
   Festival,
   Founder,
@@ -4150,6 +4151,236 @@ describe("Query", () => {
         const _noTeacher: Array<EntityAttributesInstance<Teacher>> = result;
 
         Logger.log(_narrowed, _noTeacher);
+      });
+    });
+  });
+
+  describe("discriminated union attributes", () => {
+    beforeEach(() => {
+      mockQuery.mockReset();
+    });
+
+    it("deserializes discriminated union fields with date conversion", async () => {
+      expect.assertions(3);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-1",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-1",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "creditCard",
+                cardNumber: "4111",
+                expiry: "12/25",
+                expiryDate: "2024-06-15T12:00:00.000Z"
+              },
+              amount: 99.99,
+              note: "test"
+            },
+            NullableUnion: {
+              preference: {
+                channel: "email",
+                address: "test@example.com"
+              }
+            }
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-1");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(DiscriminatedUnionEntity);
+      expect(results[0].payment).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z")
+        },
+        amount: 99.99,
+        note: "test"
+      });
+    });
+
+    it("deserializes crypto variant correctly (no date fields)", async () => {
+      expect.assertions(2);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-2",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-2",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "crypto",
+                walletAddress: "0xabc",
+                network: "ethereum"
+              },
+              amount: 50
+            },
+            NullableUnion: {}
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-2");
+
+      expect(results).toHaveLength(1);
+      expect(results[0].payment.method).toEqual({
+        type: "crypto",
+        walletAddress: "0xabc",
+        network: "ethereum"
+      });
+    });
+
+    it("supports type narrowing on query results", async () => {
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-3",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-3",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "creditCard",
+                cardNumber: "4111",
+                expiry: "12/25",
+                expiryDate: "2024-06-15T12:00:00.000Z"
+              },
+              amount: 100
+            },
+            NullableUnion: {}
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-3");
+      const entity = results[0];
+
+      if (entity.payment.method.type === "creditCard") {
+        // @ts-expect-no-error: after narrowing, cardNumber is accessible
+        const card: string = entity.payment.method.cardNumber;
+        Logger.log(card);
+
+        // @ts-expect-error: after narrowing, bankName is not accessible
+        const bankName: string = entity.payment.method.bankName;
+        Logger.log(bankName);
+      }
+
+      if (entity.payment.method.type === "crypto") {
+        // @ts-expect-no-error: after narrowing, network is accessible
+        const net: "ethereum" | "bitcoin" | "solana" =
+          entity.payment.method.network;
+        Logger.log(net);
+      }
+    });
+
+    describe("typed filter keys for discriminated union dot-paths", () => {
+      it("accepts discriminator dot-path as a filter key", async () => {
+        // @ts-expect-no-error: payment.method.type is a valid dot-path (discriminator)
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.type": "creditCard" }
+        }).catch(() => {});
+      });
+
+      it("accepts variant-specific dot-paths as filter keys", async () => {
+        // @ts-expect-no-error: payment.method.cardNumber is from creditCard variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.cardNumber": "4111" }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: payment.method.walletAddress is from crypto variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.walletAddress": "0xabc" }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: payment.method.bankName is from bankTransfer variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.bankName": "Chase" }
+        }).catch(() => {});
+      });
+
+      it("accepts non-union fields alongside union dot-paths", async () => {
+        // @ts-expect-no-error: payment.amount is a non-union field in the same schema
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.amount": 100 }
+        }).catch(() => {});
+      });
+
+      it("accepts nullable union dot-paths", async () => {
+        // @ts-expect-no-error: nullableUnion.preference.channel is a valid dot-path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "nullableUnion.preference.channel": "email" }
+        }).catch(() => {});
+      });
+
+      it("rejects invalid dot-paths within discriminated union", async () => {
+        // @ts-expect-error: payment.method.nonExistent is not a valid path in any variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.nonExistent": "value" }
+        }).catch(() => {});
+      });
+
+      it("accepts discriminator dot-path in $or blocks", async () => {
+        // @ts-expect-no-error: $or with discriminator path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            $or: [
+              { "payment.method.type": "creditCard" },
+              { "payment.method.type": "crypto" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts variant-specific dot-paths in $or blocks", async () => {
+        // @ts-expect-no-error: each $or block uses variant-specific paths
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            $or: [
+              { "payment.method.cardNumber": "4111" },
+              { "payment.method.walletAddress": "0xabc" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts mixed top-level and $or filters with union dot-paths", async () => {
+        // @ts-expect-no-error: top-level AND with $or
+        await DiscriminatedUnionEntity.query("123", {
+          filter: {
+            "payment.amount": { $gt: 50 },
+            $or: [
+              { "payment.method.type": "creditCard" },
+              { "payment.method.type": "bankTransfer" }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("accepts filter operators on discriminated union dot-paths", async () => {
+        // @ts-expect-no-error: $beginsWith on a string dot-path from a variant
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.cardNumber": { $beginsWith: "41" } }
+        }).catch(() => {});
+
+        // @ts-expect-no-error: IN operator on a union dot-path
+        await DiscriminatedUnionEntity.query("123", {
+          filter: { "payment.method.network": ["ethereum", "bitcoin"] }
+        }).catch(() => {});
       });
     });
   });

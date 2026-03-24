@@ -212,7 +212,7 @@ class Store extends MyTable {
 }
 ```
 
-- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"date"` (stored as ISO strings, exposed as `Date` objects), `"enum"` (via `values`), nested `"object"` (via `fields`), and `"array"` (via `items`)
+- **Supported field types:** `"string"`, `"number"`, `"boolean"`, `"date"` (stored as ISO strings, exposed as `Date` objects), `"enum"` (via `values`), nested `"object"` (via `fields`), `"array"` (via `items`), and `"discriminatedUnion"` (via `discriminator` + `variants`)
 - **Nullable fields:** Set `nullable: true` on individual non-object fields within the schema to make them optional
 - **Object attributes are never nullable:** DynamoDB cannot update nested document paths (e.g., `address.geo.lat`) if the parent object does not exist. To prevent this, `@ObjectAttribute` fields always exist as at least an empty object `{}`. Nested object fields within the schema are also never nullable. Non-object fields (primitives, enums, dates, arrays) can still be nullable.
 - **Alias support:** Use the `alias` option to map to a different DynamoDB attribute name
@@ -248,6 +248,48 @@ const schema = {
 ```
 
 The schema must be declared with `as const satisfies ObjectSchema` so TypeScript preserves the literal string values for type inference. At runtime, providing an invalid value (e.g., `status: "unknown"`) throws a `ValidationError`.
+
+##### Discriminated union fields
+
+Use `{ type: "discriminatedUnion", discriminator: "...", variants: { ... } }` to define a field that is a tagged union of object types. Each variant is an `ObjectSchema` keyed by its discriminator value. The discriminator key is automatically included in each variant's inferred type as a string literal.
+
+```typescript
+const drawingSchema = {
+  shape: {
+    type: "discriminatedUnion",
+    discriminator: "kind",
+    variants: {
+      circle: { radius: { type: "number" } },
+      square: { side: { type: "number" } }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Drawing extends MyTable {
+  declare readonly type: "Drawing";
+
+  @ObjectAttribute({ alias: "Drawing", schema: drawingSchema })
+  public readonly drawing: InferObjectSchema<typeof drawingSchema>;
+}
+
+// TypeScript infers:
+// drawing.shape → { kind: "circle"; radius: number } | { kind: "square"; side: number }
+```
+
+Unlike nested `"object"` fields, discriminated union fields **can be nullable** (`nullable: true`) because they always use **full replacement** on update rather than document path expressions:
+
+```typescript
+// Replaces the entire shape field — no partial merge
+await Drawing.update("123", {
+  drawing: { shape: { kind: "square", side: 10 } }
+});
+```
+
+**Scoping constraints (initial release):**
+
+- Supported at the ObjectAttribute root level and as fields within an ObjectSchema
+- Not supported inside array items or nested inside other discriminated unions
 
 ### Foreign Keys
 
@@ -987,6 +1029,15 @@ await Store.update("123", {
 // Replaces the entire tags array
 await Store.update("123", {
   address: { tags: ["new-tag-1", "new-tag-2"] }
+});
+```
+
+**Discriminated unions** within objects are also **full replacement** (not merged):
+
+```typescript
+// Replaces the entire shape — switches from circle to square
+await Drawing.update("123", {
+  drawing: { shape: { kind: "square", side: 10 } }
 });
 ```
 

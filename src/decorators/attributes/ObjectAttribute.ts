@@ -5,7 +5,12 @@ import type {
   AttributeDecoratorContext,
   NonNullAttributeOptions
 } from "../types";
-import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
+import type {
+  ObjectSchema,
+  InferObjectSchema,
+  FieldDef,
+  DiscriminatedUnionFieldDef
+} from "./types";
 import { createObjectSerializer } from "./serializers";
 
 /**
@@ -17,7 +22,7 @@ import { createObjectSerializer } from "./serializers";
  * `ValidationException: The document path provided in the update expression is invalid for update`.
  * To avoid this, `@ObjectAttribute` fields always exist as at least an empty object `{}`.
  *
- * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, and arrays.
+ * The schema supports all {@link FieldDef} types: primitives, enums, nested objects, arrays, and discriminated unions.
  * Non-object fields within the schema may still be nullable.
  *
  * @template S The specific ObjectSchema type used for type inference
@@ -62,10 +67,17 @@ function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
  * Converts a single {@link FieldDef} to the corresponding partial Zod type.
  * Nested objects use partial schemas; all other types use the standard schema.
  * Object fields are never nullable — they always exist as at least `{}`.
+ * Discriminated union fields use the full schema (not partial) since they
+ * always use full replacement on update.
  */
 function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
   if (fieldDef.type === "object") {
     return objectSchemaToZodPartial(fieldDef.fields);
+  }
+
+  if (fieldDef.type === "discriminatedUnion") {
+    // Discriminated unions use full replacement — same schema as create
+    return discriminatedUnionToZod(fieldDef);
   }
 
   // For non-object fields, use the standard schema (includes nullable wrapping)
@@ -89,11 +101,50 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 }
 
 /**
+ * Builds a Zod `discriminatedUnion` schema from a {@link DiscriminatedUnionFieldDef}.
+ *
+ * Each variant's ObjectSchema is converted to a `z.object()` and extended with a
+ * `z.literal()` for the discriminator key. The resulting schemas are wrapped in
+ * `z.discriminatedUnion()`.
+ *
+ * @param fieldDef The discriminated union field definition
+ * @returns A ZodType that validates discriminated union values
+ */
+function discriminatedUnionToZod(
+  fieldDef: DiscriminatedUnionFieldDef
+): ZodType {
+  if (Object.keys(fieldDef.variants).length === 0) {
+    throw new Error("DiscriminatedUnionFieldDef requires at least one variant");
+  }
+
+  const variantSchemas = Object.entries(fieldDef.variants).map(
+    ([variantKey, variantObjectSchema]) => {
+      const variantZod = objectSchemaToZod(variantObjectSchema) as z.ZodObject;
+      return variantZod.extend({
+        [fieldDef.discriminator]: z.literal(variantKey)
+      });
+    }
+  );
+
+  let zodType: ZodType = z.discriminatedUnion(
+    fieldDef.discriminator,
+    variantSchemas as [z.ZodObject, ...z.ZodObject[]]
+  );
+
+  if (fieldDef.nullable === true) {
+    zodType = zodType.optional().nullable();
+  }
+
+  return zodType;
+}
+
+/**
  * Converts a single {@link FieldDef} to the corresponding Zod type for runtime validation.
  *
  * Handles all field types:
  * - `"object"` → recursively builds a `z.object()` via {@link objectSchemaToZod}.
  *   Object fields are never nullable — DynamoDB requires them to exist for document path updates.
+ * - `"discriminatedUnion"` → `z.discriminatedUnion()` via {@link discriminatedUnionToZod}
  * - `"array"` → `z.array()` wrapping a recursive call for the `items` type
  * - `"string"` → `z.string()`
  * - `"number"` → `z.number()`
@@ -109,6 +160,11 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
   // Object fields return early — they are never nullable
   if (fieldDef.type === "object") {
     return objectSchemaToZod(fieldDef.fields);
+  }
+
+  // Discriminated union fields handle their own nullable wrapping
+  if (fieldDef.type === "discriminatedUnion") {
+    return discriminatedUnionToZod(fieldDef);
   }
 
   let zodType: ZodType;
@@ -163,6 +219,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * - `"date"` — dates stored as ISO strings (support `nullable: true`)
  * - `"object"` — nested objects, arbitrarily deep (**never nullable**)
  * - `"array"` — lists of any field type (support `nullable: true`, full replacement on update)
+ * - `"discriminatedUnion"` — tagged unions via `discriminator` + `variants` (support `nullable: true`, full replacement on update)
  *
  * Objects within arrays are not subject to the document path limitation because arrays
  * use full replacement on update. Partial updates of individual objects within arrays
@@ -218,6 +275,10 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * await MyEntity.update("id", { address: { zip: null } });
  * ```
  *
+ * **Discriminated union fields** always use **full replacement** on update — the user
+ * must provide a complete variant object. See {@link DiscriminatedUnionFieldDef} for
+ * the rationale.
+ *
  * Object attributes support filtering in queries using dot-path notation for nested fields
  * and the {@link ContainsFilter | $contains} operator for List membership checks.
  *
@@ -242,12 +303,13 @@ function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
       ObjectAttributeOptions<S>
     >
   ) {
-    context.addInitializer(function (this: T) {
-      const { schema, ...restProps } = props;
-      const zodSchema = objectSchemaToZod(schema);
-      const partialZodSchema = objectSchemaToZodPartial(schema);
-      const serializers = createObjectSerializer(schema);
+    // Fail fast: surface schema validation errors at class definition time.
+    const { schema, ...restProps } = props;
+    const zodSchema = objectSchemaToZod(schema);
+    const partialZodSchema = objectSchemaToZodPartial(schema);
+    const serializers = createObjectSerializer(schema);
 
+    context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
         type: zodSchema,
