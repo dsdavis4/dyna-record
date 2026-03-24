@@ -11994,24 +11994,39 @@ describe("Update", () => {
         })
       ).toBeUndefined();
 
-      const call = mockTransactWriteCommand.mock.calls[0][0];
-      const updateItem = (
-        call as {
-          TransactItems: Array<{
-            Update?: { ExpressionAttributeValues?: Record<string, unknown> };
-          }>;
-        }
-      ).TransactItems[0].Update;
-
-      expect(updateItem?.ExpressionAttributeValues).toEqual(
-        expect.objectContaining({
-          ":Payment_method": {
-            type: "crypto",
-            walletAddress: "0xdef456",
-            network: "bitcoin"
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_method": {
+                      type: "crypto",
+                      walletAddress: "0xdef456",
+                      network: "bitcoin"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-2",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#method = :Payment_method"
+                }
+              }
+            ]
           }
-        })
-      );
+        ]
+      ]);
     });
 
     it("can update nullable discriminated union to null", async () => {
@@ -12025,16 +12040,120 @@ describe("Update", () => {
         })
       ).toBeUndefined();
 
-      const call = mockTransactWriteCommand.mock.calls[0][0];
-      const updateItem = (
-        call as {
-          TransactItems: Array<{
-            Update?: { UpdateExpression?: string };
-          }>;
-        }
-      ).TransactItems[0].Update;
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#NullableUnion": "NullableUnion",
+                    "#preference": "preference"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-3",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #NullableUnion.#preference"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
 
-      expect(updateItem?.UpdateExpression).toContain("REMOVE");
+    it("updates only non-union fields without touching the union field", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-4", {
+          payment: {
+            amount: 500,
+            note: "updated note"
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#amount": "amount",
+                    "#note": "note"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_amount": 500,
+                    ":Payment_note": "updated note"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-4",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#amount = :Payment_amount, #Payment.#note = :Payment_note"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("removes a nullable non-union field within the same schema as a union field", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-5", {
+          payment: {
+            note: null
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#note": "note"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-5",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt REMOVE #Payment.#note"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 });
