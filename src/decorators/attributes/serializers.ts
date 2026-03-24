@@ -64,6 +64,17 @@ export function convertFieldToTableItem(
       return (val as unknown[]).map(item =>
         convertFieldToTableItem(fieldDef.items, item)
       );
+    case "discriminatedUnion": {
+      const value = val as Record<string, unknown>;
+      const discriminatorValue = value[fieldDef.discriminator] as string;
+      const variantSchema = fieldDef.variants[discriminatorValue] as
+        | ObjectSchema
+        | undefined;
+      if (variantSchema === undefined) return val;
+      const result = objectToTableItem(variantSchema, value);
+      result[fieldDef.discriminator] = discriminatorValue;
+      return result;
+    }
     default:
       return val;
   }
@@ -110,6 +121,17 @@ function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
       return (val as unknown[]).map(item =>
         convertFieldToEntityValue(fieldDef.items, item)
       );
+    case "discriminatedUnion": {
+      const value = val as Record<string, unknown>;
+      const discriminatorValue = value[fieldDef.discriminator] as string;
+      const variantSchema = fieldDef.variants[discriminatorValue] as
+        | ObjectSchema
+        | undefined;
+      if (variantSchema === undefined) return val;
+      const result = tableItemToObject(variantSchema, value);
+      result[fieldDef.discriminator] = discriminatorValue;
+      return result;
+    }
     default:
       return val;
   }

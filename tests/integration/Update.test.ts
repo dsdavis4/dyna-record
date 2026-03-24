@@ -30,7 +30,8 @@ import {
   Website,
   Warehouse,
   ArrayOfObjectsEntity,
-  DeepNestedEntity
+  DeepNestedEntity,
+  DiscriminatedUnionEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -11913,6 +11914,127 @@ describe("Update", () => {
             Logger.log("Testing types");
           });
       });
+    });
+  });
+
+  describe("discriminated union attributes", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    it("updates a discriminated union field with full replacement", async () => {
+      expect.assertions(2);
+
+      const testDate = new Date("2024-06-15T12:00:00.000Z");
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-1", {
+          payment: {
+            method: {
+              type: "creditCard",
+              cardNumber: "4111",
+              expiry: "12/25",
+              expiryDate: testDate
+            },
+            amount: 200
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Payment": "Payment",
+                    "#amount": "amount",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Payment_amount": 200,
+                    ":Payment_method": {
+                      type: "creditCard",
+                      cardNumber: "4111",
+                      expiry: "12/25",
+                      expiryDate: "2024-06-15T12:00:00.000Z"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-1",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#method = :Payment_method, #Payment.#amount = :Payment_amount"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can switch discriminated union variants on update", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-2", {
+          payment: {
+            method: {
+              type: "crypto",
+              walletAddress: "0xdef456",
+              network: "bitcoin"
+            }
+          }
+        })
+      ).toBeUndefined();
+
+      const call = mockTransactWriteCommand.mock.calls[0][0];
+      const updateItem = (
+        call as {
+          TransactItems: Array<{
+            Update?: { ExpressionAttributeValues?: Record<string, unknown> };
+          }>;
+        }
+      ).TransactItems[0].Update;
+
+      expect(updateItem?.ExpressionAttributeValues).toEqual(
+        expect.objectContaining({
+          ":Payment_method": {
+            type: "crypto",
+            walletAddress: "0xdef456",
+            network: "bitcoin"
+          }
+        })
+      );
+    });
+
+    it("can update nullable discriminated union to null", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-3", {
+          nullableUnion: {
+            preference: null
+          }
+        })
+      ).toBeUndefined();
+
+      const call = mockTransactWriteCommand.mock.calls[0][0];
+      const updateItem = (
+        call as {
+          TransactItems: Array<{
+            Update?: { UpdateExpression?: string };
+          }>;
+        }
+      ).TransactItems[0].Update;
+
+      expect(updateItem?.UpdateExpression).toContain("REMOVE");
     });
   });
 });

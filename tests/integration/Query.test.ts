@@ -5,6 +5,7 @@ import {
   Course,
   Customer,
   DeepNestedEntity,
+  DiscriminatedUnionEntity,
   Employee,
   Festival,
   Founder,
@@ -4151,6 +4152,140 @@ describe("Query", () => {
 
         Logger.log(_narrowed, _noTeacher);
       });
+    });
+  });
+
+  describe("discriminated union attributes", () => {
+    beforeEach(() => {
+      mockQuery.mockReset();
+    });
+
+    it("deserializes discriminated union fields with date conversion", async () => {
+      expect.assertions(3);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-1",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-1",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "creditCard",
+                cardNumber: "4111",
+                expiry: "12/25",
+                expiryDate: "2024-06-15T12:00:00.000Z"
+              },
+              amount: 99.99,
+              note: "test"
+            },
+            NullableUnion: {
+              preference: {
+                channel: "email",
+                address: "test@example.com"
+              }
+            }
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-1");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(DiscriminatedUnionEntity);
+      expect(results[0].payment).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z")
+        },
+        amount: 99.99,
+        note: "test"
+      });
+    });
+
+    it("deserializes crypto variant correctly (no date fields)", async () => {
+      expect.assertions(2);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-2",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-2",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "crypto",
+                walletAddress: "0xabc",
+                network: "ethereum"
+              },
+              amount: 50
+            },
+            NullableUnion: {}
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-2");
+
+      expect(results).toHaveLength(1);
+      expect(results[0].payment.method).toEqual({
+        type: "crypto",
+        walletAddress: "0xabc",
+        network: "ethereum"
+      });
+    });
+
+    it("supports type narrowing on query results", async () => {
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "DiscriminatedUnionEntity#du-q-3",
+            SK: "DiscriminatedUnionEntity",
+            Id: "du-q-3",
+            Type: "DiscriminatedUnionEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Payment: {
+              method: {
+                type: "creditCard",
+                cardNumber: "4111",
+                expiry: "12/25",
+                expiryDate: "2024-06-15T12:00:00.000Z"
+              },
+              amount: 100
+            },
+            NullableUnion: {}
+          }
+        ]
+      });
+
+      const results = await DiscriminatedUnionEntity.query("du-q-3");
+      const entity = results[0];
+
+      if (entity.payment.method.type === "creditCard") {
+        // @ts-expect-no-error: after narrowing, cardNumber is accessible
+        const card: string = entity.payment.method.cardNumber;
+        Logger.log(card);
+
+        // @ts-expect-error: after narrowing, bankName is not accessible
+        const bankName: string = entity.payment.method.bankName;
+        Logger.log(bankName);
+      }
+
+      if (entity.payment.method.type === "crypto") {
+        // @ts-expect-no-error: after narrowing, network is accessible
+        const net: "ethereum" | "bitcoin" | "solana" =
+          entity.payment.method.network;
+        Logger.log(net);
+      }
     });
   });
 });

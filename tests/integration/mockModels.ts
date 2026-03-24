@@ -791,6 +791,54 @@ class SponsorFestival extends JoinTable<Sponsor, Festival> {
   public readonly festivalId: ForeignKey;
 }
 
+const paymentSchema = {
+  method: {
+    type: "discriminatedUnion",
+    discriminator: "type",
+    variants: {
+      creditCard: {
+        cardNumber: { type: "string" },
+        expiry: { type: "string" },
+        expiryDate: { type: "date" }
+      },
+      bankTransfer: {
+        bankName: { type: "string" },
+        accountNumber: { type: "string" },
+        routingNumber: { type: "string" }
+      },
+      crypto: {
+        walletAddress: { type: "string" },
+        network: { type: "enum", values: ["ethereum", "bitcoin", "solana"] }
+      }
+    }
+  },
+  amount: { type: "number" },
+  note: { type: "string", nullable: true }
+} as const satisfies ObjectSchema;
+
+const nullableUnionSchema = {
+  preference: {
+    type: "discriminatedUnion",
+    discriminator: "channel",
+    variants: {
+      email: { address: { type: "string" } },
+      sms: { phoneNumber: { type: "string" } }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class DiscriminatedUnionEntity extends MockTable {
+  declare readonly type: "DiscriminatedUnionEntity";
+
+  @ObjectAttribute({ alias: "Payment", schema: paymentSchema })
+  public payment: InferObjectSchema<typeof paymentSchema>;
+
+  @ObjectAttribute({ alias: "NullableUnion", schema: nullableUnionSchema })
+  public nullableUnion: InferObjectSchema<typeof nullableUnionSchema>;
+}
+
 export {
   // Schemas
   addressSchema,
@@ -801,6 +849,8 @@ export {
   locationSchema,
   inventorySchema,
   dimensionsSchema,
+  paymentSchema,
+  nullableUnionSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -834,6 +884,7 @@ export {
   Sponsor,
   Festival,
   SponsorFestival,
+  DiscriminatedUnionEntity,
   // OtherTable exports
   OtherTable,
   Teacher,

@@ -179,6 +179,53 @@ export interface DateFieldDef {
 }
 
 /**
+ * A schema field definition for a discriminated union type.
+ *
+ * The `discriminator` names the key used to distinguish variants, and `variants`
+ * maps each discriminator value to an {@link ObjectSchema} describing that variant's
+ * fields. The discriminator key is automatically added to each variant's inferred type
+ * as a string literal.
+ *
+ * Unlike {@link ObjectFieldDef}, discriminated union fields **can be nullable** because
+ * they always use full replacement on update rather than document path expressions,
+ * so there is no risk of DynamoDB failing on a missing parent path.
+ *
+ * **Scoping constraints (initial release):**
+ * - Supported at the ObjectAttribute root level and as fields within an ObjectSchema
+ * - Not supported inside array items or nested inside other discriminated unions
+ *
+ * @example
+ * ```typescript
+ * const schema = {
+ *   shape: {
+ *     type: "discriminatedUnion",
+ *     discriminator: "kind",
+ *     variants: {
+ *       circle: { radius: { type: "number" } },
+ *       square: { side: { type: "number" } }
+ *     }
+ *   }
+ * } as const satisfies ObjectSchema;
+ *
+ * type T = InferObjectSchema<typeof schema>;
+ * // { shape: { kind: "circle"; radius: number } | { kind: "square"; side: number } }
+ * ```
+ */
+export interface DiscriminatedUnionFieldDef {
+  /** Must be `"discriminatedUnion"` to indicate a discriminated union field. */
+  type: "discriminatedUnion";
+  /** The key name used to discriminate between variants. */
+  discriminator: string;
+  /**
+   * A record mapping each discriminator value to an {@link ObjectSchema}
+   * describing that variant's fields (excluding the discriminator itself).
+   */
+  variants: Readonly<Record<string, ObjectSchema>>;
+  /** When `true`, the field becomes optional (`T | undefined`). */
+  nullable?: boolean;
+}
+
+/**
  * A field definition within an {@link ObjectSchema}.
  *
  * This is the union of all supported field types:
@@ -187,6 +234,7 @@ export interface DateFieldDef {
  * - {@link ObjectFieldDef} — nested objects via `fields`
  * - {@link ArrayFieldDef} — arrays/lists via `items`
  * - {@link EnumFieldDef} — string literal enums via `values`
+ * - {@link DiscriminatedUnionFieldDef} — discriminated unions via `discriminator` + `variants`
  *
  * Each variant is discriminated by the `type` property.
  */
@@ -195,7 +243,8 @@ export type FieldDef =
   | DateFieldDef
   | ObjectFieldDef
   | ArrayFieldDef
-  | EnumFieldDef;
+  | EnumFieldDef
+  | DiscriminatedUnionFieldDef;
 
 /**
  * Declarative schema for describing the shape of an object attribute.
@@ -220,25 +269,47 @@ export type FieldDef =
 export type ObjectSchema = Record<string, FieldDef>;
 
 /**
+ * Infers the TypeScript type of a {@link DiscriminatedUnionFieldDef}.
+ *
+ * Iterates over the variant keys and for each produces a union member that is
+ * `{ [discriminator]: VariantKey } & InferObjectSchema<VariantSchema>`.
+ *
+ * @example
+ * ```typescript
+ * // Given: discriminator: "kind", variants: { circle: { radius: { type: "number" } }, square: { side: { type: "number" } } }
+ * // Produces: { kind: "circle"; radius: number } | { kind: "square"; side: number }
+ * ```
+ */
+export type InferDiscriminatedUnion<F extends DiscriminatedUnionFieldDef> = {
+  [V in keyof F["variants"] & string]: {
+    [D in F["discriminator"]]: V;
+  } & InferObjectSchema<F["variants"][V]>;
+}[keyof F["variants"] & string];
+
+/**
  * Infers the TypeScript type of a single {@link FieldDef}.
  *
  * Used internally by {@link InferObjectSchema} and for recursive array item inference.
  *
  * Resolution order:
- * 1. {@link ArrayFieldDef} → `Array<InferFieldDef<items>>`
- * 2. {@link ObjectFieldDef} → `InferObjectSchema<fields>`
- * 3. {@link EnumFieldDef} → `values[number]` (string literal union)
- * 4. {@link PrimitiveFieldDef} → `PrimitiveTypeMap[type]`
+ * 1. {@link DiscriminatedUnionFieldDef} → `InferDiscriminatedUnion<F>`
+ * 2. {@link ArrayFieldDef} → `Array<InferFieldDef<items>>`
+ * 3. {@link ObjectFieldDef} → `InferObjectSchema<fields>`
+ * 4. {@link EnumFieldDef} → `values[number]` (string literal union)
+ * 5. {@link PrimitiveFieldDef} → `PrimitiveTypeMap[type]`
  */
-export type InferFieldDef<F extends FieldDef> = F extends ArrayFieldDef
-  ? Array<InferFieldDef<F["items"]>>
-  : F extends ObjectFieldDef
-    ? InferObjectSchema<F["fields"]>
-    : F extends EnumFieldDef
-      ? F["values"][number]
-      : F extends PrimitiveFieldDef
-        ? PrimitiveTypeMap[F["type"]]
-        : never;
+export type InferFieldDef<F extends FieldDef> =
+  F extends DiscriminatedUnionFieldDef
+    ? InferDiscriminatedUnion<F>
+    : F extends ArrayFieldDef
+      ? Array<InferFieldDef<F["items"]>>
+      : F extends ObjectFieldDef
+        ? InferObjectSchema<F["fields"]>
+        : F extends EnumFieldDef
+          ? F["values"][number]
+          : F extends PrimitiveFieldDef
+            ? PrimitiveTypeMap[F["type"]]
+            : never;
 
 /**
  * Infers the TypeScript type from an {@link ObjectSchema} definition.

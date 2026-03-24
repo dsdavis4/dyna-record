@@ -2399,6 +2399,74 @@ describe("TableMetadata", () => {
                 joinTableName: "SponsorFestival"
               }
             }
+          },
+          DiscriminatedUnionEntity: {
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              payment: {
+                name: "payment",
+                alias: "Payment",
+                nullable: false
+              },
+              nullableUnion: {
+                name: "nullableUnion",
+                alias: "NullableUnion",
+                nullable: false
+              }
+            },
+            relationships: {},
+            tableAttributes: {
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              NullableUnion: {
+                name: "nullableUnion",
+                alias: "NullableUnion",
+                nullable: false
+              },
+              Payment: {
+                name: "payment",
+                alias: "Payment",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              }
+            },
+            tableClassName: "MockTable"
           }
         }
       });

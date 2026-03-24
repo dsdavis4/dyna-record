@@ -50,6 +50,13 @@ export function flattenObjectForUpdate(
       continue;
     }
 
+    if (fieldDef.type === "discriminatedUnion") {
+      // Discriminated unions always use full replacement
+      const serialized = convertFieldToTableItem(fieldDef, val);
+      ops.push({ type: "set", path: fieldPath, value: serialized });
+      continue;
+    }
+
     // Primitives, arrays, dates, enums → serialize and SET
     const serialized = convertFieldToTableItem(fieldDef, val);
     ops.push({ type: "set", path: fieldPath, value: serialized });

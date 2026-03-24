@@ -13,10 +13,12 @@ export * from "./serializers";
 export type {
   ObjectSchema,
   InferObjectSchema,
+  InferDiscriminatedUnion,
   FieldDef,
   PrimitiveFieldDef,
   ObjectFieldDef,
   ArrayFieldDef,
   EnumFieldDef,
-  DateFieldDef
+  DateFieldDef,
+  DiscriminatedUnionFieldDef
 } from "./types";

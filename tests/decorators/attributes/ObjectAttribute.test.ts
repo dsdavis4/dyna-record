@@ -11,10 +11,13 @@ import {
   MyClassWithAllAttributeTypes,
   contactSchema,
   addressSchema,
-  ArrayOfObjectsEntity
+  ArrayOfObjectsEntity,
+  DiscriminatedUnionEntity,
+  paymentSchema,
+  nullableUnionSchema
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
-import { ZodObject } from "zod";
+import { ZodObject, ZodDiscriminatedUnion } from "zod";
 
 const testSchema = {
   name: { type: "string" },
@@ -591,6 +594,411 @@ describe("ObjectAttribute", () => {
         // @ts-expect-error: array item must be Date, not number
         const badNumbers: Inferred = { timestamps: [1234567890] };
       });
+    });
+
+    describe("discriminated union fields", () => {
+      it("supports discriminated union fields in schema", () => {
+        const duSchema = {
+          shape: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              circle: { radius: { type: "number" } },
+              square: { side: { type: "number" } }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        @Entity
+        class ModelDU extends MockTable {
+          declare readonly type: "ModelDU";
+          // @ts-expect-no-error: discriminated union infers correct type
+          @ObjectAttribute({ schema: duSchema })
+          public key1: InferObjectSchema<typeof duSchema>;
+        }
+      });
+
+      it("infers correct discriminated union type", () => {
+        const duSchema = {
+          shape: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              circle: { radius: { type: "number" } },
+              square: { side: { type: "number" } }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof duSchema>;
+
+        // @ts-expect-no-error: circle variant is valid
+        const circle: Inferred = { shape: { kind: "circle", radius: 5 } };
+
+        // @ts-expect-no-error: square variant is valid
+        const square: Inferred = { shape: { kind: "square", side: 10 } };
+
+        // @ts-expect-error: invalid discriminator value
+        const bad: Inferred = { shape: { kind: "triangle", sides: 3 } };
+      });
+
+      it("supports type narrowing via discriminator check", () => {
+        const duSchema = {
+          shape: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              circle: { radius: { type: "number" } },
+              square: { side: { type: "number" } }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof duSchema>;
+        const val: Inferred = { shape: { kind: "circle", radius: 5 } };
+
+        if (val.shape.kind === "circle") {
+          // @ts-expect-no-error: after narrowing, radius is accessible
+          const r: number = val.shape.radius;
+        }
+
+        if (val.shape.kind === "square") {
+          // @ts-expect-no-error: after narrowing, side is accessible
+          const s: number = val.shape.side;
+        }
+      });
+
+      it("supports nullable discriminated union fields", () => {
+        const duSchema = {
+          pref: {
+            type: "discriminatedUnion",
+            discriminator: "channel",
+            variants: {
+              email: { address: { type: "string" } },
+              sms: { phone: { type: "string" } }
+            },
+            nullable: true
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof duSchema>;
+
+        // @ts-expect-no-error: nullable discriminated union accepts undefined
+        const withUndefined: Inferred = { pref: undefined };
+
+        // @ts-expect-no-error: nullable discriminated union accepts value
+        const withValue: Inferred = {
+          pref: { channel: "email", address: "a@b.com" }
+        };
+
+        // @ts-expect-no-error: can omit nullable field entirely
+        const withoutField: Inferred = {};
+      });
+
+      it("supports discriminated union inside nested objects", () => {
+        const nestedDUSchema = {
+          config: {
+            type: "object",
+            fields: {
+              notification: {
+                type: "discriminatedUnion",
+                discriminator: "method",
+                variants: {
+                  push: { token: { type: "string" } },
+                  email: { address: { type: "string" } }
+                }
+              }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof nestedDUSchema>;
+
+        // @ts-expect-no-error: nested discriminated union works
+        const good: Inferred = {
+          config: { notification: { method: "push", token: "abc123" } }
+        };
+
+        const bad: Inferred = {
+          // @ts-expect-error: wrong variant field - push expects token not address
+          config: { notification: { method: "push", address: "a@b.com" } }
+        };
+      });
+
+      it("supports variants with dates, enums, and nested objects", () => {
+        const complexDUSchema = {
+          event: {
+            type: "discriminatedUnion",
+            discriminator: "type",
+            variants: {
+              meeting: {
+                startTime: { type: "date" },
+                location: {
+                  type: "object",
+                  fields: { room: { type: "string" } }
+                }
+              },
+              deadline: {
+                dueDate: { type: "date" },
+                priority: {
+                  type: "enum",
+                  values: ["low", "medium", "high"]
+                }
+              }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof complexDUSchema>;
+
+        // @ts-expect-no-error: meeting variant with Date and nested object
+        const meeting: Inferred = {
+          event: {
+            type: "meeting",
+            startTime: new Date(),
+            location: { room: "A1" }
+          }
+        };
+
+        // @ts-expect-no-error: deadline variant with Date and enum
+        const deadline: Inferred = {
+          event: { type: "deadline", dueDate: new Date(), priority: "high" }
+        };
+
+        const badPriority: Inferred = {
+          event: {
+            type: "deadline",
+            dueDate: new Date(),
+            // @ts-expect-error: invalid enum value
+            priority: "urgent"
+          }
+        };
+      });
+
+      it("rejects wrong schema/type mismatch", () => {
+        const duSchema = {
+          shape: {
+            type: "discriminatedUnion",
+            discriminator: "kind",
+            variants: {
+              circle: { radius: { type: "number" } },
+              square: { side: { type: "number" } }
+            }
+          }
+        } as const satisfies ObjectSchema;
+
+        const otherSchema = {
+          name: { type: "string" }
+        } as const satisfies ObjectSchema;
+
+        @Entity
+        class ModelBad extends MockTable {
+          declare readonly type: "ModelBad";
+          // @ts-expect-error: schema and type don't match
+          @ObjectAttribute({ schema: duSchema })
+          public key1: InferObjectSchema<typeof otherSchema>;
+        }
+      });
+    });
+  });
+
+  describe("discriminated union metadata", () => {
+    it("creates attribute metadata with ZodDiscriminatedUnion type for discriminated union fields", () => {
+      expect.assertions(1);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      expect(attr).toEqual({
+        name: "payment",
+        alias: "Payment",
+        nullable: false,
+        type: expect.any(ZodObject),
+        partialType: expect.any(ZodObject),
+        objectSchema: paymentSchema,
+        serializers: {
+          toTableAttribute: expect.any(Function),
+          toEntityAttribute: expect.any(Function)
+        }
+      });
+    });
+
+    it("serializers handle discriminated union with date fields (toTableAttribute)", () => {
+      expect.assertions(2);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const testDate = new Date("2024-06-15T12:00:00.000Z");
+      const input = {
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: testDate
+        },
+        amount: 100,
+        note: "test"
+      };
+
+      expect(attr.serializers).toBeDefined();
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: "2024-06-15T12:00:00.000Z"
+        },
+        amount: 100,
+        note: "test"
+      });
+    });
+
+    it("serializers handle discriminated union with date fields (toEntityAttribute)", () => {
+      expect.assertions(2);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const input = {
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: "2024-06-15T12:00:00.000Z"
+        },
+        amount: 100,
+        note: "test"
+      };
+
+      expect(attr.serializers).toBeDefined();
+      expect(attr.serializers?.toEntityAttribute(input)).toEqual({
+        method: {
+          type: "creditCard",
+          cardNumber: "4111",
+          expiry: "12/25",
+          expiryDate: new Date("2024-06-15T12:00:00.000Z")
+        },
+        amount: 100,
+        note: "test"
+      });
+    });
+
+    it("serializers handle different variants correctly", () => {
+      expect.assertions(1);
+
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const input = {
+        method: {
+          type: "crypto",
+          walletAddress: "0xabc",
+          network: "ethereum"
+        },
+        amount: 50
+      };
+
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        method: {
+          type: "crypto",
+          walletAddress: "0xabc",
+          network: "ethereum"
+        },
+        amount: 50
+      });
+    });
+
+    it("Zod full schema validates discriminated union variants", () => {
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const zodSchema = attr.type;
+
+      // Valid: creditCard variant
+      expect(
+        zodSchema.safeParse({
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date()
+          },
+          amount: 100
+        }).success
+      ).toBe(true);
+
+      // Valid: bankTransfer variant
+      expect(
+        zodSchema.safeParse({
+          method: {
+            type: "bankTransfer",
+            bankName: "Chase",
+            accountNumber: "123",
+            routingNumber: "456"
+          },
+          amount: 50
+        }).success
+      ).toBe(true);
+
+      // Invalid: unknown variant
+      expect(
+        zodSchema.safeParse({
+          method: { type: "paypal", email: "a@b.com" },
+          amount: 50
+        }).success
+      ).toBe(false);
+
+      // Invalid: missing discriminator
+      expect(
+        zodSchema.safeParse({
+          method: { cardNumber: "4111", expiry: "12/25" },
+          amount: 50
+        }).success
+      ).toBe(false);
+
+      // Invalid: wrong fields for variant
+      expect(
+        zodSchema.safeParse({
+          method: { type: "creditCard", bankName: "Chase" },
+          amount: 50
+        }).success
+      ).toBe(false);
+    });
+
+    it("Zod partial schema requires complete variant (full replacement)", () => {
+      const attr = Metadata.getEntityAttributes(
+        DiscriminatedUnionEntity.name
+      ).payment;
+
+      const partialSchema = attr.partialType!;
+
+      // Valid: complete variant in partial update context
+      expect(
+        partialSchema.safeParse({
+          method: {
+            type: "creditCard",
+            cardNumber: "4111",
+            expiry: "12/25",
+            expiryDate: new Date()
+          }
+        }).success
+      ).toBe(true);
+
+      // Valid: only non-union fields
+      expect(partialSchema.safeParse({ amount: 200 }).success).toBe(true);
+
+      // Invalid: union field without discriminator
+      expect(
+        partialSchema.safeParse({
+          method: { cardNumber: "4111" }
+        }).success
+      ).toBe(false);
     });
   });
 });

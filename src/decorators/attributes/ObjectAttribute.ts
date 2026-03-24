@@ -5,7 +5,12 @@ import type {
   AttributeDecoratorContext,
   NonNullAttributeOptions
 } from "../types";
-import type { ObjectSchema, InferObjectSchema, FieldDef } from "./types";
+import type {
+  ObjectSchema,
+  InferObjectSchema,
+  FieldDef,
+  DiscriminatedUnionFieldDef
+} from "./types";
 import { createObjectSerializer } from "./serializers";
 
 /**
@@ -62,10 +67,17 @@ function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
  * Converts a single {@link FieldDef} to the corresponding partial Zod type.
  * Nested objects use partial schemas; all other types use the standard schema.
  * Object fields are never nullable — they always exist as at least `{}`.
+ * Discriminated union fields use the full schema (not partial) since they
+ * always use full replacement on update.
  */
 function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
   if (fieldDef.type === "object") {
     return objectSchemaToZodPartial(fieldDef.fields);
+  }
+
+  if (fieldDef.type === "discriminatedUnion") {
+    // Discriminated unions use full replacement — same schema as create
+    return discriminatedUnionToZod(fieldDef);
   }
 
   // For non-object fields, use the standard schema (includes nullable wrapping)
@@ -89,11 +101,46 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 }
 
 /**
+ * Builds a Zod `discriminatedUnion` schema from a {@link DiscriminatedUnionFieldDef}.
+ *
+ * Each variant's ObjectSchema is converted to a `z.object()` and extended with a
+ * `z.literal()` for the discriminator key. The resulting schemas are wrapped in
+ * `z.discriminatedUnion()`.
+ *
+ * @param fieldDef The discriminated union field definition
+ * @returns A ZodType that validates discriminated union values
+ */
+function discriminatedUnionToZod(
+  fieldDef: DiscriminatedUnionFieldDef
+): ZodType {
+  const variantSchemas = Object.entries(fieldDef.variants).map(
+    ([variantKey, variantObjectSchema]) => {
+      const variantZod = objectSchemaToZod(variantObjectSchema) as z.ZodObject;
+      return variantZod.extend({
+        [fieldDef.discriminator]: z.literal(variantKey)
+      });
+    }
+  );
+
+  let zodType: ZodType = z.discriminatedUnion(
+    fieldDef.discriminator,
+    variantSchemas as [z.ZodObject, z.ZodObject, ...z.ZodObject[]]
+  );
+
+  if (fieldDef.nullable === true) {
+    zodType = zodType.optional().nullable();
+  }
+
+  return zodType;
+}
+
+/**
  * Converts a single {@link FieldDef} to the corresponding Zod type for runtime validation.
  *
  * Handles all field types:
  * - `"object"` → recursively builds a `z.object()` via {@link objectSchemaToZod}.
  *   Object fields are never nullable — DynamoDB requires them to exist for document path updates.
+ * - `"discriminatedUnion"` → `z.discriminatedUnion()` via {@link discriminatedUnionToZod}
  * - `"array"` → `z.array()` wrapping a recursive call for the `items` type
  * - `"string"` → `z.string()`
  * - `"number"` → `z.number()`
@@ -109,6 +156,11 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
   // Object fields return early — they are never nullable
   if (fieldDef.type === "object") {
     return objectSchemaToZod(fieldDef.fields);
+  }
+
+  // Discriminated union fields handle their own nullable wrapping
+  if (fieldDef.type === "discriminatedUnion") {
+    return discriminatedUnionToZod(fieldDef);
   }
 
   let zodType: ZodType;
