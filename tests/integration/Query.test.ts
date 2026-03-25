@@ -6,6 +6,7 @@ import {
   Customer,
   DeepNestedEntity,
   DiscriminatedUnionEntity,
+  ArrayOfUnionsEntity,
   Employee,
   Festival,
   Founder,
@@ -4382,6 +4383,174 @@ describe("Query", () => {
           filter: { "payment.method.network": ["ethereum", "bitcoin"] }
         }).catch(() => {});
       });
+    });
+  });
+
+  describe("array of discriminated unions", () => {
+    it("deserializes array of discriminated union items with date conversion", async () => {
+      expect.assertions(3);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "ArrayOfUnionsEntity#aou-q-1",
+            SK: "ArrayOfUnionsEntity",
+            Id: "aou-q-1",
+            Type: "ArrayOfUnionsEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Dashboard: {
+              title: "Daily Report",
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  value: 420,
+                  format: "currency",
+                  trend: "flat"
+                },
+                {
+                  type: "date-marker",
+                  date: "2024-06-15T12:00:00.000Z",
+                  label: "Start"
+                }
+              ]
+            }
+          }
+        ]
+      });
+
+      const results = await ArrayOfUnionsEntity.query("aou-q-1");
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(ArrayOfUnionsEntity);
+      expect(results[0].dashboard).toEqual({
+        title: "Daily Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "date-marker",
+            date: new Date("2024-06-15T12:00:00.000Z"),
+            label: "Start"
+          }
+        ]
+      });
+    });
+
+    it("deserializes array of union items without date fields", async () => {
+      expect.assertions(2);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "ArrayOfUnionsEntity#aou-q-2",
+            SK: "ArrayOfUnionsEntity",
+            Id: "aou-q-2",
+            Type: "ArrayOfUnionsEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Dashboard: {
+              title: "Simple",
+              widgets: [
+                {
+                  type: "narrative-block",
+                  body: "All good.",
+                  tone: "positive"
+                }
+              ]
+            }
+          }
+        ]
+      });
+
+      const results = await ArrayOfUnionsEntity.query("aou-q-2");
+
+      expect(results).toHaveLength(1);
+      expect(results[0].dashboard.widgets[0]).toEqual({
+        type: "narrative-block",
+        body: "All good.",
+        tone: "positive"
+      });
+    });
+
+    it("deserializes empty array of union items", async () => {
+      expect.assertions(1);
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "ArrayOfUnionsEntity#aou-q-3",
+            SK: "ArrayOfUnionsEntity",
+            Id: "aou-q-3",
+            Type: "ArrayOfUnionsEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Dashboard: {
+              title: "Empty",
+              widgets: []
+            }
+          }
+        ]
+      });
+
+      const results = await ArrayOfUnionsEntity.query("aou-q-3");
+
+      expect(results[0].dashboard.widgets).toEqual([]);
+    });
+
+    it("supports type narrowing on query results for array union items", async () => {
+      mockQuery.mockResolvedValueOnce({
+        Items: [
+          {
+            PK: "ArrayOfUnionsEntity#aou-q-4",
+            SK: "ArrayOfUnionsEntity",
+            Id: "aou-q-4",
+            Type: "ArrayOfUnionsEntity",
+            CreatedAt: "2023-10-16T03:31:35.918Z",
+            UpdatedAt: "2023-10-16T03:31:35.918Z",
+            Dashboard: {
+              title: "Report",
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Rev",
+                  value: 100,
+                  format: "currency"
+                }
+              ]
+            }
+          }
+        ]
+      });
+
+      const results = await ArrayOfUnionsEntity.query("aou-q-4");
+      const widget = results[0].dashboard.widgets[0];
+
+      if (widget.type === "metric-card") {
+        // @ts-expect-no-error: after narrowing, label is accessible
+        const label: string = widget.label;
+        Logger.log(label);
+
+        // @ts-expect-error: after narrowing, body is not accessible
+        const body: string = widget.body;
+        Logger.log(body);
+      }
+
+      if (widget.type === "date-marker") {
+        // @ts-expect-no-error: after narrowing, date is accessible
+        const d: Date = widget.date;
+        Logger.log(d);
+
+        // @ts-expect-error: after narrowing, value is not accessible
+        const v: number = widget.value;
+        Logger.log(v);
+      }
     });
   });
 });

@@ -13,8 +13,10 @@ import {
   addressSchema,
   ArrayOfObjectsEntity,
   DiscriminatedUnionEntity,
+  ArrayOfUnionsEntity,
   paymentSchema,
-  nullableUnionSchema
+  nullableUnionSchema,
+  arrayOfUnionsSchema
 } from "../../integration/mockModels";
 import Metadata from "../../../src/metadata";
 import { ZodObject, ZodDiscriminatedUnion } from "zod";
@@ -800,20 +802,29 @@ describe("ObjectAttribute", () => {
         }
       });
 
-      it("does not allow discriminated union as array items", () => {
-        const badSchema = {
+      it("allows discriminated union as array items", () => {
+        const schema = {
           items: {
             type: "array",
             items: {
-              // @ts-expect-error: "discriminatedUnion" is not assignable to NonUnionFieldDef
               type: "discriminatedUnion",
               discriminator: "kind",
               variants: {
-                a: { val: { type: "string" } }
+                a: { val: { type: "string" } },
+                b: { num: { type: "number" } }
               }
             }
           }
         } as const satisfies ObjectSchema;
+
+        type Inferred = InferObjectSchema<typeof schema>;
+        const val: Inferred = {
+          items: [
+            { kind: "a", val: "hello" },
+            { kind: "b", num: 42 }
+          ]
+        };
+        expect(val.items).toHaveLength(2);
       });
 
       it("does not allow discriminated union nested inside another discriminated union variant", () => {
@@ -1238,6 +1249,198 @@ describe("ObjectAttribute", () => {
           amount: 100
         }).success
       ).toBe(true);
+    });
+
+    it("supports arrays of discriminated unions in type inference", () => {
+      type Dashboard = InferObjectSchema<typeof arrayOfUnionsSchema>;
+
+      const dashboard: Dashboard = {
+        title: "Daily Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "narrative-block",
+            body: "Steady day.",
+            tone: "neutral"
+          },
+          {
+            type: "date-marker",
+            date: new Date("2024-06-15")
+          }
+        ]
+      };
+
+      expect(dashboard.widgets).toHaveLength(3);
+    });
+
+    it("serializers handle arrays of discriminated unions (toTableAttribute)", () => {
+      expect.assertions(1);
+
+      const attr = Metadata.getEntityAttributes(
+        ArrayOfUnionsEntity.name
+      ).dashboard;
+
+      const input = {
+        title: "Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "date-marker",
+            date: new Date("2024-06-15T12:00:00.000Z"),
+            label: "Start"
+          }
+        ]
+      };
+
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        title: "Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "date-marker",
+            date: "2024-06-15T12:00:00.000Z",
+            label: "Start"
+          }
+        ]
+      });
+    });
+
+    it("serializers handle arrays of discriminated unions (toEntityAttribute)", () => {
+      expect.assertions(1);
+
+      const attr = Metadata.getEntityAttributes(
+        ArrayOfUnionsEntity.name
+      ).dashboard;
+
+      const tableItem = {
+        title: "Report",
+        widgets: [
+          {
+            type: "narrative-block",
+            body: "All good.",
+            tone: "positive"
+          },
+          {
+            type: "date-marker",
+            date: "2024-06-15T12:00:00.000Z"
+          }
+        ]
+      };
+
+      expect(attr.serializers?.toEntityAttribute(tableItem)).toEqual({
+        title: "Report",
+        widgets: [
+          {
+            type: "narrative-block",
+            body: "All good.",
+            tone: "positive"
+          },
+          {
+            type: "date-marker",
+            date: new Date("2024-06-15T12:00:00.000Z")
+          }
+        ]
+      });
+    });
+
+    it("Zod schema validates arrays of discriminated unions", () => {
+      const attr = Metadata.getEntityAttributes(
+        ArrayOfUnionsEntity.name
+      ).dashboard;
+
+      const zodSchema = attr.type;
+
+      // Valid: array with mixed variants
+      expect(
+        zodSchema.safeParse({
+          title: "Report",
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Rev",
+              value: 100,
+              format: "currency"
+            },
+            {
+              type: "narrative-block",
+              body: "Good",
+              tone: "neutral"
+            }
+          ]
+        }).success
+      ).toBe(true);
+
+      // Valid: empty array
+      expect(zodSchema.safeParse({ title: "Empty", widgets: [] }).success).toBe(
+        true
+      );
+
+      // Invalid: unknown variant in array
+      expect(
+        zodSchema.safeParse({
+          title: "Bad",
+          widgets: [{ type: "unknown-widget", foo: "bar" }]
+        }).success
+      ).toBe(false);
+
+      // Invalid: missing required field in variant
+      expect(
+        zodSchema.safeParse({
+          title: "Bad",
+          widgets: [{ type: "metric-card", label: "Rev" }]
+        }).success
+      ).toBe(false);
+    });
+
+    it("serializers strip null nullable fields in array of union items", () => {
+      expect.assertions(1);
+
+      const attr = Metadata.getEntityAttributes(
+        ArrayOfUnionsEntity.name
+      ).dashboard;
+
+      const input = {
+        title: "Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: null
+          }
+        ]
+      };
+
+      expect(attr.serializers?.toTableAttribute(input)).toEqual({
+        title: "Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency"
+          }
+        ]
+      });
     });
 
     it("serializers pass through discriminated union with unknown discriminator value", () => {

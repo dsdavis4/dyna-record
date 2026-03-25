@@ -829,6 +829,45 @@ const nullableUnionSchema = {
   }
 } as const satisfies ObjectSchema;
 
+const arrayOfUnionsSchema = {
+  widgets: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "type",
+      variants: {
+        "metric-card": {
+          label: { type: "string" },
+          value: { type: "number" },
+          format: { type: "enum", values: ["currency", "number", "percent"] },
+          trend: {
+            type: "enum",
+            values: ["up", "down", "flat"],
+            nullable: true
+          }
+        },
+        "narrative-block": {
+          body: { type: "string" },
+          tone: { type: "enum", values: ["positive", "neutral", "negative"] }
+        },
+        "date-marker": {
+          date: { type: "date" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    }
+  },
+  title: { type: "string" }
+} as const satisfies ObjectSchema;
+
+@Entity
+class ArrayOfUnionsEntity extends MockTable {
+  declare readonly type: "ArrayOfUnionsEntity";
+
+  @ObjectAttribute({ alias: "Dashboard", schema: arrayOfUnionsSchema })
+  public dashboard: InferObjectSchema<typeof arrayOfUnionsSchema>;
+}
+
 @Entity
 class DiscriminatedUnionEntity extends MockTable {
   declare readonly type: "DiscriminatedUnionEntity";
@@ -852,6 +891,7 @@ export {
   dimensionsSchema,
   paymentSchema,
   nullableUnionSchema,
+  arrayOfUnionsSchema,
   // MockTable exports
   MockTable,
   Order,
@@ -885,6 +925,7 @@ export {
   Sponsor,
   Festival,
   SponsorFestival,
+  ArrayOfUnionsEntity,
   DiscriminatedUnionEntity,
   // OtherTable exports
   OtherTable,
