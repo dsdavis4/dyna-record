@@ -1,3 +1,14 @@
+## 0.6.5 - 2026-03-24
+
+### Added
+
+- **Discriminated unions as array items:** `ArrayFieldDef.items` now accepts `FieldDef` (previously `NonUnionFieldDef`), allowing `{ type: "array", items: { type: "discriminatedUnion", ... } }`. Arrays of discriminated unions use full replacement on update, and each item is serialized and deserialized using variant-aware logic.
+
+### Changed
+
+- **`NonUnionFieldDef` scope narrowed:** `NonUnionFieldDef` is now only used for `DiscriminatedUnionFieldDef.variants` (preventing DU-inside-DU nesting). It is no longer used for `ArrayFieldDef.items`.
+- **DRY refactor of serializer DU handling:** Extracted shared discriminated union conversion logic into `convertDiscriminatedUnion` helper, used by both serialization and deserialization paths.
+
 ## 0.6.4 - 2026-03-24
 
 ### Added

@@ -96,12 +96,12 @@ export interface ArrayFieldDef {
   /** Must be `"array"` to indicate a list/array field. */
   type: "array";
   /**
-   * A {@link NonUnionFieldDef} describing the type of each array element.
-   * Discriminated unions are not supported as array items because arrays use
-   * full replacement on update and the variant-aware serialization semantics
-   * are not defined for array item context.
+   * A {@link FieldDef} describing the type of each array element.
+   * All field types are supported as array items, including discriminated unions.
+   * Arrays always use full replacement on update, so discriminated union items
+   * are serialized per-element using variant-aware logic.
    */
-  items: NonUnionFieldDef;
+  items: FieldDef;
   /** When `true`, the field becomes optional. */
   nullable?: boolean;
 }
@@ -203,9 +203,10 @@ export interface DateFieldDef {
  * they always use full replacement on update rather than document path expressions,
  * so there is no risk of DynamoDB failing on a missing parent path.
  *
- * **Scoping constraints (initial release):**
- * - Supported at the ObjectAttribute root level and as fields within an ObjectSchema
- * - Not supported inside array items or nested inside other discriminated unions
+ * **Scoping constraints:**
+ * - Supported at the ObjectAttribute root level, as fields within an ObjectSchema,
+ *   and as array items
+ * - Not supported nested inside other discriminated unions
  *
  * @example
  * ```typescript
@@ -243,8 +244,6 @@ export interface DiscriminatedUnionFieldDef {
  * A field definition that excludes {@link DiscriminatedUnionFieldDef}.
  *
  * Used in contexts where discriminated unions are not allowed:
- * - {@link ArrayFieldDef} `items` — arrays use full replacement and variant-aware
- *   serialization is not defined for array item context
  * - {@link DiscriminatedUnionFieldDef} `variants` — discriminated unions cannot
  *   be nested inside other discriminated unions
  */

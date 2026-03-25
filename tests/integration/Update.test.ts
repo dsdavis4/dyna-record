@@ -31,7 +31,8 @@ import {
   Warehouse,
   ArrayOfObjectsEntity,
   DeepNestedEntity,
-  DiscriminatedUnionEntity
+  DiscriminatedUnionEntity,
+  ArrayOfUnionsEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
@@ -12070,6 +12071,54 @@ describe("Update", () => {
       ]);
     });
 
+    it("can re-populate nullable discriminated union from null back to a value", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-4", {
+          nullableUnion: {
+            preference: {
+              channel: "email",
+              address: "restored@example.com"
+            }
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#NullableUnion": "NullableUnion",
+                    "#preference": "preference"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":NullableUnion_preference": {
+                      channel: "email",
+                      address: "restored@example.com"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-4",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #NullableUnion.#preference = :NullableUnion_preference"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("updates only non-union fields without touching the union field", async () => {
       expect.assertions(2);
 
@@ -12324,6 +12373,307 @@ describe("Update", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+  });
+
+  describe("array of discriminated unions", () => {
+    beforeEach(() => {
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    it("updates an array of discriminated union items with full replacement", async () => {
+      expect.assertions(2);
+
+      const testDate = new Date("2024-06-15T12:00:00.000Z");
+
+      expect(
+        await ArrayOfUnionsEntity.update("aou-id-1", {
+          dashboard: {
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Revenue",
+                value: 500,
+                format: "currency",
+                trend: "up"
+              },
+              {
+                type: "date-marker",
+                date: testDate,
+                label: "Q2 Start"
+              }
+            ]
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Dashboard": "Dashboard",
+                    "#widgets": "widgets"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Dashboard_widgets": [
+                      {
+                        type: "metric-card",
+                        label: "Revenue",
+                        value: 500,
+                        format: "currency",
+                        trend: "up"
+                      },
+                      {
+                        type: "date-marker",
+                        date: "2024-06-15T12:00:00.000Z",
+                        label: "Q2 Start"
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "ArrayOfUnionsEntity#aou-id-1",
+                    SK: "ArrayOfUnionsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Dashboard.#widgets = :Dashboard_widgets"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can update to an empty array of union items", async () => {
+      expect.assertions(2);
+
+      expect(
+        await ArrayOfUnionsEntity.update("aou-id-2", {
+          dashboard: {
+            widgets: []
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Dashboard": "Dashboard",
+                    "#widgets": "widgets"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Dashboard_widgets": []
+                  },
+                  Key: {
+                    PK: "ArrayOfUnionsEntity#aou-id-2",
+                    SK: "ArrayOfUnionsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Dashboard.#widgets = :Dashboard_widgets"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can update non-array fields without touching the union array", async () => {
+      expect.assertions(2);
+
+      expect(
+        await ArrayOfUnionsEntity.update("aou-id-3", {
+          dashboard: {
+            title: "Updated Title"
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Dashboard": "Dashboard",
+                    "#title": "title"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Dashboard_title": "Updated Title"
+                  },
+                  Key: {
+                    PK: "ArrayOfUnionsEntity#aou-id-3",
+                    SK: "ArrayOfUnionsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Dashboard.#title = :Dashboard_title"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("accepts valid mixed variants in array on update", async () => {
+      // @ts-expect-no-error: mixed valid variants on update
+      await ArrayOfUnionsEntity.update("aou-id-type", {
+        dashboard: {
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Rev",
+              value: 100,
+              format: "currency"
+            },
+            { type: "narrative-block", body: "Good", tone: "neutral" }
+          ]
+        }
+      });
+    });
+
+    it("rejects invalid discriminator value in array item on update", async () => {
+      await ArrayOfUnionsEntity.update("aou-id-type", {
+        dashboard: {
+          widgets: [
+            // @ts-expect-error: "chart" is not a valid discriminator value
+            { type: "chart", data: [1, 2, 3] }
+          ]
+        }
+      }).catch(() => {});
+    });
+
+    it("rejects wrong fields for variant in array item on update", async () => {
+      await ArrayOfUnionsEntity.update("aou-id-type", {
+        dashboard: {
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Rev",
+              value: 100,
+              format: "currency",
+              // @ts-expect-error: body does not exist on metric-card variant
+              body: "Some text"
+            }
+          ]
+        }
+      }).catch(() => {});
+    });
+
+    it("will error if array union item is missing required fields on update", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.update("aou-id-val", {
+          dashboard: {
+            widgets: [
+              {
+                type: "metric-card"
+              } as never
+            ]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["dashboard", "widgets", 0, "label"]
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Invalid input: expected number, received undefined",
+            path: ["dashboard", "widgets", 0, "value"]
+          },
+          {
+            code: "invalid_value",
+            message:
+              'Invalid option: expected one of "currency"|"number"|"percent"',
+            path: ["dashboard", "widgets", 0, "format"],
+            values: ["currency", "number", "percent"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if array union item has an invalid discriminator value on update", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.update("aou-id-val", {
+          dashboard: {
+            widgets: [{ type: "unknown-widget", foo: "bar" } as never]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["dashboard", "widgets", 0, "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if array union item is missing the discriminator key on update", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.update("aou-id-val", {
+          dashboard: {
+            widgets: [{ label: "Rev", value: 100, format: "currency" } as never]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["dashboard", "widgets", 0, "type"],
             message: "Invalid input"
           }
         ]);

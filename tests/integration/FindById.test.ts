@@ -19,7 +19,8 @@ import {
   MyClassWithAllAttributeTypes,
   Warehouse,
   Shipment,
-  DiscriminatedUnionEntity
+  DiscriminatedUnionEntity,
+  ArrayOfUnionsEntity
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -2133,6 +2134,151 @@ describe("FindById", () => {
           // @ts-expect-error: after narrowing, bankName is not accessible
           const bank: string = result.payment.method.bankName;
           Logger.log(bank);
+        }
+      }
+    });
+
+    it("deserializes nullable discriminated union with absent preference key", async () => {
+      expect.assertions(2);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "DiscriminatedUnionEntity#du-find-3",
+          SK: "DiscriminatedUnionEntity",
+          Id: "du-find-3",
+          Type: "DiscriminatedUnionEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Payment: {
+            method: {
+              type: "crypto",
+              walletAddress: "0xabc",
+              network: "ethereum"
+            },
+            amount: 50
+          },
+          NullableUnion: {}
+        }
+      });
+
+      const result = await DiscriminatedUnionEntity.findById("du-find-3");
+
+      expect(result).toBeInstanceOf(DiscriminatedUnionEntity);
+      expect(result?.nullableUnion).toEqual({});
+    });
+  });
+
+  describe("array of discriminated unions", () => {
+    it("deserializes array of discriminated union items with date conversion on findById", async () => {
+      expect.assertions(3);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "ArrayOfUnionsEntity#aou-find-1",
+          SK: "ArrayOfUnionsEntity",
+          Id: "aou-find-1",
+          Type: "ArrayOfUnionsEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Dashboard: {
+            title: "Daily Report",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Revenue",
+                value: 420,
+                format: "currency",
+                trend: "flat"
+              },
+              {
+                type: "narrative-block",
+                body: "Steady day.",
+                tone: "neutral"
+              },
+              {
+                type: "date-marker",
+                date: "2024-06-15T12:00:00.000Z",
+                label: "Start"
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await ArrayOfUnionsEntity.findById("aou-find-1");
+
+      expect(result).toBeInstanceOf(ArrayOfUnionsEntity);
+      expect(result?.dashboard.widgets).toHaveLength(3);
+      expect(result?.dashboard).toEqual({
+        title: "Daily Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "narrative-block",
+            body: "Steady day.",
+            tone: "neutral"
+          },
+          {
+            type: "date-marker",
+            date: new Date("2024-06-15T12:00:00.000Z"),
+            label: "Start"
+          }
+        ]
+      });
+    });
+
+    it("supports type narrowing on findById result for array union items", async () => {
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "ArrayOfUnionsEntity#aou-find-2",
+          SK: "ArrayOfUnionsEntity",
+          Id: "aou-find-2",
+          Type: "ArrayOfUnionsEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Dashboard: {
+            title: "Report",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Rev",
+                value: 100,
+                format: "currency"
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await ArrayOfUnionsEntity.findById("aou-find-2");
+
+      if (result !== undefined) {
+        const widget = result.dashboard.widgets[0];
+
+        if (widget.type === "metric-card") {
+          // @ts-expect-no-error: after narrowing, label is accessible
+          const label: string = widget.label;
+          Logger.log(label);
+
+          // @ts-expect-error: after narrowing, body is not accessible
+          const body: string = widget.body;
+          Logger.log(body);
+        }
+
+        if (widget.type === "date-marker") {
+          // @ts-expect-no-error: after narrowing, date is accessible
+          const d: Date = widget.date;
+          Logger.log(d);
+
+          // @ts-expect-error: after narrowing, value is not accessible
+          const v: number = widget.value;
+          Logger.log(v);
         }
       }
     });

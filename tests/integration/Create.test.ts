@@ -24,7 +24,8 @@ import {
   Shipment,
   DeepNestedEntity,
   ArrayOfObjectsEntity,
-  DiscriminatedUnionEntity
+  DiscriminatedUnionEntity,
+  ArrayOfUnionsEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { v4 as uuidv4 } from "uuid";
@@ -4871,6 +4872,340 @@ describe("Create", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["payment", "method", "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+  });
+
+  describe("array of discriminated unions", () => {
+    it("can create an entity with an array of discriminated union items", async () => {
+      expect.assertions(3);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("aou-uuid-1");
+
+      const testDate = new Date("2024-06-15T12:00:00.000Z");
+
+      const instance = await ArrayOfUnionsEntity.create({
+        dashboard: {
+          title: "Daily Report",
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Revenue",
+              value: 420,
+              format: "currency",
+              trend: "flat"
+            },
+            {
+              type: "narrative-block",
+              body: "Steady day.",
+              tone: "neutral"
+            },
+            {
+              type: "date-marker",
+              date: testDate,
+              label: "Start"
+            }
+          ]
+        }
+      });
+
+      expect(instance).toBeInstanceOf(ArrayOfUnionsEntity);
+      expect(instance.dashboard).toEqual({
+        title: "Daily Report",
+        widgets: [
+          {
+            type: "metric-card",
+            label: "Revenue",
+            value: 420,
+            format: "currency",
+            trend: "flat"
+          },
+          {
+            type: "narrative-block",
+            body: "Steady day.",
+            tone: "neutral"
+          },
+          {
+            type: "date-marker",
+            date: testDate,
+            label: "Start"
+          }
+        ]
+      });
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    Id: "aou-uuid-1",
+                    PK: "ArrayOfUnionsEntity#aou-uuid-1",
+                    SK: "ArrayOfUnionsEntity",
+                    Type: "ArrayOfUnionsEntity",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z",
+                    Dashboard: {
+                      title: "Daily Report",
+                      widgets: [
+                        {
+                          type: "metric-card",
+                          label: "Revenue",
+                          value: 420,
+                          format: "currency",
+                          trend: "flat"
+                        },
+                        {
+                          type: "narrative-block",
+                          body: "Steady day.",
+                          tone: "neutral"
+                        },
+                        {
+                          type: "date-marker",
+                          date: "2024-06-15T12:00:00.000Z",
+                          label: "Start"
+                        }
+                      ]
+                    }
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("can create an entity with an empty array of union items", async () => {
+      expect.assertions(2);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("aou-uuid-2");
+
+      const instance = await ArrayOfUnionsEntity.create({
+        dashboard: {
+          title: "Empty",
+          widgets: []
+        }
+      });
+
+      expect(instance).toBeInstanceOf(ArrayOfUnionsEntity);
+      expect(instance.dashboard.widgets).toEqual([]);
+    });
+
+    it("omits nullable fields when not provided in array union items on create", async () => {
+      expect.assertions(1);
+
+      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedUuidv4.mockReturnValueOnce("aou-uuid-3");
+
+      await ArrayOfUnionsEntity.create({
+        dashboard: {
+          title: "Report",
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Revenue",
+              value: 420,
+              format: "currency"
+            }
+          ]
+        }
+      });
+
+      const calls = mockTransactWriteCommand.mock.calls as any;
+      const putItem = calls[0][0].TransactItems[0].Put.Item;
+      expect(putItem.Dashboard.widgets[0]).toEqual({
+        type: "metric-card",
+        label: "Revenue",
+        value: 420,
+        format: "currency"
+      });
+    });
+
+    describe("types", () => {
+      beforeEach(() => {
+        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedUuidv4.mockReturnValueOnce("aou-uuid-type");
+      });
+
+      it("accepts valid mixed variants in array on create", async () => {
+        // @ts-expect-no-error: mixed valid variants
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Rev",
+                value: 100,
+                format: "currency"
+              },
+              { type: "narrative-block", body: "Good", tone: "neutral" }
+            ]
+          }
+        });
+      });
+
+      it("rejects invalid discriminator value in array item", async () => {
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [
+              // @ts-expect-error: "chart" is not a valid discriminator value
+              { type: "chart", data: [1, 2, 3] }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("rejects wrong fields for variant in array item", async () => {
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Rev",
+                value: 100,
+                format: "currency",
+                // @ts-expect-error: body does not exist on metric-card variant
+                body: "Some text"
+              }
+            ]
+          }
+        }).catch(() => {});
+      });
+
+      it("type narrows discriminated union items in array result", async () => {
+        const result = await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Rev",
+                value: 100,
+                format: "currency"
+              }
+            ]
+          }
+        });
+
+        const widget = result.dashboard.widgets[0];
+        if (widget.type === "metric-card") {
+          // @ts-expect-no-error: after narrowing, label is accessible
+          const label: string = widget.label;
+          Logger.log(label);
+        }
+
+        if (widget.type === "date-marker") {
+          // @ts-expect-no-error: after narrowing, date is accessible
+          const d: Date = widget.date;
+          Logger.log(d);
+        }
+      });
+    });
+
+    it("will error if array union item is missing required fields", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [
+              {
+                type: "metric-card"
+              } as never
+            ]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["dashboard", "widgets", 0, "label"]
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Invalid input: expected number, received undefined",
+            path: ["dashboard", "widgets", 0, "value"]
+          },
+          {
+            code: "invalid_value",
+            message:
+              'Invalid option: expected one of "currency"|"number"|"percent"',
+            path: ["dashboard", "widgets", 0, "format"],
+            values: ["currency", "number", "percent"]
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if array union item has an invalid discriminator value", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [{ type: "unknown-widget", foo: "bar" } as never]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["dashboard", "widgets", 0, "type"],
+            message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+
+    it("will error if array union item is missing the discriminator key", async () => {
+      expect.assertions(5);
+
+      try {
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Report",
+            widgets: [{ label: "Rev", value: 100, format: "currency" } as never]
+          }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_union",
+            errors: [],
+            note: "No matching discriminator",
+            discriminator: "type",
+            path: ["dashboard", "widgets", 0, "type"],
             message: "Invalid input"
           }
         ]);

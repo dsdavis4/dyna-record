@@ -1603,6 +1603,64 @@ describe("TableMetadata", () => {
             },
             relationships: {}
           },
+          ArrayOfUnionsEntity: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              dashboard: {
+                name: "dashboard",
+                alias: "Dashboard",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Dashboard: {
+                name: "dashboard",
+                alias: "Dashboard",
+                nullable: false
+              }
+            },
+            relationships: {}
+          },
           DeepNestedEntity: {
             tableClassName: "MockTable",
             attributes: {
