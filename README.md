@@ -286,10 +286,44 @@ await Drawing.update("123", {
 });
 ```
 
-**Scoping constraints (initial release):**
+##### Arrays of discriminated unions
 
-- Supported at the ObjectAttribute root level and as fields within an ObjectSchema
-- Not supported inside array items or nested inside other discriminated unions
+Discriminated unions can be used as array items. Each element in the array is validated and serialized using variant-aware logic:
+
+```typescript
+const dashboardSchema = {
+  widgets: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "type",
+      variants: {
+        "metric-card": {
+          label: { type: "string" },
+          value: { type: "number" }
+        },
+        chart: {
+          title: { type: "string" },
+          chartType: { type: "enum", values: ["bar", "line", "pie"] }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+// TypeScript infers:
+// dashboard.widgets → Array<
+//   | { type: "metric-card"; label: string; value: number }
+//   | { type: "chart"; title: string; chartType: "bar" | "line" | "pie" }
+// >
+```
+
+Arrays of discriminated unions use **full replacement** on update (the entire array is replaced), consistent with all array fields.
+
+**Scoping constraints:**
+
+- Supported at the ObjectAttribute root level, as fields within an ObjectSchema, and as array items
+- Not supported nested inside other discriminated unions
 
 ### Foreign Keys
 

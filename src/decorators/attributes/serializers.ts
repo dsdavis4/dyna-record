@@ -75,6 +75,28 @@ export function objectToTableItem(
 }
 
 /**
+ * Resolves and converts a discriminated union value using the provided schema
+ * converter function. Shared by both serialization and deserialization paths.
+ */
+function convertDiscriminatedUnion(
+  fieldDef: {
+    discriminator: string;
+    variants: Readonly<Record<string, ObjectSchema>>;
+  },
+  value: Record<string, unknown>,
+  schemaConverter: (
+    schema: ObjectSchema,
+    value: Record<string, unknown>
+  ) => Record<string, unknown>
+): unknown {
+  const variantSchema = resolveVariantSchema(fieldDef, value);
+  if (variantSchema === undefined) return value;
+  const result = schemaConverter(variantSchema, value);
+  result[fieldDef.discriminator] = value[fieldDef.discriminator];
+  return result;
+}
+
+/**
  * Converts a single field value to its DynamoDB table representation based on
  * the field definition.
  *
@@ -102,14 +124,12 @@ export function convertFieldToTableItem(
       return (val as unknown[]).map(item =>
         convertFieldToTableItem(fieldDef.items, item)
       );
-    case "discriminatedUnion": {
-      const value = val as Record<string, unknown>;
-      const variantSchema = resolveVariantSchema(fieldDef, value);
-      if (variantSchema === undefined) return val;
-      const result = objectToTableItem(variantSchema, value);
-      result[fieldDef.discriminator] = value[fieldDef.discriminator];
-      return result;
-    }
+    case "discriminatedUnion":
+      return convertDiscriminatedUnion(
+        fieldDef,
+        val as Record<string, unknown>,
+        objectToTableItem
+      );
     default:
       return val;
   }
@@ -165,14 +185,12 @@ function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
       return (val as unknown[]).map(item =>
         convertFieldToEntityValue(fieldDef.items, item)
       );
-    case "discriminatedUnion": {
-      const value = val as Record<string, unknown>;
-      const variantSchema = resolveVariantSchema(fieldDef, value);
-      if (variantSchema === undefined) return val;
-      const result = tableItemToObject(variantSchema, value);
-      result[fieldDef.discriminator] = value[fieldDef.discriminator];
-      return result;
-    }
+    case "discriminatedUnion":
+      return convertDiscriminatedUnion(
+        fieldDef,
+        val as Record<string, unknown>,
+        tableItemToObject
+      );
     default:
       return val;
   }

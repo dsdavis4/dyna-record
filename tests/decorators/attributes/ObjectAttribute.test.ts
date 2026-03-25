@@ -1251,6 +1251,98 @@ describe("ObjectAttribute", () => {
       ).toBe(true);
     });
 
+    it("serializes date within discriminated union inside nested object (round-trip)", () => {
+      expect.assertions(2);
+
+      const nestedDUSchema = {
+        wrapper: {
+          type: "object",
+          fields: {
+            event: {
+              type: "discriminatedUnion",
+              discriminator: "kind",
+              variants: {
+                meeting: {
+                  startDate: { type: "date" },
+                  title: { type: "string" }
+                },
+                deadline: {
+                  dueDate: { type: "date" }
+                }
+              }
+            }
+          }
+        }
+      } as const satisfies ObjectSchema;
+
+      const serialized = objectToTableItem(nestedDUSchema, {
+        wrapper: {
+          event: {
+            kind: "meeting",
+            startDate: new Date("2024-06-15T12:00:00.000Z"),
+            title: "Standup"
+          }
+        }
+      });
+
+      expect(serialized).toEqual({
+        wrapper: {
+          event: {
+            kind: "meeting",
+            startDate: "2024-06-15T12:00:00.000Z",
+            title: "Standup"
+          }
+        }
+      });
+
+      const deserialized = tableItemToObject(nestedDUSchema, serialized);
+
+      expect(deserialized).toEqual({
+        wrapper: {
+          event: {
+            kind: "meeting",
+            startDate: new Date("2024-06-15T12:00:00.000Z"),
+            title: "Standup"
+          }
+        }
+      });
+    });
+
+    it("supports single-variant discriminated union", () => {
+      expect.assertions(2);
+
+      const singleVariantSchema = {
+        status: {
+          type: "discriminatedUnion",
+          discriminator: "kind",
+          variants: {
+            active: { since: { type: "date" } }
+          }
+        }
+      } as const satisfies ObjectSchema;
+
+      // Verify serialization works with a single variant
+      const serialized = objectToTableItem(singleVariantSchema, {
+        status: { kind: "active", since: new Date("2024-06-15T12:00:00.000Z") }
+      });
+
+      expect(serialized).toEqual({
+        status: {
+          kind: "active",
+          since: "2024-06-15T12:00:00.000Z"
+        }
+      });
+
+      const deserialized = tableItemToObject(singleVariantSchema, serialized);
+
+      expect(deserialized).toEqual({
+        status: {
+          kind: "active",
+          since: new Date("2024-06-15T12:00:00.000Z")
+        }
+      });
+    });
+
     it("supports arrays of discriminated unions in type inference", () => {
       type Dashboard = InferObjectSchema<typeof arrayOfUnionsSchema>;
 

@@ -12071,6 +12071,54 @@ describe("Update", () => {
       ]);
     });
 
+    it("can re-populate nullable discriminated union from null back to a value", async () => {
+      expect.assertions(2);
+
+      expect(
+        await DiscriminatedUnionEntity.update("du-id-4", {
+          nullableUnion: {
+            preference: {
+              channel: "email",
+              address: "restored@example.com"
+            }
+          }
+        })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#NullableUnion": "NullableUnion",
+                    "#preference": "preference"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":NullableUnion_preference": {
+                      channel: "email",
+                      address: "restored@example.com"
+                    }
+                  },
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-id-4",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #NullableUnion.#preference = :NullableUnion_preference"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("updates only non-union fields without touching the union field", async () => {
       expect.assertions(2);
 

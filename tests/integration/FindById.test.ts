@@ -2137,6 +2137,35 @@ describe("FindById", () => {
         }
       }
     });
+
+    it("deserializes nullable discriminated union with absent preference key", async () => {
+      expect.assertions(2);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "DiscriminatedUnionEntity#du-find-3",
+          SK: "DiscriminatedUnionEntity",
+          Id: "du-find-3",
+          Type: "DiscriminatedUnionEntity",
+          CreatedAt: "2023-10-16T03:31:35.918Z",
+          UpdatedAt: "2023-10-16T03:31:35.918Z",
+          Payment: {
+            method: {
+              type: "crypto",
+              walletAddress: "0xabc",
+              network: "ethereum"
+            },
+            amount: 50
+          },
+          NullableUnion: {}
+        }
+      });
+
+      const result = await DiscriminatedUnionEntity.findById("du-find-3");
+
+      expect(result).toBeInstanceOf(DiscriminatedUnionEntity);
+      expect(result?.nullableUnion).toEqual({});
+    });
   });
 
   describe("array of discriminated unions", () => {

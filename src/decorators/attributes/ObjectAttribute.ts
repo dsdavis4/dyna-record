@@ -44,6 +44,21 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
 }
 
 /**
+ * Builds a Zod shape record from an {@link ObjectSchema} using the provided
+ * field converter function. Shared by both full and partial schema builders.
+ */
+function buildZodShape(
+  schema: ObjectSchema,
+  fieldConverter: (fieldDef: FieldDef) => ZodType
+): Record<string, ZodType> {
+  const shape: Record<string, ZodType> = {};
+  for (const [key, fieldDef] of Object.entries(schema)) {
+    shape[key] = fieldConverter(fieldDef);
+  }
+  return shape;
+}
+
+/**
  * Converts an {@link ObjectSchema} to a partial Zod schema for update validation.
  *
  * All fields become optional (can be omitted). Nullable fields accept `null`.
@@ -54,13 +69,7 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
  * @returns A ZodType that validates partial objects matching the schema
  */
 function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
-  const shape: Record<string, ZodType> = {};
-
-  for (const [key, fieldDef] of Object.entries(schema)) {
-    shape[key] = fieldDefToZodPartial(fieldDef);
-  }
-
-  return z.object(shape).partial();
+  return z.object(buildZodShape(schema, fieldDefToZodPartial)).partial();
 }
 
 /**
@@ -71,17 +80,16 @@ function objectSchemaToZodPartial(schema: ObjectSchema): ZodType {
  * always use full replacement on update.
  */
 function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
-  if (fieldDef.type === "object") {
-    return objectSchemaToZodPartial(fieldDef.fields);
+  switch (fieldDef.type) {
+    case "object":
+      return objectSchemaToZodPartial(fieldDef.fields);
+    case "discriminatedUnion":
+      // Discriminated unions use full replacement — same schema as create
+      return discriminatedUnionToZod(fieldDef);
+    default:
+      // For non-object fields, use the standard schema (includes nullable wrapping)
+      return fieldDefToZod(fieldDef);
   }
-
-  if (fieldDef.type === "discriminatedUnion") {
-    // Discriminated unions use full replacement — same schema as create
-    return discriminatedUnionToZod(fieldDef);
-  }
-
-  // For non-object fields, use the standard schema (includes nullable wrapping)
-  return fieldDefToZod(fieldDef);
 }
 
 /**
@@ -91,13 +99,7 @@ function fieldDefToZodPartial(fieldDef: FieldDef): ZodType {
  * @returns A ZodType that validates objects matching the schema
  */
 function objectSchemaToZod(schema: ObjectSchema): ZodType {
-  const shape: Record<string, ZodType> = {};
-
-  for (const [key, fieldDef] of Object.entries(schema)) {
-    shape[key] = fieldDefToZod(fieldDef);
-  }
-
-  return z.object(shape);
+  return z.object(buildZodShape(schema, fieldDefToZod));
 }
 
 /**
@@ -113,11 +115,13 @@ function objectSchemaToZod(schema: ObjectSchema): ZodType {
 function discriminatedUnionToZod(
   fieldDef: DiscriminatedUnionFieldDef
 ): ZodType {
-  if (Object.keys(fieldDef.variants).length === 0) {
+  const variantEntries = Object.entries(fieldDef.variants);
+
+  if (variantEntries.length === 0) {
     throw new Error("DiscriminatedUnionFieldDef requires at least one variant");
   }
 
-  const variantSchemas = Object.entries(fieldDef.variants).map(
+  const variantSchemas = variantEntries.map(
     ([variantKey, variantObjectSchema]) => {
       const variantZod = objectSchemaToZod(variantObjectSchema) as z.ZodObject;
       return variantZod.extend({
@@ -157,14 +161,12 @@ function discriminatedUnionToZod(
  * @returns A ZodType that validates values matching the field definition
  */
 function fieldDefToZod(fieldDef: FieldDef): ZodType {
-  // Object fields return early — they are never nullable
-  if (fieldDef.type === "object") {
-    return objectSchemaToZod(fieldDef.fields);
-  }
-
-  // Discriminated union fields handle their own nullable wrapping
-  if (fieldDef.type === "discriminatedUnion") {
-    return discriminatedUnionToZod(fieldDef);
+  // These types handle their own nullable semantics or are never nullable
+  switch (fieldDef.type) {
+    case "object":
+      return objectSchemaToZod(fieldDef.fields);
+    case "discriminatedUnion":
+      return discriminatedUnionToZod(fieldDef);
   }
 
   let zodType: ZodType;
