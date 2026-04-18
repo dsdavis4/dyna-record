@@ -879,6 +879,35 @@ class DiscriminatedUnionEntity extends MockTable {
   public nullableUnion: InferObjectSchema<typeof nullableUnionSchema>;
 }
 
+@Entity
+class Vendor extends MockTable {
+  declare readonly type: "Vendor";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasOne(() => Discovery, { foreignKey: "vendorId" })
+  public readonly discovery?: Discovery;
+
+  @HasMany(() => Order, { foreignKey: "customerId" })
+  public readonly orders: Order[];
+}
+
+@Entity
+class Discovery extends MockTable {
+  declare readonly type: "Discovery";
+
+  @IdAttribute
+  @ForeignKeyAttribute(() => Vendor, { alias: "VendorId" })
+  public readonly vendorId: ForeignKey<Vendor>;
+
+  @StringAttribute({ alias: "Details" })
+  public readonly details: string;
+
+  @BelongsTo(() => Vendor, { foreignKey: "vendorId" })
+  public readonly vendor: Vendor;
+}
+
 export {
   // Schemas
   addressSchema,
@@ -927,6 +956,8 @@ export {
   SponsorFestival,
   ArrayOfUnionsEntity,
   DiscriminatedUnionEntity,
+  Vendor,
+  Discovery,
   // OtherTable exports
   OtherTable,
   Teacher,

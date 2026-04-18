@@ -1,3 +1,9 @@
+## 0.6.7 - 2026-04-18
+
+### Fixed
+
+- **`findById` with includes now correctly resolves `@IdAttribute` entities:** When a child entity uses `@IdAttribute` (e.g., a foreign key that doubles as its ID), the child's `id` equals the parent's `id`. Previously, `filterQueryResults` used only `id` equality to distinguish the parent from related entities, causing the child to overwrite the parent instead of being added to `relatedEntities`. The parent-detection condition now also checks `res.type === this.EntityClass.name`, correctly disambiguating parent from child even when IDs match. No behavioral change for entities with distinct IDs.
+
 ## 0.6.5 - 2026-03-24
 
 ### Added

@@ -20,7 +20,9 @@ import {
   Warehouse,
   Shipment,
   DiscriminatedUnionEntity,
-  ArrayOfUnionsEntity
+  ArrayOfUnionsEntity,
+  Vendor,
+  Discovery
 } from "./mockModels";
 import {
   DynamoDBDocumentClient,
@@ -1340,6 +1342,112 @@ describe("FindById", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("will resolve a child entity with @IdAttribute (shared ID) when included", async () => {
+      expect.assertions(5);
+
+      const vendorId = "58217330-f0c1-70d3-3395-0d8bd15ff95e";
+
+      const vendor: MockTableEntityTableItem<Vendor> = {
+        PK: `Vendor#${vendorId}`,
+        SK: "Vendor",
+        Id: vendorId,
+        Type: "Vendor",
+        Name: "Test Vendor",
+        CreatedAt: "2023-09-15T04:26:31.148Z",
+        UpdatedAt: "2023-09-15T04:26:31.148Z"
+      };
+
+      const discovery: MockTableEntityTableItem<Discovery> = {
+        PK: `Vendor#${vendorId}`,
+        SK: "Discovery",
+        Id: vendorId,
+        Type: "Discovery",
+        VendorId: vendorId,
+        Details: "Some discovery details",
+        CreatedAt: "2023-09-16T04:26:31.148Z",
+        UpdatedAt: "2023-09-16T04:26:31.148Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [vendor, discovery]
+      });
+
+      const result = await Vendor.findById(vendorId, {
+        include: [{ association: "discovery" }]
+      });
+
+      expect(result).toBeInstanceOf(Vendor);
+      expect(result?.type).toEqual("Vendor");
+      expect(result?.name).toEqual("Test Vendor");
+      expect(result?.discovery).toBeInstanceOf(Discovery);
+      expect(result?.discovery).toEqual({
+        pk: `Vendor#${vendorId}`,
+        sk: "Discovery",
+        id: vendorId,
+        type: "Discovery",
+        vendorId,
+        details: "Some discovery details",
+        createdAt: new Date("2023-09-16T04:26:31.148Z"),
+        updatedAt: new Date("2023-09-16T04:26:31.148Z")
+      });
+    });
+
+    it("will resolve multiple includes where one child shares parent ID via @IdAttribute", async () => {
+      expect.assertions(6);
+
+      const vendorId = "58217330-f0c1-70d3-3395-0d8bd15ff95e";
+
+      const vendor: MockTableEntityTableItem<Vendor> = {
+        PK: `Vendor#${vendorId}`,
+        SK: "Vendor",
+        Id: vendorId,
+        Type: "Vendor",
+        Name: "Test Vendor",
+        CreatedAt: "2023-09-15T04:26:31.148Z",
+        UpdatedAt: "2023-09-15T04:26:31.148Z"
+      };
+
+      const discovery: MockTableEntityTableItem<Discovery> = {
+        PK: `Vendor#${vendorId}`,
+        SK: "Discovery",
+        Id: vendorId,
+        Type: "Discovery",
+        VendorId: vendorId,
+        Details: "Discovery details",
+        CreatedAt: "2023-09-16T04:26:31.148Z",
+        UpdatedAt: "2023-09-16T04:26:31.148Z"
+      };
+
+      const orders: Array<MockTableEntityTableItem<Order>> = [
+        {
+          PK: `Vendor#${vendorId}`,
+          SK: "Order#order-1",
+          Id: "order-1",
+          Type: "Order",
+          CustomerId: vendorId,
+          PaymentMethodId: "pm-1",
+          OrderDate: "2023-10-01T00:00:00.000Z",
+          CreatedAt: "2023-10-01T00:00:00.000Z",
+          UpdatedAt: "2023-10-01T00:00:00.000Z"
+        }
+      ];
+
+      mockQuery.mockResolvedValueOnce({
+        Items: [vendor, discovery, ...orders]
+      });
+
+      const result = await Vendor.findById(vendorId, {
+        include: [{ association: "discovery" }, { association: "orders" }]
+      });
+
+      expect(result).toBeInstanceOf(Vendor);
+      expect(result?.type).toEqual("Vendor");
+      expect(result?.discovery).toBeDefined();
+      expect(result?.discovery).toBeInstanceOf(Discovery);
+      expect(result?.discovery?.details).toEqual("Discovery details");
+      expect(result?.orders).toHaveLength(1);
     });
 
     it("will serialize object attributes on included related entities", async () => {

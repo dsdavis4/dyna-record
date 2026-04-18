@@ -129,7 +129,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
   ): SortedQueryResults {
     return queryResults.reduce<SortedQueryResults>(
       (acc, res) => {
-        if (entityId === res.id) {
+        if (entityId === res.id && res.type === this.EntityClass.name) {
           acc.entity = res;
         } else {
           acc.relatedEntities.push(res);

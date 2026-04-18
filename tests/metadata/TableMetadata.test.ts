@@ -2525,6 +2525,155 @@ describe("TableMetadata", () => {
               }
             },
             tableClassName: "MockTable"
+          },
+          Vendor: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false
+              }
+            },
+            relationships: {
+              discovery: {
+                type: "HasOne",
+                propertyName: "discovery",
+                target: "Discovery",
+                foreignKey: "vendorId"
+              },
+              orders: {
+                type: "HasMany",
+                propertyName: "orders",
+                target: "Order",
+                foreignKey: "customerId"
+              }
+            }
+          },
+          Discovery: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              vendorId: {
+                name: "vendorId",
+                alias: "VendorId",
+                nullable: false,
+                foreignKeyTarget: "Vendor"
+              },
+              details: {
+                name: "details",
+                alias: "Details",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false
+              },
+              VendorId: {
+                name: "vendorId",
+                alias: "VendorId",
+                nullable: false,
+                foreignKeyTarget: "Vendor"
+              },
+              Details: {
+                name: "details",
+                alias: "Details",
+                nullable: false
+              }
+            },
+            relationships: {
+              vendor: {
+                type: "BelongsTo",
+                propertyName: "vendor",
+                target: "Vendor",
+                foreignKey: "vendorId"
+              }
+            },
+            idField: "vendorId"
           }
         }
       });
