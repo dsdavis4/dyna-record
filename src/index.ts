@@ -19,3 +19,5 @@ export type {
   ForeignKey,
   NullableForeignKey
 } from "./types";
+export type { AttributeKind } from "./metadata/types";
+export type { SerializedTableMetadata } from "./metadata/schemas";

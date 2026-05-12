@@ -42,14 +42,16 @@ const AttributeMetadataTransform = z.discriminatedUnion("kind", [
       ...rest,
       values: enumValues
     })),
-  z.object({
-    ...baseAttributeShape,
-    kind: z.literal("object"),
-    objectSchema: z.custom<ObjectSchema>()
-  }).transform(({ objectSchema, ...rest }) => ({
-    ...rest,
-    schema: objectSchema
-  })),
+  z
+    .object({
+      ...baseAttributeShape,
+      kind: z.literal("object"),
+      objectSchema: z.custom<ObjectSchema>()
+    })
+    .transform(({ objectSchema, ...rest }) => ({
+      ...rest,
+      schema: objectSchema
+    })),
   z
     .object({
       ...baseAttributeShape,
