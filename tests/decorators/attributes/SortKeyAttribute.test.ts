@@ -13,6 +13,7 @@ describe("SortKeyAttribute", () => {
       name: "sk",
       alias: "SK",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });
@@ -24,6 +25,7 @@ describe("SortKeyAttribute", () => {
       name: "mySk",
       alias: "mySk",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });

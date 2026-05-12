@@ -1,4 +1,18 @@
-import { MockTable, OtherTable } from "../integration/mockModels";
+import {
+  MockTable,
+  OtherTable,
+  addressSchema,
+  arrayOfObjectsSchema,
+  arrayOfUnionsSchema,
+  contactSchema,
+  deeplyNestedSchema,
+  dimensionsSchema,
+  duplicateFieldNameSchema,
+  inventorySchema,
+  locationSchema,
+  nullableUnionSchema,
+  paymentSchema
+} from "../integration/mockModels";
 
 describe("TableMetadata", () => {
   describe("MockTable.metadata()", () => {
@@ -14,21 +28,25 @@ describe("TableMetadata", () => {
           id: {
             name: "id",
             alias: "Id",
+            kind: "string",
             nullable: false
           },
           type: {
             name: "type",
             alias: "Type",
+            kind: "string",
             nullable: false
           },
           createdAt: {
             name: "createdAt",
             alias: "CreatedAt",
+            kind: "date",
             nullable: false
           },
           updatedAt: {
             name: "updatedAt",
             alias: "UpdatedAt",
+            kind: "date",
             nullable: false
           }
         },
@@ -36,32 +54,38 @@ describe("TableMetadata", () => {
           Id: {
             name: "id",
             alias: "Id",
+            kind: "string",
             nullable: false
           },
           Type: {
             name: "type",
             alias: "Type",
+            kind: "string",
             nullable: false
           },
           CreatedAt: {
             name: "createdAt",
             alias: "CreatedAt",
+            kind: "date",
             nullable: false
           },
           UpdatedAt: {
             name: "updatedAt",
             alias: "UpdatedAt",
+            kind: "date",
             nullable: false
           }
         },
         partitionKeyAttribute: {
           name: "pk",
           alias: "PK",
+          kind: "string",
           nullable: false
         },
         sortKeyAttribute: {
           name: "sk",
           alias: "SK",
+          kind: "string",
           nullable: false
         },
         entities: {
@@ -71,38 +95,45 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               customerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               },
               paymentMethodId: {
                 name: "paymentMethodId",
                 alias: "PaymentMethodId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PaymentMethod"
               },
               orderDate: {
                 name: "orderDate",
                 alias: "OrderDate",
+                kind: "date",
                 nullable: false
               }
             },
@@ -110,38 +141,45 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               CustomerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               },
               PaymentMethodId: {
                 name: "paymentMethodId",
                 alias: "PaymentMethodId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PaymentMethod"
               },
               OrderDate: {
                 name: "orderDate",
                 alias: "OrderDate",
+                kind: "date",
                 nullable: false
               }
             },
@@ -166,31 +204,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               paymentMethodId: {
                 name: "paymentMethodId",
                 alias: "PaymentMethodId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PaymentMethod"
               }
@@ -199,31 +243,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               PaymentMethodId: {
                 name: "paymentMethodId",
                 alias: "PaymentMethodId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PaymentMethod"
               }
@@ -243,31 +293,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               lastFour: {
                 name: "lastFour",
                 alias: "LastFour",
+                kind: "string",
                 nullable: false
               },
               customerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               }
@@ -276,31 +332,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               LastFour: {
                 name: "lastFour",
                 alias: "LastFour",
+                kind: "string",
                 nullable: false
               },
               CustomerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               }
@@ -332,31 +394,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               address: {
                 name: "address",
                 alias: "Address",
+                kind: "string",
                 nullable: false
               }
             },
@@ -364,31 +432,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Address: {
                 name: "address",
                 alias: "Address",
+                kind: "string",
                 nullable: false
               }
             },
@@ -419,36 +493,43 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               email: {
                 name: "email",
                 alias: "Email",
+                kind: "string",
                 nullable: false
               },
               phone: {
                 name: "phone",
                 alias: "Phone",
+                kind: "string",
                 nullable: true
               },
               customerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Customer"
               }
@@ -457,36 +538,43 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Email: {
                 name: "email",
                 alias: "Email",
+                kind: "string",
                 nullable: false
               },
               Phone: {
                 name: "phone",
                 alias: "Phone",
+                kind: "string",
                 nullable: true
               },
               CustomerId: {
                 name: "customerId",
                 alias: "CustomerId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Customer"
               }
@@ -506,26 +594,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -533,26 +626,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -583,37 +681,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               ownerId: {
                 name: "ownerId",
                 alias: "OwnerId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               },
               adoptedDate: {
                 name: "adoptedDate",
                 alias: "AdoptedDate",
+                kind: "date",
                 nullable: true
               }
             },
@@ -621,37 +726,44 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               OwnerId: {
                 name: "ownerId",
                 alias: "OwnerId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               },
               AdoptedDate: {
                 name: "adoptedDate",
                 alias: "AdoptedDate",
+                kind: "date",
                 nullable: true
               }
             },
@@ -670,36 +782,43 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               mlsNum: {
                 name: "mlsNum",
                 alias: "MLS#",
+                kind: "string",
                 nullable: false
               },
               neighborhood: {
                 name: "neighborhood",
                 alias: "Neighborhood",
+                kind: "string",
                 nullable: true
               },
               personId: {
                 name: "personId",
                 alias: "PersonId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               }
@@ -708,36 +827,43 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               "MLS#": {
                 name: "mlsNum",
                 alias: "MLS#",
+                kind: "string",
                 nullable: false
               },
               Neighborhood: {
                 name: "neighborhood",
                 alias: "Neighborhood",
+                kind: "string",
                 nullable: true
               },
               PersonId: {
                 name: "personId",
                 alias: "PersonId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               }
@@ -763,37 +889,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               state: {
                 name: "state",
                 alias: "State",
+                kind: "string",
                 nullable: false
               },
               homeId: {
                 name: "homeId",
                 alias: "HomeId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Home"
               },
               phoneBookId: {
                 name: "phoneBookId",
                 alias: "PhoneBookId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PhoneBook"
               }
@@ -802,37 +935,44 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               State: {
                 name: "state",
                 alias: "State",
+                kind: "string",
                 nullable: false
               },
               HomeId: {
                 name: "homeId",
                 alias: "HomeId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Home"
               },
               PhoneBookId: {
                 name: "phoneBookId",
                 alias: "PhoneBookId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "PhoneBook"
               }
@@ -858,26 +998,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               edition: {
                 name: "edition",
                 alias: "Edition",
+                kind: "string",
                 nullable: false
               }
             },
@@ -885,26 +1030,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Edition: {
                 name: "edition",
                 alias: "Edition",
+                kind: "string",
                 nullable: false
               }
             },
@@ -923,36 +1073,43 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               numPages: {
                 name: "numPages",
                 alias: "NumPages",
+                kind: "number",
                 nullable: false
               },
               ownerId: {
                 name: "ownerId",
                 alias: "PersonId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               }
@@ -961,36 +1118,43 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               NumPages: {
                 name: "numPages",
                 alias: "NumPages",
+                kind: "number",
                 nullable: false
               },
               PersonId: {
                 name: "ownerId",
                 alias: "PersonId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Person"
               }
@@ -1016,26 +1180,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1043,26 +1212,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1081,188 +1255,232 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               stringAttribute: {
                 name: "stringAttribute",
                 alias: "stringAttribute",
+                kind: "string",
                 nullable: false
               },
               nullableStringAttribute: {
                 name: "nullableStringAttribute",
                 alias: "nullableStringAttribute",
+                kind: "string",
                 nullable: true
               },
               dateAttribute: {
                 name: "dateAttribute",
                 alias: "dateAttribute",
+                kind: "date",
                 nullable: false
               },
               nullableDateAttribute: {
                 name: "nullableDateAttribute",
                 alias: "nullableDateAttribute",
+                kind: "date",
                 nullable: true
               },
               boolAttribute: {
                 name: "boolAttribute",
                 alias: "boolAttribute",
+                kind: "boolean",
                 nullable: false
               },
               nullableBoolAttribute: {
                 name: "nullableBoolAttribute",
                 alias: "nullableBoolAttribute",
+                kind: "boolean",
                 nullable: true
               },
               numberAttribute: {
                 name: "numberAttribute",
                 alias: "numberAttribute",
+                kind: "number",
                 nullable: false
               },
               nullableNumberAttribute: {
                 name: "nullableNumberAttribute",
                 alias: "nullableNumberAttribute",
+                kind: "number",
                 nullable: true
               },
               foreignKeyAttribute: {
                 name: "foreignKeyAttribute",
                 alias: "foreignKeyAttribute",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               },
               nullableForeignKeyAttribute: {
                 name: "nullableForeignKeyAttribute",
                 alias: "nullableForeignKeyAttribute",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Customer"
               },
               enumAttribute: {
                 name: "enumAttribute",
                 alias: "enumAttribute",
-                nullable: false
+                kind: "enum",
+                nullable: false,
+                values: ["val-1", "val-2"]
               },
               nullableEnumAttribute: {
                 name: "nullableEnumAttribute",
                 alias: "nullableEnumAttribute",
-                nullable: true
+                kind: "enum",
+                nullable: true,
+                values: ["val-1", "val-2"]
               },
               objectAttribute: {
                 name: "objectAttribute",
                 alias: "objectAttribute",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: contactSchema
               },
               addressAttribute: {
                 name: "addressAttribute",
                 alias: "addressAttribute",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: addressSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               stringAttribute: {
                 name: "stringAttribute",
                 alias: "stringAttribute",
+                kind: "string",
                 nullable: false
               },
               nullableStringAttribute: {
                 name: "nullableStringAttribute",
                 alias: "nullableStringAttribute",
+                kind: "string",
                 nullable: true
               },
               dateAttribute: {
                 name: "dateAttribute",
                 alias: "dateAttribute",
+                kind: "date",
                 nullable: false
               },
               nullableDateAttribute: {
                 name: "nullableDateAttribute",
                 alias: "nullableDateAttribute",
+                kind: "date",
                 nullable: true
               },
               boolAttribute: {
                 name: "boolAttribute",
                 alias: "boolAttribute",
+                kind: "boolean",
                 nullable: false
               },
               nullableBoolAttribute: {
                 name: "nullableBoolAttribute",
                 alias: "nullableBoolAttribute",
+                kind: "boolean",
                 nullable: true
               },
               numberAttribute: {
                 name: "numberAttribute",
                 alias: "numberAttribute",
+                kind: "number",
                 nullable: false
               },
               nullableNumberAttribute: {
                 name: "nullableNumberAttribute",
                 alias: "nullableNumberAttribute",
+                kind: "number",
                 nullable: true
               },
               foreignKeyAttribute: {
                 name: "foreignKeyAttribute",
                 alias: "foreignKeyAttribute",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Customer"
               },
               nullableForeignKeyAttribute: {
                 name: "nullableForeignKeyAttribute",
                 alias: "nullableForeignKeyAttribute",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Customer"
               },
               enumAttribute: {
                 name: "enumAttribute",
                 alias: "enumAttribute",
-                nullable: false
+                kind: "enum",
+                nullable: false,
+                values: ["val-1", "val-2"]
               },
               nullableEnumAttribute: {
                 name: "nullableEnumAttribute",
                 alias: "nullableEnumAttribute",
-                nullable: true
+                kind: "enum",
+                nullable: true,
+                values: ["val-1", "val-2"]
               },
               objectAttribute: {
                 name: "objectAttribute",
                 alias: "objectAttribute",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: contactSchema
               },
               addressAttribute: {
                 name: "addressAttribute",
                 alias: "addressAttribute",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: addressSchema
               }
             },
             relationships: {}
@@ -1273,42 +1491,50 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               email: {
                 name: "email",
                 alias: "Email",
+                kind: "string",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               orgId: {
                 name: "orgId",
                 alias: "OrgId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Organization"
               },
               deskId: {
                 name: "deskId",
                 alias: "DeskId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Desk"
               }
@@ -1317,42 +1543,50 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Email: {
                 name: "email",
                 alias: "Email",
+                kind: "string",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               OrgId: {
                 name: "orgId",
                 alias: "OrgId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Organization"
               },
               DeskId: {
                 name: "deskId",
                 alias: "DeskId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Desk"
               }
@@ -1385,26 +1619,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1412,26 +1651,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1464,31 +1708,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               organizationId: {
                 name: "organizationId",
                 alias: "OrganizationId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Organization"
               }
@@ -1497,31 +1747,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               OrganizationId: {
                 name: "organizationId",
                 alias: "OrganizationId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Organization"
               }
@@ -1541,64 +1797,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               data: {
                 name: "data",
                 alias: "Data",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: arrayOfObjectsSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Data: {
                 name: "data",
                 alias: "Data",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: arrayOfObjectsSchema
               }
             },
             relationships: {}
@@ -1609,54 +1879,66 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               dashboard: {
                 name: "dashboard",
                 alias: "Dashboard",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: arrayOfUnionsSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Dashboard: {
                 name: "dashboard",
                 alias: "Dashboard",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: arrayOfUnionsSchema
               }
             },
             relationships: {}
@@ -1667,64 +1949,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               data: {
                 name: "data",
                 alias: "Data",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: deeplyNestedSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Data: {
                 name: "data",
                 alias: "Data",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: deeplyNestedSchema
               }
             },
             relationships: {}
@@ -1735,26 +2031,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               num: {
                 name: "num",
                 alias: "Num",
+                kind: "number",
                 nullable: false
               }
             },
@@ -1762,26 +2063,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Num: {
                 name: "num",
                 alias: "Num",
+                kind: "number",
                 nullable: false
               }
             },
@@ -1800,26 +2106,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1827,26 +2138,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -1865,31 +2181,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               organizationId: {
                 name: "organizationId",
                 alias: "OrganizationId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Organization"
               }
@@ -1898,31 +2220,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               OrganizationId: {
                 name: "organizationId",
                 alias: "OrganizationId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Organization"
               }
@@ -1942,64 +2270,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               location: {
                 name: "location",
                 alias: "Location",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: locationSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Location: {
                 name: "location",
                 alias: "Location",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: locationSchema
               }
             },
             relationships: {
@@ -2017,36 +2359,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               destination: {
                 name: "destination",
                 alias: "Destination",
+                kind: "string",
                 nullable: false
               },
               dimensions: {
                 name: "dimensions",
                 alias: "Dimensions",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: dimensionsSchema
               },
               warehouseId: {
                 name: "warehouseId",
                 alias: "WarehouseId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Warehouse"
               }
@@ -2055,36 +2405,44 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Destination: {
                 name: "destination",
                 alias: "Destination",
+                kind: "string",
                 nullable: false
               },
               Dimensions: {
                 name: "dimensions",
                 alias: "Dimensions",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: dimensionsSchema
               },
               WarehouseId: {
                 name: "warehouseId",
                 alias: "WarehouseId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Warehouse"
               }
@@ -2104,64 +2462,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               duplicateFieldObj: {
                 name: "duplicateFieldObj",
                 alias: "DuplicateFieldObj",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: duplicateFieldNameSchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               DuplicateFieldObj: {
                 name: "duplicateFieldObj",
                 alias: "DuplicateFieldObj",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: duplicateFieldNameSchema
               }
             },
             relationships: {}
@@ -2172,64 +2544,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               inventory: {
                 name: "inventory",
                 alias: "Inventory",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: inventorySchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Inventory: {
                 name: "inventory",
                 alias: "Inventory",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: inventorySchema
               }
             },
             relationships: {
@@ -2247,31 +2633,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               description: {
                 name: "description",
                 alias: "Description",
+                kind: "string",
                 nullable: false
               },
               catalogId: {
                 name: "catalogId",
                 alias: "CatalogId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Catalog"
               }
@@ -2280,31 +2672,37 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Description: {
                 name: "description",
                 alias: "Description",
+                kind: "string",
                 nullable: false
               },
               CatalogId: {
                 name: "catalogId",
                 alias: "CatalogId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Catalog"
               }
@@ -2324,64 +2722,78 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               inventory: {
                 name: "inventory",
                 alias: "Inventory",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: inventorySchema
               }
             },
             tableAttributes: {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               },
               Inventory: {
                 name: "inventory",
                 alias: "Inventory",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: inventorySchema
               }
             },
             relationships: {
@@ -2399,26 +2811,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2426,26 +2843,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2463,32 +2885,40 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               payment: {
                 name: "payment",
                 alias: "Payment",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: paymentSchema
               },
               nullableUnion: {
                 name: "nullableUnion",
                 alias: "NullableUnion",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: nullableUnionSchema
               }
             },
             relationships: {},
@@ -2496,31 +2926,39 @@ describe("TableMetadata", () => {
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               NullableUnion: {
                 name: "nullableUnion",
                 alias: "NullableUnion",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: nullableUnionSchema
               },
               Payment: {
                 name: "payment",
                 alias: "Payment",
-                nullable: false
+                kind: "object",
+                nullable: false,
+                schema: paymentSchema
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               }
             },
@@ -2532,26 +2970,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2559,26 +3002,31 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               Name: {
                 name: "name",
                 alias: "Name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2603,32 +3051,38 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               vendorId: {
                 name: "vendorId",
                 alias: "VendorId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Vendor"
               },
               details: {
                 name: "details",
                 alias: "Details",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2636,32 +3090,38 @@ describe("TableMetadata", () => {
               Id: {
                 name: "id",
                 alias: "Id",
+                kind: "string",
                 nullable: false
               },
               Type: {
                 name: "type",
                 alias: "Type",
+                kind: "string",
                 nullable: false
               },
               CreatedAt: {
                 name: "createdAt",
                 alias: "CreatedAt",
+                kind: "date",
                 nullable: false
               },
               UpdatedAt: {
                 name: "updatedAt",
                 alias: "UpdatedAt",
+                kind: "date",
                 nullable: false
               },
               VendorId: {
                 name: "vendorId",
                 alias: "VendorId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Vendor"
               },
               Details: {
                 name: "details",
                 alias: "Details",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2693,21 +3153,25 @@ describe("TableMetadata", () => {
           id: {
             name: "id",
             alias: "id",
+            kind: "string",
             nullable: false
           },
           type: {
             name: "type",
             alias: "type",
+            kind: "string",
             nullable: false
           },
           createdAt: {
             name: "createdAt",
             alias: "createdAt",
+            kind: "date",
             nullable: false
           },
           updatedAt: {
             name: "updatedAt",
             alias: "updatedAt",
+            kind: "date",
             nullable: false
           }
         },
@@ -2715,32 +3179,38 @@ describe("TableMetadata", () => {
           id: {
             name: "id",
             alias: "id",
+            kind: "string",
             nullable: false
           },
           type: {
             name: "type",
             alias: "type",
+            kind: "string",
             nullable: false
           },
           createdAt: {
             name: "createdAt",
             alias: "createdAt",
+            kind: "date",
             nullable: false
           },
           updatedAt: {
             name: "updatedAt",
             alias: "updatedAt",
+            kind: "date",
             nullable: false
           }
         },
         partitionKeyAttribute: {
           name: "myPk",
           alias: "myPk",
+          kind: "string",
           nullable: false
         },
         sortKeyAttribute: {
           name: "mySk",
           alias: "mySk",
+          kind: "string",
           nullable: false
         },
         entities: {
@@ -2750,26 +3220,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2777,26 +3252,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2821,26 +3301,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2848,26 +3333,31 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               }
             },
@@ -2898,31 +3388,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               },
               teacherId: {
                 name: "teacherId",
                 alias: "teacherId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Teacher"
               }
@@ -2931,31 +3427,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               name: {
                 name: "name",
                 alias: "name",
+                kind: "string",
                 nullable: false
               },
               teacherId: {
                 name: "teacherId",
                 alias: "teacherId",
+                kind: "foreignKey",
                 nullable: true,
                 foreignKeyTarget: "Teacher"
               }
@@ -2987,31 +3489,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               title: {
                 name: "title",
                 alias: "title",
+                kind: "string",
                 nullable: false
               },
               courseId: {
                 name: "courseId",
                 alias: "courseId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Course"
               }
@@ -3020,31 +3528,37 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               title: {
                 name: "title",
                 alias: "title",
+                kind: "string",
                 nullable: false
               },
               courseId: {
                 name: "courseId",
                 alias: "courseId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Course"
               }
@@ -3070,37 +3584,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               gradeValue: {
                 name: "gradeValue",
                 alias: "LetterValue",
+                kind: "string",
                 nullable: false
               },
               assignmentId: {
                 name: "assignmentId",
                 alias: "assignmentId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Assignment"
               },
               studentId: {
                 name: "studentId",
                 alias: "studentId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Student"
               }
@@ -3109,37 +3630,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               LetterValue: {
                 name: "gradeValue",
                 alias: "LetterValue",
+                kind: "string",
                 nullable: false
               },
               assignmentId: {
                 name: "assignmentId",
                 alias: "assignmentId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Assignment"
               },
               studentId: {
                 name: "studentId",
                 alias: "studentId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Student"
               }
@@ -3165,37 +3693,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               lastLogin: {
                 name: "lastLogin",
                 alias: "lastLogin",
+                kind: "date",
                 nullable: false
               },
               userId: {
                 name: "userId",
                 alias: "userId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Student"
               },
               alternateEmail: {
                 name: "alternateEmail",
                 alias: "alternateEmail",
+                kind: "string",
                 nullable: true
               }
             },
@@ -3203,37 +3738,44 @@ describe("TableMetadata", () => {
               id: {
                 name: "id",
                 alias: "id",
+                kind: "string",
                 nullable: false
               },
               type: {
                 name: "type",
                 alias: "type",
+                kind: "string",
                 nullable: false
               },
               createdAt: {
                 name: "createdAt",
                 alias: "createdAt",
+                kind: "date",
                 nullable: false
               },
               updatedAt: {
                 name: "updatedAt",
                 alias: "updatedAt",
+                kind: "date",
                 nullable: false
               },
               lastLogin: {
                 name: "lastLogin",
                 alias: "lastLogin",
+                kind: "date",
                 nullable: false
               },
               userId: {
                 name: "userId",
                 alias: "userId",
+                kind: "foreignKey",
                 nullable: false,
                 foreignKeyTarget: "Student"
               },
               alternateEmail: {
                 name: "alternateEmail",
                 alias: "alternateEmail",
+                kind: "string",
                 nullable: true
               }
             },

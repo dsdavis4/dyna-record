@@ -26,6 +26,7 @@ describe("BooleanAttribute", () => {
       name: "myBoolean",
       alias: "MyBoolean",
       nullable: false,
+      kind: "boolean",
       type: expect.any(ZodBoolean)
     });
   });
@@ -37,6 +38,7 @@ describe("BooleanAttribute", () => {
       name: "myOtherBoolean",
       alias: "myOtherBoolean",
       nullable: false,
+      kind: "boolean",
       type: expect.any(ZodBoolean)
     });
   });
@@ -49,6 +51,7 @@ describe("BooleanAttribute", () => {
       name: "myNullableBoolean",
       alias: "MyNullableBoolean",
       nullable: true,
+      kind: "boolean",
       type: expect.any(ZodNullable)
     });
     expect(attr.type).toBeInstanceOf(ZodNullable);

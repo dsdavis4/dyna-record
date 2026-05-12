@@ -314,6 +314,7 @@ function ObjectAttribute<T extends DynaRecord, const S extends ObjectSchema>(
     context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "object",
         type: zodSchema,
         partialType: partialZodSchema,
         serializers,

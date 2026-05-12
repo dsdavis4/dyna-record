@@ -1,6 +1,10 @@
 import { type ZodType } from "zod";
 import type DynaRecord from "../DynaRecord";
-import type { AttributeMetadataOptions, Serializers } from "./types";
+import type {
+  AttributeKind,
+  AttributeMetadataOptions,
+  Serializers
+} from "./types";
 import type { EntityClass } from "../types";
 import type { ObjectSchema } from "../decorators/attributes/types";
 
@@ -21,20 +25,24 @@ import type { ObjectSchema } from "../decorators/attributes/types";
 class AttributeMetadata {
   public readonly name: string;
   public readonly alias: string;
+  public readonly kind: AttributeKind;
   public readonly nullable: boolean;
   public readonly serializers?: Serializers;
   public readonly type: ZodType;
   public readonly foreignKeyTarget?: EntityClass<DynaRecord>;
   public readonly objectSchema?: ObjectSchema;
   public readonly partialType?: ZodType;
+  public readonly enumValues?: readonly [string, ...string[]];
 
   constructor(options: AttributeMetadataOptions) {
     this.name = options.attributeName;
     this.alias = options.alias ?? options.attributeName;
+    this.kind = options.kind;
     this.nullable = options.nullable ?? false;
     this.serializers = options.serializers;
     this.foreignKeyTarget = options.foreignKeyTarget;
     this.objectSchema = options.objectSchema;
+    this.enumValues = options.enumValues;
     if (options.nullable === true) {
       this.type = options.type.optional().nullable();
       this.partialType = options.partialType?.optional().nullable();

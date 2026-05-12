@@ -38,6 +38,7 @@ function BooleanAttribute<
     context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "boolean",
         nullable: props?.nullable,
         type: z.boolean(),
         ...props

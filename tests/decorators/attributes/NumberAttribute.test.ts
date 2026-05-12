@@ -26,6 +26,7 @@ describe("NumberAttribute", () => {
       name: "myNumber",
       alias: "MyNumber",
       nullable: false,
+      kind: "number",
       type: expect.any(ZodNumber)
     });
   });
@@ -37,6 +38,7 @@ describe("NumberAttribute", () => {
       name: "myOtherNumber",
       alias: "myOtherNumber",
       nullable: false,
+      kind: "number",
       type: expect.any(ZodNumber)
     });
   });
@@ -49,6 +51,7 @@ describe("NumberAttribute", () => {
       name: "myNullableNumber",
       alias: "MyNullableNumber",
       nullable: true,
+      kind: "number",
       type: expect.any(ZodNullable)
     });
     expect(attr.type).toBeInstanceOf(ZodNullable);

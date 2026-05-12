@@ -45,8 +45,10 @@ function EnumAttribute<
     context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "enum",
         nullable: props.nullable,
         type: z.enum(props.values),
+        enumValues: props.values,
         ...props
       });
     });

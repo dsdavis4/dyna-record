@@ -115,19 +115,41 @@ export interface Serializers {
 }
 
 /**
+ * Discriminator identifying which `@…Attribute` decorator produced an
+ * {@link AttributeMetadata} record. Exposed in the serialized metadata
+ * returned by `DynaRecord.metadata()` so consumers can switch on the
+ * attribute's logical type.
+ */
+export type AttributeKind =
+  | "string"
+  | "number"
+  | "boolean"
+  | "date"
+  | "enum"
+  | "object"
+  | "foreignKey";
+
+/**
  * Defines the options for configuring attribute metadata within the ORM system. This interface specifies the settings used to describe and manage an attribute's representation and behavior in both the entity model and the underlying database schema, particularly focusing on attributes' names, aliases, nullability, and serialization strategies.
  *
  * @property {string} attributeName - The name of the attribute as defined in the entity. This is the primary identifier for the attribute within the ORM and is used in entity operations.
+ * @property {AttributeKind} kind - Discriminator identifying which attribute decorator produced this metadata.
  * @property {string} [alias] - An optional alias for the attribute that represents its name within the database. This is used for mapping the attribute to its corresponding column in the database table. If not specified, the `attributeName` is used as the column name.
  * @property {boolean} nullable - Indicates whether the attribute is allowed to have null values. This property is crucial for enforcing data integrity and validation rules at the database level.
  * @property {Serializers} [serializers] - Optional custom serialization strategies for the attribute. These strategies define how to convert the attribute's value between its representation in the entity and its representation in the database. This is particularly useful for handling complex data types or custom transformations.
  */
 export interface AttributeMetadataOptions {
   attributeName: string;
+  kind: AttributeKind;
   type: ZodType;
   alias?: string;
   nullable?: boolean;
   serializers?: Serializers;
+  /**
+   * For `kind: "enum"` attributes, the allowed string values. Forwarded to
+   * the serialized metadata so consumers can introspect the enum domain.
+   */
+  enumValues?: readonly [string, ...string[]];
   /**
    * When the attribute represents a foreign key, this references the target entity class.
    * Used to enforce referential integrity even when a relationship decorator is not present.

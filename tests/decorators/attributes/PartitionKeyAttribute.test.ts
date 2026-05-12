@@ -13,6 +13,7 @@ describe("PartitionKeyAttribute", () => {
       name: "pk",
       alias: "PK",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });
@@ -24,6 +25,7 @@ describe("PartitionKeyAttribute", () => {
       name: "myPk",
       alias: "myPk",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });

@@ -1,34 +1,66 @@
 import { z } from "zod";
 import type { EntityClass } from "../types";
 import type DynaRecord from "../DynaRecord";
+import type { ObjectSchema } from "../decorators/attributes/types";
+
+/**
+ * Common serialized fields shared by every attribute kind.
+ */
+const baseAttributeShape = {
+  name: z.string(),
+  alias: z.string(),
+  nullable: z.boolean()
+};
+
+const simpleAttributeShape = <K extends string>(kind: K) =>
+  z.object({ ...baseAttributeShape, kind: z.literal(kind) });
 
 /**
  * Zod schema that transforms attribute metadata to a serializable format.
- * Extracts only serializable properties (name, alias, nullable) and converts
- * the foreignKeyTarget EntityClass reference to its class name string.
  *
- * @property {string} name - The name of the attribute as defined on the entity
- * @property {string} alias - The alias of the attribute as defined in the database table
- * @property {boolean} nullable - Indicates whether the attribute can be null
- * @property {EntityClass<DynaRecord>} [foreignKeyTarget] - Optional entity class reference that will be converted to its name string
+ * Emits a discriminated union keyed on `kind`. Every attribute carries
+ * `{ name, alias, nullable, kind }`; some kinds carry an additional payload:
  *
- * @returns A serialized attribute metadata object with foreignKeyTarget as a string (class name) if present
+ * - `kind: "enum"` → `values: readonly [string, ...string[]]`
+ * - `kind: "object"` → `schema: ObjectSchema` (the user-authored schema)
+ * - `kind: "foreignKey"` → `foreignKeyTarget: string` (target entity class name)
+ *
+ * Non-serializable internals (Zod types, serializers, partial types) are dropped.
  */
-const AttributeMetadataTransform = z
-  .object({
-    name: z.string(),
-    alias: z.string(),
-    nullable: z.boolean(),
-    foreignKeyTarget: z.custom<EntityClass<DynaRecord>>().optional()
-  })
-  .transform(attr => ({
-    name: attr.name,
-    alias: attr.alias,
-    nullable: attr.nullable,
-    ...(attr.foreignKeyTarget != null && {
-      foreignKeyTarget: attr.foreignKeyTarget.name
+const AttributeMetadataTransform = z.discriminatedUnion("kind", [
+  simpleAttributeShape("string"),
+  simpleAttributeShape("number"),
+  simpleAttributeShape("boolean"),
+  simpleAttributeShape("date"),
+  z
+    .object({
+      ...baseAttributeShape,
+      kind: z.literal("enum"),
+      enumValues: z.custom<readonly [string, ...string[]]>()
     })
-  }));
+    .transform(({ enumValues, ...rest }) => ({
+      ...rest,
+      values: enumValues
+    })),
+  z.object({
+    ...baseAttributeShape,
+    kind: z.literal("object"),
+    objectSchema: z.custom<ObjectSchema>()
+  }).transform(({ objectSchema, ...rest }) => ({
+    ...rest,
+    schema: objectSchema
+  })),
+  z
+    .object({
+      ...baseAttributeShape,
+      kind: z.literal("foreignKey"),
+      foreignKeyTarget: z.custom<EntityClass<DynaRecord>>()
+    })
+    .transform(({ foreignKeyTarget, ...rest }) => ({
+      ...rest,
+      foreignKeyTarget: foreignKeyTarget.name
+    }))
+]);
 
 /**
  * Zod schema that transforms relationship metadata to a serializable format.

@@ -32,6 +32,7 @@ function SortKeyAttribute<T extends DynaRecord, K extends SortKey>(
     context.addInitializer(function (this: T) {
       Metadata.addSortKeyAttribute(this, {
         attributeName: context.name.toString(),
+        kind: "string",
         type: z.string(),
         ...props
       });

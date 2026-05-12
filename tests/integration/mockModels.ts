@@ -26,7 +26,7 @@ import type {
   NullableForeignKey
 } from "../../src/types";
 
-const addressSchema = {
+export const addressSchema = {
   street: { type: "string" },
   city: { type: "string" },
   zip: { type: "number", nullable: true },
@@ -42,7 +42,7 @@ const addressSchema = {
   category: { type: "enum", values: ["home", "work", "other"], nullable: true }
 } as const satisfies ObjectSchema;
 
-const contactSchema = {
+export const contactSchema = {
   name: { type: "string" },
   email: { type: "string" },
   tags: { type: "array", items: { type: "string" } },
@@ -572,7 +572,7 @@ class StudentCourse extends JoinTable<Student, Course> {
   public readonly courseId: ForeignKey;
 }
 
-const deeplyNestedSchema = {
+export const deeplyNestedSchema = {
   label: { type: "string" },
   level1: {
     type: "object",
@@ -597,7 +597,7 @@ const deeplyNestedSchema = {
   }
 } as const satisfies ObjectSchema;
 
-const duplicateFieldNameSchema = {
+export const duplicateFieldNameSchema = {
   name: { type: "string" },
   nested1: {
     type: "object",
@@ -615,13 +615,13 @@ const duplicateFieldNameSchema = {
   }
 } as const satisfies ObjectSchema;
 
-const locationSchema = {
+export const locationSchema = {
   city: { type: "string" },
   state: { type: "string" },
   zip: { type: "number", nullable: true }
 } as const satisfies ObjectSchema;
 
-const arrayOfObjectsSchema = {
+export const arrayOfObjectsSchema = {
   title: { type: "string" },
   entries: {
     type: "array",
@@ -698,7 +698,7 @@ class Warehouse extends MockTable {
   public readonly shipments: Shipment[];
 }
 
-const dimensionsSchema = {
+export const dimensionsSchema = {
   weight: { type: "number" },
   unit: { type: "string" },
   label: { type: "string", nullable: true }
@@ -721,7 +721,7 @@ class Shipment extends MockTable {
   public readonly warehouse: Warehouse;
 }
 
-const inventorySchema = {
+export const inventorySchema = {
   quantity: { type: "number" },
   location: { type: "string" },
   notes: { type: "string", nullable: true }
@@ -791,7 +791,7 @@ class SponsorFestival extends JoinTable<Sponsor, Festival> {
   public readonly festivalId: ForeignKey;
 }
 
-const paymentSchema = {
+export const paymentSchema = {
   method: {
     type: "discriminatedUnion",
     discriminator: "type",
@@ -817,7 +817,7 @@ const paymentSchema = {
   note: { type: "string", nullable: true }
 } as const satisfies ObjectSchema;
 
-const nullableUnionSchema = {
+export const nullableUnionSchema = {
   preference: {
     type: "discriminatedUnion",
     discriminator: "channel",
@@ -829,7 +829,7 @@ const nullableUnionSchema = {
   }
 } as const satisfies ObjectSchema;
 
-const arrayOfUnionsSchema = {
+export const arrayOfUnionsSchema = {
   widgets: {
     type: "array",
     items: {
@@ -909,18 +909,6 @@ class Discovery extends MockTable {
 }
 
 export {
-  // Schemas
-  addressSchema,
-  contactSchema,
-  deeplyNestedSchema,
-  arrayOfObjectsSchema,
-  duplicateFieldNameSchema,
-  locationSchema,
-  inventorySchema,
-  dimensionsSchema,
-  paymentSchema,
-  nullableUnionSchema,
-  arrayOfUnionsSchema,
   // MockTable exports
   MockTable,
   Order,

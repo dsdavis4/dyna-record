@@ -58,6 +58,7 @@ function ForeignKeyAttribute<
 
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "foreignKey",
         nullable: props?.nullable,
         type: z.string(),
         foreignKeyTarget: targetEntity,
