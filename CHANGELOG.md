@@ -1,4 +1,13 @@
-## 0.6.7 - 2026-04-18
+## 0.6.8 - 2026-05-11
+
+### Added
+
+- **Attribute type introspection via `DynaRecord.metadata()`:** Every attribute in the serialized metadata now carries a `kind` field identifying its logical type: `"string" | "number" | "boolean" | "date" | "enum" | "object" | "foreignKey"`. Consumers can now switch exhaustively on `attr.kind` for use cases like code generation, form builders, admin UIs, and documentation generation — without inferring the type from side-channel fields. Available on entity attributes, table attributes, default attributes, partition keys, and sort keys.
+- **Enum domain in serialized metadata:** Attributes with `kind: "enum"` expose a `values: readonly string[]` array of the allowed enum values, so consumers can render dropdowns, validate input, or generate type literals without re-deriving the domain from the source decorator.
+- **Object schema in serialized metadata:** Attributes with `kind: "object"` expose a `schema: ObjectSchema` field carrying the user-authored object schema (the same value passed to `@ObjectAttribute({ schema })`). Consumers can walk the schema to inspect nested fields, types, and nullability.
+- **Discriminated `SerializedTableMetadata` type:** The exported `SerializedTableMetadata` type is now a discriminated union keyed on `kind`, so TypeScript narrows kind-specific payloads automatically. For example, inside `if (attr.kind === "enum")`, `attr.values` is typed as `readonly string[]`; inside `if (attr.kind === "object")`, `attr.schema` is typed as `ObjectSchema`.
+
+
 
 ### Fixed
 
