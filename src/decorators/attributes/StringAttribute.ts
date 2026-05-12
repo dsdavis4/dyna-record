@@ -42,6 +42,7 @@ function StringAttribute<
     context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "string",
         nullable: props?.nullable,
         type: z.string(),
         ...props

@@ -32,6 +32,7 @@ function PartitionKeyAttribute<T extends DynaRecord, K extends PartitionKey>(
     context.addInitializer(function (this: T) {
       Metadata.addPartitionKeyAttribute(this, {
         attributeName: context.name.toString(),
+        kind: "string",
         type: z.string(),
         ...props
       });

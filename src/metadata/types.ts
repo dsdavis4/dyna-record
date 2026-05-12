@@ -115,6 +115,21 @@ export interface Serializers {
 }
 
 /**
+ * Discriminator identifying which `@…Attribute` decorator produced an
+ * {@link AttributeMetadata} record. Exposed in the serialized metadata
+ * returned by `DynaRecord.metadata()` so consumers can switch on the
+ * attribute's logical type.
+ */
+export type AttributeKind =
+  | "string"
+  | "number"
+  | "boolean"
+  | "date"
+  | "enum"
+  | "object"
+  | "foreignKey";
+
+/**
  * Defines the options for configuring attribute metadata within the ORM system. This interface specifies the settings used to describe and manage an attribute's representation and behavior in both the entity model and the underlying database schema, particularly focusing on attributes' names, aliases, nullability, and serialization strategies.
  *
  * @property {string} attributeName - The name of the attribute as defined in the entity. This is the primary identifier for the attribute within the ORM and is used in entity operations.
@@ -124,10 +139,16 @@ export interface Serializers {
  */
 export interface AttributeMetadataOptions {
   attributeName: string;
+  kind: AttributeKind;
   type: ZodType;
   alias?: string;
   nullable?: boolean;
   serializers?: Serializers;
+  /**
+   * For `kind: "enum"` attributes, the allowed string values. Forwarded to
+   * the serialized metadata so consumers can introspect the enum domain.
+   */
+  enumValues?: readonly [string, ...string[]];
   /**
    * When the attribute represents a foreign key, this references the target entity class.
    * Used to enforce referential integrity even when a relationship decorator is not present.

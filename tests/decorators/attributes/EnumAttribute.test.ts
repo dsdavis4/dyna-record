@@ -33,6 +33,8 @@ describe("EnumAttribute", () => {
       name: "someEnum",
       alias: "SomeEnum",
       nullable: false,
+      kind: "enum",
+      enumValues: ["val-1", "val-2"],
       type: expect.any(ZodEnum)
     });
   });
@@ -44,6 +46,8 @@ describe("EnumAttribute", () => {
       name: "noAliasEnum",
       alias: "noAliasEnum",
       nullable: false,
+      kind: "enum",
+      enumValues: ["val-1", "val-2"],
       type: expect.any(ZodEnum)
     });
   });
@@ -56,6 +60,8 @@ describe("EnumAttribute", () => {
       name: "someNullableEnum",
       alias: "SomeNullableEnum",
       nullable: true,
+      kind: "enum",
+      enumValues: ["val-1", "val-2"],
       type: expect.any(ZodNullable)
     });
     expect(attr.type).toBeInstanceOf(ZodNullable);

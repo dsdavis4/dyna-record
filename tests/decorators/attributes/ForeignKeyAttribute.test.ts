@@ -24,6 +24,7 @@ describe("ForeignKeyAttribute", () => {
       name: "customerId",
       alias: "CustomerId",
       nullable: false,
+      kind: "foreignKey",
       foreignKeyTarget: Customer,
       type: expect.any(ZodString)
     });
@@ -36,6 +37,7 @@ describe("ForeignKeyAttribute", () => {
       name: "courseId",
       alias: "courseId",
       nullable: false,
+      kind: "foreignKey",
       foreignKeyTarget: Course,
       type: expect.any(ZodString)
     });
@@ -51,6 +53,7 @@ describe("ForeignKeyAttribute", () => {
       name: "nullableForeignKeyAttribute",
       alias: "nullableForeignKeyAttribute",
       nullable: true,
+      kind: "foreignKey",
       foreignKeyTarget: Customer,
       type: expect.any(ZodNullable)
     });

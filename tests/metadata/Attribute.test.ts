@@ -10,6 +10,7 @@ describe("Attribute metadata", () => {
         // @ts-expect-no-error: serializers is optional
         Metadata.addEntityAttribute("SomeEntityName", {
           attributeName: "attributeName",
+          kind: "string",
           alias: "alias",
           nullable: true,
           type: z.any()
@@ -39,6 +40,7 @@ describe("Attribute metadata", () => {
 
         Metadata.addEntityAttribute("SomeEntityName", {
           attributeName: "attributeName",
+          kind: "string",
           alias: "alias",
           nullable: true,
           type: z.any(),

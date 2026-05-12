@@ -41,6 +41,7 @@ function DateAttribute<
     context.addInitializer(function (this: T) {
       Metadata.addEntityAttribute(this.constructor.name, {
         attributeName: context.name.toString(),
+        kind: "date",
         nullable: props?.nullable,
         serializers: dateSerializer,
         type: z.date(),

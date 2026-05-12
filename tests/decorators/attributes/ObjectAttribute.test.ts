@@ -48,6 +48,7 @@ describe("ObjectAttribute", () => {
     expect(attr).toEqual({
       name: "objectAttribute",
       alias: "objectAttribute",
+      kind: "object",
       nullable: false,
       type: expect.any(ZodObject),
       partialType: expect.any(ZodObject),
@@ -936,6 +937,7 @@ describe("ObjectAttribute", () => {
       expect(attr).toEqual({
         name: "payment",
         alias: "Payment",
+        kind: "object",
         nullable: false,
         type: expect.any(ZodObject),
         partialType: expect.any(ZodObject),

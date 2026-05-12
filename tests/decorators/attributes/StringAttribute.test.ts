@@ -18,6 +18,7 @@ describe("StringAttribute", () => {
       name: "name",
       alias: "Name",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });
@@ -29,6 +30,7 @@ describe("StringAttribute", () => {
       name: "name",
       alias: "name",
       nullable: false,
+      kind: "string",
       type: expect.any(ZodString)
     });
   });
@@ -41,6 +43,7 @@ describe("StringAttribute", () => {
       name: "alternateEmail",
       alias: "alternateEmail",
       nullable: true,
+      kind: "string",
       type: expect.any(ZodNullable)
     });
     expect(attr.type).toBeInstanceOf(ZodNullable);

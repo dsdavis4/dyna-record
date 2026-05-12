@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AttributeMetadata } from ".";
 import { dateSerializer } from "../decorators";
 import type {
+  AttributeKind,
   TableMetadataOptions,
   DefaultFields,
   TableDefaultFields,
@@ -81,12 +82,14 @@ class TableMetadata {
     this.partitionKeyAttribute = {
       name: "",
       alias: defaultTableKeys.partitionKey,
+      kind: "string",
       nullable: false,
       type: z.string()
     };
     this.sortKeyAttribute = {
       name: "",
       alias: defaultTableKeys.sortKey,
+      kind: "string",
       nullable: false,
       type: z.string()
     };
@@ -110,6 +113,7 @@ class TableMetadata {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
     const customDefaults: Partial<TableDefaultFields> =
       options.defaultFields ?? {};
+    const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
 
     return defaultAttrsMeta.reduce<{
       entityDefaults: Record<string, AttributeMetadata>;
@@ -118,11 +122,12 @@ class TableMetadata {
       (acc, [entityKey, tableKeyAlias]) => {
         const key = entityKey as DefaultFields;
         const { alias } = customDefaults[key] ?? tableKeyAlias;
-        const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
+        const kind: AttributeKind = isDateField ? "date" : "string";
         const meta = {
           name: entityKey,
           alias,
+          kind,
           nullable: false,
           serializers: isDateField ? dateSerializer : undefined,
           type: isDateField ? z.date() : z.string()

@@ -12,6 +12,7 @@ describe("DateAttribute", () => {
       name: "orderDate",
       alias: "OrderDate",
       nullable: false,
+      kind: "date",
       serializers: dateSerializer,
       type: expect.any(ZodDate)
     });
@@ -24,6 +25,7 @@ describe("DateAttribute", () => {
       name: "lastLogin",
       alias: "lastLogin",
       nullable: false,
+      kind: "date",
       serializers: dateSerializer,
       type: expect.any(ZodDate)
     });
@@ -37,6 +39,7 @@ describe("DateAttribute", () => {
       name: "adoptedDate",
       alias: "AdoptedDate",
       nullable: true,
+      kind: "date",
       serializers: dateSerializer,
       type: expect.any(ZodNullable)
     });
