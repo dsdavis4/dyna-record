@@ -133,7 +133,6 @@ export type AttributeKind =
  * Defines the options for configuring attribute metadata within the ORM system. This interface specifies the settings used to describe and manage an attribute's representation and behavior in both the entity model and the underlying database schema, particularly focusing on attributes' names, aliases, nullability, and serialization strategies.
  *
  * @property {string} attributeName - The name of the attribute as defined in the entity. This is the primary identifier for the attribute within the ORM and is used in entity operations.
- * @property {AttributeKind} kind - Discriminator identifying which attribute decorator produced this metadata.
  * @property {string} [alias] - An optional alias for the attribute that represents its name within the database. This is used for mapping the attribute to its corresponding column in the database table. If not specified, the `attributeName` is used as the column name.
  * @property {boolean} nullable - Indicates whether the attribute is allowed to have null values. This property is crucial for enforcing data integrity and validation rules at the database level.
  * @property {Serializers} [serializers] - Optional custom serialization strategies for the attribute. These strategies define how to convert the attribute's value between its representation in the entity and its representation in the database. This is particularly useful for handling complex data types or custom transformations.

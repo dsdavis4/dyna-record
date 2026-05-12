@@ -36,7 +36,7 @@ const AttributeMetadataTransform = z.discriminatedUnion("kind", [
     .object({
       ...baseAttributeShape,
       kind: z.literal("enum"),
-      enumValues: z.custom<readonly [string, ...string[]]>()
+      enumValues: z.array(z.string()).nonempty()
     })
     .transform(({ enumValues, ...rest }) => ({
       ...rest,

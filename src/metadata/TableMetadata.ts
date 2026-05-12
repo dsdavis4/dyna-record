@@ -113,6 +113,7 @@ class TableMetadata {
     const defaultAttrsMeta = Object.entries(tableDefaultFields);
     const customDefaults: Partial<TableDefaultFields> =
       options.defaultFields ?? {};
+    const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
 
     return defaultAttrsMeta.reduce<{
       entityDefaults: Record<string, AttributeMetadata>;
@@ -121,7 +122,6 @@ class TableMetadata {
       (acc, [entityKey, tableKeyAlias]) => {
         const key = entityKey as DefaultFields;
         const { alias } = customDefaults[key] ?? tableKeyAlias;
-        const dateFields: DefaultDateFields[] = ["createdAt", "updatedAt"];
         const isDateField = dateFields.includes(entityKey as DefaultDateFields);
         const kind: AttributeKind = isDateField ? "date" : "string";
         const meta = {
