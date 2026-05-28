@@ -1,11 +1,11 @@
 import TransactGetBuilder from "../../src/dynamo-utils/TransactGetBuilder";
 
 import DynamoClient from "../../src/dynamo-utils/DynamoClient";
-jest.mock("../../src/dynamo-utils/DynamoClient");
+vi.mock("../../src/dynamo-utils/DynamoClient");
 
 describe("TransactGetBuilder", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("will handle transactions of more than the max allowed by Dynamo (100) into multiple requests", async () => {
@@ -13,7 +13,7 @@ describe("TransactGetBuilder", () => {
 
     const numTransactions = 303;
 
-    const mockTransactGetItems = jest.spyOn(DynamoClient, "transactGetItems");
+    const mockTransactGetItems = vi.spyOn(DynamoClient, "transactGetItems");
 
     mockTransactGetItems.mockImplementation(async params => {
       const transactions = params.TransactItems ?? [];

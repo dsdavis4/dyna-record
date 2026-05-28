@@ -31,24 +31,24 @@ import {
 } from "../../src/operations";
 import Logger from "../../src/Logger";
 
-const mockSend = jest.fn();
-const mockQuery = jest.fn();
-const mockedQueryCommand = jest.mocked(QueryCommand);
+const mockSend = vi.fn();
+const mockQuery = vi.fn();
+const mockedQueryCommand = vi.mocked(QueryCommand);
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "QueryCommand") {
               return await Promise.resolve(mockQuery());
@@ -57,7 +57,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         };
       })
     },
-    QueryCommand: jest.fn().mockImplementation(() => {
+    QueryCommand: vi.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
     })
   };
@@ -65,7 +65,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 describe("Query", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("deserializes object attributes from JSON strings", () => {

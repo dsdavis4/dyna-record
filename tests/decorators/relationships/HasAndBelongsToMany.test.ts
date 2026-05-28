@@ -9,7 +9,7 @@ import { MockTable } from "../../integration/mockModels";
 
 describe("HasAndBelongsToMany", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("types", () => {

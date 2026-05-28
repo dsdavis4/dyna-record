@@ -59,33 +59,33 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
-const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockTransactGetCommand = jest.mocked(TransactGetCommand);
-const mockedQueryCommand = jest.mocked(QueryCommand);
+const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
+const mockTransactGetCommand = vi.mocked(TransactGetCommand);
+const mockedQueryCommand = vi.mocked(QueryCommand);
 
-const mockSend = jest.fn();
-const mockTransactGetItems = jest.fn();
-const mockQuery = jest.fn();
+const mockSend = vi.fn();
+const mockTransactGetItems = vi.fn();
+const mockQuery = vi.fn();
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    TransactionCanceledException: jest.fn().mockImplementation((...params) => {
+    TransactionCanceledException: vi.fn().mockImplementation((...params) => {
       const obj = Object.create(TransactionCanceledException.prototype);
       Object.assign(obj, ...params);
       return obj;
     }),
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "TransactGetCommand") {
               return await Promise.resolve(mockTransactGetItems());
@@ -104,13 +104,13 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         };
       })
     },
-    TransactGetCommand: jest.fn().mockImplementation(() => {
+    TransactGetCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactGetCommand" };
     }),
-    TransactWriteCommand: jest.fn().mockImplementation(() => {
+    TransactWriteCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     }),
-    QueryCommand: jest.fn().mockImplementation(() => {
+    QueryCommand: vi.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
     })
   };
@@ -154,15 +154,15 @@ class MockInformation extends MockTable {
 
 describe("Update", () => {
   beforeAll(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterAll(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("will update an entity without foreign key attributes (this entity has no local denormalized links)", () => {
@@ -222,7 +222,7 @@ describe("Update", () => {
     let customer: MockTableEntityTableItem<Customer>;
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
       customer = {
         PK: "Customer#123",
@@ -350,7 +350,7 @@ describe("Update", () => {
     let customer: MockTableEntityTableItem<Customer>;
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
       customer = {
         PK: "Customer#123",
@@ -524,7 +524,7 @@ describe("Update", () => {
     };
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     test("static method", async () => {
@@ -795,7 +795,7 @@ describe("Update", () => {
     };
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     test("static method", async () => {
@@ -963,7 +963,7 @@ describe("Update", () => {
     let contactInformation: MockTableEntityTableItem<ContactInformation>;
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
       contactInformation = {
         PK: "ContactInformation#123",
@@ -1126,7 +1126,7 @@ describe("Update", () => {
     };
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     test("static method", async () => {
@@ -1147,7 +1147,7 @@ describe("Update", () => {
       expect.assertions(7);
 
       const now = new Date("2023-10-16T03:31:35.918Z");
-      jest.setSystemTime(now);
+      vi.setSystemTime(now);
 
       const instance = createInstance(MockInformation, {
         pk: "MockInformation#123" as PartitionKey,
@@ -2159,7 +2159,7 @@ describe("Update", () => {
 
   describe("nullable fields within object attributes are stripped when set to null", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     test("static method", async () => {
@@ -2260,7 +2260,7 @@ describe("Update", () => {
     };
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     it("static method", async () => {
@@ -2418,7 +2418,7 @@ describe("Update", () => {
           Responses: [{ Item: customer }]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -3074,7 +3074,7 @@ describe("Update", () => {
           UpdatedAt: "2023-04-02T00:00:00.000Z"
         };
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
         mockQuery.mockResolvedValue({
           Items: [contactInformation]
         });
@@ -3922,7 +3922,7 @@ describe("Update", () => {
           Responses: [{ Item: person }]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -4570,7 +4570,7 @@ describe("Update", () => {
           Responses: [{ Item: person }]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -5398,7 +5398,7 @@ describe("Update", () => {
           Items: [employee]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -5937,7 +5937,7 @@ describe("Update", () => {
           Items: [employee]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -6781,7 +6781,7 @@ describe("Update", () => {
     }
 
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     afterEach(() => {
@@ -8389,7 +8389,7 @@ describe("Update", () => {
         Items: [warehouse, linkedShipment]
       });
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     afterEach(() => {
@@ -8564,7 +8564,7 @@ describe("Update", () => {
           Items: [warehouse, linkedShipment]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -8774,7 +8774,7 @@ describe("Update", () => {
           Items: [shipment]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -9012,7 +9012,7 @@ describe("Update", () => {
           Items: [catalog, linkedCatalogItem]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -9240,7 +9240,7 @@ describe("Update", () => {
           Items: [sponsor, linkedFestival1, linkedFestival2]
         });
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
       });
 
       afterEach(() => {
@@ -9470,7 +9470,7 @@ describe("Update", () => {
 
   describe("partial ObjectAttribute updates", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     describe("partial update of non-nullable ObjectAttribute - only provide some fields", () => {
@@ -10547,7 +10547,7 @@ describe("Update", () => {
         };
 
         beforeEach(() => {
-          jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+          vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
         });
 
         test("static method", async () => {
@@ -11920,7 +11920,7 @@ describe("Update", () => {
 
   describe("discriminated union attributes", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     it("updates a discriminated union field with full replacement", async () => {
@@ -12384,7 +12384,7 @@ describe("Update", () => {
 
   describe("array of discriminated unions", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
     });
 
     it("updates an array of discriminated union items with full replacement", async () => {

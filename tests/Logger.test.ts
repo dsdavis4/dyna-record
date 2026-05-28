@@ -1,13 +1,13 @@
 import Logger from "../src/Logger";
 
-const consoleLogSpy = jest.spyOn(console, "log");
-const consoleWarnSpy = jest.spyOn(console, "warn");
-const consoleErrorSpy = jest.spyOn(console, "error");
-const consoleInfoSpy = jest.spyOn(console, "info");
+const consoleLogSpy = vi.spyOn(console, "log");
+const consoleWarnSpy = vi.spyOn(console, "warn");
+const consoleErrorSpy = vi.spyOn(console, "error");
+const consoleInfoSpy = vi.spyOn(console, "info");
 
 describe("Logger", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("when DYNA_RECORD_LOGGING_ENABLED is true", () => {

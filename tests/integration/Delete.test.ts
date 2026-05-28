@@ -35,13 +35,13 @@ type BookTableItem = Omit<MockTableEntityTableItem<Book>, "OwnerId"> & {
   PersonId: string;
 };
 
-const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockedQueryCommand = jest.mocked(QueryCommand);
+const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
+const mockedQueryCommand = vi.mocked(QueryCommand);
 
-const mockSend = jest.fn();
-const mockQuery = jest.fn();
-const mockDelete = jest.fn();
-const mockTransact = jest.fn();
+const mockSend = vi.fn();
+const mockQuery = vi.fn();
+const mockDelete = vi.fn();
+const mockTransact = vi.fn();
 
 @Entity
 class MockModel extends MockTable {
@@ -54,25 +54,25 @@ class MockModel extends MockTable {
   public myVar2: number;
 }
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    TransactionCanceledException: jest.fn().mockImplementation((...params) => {
+    TransactionCanceledException: vi.fn().mockImplementation((...params) => {
       const obj = Object.create(TransactionCanceledException.prototype);
       Object.assign(obj, ...params);
       return obj;
     }),
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "QueryCommand") {
               return await Promise.resolve(mockQuery());
@@ -89,13 +89,13 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         };
       })
     },
-    QueryCommand: jest.fn().mockImplementation(() => {
+    QueryCommand: vi.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
     }),
-    DeleteCommand: jest.fn().mockImplementation(() => {
+    DeleteCommand: vi.fn().mockImplementation(() => {
       return { name: "DeleteCommand" };
     }),
-    TransactWriteCommand: jest.fn().mockImplementation(() => {
+    TransactWriteCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     })
   };
@@ -103,17 +103,17 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 describe("Delete", () => {
   beforeAll(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
   });
 
   afterAll(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("will delete an entity that has no relationships", async () => {
