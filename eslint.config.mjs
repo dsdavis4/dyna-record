@@ -12,8 +12,6 @@ export default defineConfig(
       "node_modules/**",
       "docs/**",
       "tmp/**",
-      "scripts/**",
-      "patches/**",
       ".debug/**",
       "eslint.config.mjs"
     ]
