@@ -1,5 +1,5 @@
-import Metadata, { type TableMetadataOptions } from "../metadata";
-import type DynaRecord from "../DynaRecord";
+import Metadata, { type TableMetadataOptions } from "../metadata/index.js";
+import type DynaRecord from "../DynaRecord.js";
 
 /**
  * A class decorator for defining and customizing the table metadata associated with an entity class within the ORM system. This decorator enriches the entity with additional metadata, specifying how the entity relates to the underlying database table. By providing custom table options, such as table names or schema definitions, this decorator plays a crucial role in bridging the gap between the ORM's abstract entities and their concrete database representations.

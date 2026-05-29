@@ -1,6 +1,6 @@
-import TransactGetBuilder from "../../src/dynamo-utils/TransactGetBuilder";
+import TransactGetBuilder from "../../src/dynamo-utils/TransactGetBuilder.js";
 
-import DynamoClient from "../../src/dynamo-utils/DynamoClient";
+import DynamoClient from "../../src/dynamo-utils/DynamoClient.js";
 vi.mock("../../src/dynamo-utils/DynamoClient");
 
 describe("TransactGetBuilder", () => {

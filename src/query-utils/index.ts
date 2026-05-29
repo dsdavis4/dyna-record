@@ -1,2 +1,2 @@
-export { default as QueryBuilder } from "./QueryBuilder";
-export * from "./types";
+export { default as QueryBuilder } from "./QueryBuilder.js";
+export * from "./types.js";

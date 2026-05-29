@@ -23,17 +23,17 @@ import {
   ArrayOfUnionsEntity,
   Vendor,
   Discovery
-} from "./mockModels";
+} from "./mockModels.js";
 import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand
 } from "@aws-sdk/lib-dynamodb";
-import Logger from "../../src/Logger";
+import Logger from "../../src/Logger.js";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
-} from "./utils";
+} from "./utils.js";
 
 const mockGet = vi.fn();
 const mockSend = vi.fn();

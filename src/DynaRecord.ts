@@ -1,5 +1,5 @@
-import Metadata, { tableDefaultFields, type TableMetadata } from "./metadata";
-import { DateAttribute, StringAttribute } from "./decorators";
+import Metadata, { tableDefaultFields, type TableMetadata } from "./metadata/index.js";
+import { DateAttribute, StringAttribute } from "./decorators/index.js";
 import {
   FindById,
   type FindByIdOptions,
@@ -23,10 +23,10 @@ import {
   type TypedSortKeyCondition,
   type InferQueryResults,
   type SKScopedFilterParams
-} from "./operations";
-import { mergePartialObjectAttributes } from "./operations/utils";
-import type { DynamoTableItem, EntityClass, Optional } from "./types";
-import { createInstance, tableItemToEntity } from "./utils";
+} from "./operations/index.js";
+import { mergePartialObjectAttributes } from "./operations/utils/index.js";
+import type { DynamoTableItem, EntityClass, Optional } from "./types.js";
+import { createInstance, tableItemToEntity } from "./utils.js";
 
 interface DynaRecordBase {
   id: string;

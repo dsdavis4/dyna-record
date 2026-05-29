@@ -2,10 +2,10 @@ import {
   Entity,
   HasAndBelongsToMany,
   StringAttribute
-} from "../../../src/decorators";
-import { JoinTable } from "../../../src/relationships";
-import type { ForeignKey } from "../../../src/types";
-import { MockTable } from "../../integration/mockModels";
+} from "../../../src/decorators/index.js";
+import { JoinTable } from "../../../src/relationships/index.js";
+import type { ForeignKey } from "../../../src/types.js";
+import { MockTable } from "../../integration/mockModels.js";
 
 describe("HasAndBelongsToMany", () => {
   afterEach(() => {

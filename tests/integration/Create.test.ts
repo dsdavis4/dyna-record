@@ -26,24 +26,24 @@ import {
   ArrayOfObjectsEntity,
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity
-} from "./mockModels";
+} from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { generateId } from "../../src/id";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { generateId } from "../../src/id.js";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
   BelongsTo,
   Entity,
   ForeignKeyAttribute,
   HasOne,
   StringAttribute
-} from "../../src/decorators";
-import type { ForeignKey, NullableForeignKey } from "../../src/types";
-import { ValidationError } from "../../src";
+} from "../../src/decorators/index.js";
+import type { ForeignKey, NullableForeignKey } from "../../src/types.js";
+import { ValidationError } from "../../src/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
-} from "./utils";
-import Logger from "../../src/Logger";
+} from "./utils.js";
+import Logger from "../../src/Logger.js";
 
 vi.mock("../../src/id");
 

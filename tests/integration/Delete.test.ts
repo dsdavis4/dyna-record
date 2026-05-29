@@ -13,13 +13,13 @@ import {
   Organization,
   Employee,
   type Founder
-} from "./mockModels";
-import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators";
+} from "./mockModels.js";
+import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators/index.js";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
-import { NotFoundError, NullConstraintViolationError } from "../../src/errors";
-import { type MockTableEntityTableItem } from "./utils";
-import Logger from "../../src/Logger";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
+import { NotFoundError, NullConstraintViolationError } from "../../src/errors.js";
+import { type MockTableEntityTableItem } from "./utils.js";
+import Logger from "../../src/Logger.js";
 
 /**
  * The testing type util does not support converting MLS# so set it here

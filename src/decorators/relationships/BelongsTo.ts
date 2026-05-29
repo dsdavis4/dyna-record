@@ -1,8 +1,8 @@
-import Metadata from "../../metadata";
-import type DynaRecord from "../../DynaRecord";
-import type { EntityClass, ForeignKeyProperty } from "../../types";
-import type { BelongsToField, BelongsToProps, BelongsToTarget } from "./types";
-import type { ForeignEntityAttribute } from "../types";
+import Metadata from "../../metadata/index.js";
+import type DynaRecord from "../../DynaRecord.js";
+import type { EntityClass, ForeignKeyProperty } from "../../types.js";
+import type { BelongsToField, BelongsToProps, BelongsToTarget } from "./types.js";
+import type { ForeignEntityAttribute } from "../types.js";
 
 /**
  * A decorator for defining a "BelongsTo" relationship between entities in a single-table design using DynaRecord. This relationship indicates that the decorated field is a reference to another entity, effectively establishing a parent-child linkage. The decorator dynamically enforces the presence or optionality of this reference based on the nature of the foreign key, enhancing type safety and relationship integrity within the ORM model.

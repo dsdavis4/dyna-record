@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, StringAttribute } from "../../../src/decorators";
+import { Entity, StringAttribute } from "../../../src/decorators/index.js";
 import {
   MockTable,
   Customer,
   Student,
   Profile
-} from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+} from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodNullable, ZodOptional, ZodString } from "zod";
-import { type ForeignKey, type NullableForeignKey } from "../../../src";
+import { type ForeignKey, type NullableForeignKey } from "../../../src/index.js";
 
 describe("StringAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {

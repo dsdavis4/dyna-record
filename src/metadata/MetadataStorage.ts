@@ -1,11 +1,11 @@
-import type DynaRecord from "../DynaRecord";
-import type { MakeOptional } from "../types";
-import TableMetadata from "./TableMetadata";
-import EntityMetadata from "./EntityMetadata";
-import AttributeMetadata from "./AttributeMetadata";
-import JoinTableMetadata from "./JoinTableMetadata";
-import { createRelationshipInstance } from "./relationship-metadata/utils";
-import type { RelationshipMetadata } from "./relationship-metadata";
+import type DynaRecord from "../DynaRecord.js";
+import type { MakeOptional } from "../types.js";
+import TableMetadata from "./TableMetadata.js";
+import EntityMetadata from "./EntityMetadata.js";
+import AttributeMetadata from "./AttributeMetadata.js";
+import JoinTableMetadata from "./JoinTableMetadata.js";
+import { createRelationshipInstance } from "./relationship-metadata/utils.js";
+import type { RelationshipMetadata } from "./relationship-metadata/index.js";
 import type {
   AttributeMetadataStorage,
   DefaultFields,
@@ -14,7 +14,7 @@ import type {
   TableMetadataOptions,
   TableMetadataStorage,
   AttributeMetadataOptions
-} from "./types";
+} from "./types.js";
 
 /**
  * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.

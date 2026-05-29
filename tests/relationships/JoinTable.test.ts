@@ -8,19 +8,19 @@ import {
   type User,
   UserWebsite,
   type Website
-} from "../integration/mockModels";
+} from "../integration/mockModels.js";
 import {
   TransactWriteCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
-} from "../integration/utils";
-import { NotFoundError } from "../../src";
-import Logger from "../../src/Logger";
+} from "../integration/utils.js";
+import { NotFoundError } from "../../src/index.js";
+import Logger from "../../src/Logger.js";
 
 const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
 const mockTransactGetCommand = vi.mocked(TransactGetCommand);

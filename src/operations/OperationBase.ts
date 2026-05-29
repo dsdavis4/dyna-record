@@ -1,6 +1,6 @@
-import type DynaRecord from "../DynaRecord";
-import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata";
-import type { EntityClass } from "../types";
+import type DynaRecord from "../DynaRecord.js";
+import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata/index.js";
+import type { EntityClass } from "../types.js";
 
 /**
  * Serves as an abstract base class for various operation classes within the ORM system that perform actions on entities, such as creating, updating, querying, or deleting. This class provides shared properties and functionality that are common across different types of operations, centralizing the handling of entity and table metadata.

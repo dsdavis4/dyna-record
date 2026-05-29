@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators";
-import { MockTable, Order, Profile, Pet } from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+import { Entity, DateAttribute, dateSerializer } from "../../../src/decorators/index.js";
+import { MockTable, Order, Profile, Pet } from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodDate, ZodNullable, ZodOptional } from "zod";
 
 describe("DateAttribute", () => {

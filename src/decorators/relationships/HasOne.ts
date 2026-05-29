@@ -1,7 +1,7 @@
-import Metadata from "../../metadata";
-import type DynaRecord from "../../DynaRecord";
-import type { EntityClass, ForeignKeyProperty, Optional } from "../../types";
-import { type ForeignEntityAttribute } from "../types";
+import Metadata from "../../metadata/index.js";
+import type DynaRecord from "../../DynaRecord.js";
+import type { EntityClass, ForeignKeyProperty, Optional } from "../../types.js";
+import { type ForeignEntityAttribute } from "../types.js";
 
 interface HasOneProps<T extends DynaRecord> {
   foreignKey: ForeignEntityAttribute<T> & keyof T;

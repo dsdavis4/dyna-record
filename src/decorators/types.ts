@@ -1,6 +1,6 @@
-import type DynaRecord from "../DynaRecord";
-import { type EntityAttributesOnly } from "../operations/types";
-import type { NullableForeignKey, ForeignKey, Optional } from "../types";
+import type DynaRecord from "../DynaRecord.js";
+import { type EntityAttributesOnly } from "../operations/types.js";
+import type { NullableForeignKey, ForeignKey, Optional } from "../types.js";
 
 /**
  * Returns attributes on the provided model which are EntityAttributes of type ForeignKey

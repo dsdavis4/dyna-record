@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import DynaRecord from "../../index";
-import { Table, Entity } from "../../src/decorators";
+import DynaRecord from "../../index.js";
+import { Table, Entity } from "../../src/decorators/index.js";
 import {
   PartitionKeyAttribute,
   SortKeyAttribute,
   StringAttribute
-} from "../../src/decorators";
-import type { PartitionKey, SortKey } from "../../src/types";
+} from "../../src/decorators/index.js";
+import type { PartitionKey, SortKey } from "../../src/types.js";
 
 @Table({ name: "entity-test-table" })
 abstract class TestTable extends DynaRecord {

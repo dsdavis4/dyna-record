@@ -1,6 +1,6 @@
 import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import type { BelongsToRelationship, RelationshipMetadata } from "./metadata";
-import type DynaRecord from "./DynaRecord";
+import type { BelongsToRelationship, RelationshipMetadata } from "./metadata/index.js";
+import type DynaRecord from "./DynaRecord.js";
 
 /**
  * A utility type for branding primitives to ensure type safety with unique identifiers.

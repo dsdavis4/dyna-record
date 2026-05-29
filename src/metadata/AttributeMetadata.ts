@@ -1,12 +1,12 @@
 import { type ZodType } from "zod";
-import type DynaRecord from "../DynaRecord";
+import type DynaRecord from "../DynaRecord.js";
 import type {
   AttributeKind,
   AttributeMetadataOptions,
   Serializers
-} from "./types";
-import type { EntityClass } from "../types";
-import type { ObjectSchema } from "../decorators/attributes/types";
+} from "./types.js";
+import type { EntityClass } from "../types.js";
+import type { ObjectSchema } from "../decorators/attributes/types.js";
 
 /**
  * Represents the metadata for an attribute of an entity, including its name, alias (if any), nullability, and serialization strategies.

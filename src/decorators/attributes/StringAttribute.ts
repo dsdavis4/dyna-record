@@ -1,11 +1,11 @@
 import { z } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
 import type {
   AttributeDecoratorContext,
   AttributeOptions,
   NotForeignKey
-} from "../types";
+} from "../types.js";
 
 /**
  * A decorator for marking class fields as string attributes within the context of a single-table design entity, with a specific restriction against using foreign key types.

@@ -1,7 +1,7 @@
-export * from "./decorators";
-export * from "./errors";
-export * from "./relationships";
-export * from "./dynamo-utils/errors";
+export * from "./decorators/index.js";
+export * from "./errors.js";
+export * from "./relationships/index.js";
+export * from "./dynamo-utils/errors.js";
 
 export type {
   EntityAttributesOnly,
@@ -12,12 +12,12 @@ export type {
   SKScopedFilterParams,
   InferQueryResults,
   PartitionEntityNames
-} from "./operations";
+} from "./operations/index.js";
 export type {
   PartitionKey,
   SortKey,
   ForeignKey,
   NullableForeignKey
-} from "./types";
-export type { AttributeKind } from "./metadata/types";
-export type { SerializedTableMetadata } from "./metadata/schemas";
+} from "./types.js";
+export type { AttributeKind } from "./metadata/types.js";
+export type { SerializedTableMetadata } from "./metadata/schemas.js";

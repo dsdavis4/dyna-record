@@ -19,17 +19,17 @@ import {
   Sponsor,
   Teacher,
   Warehouse
-} from "./mockModels";
+} from "./mockModels.js";
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
-} from "./utils";
+} from "./utils.js";
 import {
   type QueryResults,
   type EntityAttributesInstance
-} from "../../src/operations";
-import Logger from "../../src/Logger";
+} from "../../src/operations/index.js";
+import Logger from "../../src/Logger.js";
 
 const mockSend = vi.fn();
 const mockQuery = vi.fn();

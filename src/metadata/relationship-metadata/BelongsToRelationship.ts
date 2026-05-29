@@ -1,5 +1,5 @@
-import type { ForeignKeyProperty } from "../../types";
-import RelationshipMetadata from "./RelationshipMetadata";
+import type { ForeignKeyProperty } from "../../types.js";
+import RelationshipMetadata from "./RelationshipMetadata.js";
 
 /**
  * Represents a "Belongs To" relationship metadata within the ORM system. These are bidirectional relationships to the parent.

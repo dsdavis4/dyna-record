@@ -1,17 +1,17 @@
 import { z, type ZodType } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
 import type {
   AttributeDecoratorContext,
   NonNullAttributeOptions
-} from "../types";
+} from "../types.js";
 import type {
   ObjectSchema,
   InferObjectSchema,
   FieldDef,
   DiscriminatedUnionFieldDef
-} from "./types";
-import { createObjectSerializer } from "./serializers";
+} from "./types.js";
+import { createObjectSerializer } from "./serializers.js";
 
 /**
  * Options for the `@ObjectAttribute` decorator.

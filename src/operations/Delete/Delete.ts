@@ -1,29 +1,29 @@
-import type DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord.js";
 import {
   TransactWriteBuilder,
   TransactionWriteFailedError
-} from "../../dynamo-utils";
-import { NotFoundError, NullConstraintViolationError } from "../../errors";
-import Metadata, { type BelongsToRelationship } from "../../metadata";
+} from "../../dynamo-utils/index.js";
+import { NotFoundError, NullConstraintViolationError } from "../../errors.js";
+import Metadata, { type BelongsToRelationship } from "../../metadata/index.js";
 import {
   isRelationshipMetadataWithForeignKey,
   isBelongsToRelationship,
   isHasAndBelongsToManyRelationship
-} from "../../metadata/utils";
+} from "../../metadata/utils.js";
 import type {
   DynamoTableItem,
   EntityClass,
   RelationshipLookup
-} from "../../types";
-import { isKeyOfObject } from "../../utils";
-import OperationBase from "../OperationBase";
-import type { QueryResults, QueryResult } from "../Query";
-import { UpdateDryRun } from "../Update";
+} from "../../types.js";
+import { isKeyOfObject } from "../../utils.js";
+import OperationBase from "../OperationBase.js";
+import type { QueryResults, QueryResult } from "../Query/index.js";
+import { UpdateDryRun } from "../Update/index.js";
 import {
   buildBelongsToLinkKey,
   buildEntityRelationshipMetaObj
-} from "../utils";
-import type { DeleteOptions } from "./types";
+} from "../utils/index.js";
+import type { DeleteOptions } from "./types.js";
 
 type Entity = QueryResult<DynaRecord>;
 

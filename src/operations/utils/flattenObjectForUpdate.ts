@@ -1,6 +1,6 @@
-import type { ObjectSchema } from "../../decorators/attributes/types";
-import { convertFieldToTableItem } from "../../decorators/attributes/serializers";
-import type { DocumentPathOperation } from "./types";
+import type { ObjectSchema } from "../../decorators/attributes/types.js";
+import { convertFieldToTableItem } from "../../decorators/attributes/serializers.js";
+import type { DocumentPathOperation } from "./types.js";
 
 /**
  * Flattens a partial object value into document path operations for DynamoDB

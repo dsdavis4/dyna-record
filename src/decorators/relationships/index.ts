@@ -1,5 +1,5 @@
-export { default as HasMany } from "./HasMany";
-export { default as HasOne } from "./HasOne";
-export { default as BelongsTo } from "./BelongsTo";
-export { default as HasAndBelongsToMany } from "./HasAndBelongsToMany";
-export * from "./types";
+export { default as HasMany } from "./HasMany.js";
+export { default as HasOne } from "./HasOne.js";
+export { default as BelongsTo } from "./BelongsTo.js";
+export { default as HasAndBelongsToMany } from "./HasAndBelongsToMany.js";
+export * from "./types.js";

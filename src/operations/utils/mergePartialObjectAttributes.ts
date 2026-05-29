@@ -1,5 +1,5 @@
-import type { AttributeMetadataStorage } from "../../metadata";
-import type { ObjectSchema } from "../../decorators/attributes/types";
+import type { AttributeMetadataStorage } from "../../metadata/index.js";
+import type { ObjectSchema } from "../../decorators/attributes/types.js";
 
 /**
  * Deep merges partial ObjectAttribute updates into the target object.

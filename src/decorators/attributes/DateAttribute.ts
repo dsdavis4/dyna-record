@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
-import type { AttributeDecoratorContext, AttributeOptions } from "../types";
-import { dateSerializer } from "./serializers";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
+import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
+import { dateSerializer } from "./serializers.js";
 
 /**
  * A decorator for marking class fields as date attributes within the context of a single-table design entity

@@ -1,5 +1,5 @@
-import type DynaRecord from "../../DynaRecord";
-import type { EntityClass } from "../../types";
+import type DynaRecord from "../../DynaRecord.js";
+import type { EntityClass } from "../../types.js";
 
 type RelationshipType =
   | "HasMany"

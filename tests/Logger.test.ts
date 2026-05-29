@@ -1,4 +1,4 @@
-import Logger from "../src/Logger";
+import Logger from "../src/Logger.js";
 
 const consoleLogSpy = vi.spyOn(console, "log");
 const consoleWarnSpy = vi.spyOn(console, "warn");

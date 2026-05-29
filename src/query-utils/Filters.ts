@@ -1,5 +1,5 @@
-import { type RelationshipMetadata } from "../metadata";
-import { type OrFilter } from "./types";
+import { type RelationshipMetadata } from "../metadata/index.js";
+import { type OrFilter } from "./types.js";
 
 /**
  * Builds the filter so that relationships that are included in the query will have their relationships included in the query

@@ -1,19 +1,19 @@
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
 import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
-} from "../../query-utils";
-import DynamoClient from "../../dynamo-utils/DynamoClient";
-import type { DynamoTableItem } from "../../types";
-import { isString, tableItemToEntity } from "../../utils";
-import OperationBase from "../OperationBase";
+} from "../../query-utils/index.js";
+import DynamoClient from "../../dynamo-utils/DynamoClient.js";
+import type { DynamoTableItem } from "../../types.js";
+import { isString, tableItemToEntity } from "../../utils.js";
+import OperationBase from "../OperationBase.js";
 import type {
   EntityQueryKeyConditions,
   QueryOptions,
   QueryResult,
   QueryResults
-} from "./types";
+} from "./types.js";
 
 /**
  * Provides functionality to query entities from the database based on partition key, sort key, and optional filter conditions.

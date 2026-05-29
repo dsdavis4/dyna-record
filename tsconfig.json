@@ -2,8 +2,8 @@
   "include": ["src/**/*", "index.ts"],
   "exclude": ["**/*.test.ts", "**/tests/*", "dist"],
   "compilerOptions": {
-    "module": "Preserve",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2025",
     "lib": ["ES2025"],
     "types": ["node"],
@@ -13,7 +13,6 @@
     "strictPropertyInitialization": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,

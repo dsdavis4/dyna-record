@@ -33,9 +33,9 @@ import {
   DeepNestedEntity,
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity
-} from "./mockModels";
+} from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
   ForeignKeyAttribute,
   BelongsTo,
@@ -44,20 +44,20 @@ import {
   HasOne,
   DateAttribute,
   StringAttribute
-} from "../../src/decorators";
+} from "../../src/decorators/index.js";
 import {
   type NullableForeignKey,
   type PartitionKey,
   type SortKey,
   type ForeignKey
-} from "../../src/types";
-import { NotFoundError, ValidationError } from "../../src";
-import { createInstance } from "../../src/utils";
+} from "../../src/types.js";
+import { NotFoundError, ValidationError } from "../../src/index.js";
+import { createInstance } from "../../src/utils.js";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
-} from "./utils";
-import Logger from "../../src/Logger";
+} from "./utils.js";
+import Logger from "../../src/Logger.js";
 
 const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
 const mockTransactGetCommand = vi.mocked(TransactGetCommand);

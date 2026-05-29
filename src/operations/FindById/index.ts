@@ -1,2 +1,2 @@
-export { default as FindById } from "./FindById";
-export * from "./types";
+export { default as FindById } from "./FindById.js";
+export * from "./types.js";

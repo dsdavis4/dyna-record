@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import DynaRecord from "../../index";
-import { Table } from "../../src/decorators";
+import DynaRecord from "../../index.js";
+import { Table } from "../../src/decorators/index.js";
 
 describe("Table metadata", () => {
   describe("types", () => {

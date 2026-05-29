@@ -1,11 +1,11 @@
-import type DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord.js";
 import type {
   EntityAttributesInstance,
   EntityAttributesOnly,
   FunctionFields,
   RelationshipAttributeNames
-} from "../types";
-import { type QueryResult, type QueryResults } from "../Query";
+} from "../types.js";
+import { type QueryResult, type QueryResults } from "../Query/index.js";
 
 /**
  * An array of objects each describing an entity relationship association to include.

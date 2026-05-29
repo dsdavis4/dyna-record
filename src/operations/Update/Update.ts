@@ -1,21 +1,21 @@
-import type DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord.js";
 import {
   type ConditionCheck,
   TransactGetBuilder,
   TransactWriteBuilder
-} from "../../dynamo-utils";
+} from "../../dynamo-utils/index.js";
 import type {
   BelongsToOrOwnedByRelationship,
   BelongsToRelationship,
   HasAndBelongsToManyRelationship
-} from "../../metadata";
+} from "../../metadata/index.js";
 import {
   entityToTableItem,
   isKeyOfObject,
   isNullableString,
   isString,
   tableItemToEntity
-} from "../../utils";
+} from "../../utils.js";
 import {
   type UpdateExpression,
   type DocumentPathOperation,
@@ -23,24 +23,24 @@ import {
   expressionBuilder,
   extractForeignKeyFromEntity,
   flattenObjectForUpdate
-} from "../utils";
-import OperationBase from "../OperationBase";
+} from "../utils/index.js";
+import OperationBase from "../OperationBase.js";
 import type {
   UpdatedAttributes,
   UpdateOptions,
   UpdateOperationOptions
-} from "./types";
-import type { DynamoTableItem, EntityClass, WithRequired } from "../../types";
-import Metadata from "../../metadata";
+} from "./types.js";
+import type { DynamoTableItem, EntityClass, WithRequired } from "../../types.js";
+import Metadata from "../../metadata/index.js";
 import {
   type EntityAttributesInstance,
   type EntityAttributesOnly
-} from "../types";
-import { NotFoundError } from "../../errors";
+} from "../types.js";
+import { NotFoundError } from "../../errors.js";
 import {
   isBelongsToRelationship,
   isHasManyRelationship
-} from "../../metadata/utils";
+} from "../../metadata/utils.js";
 
 type Entity = EntityAttributesInstance<DynaRecord>;
 

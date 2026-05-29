@@ -3,9 +3,9 @@ import {
   type NullableForeignKey,
   type PartitionKey,
   type SortKey
-} from "../../src";
-import type DynaRecord from "../../src/DynaRecord";
-import { type MockTable } from "./mockModels";
+} from "../../src/index.js";
+import type DynaRecord from "../../src/DynaRecord.js";
+import { type MockTable } from "./mockModels.js";
 
 /**
  * Capitalize the first letter of a string

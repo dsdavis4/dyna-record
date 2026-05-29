@@ -12,8 +12,8 @@ import {
   type TransactWriteCommandOutput,
   type TransactGetCommandInput
 } from "@aws-sdk/lib-dynamodb";
-import Logger from "../Logger";
-import type { QueryItems, TransactGetItemResponses } from "./types";
+import Logger from "../Logger.js";
+import type { QueryItems, TransactGetItemResponses } from "./types.js";
 
 // Initialize the DynamoDB Document Client with a specific AWS region.
 const dynamo = DynamoDBDocumentClient.from(

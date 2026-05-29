@@ -1,4 +1,4 @@
-import { NullConstraintViolationError, NotFoundError } from "../../src/errors";
+import { NullConstraintViolationError, NotFoundError } from "../../src/errors.js";
 
 describe("errors", () => {
   describe("NullConstraintViolationError", () => {

@@ -7,11 +7,11 @@ import type {
   OwnedByRelationship,
   RelationshipMetadata,
   TableMetadata
-} from ".";
-import type DynaRecord from "../DynaRecord";
-import type { EntityClass, MakeOptional } from "../types";
+} from "./index.js";
+import type DynaRecord from "../DynaRecord.js";
+import type { EntityClass, MakeOptional } from "../types.js";
 import type { ZodType } from "zod";
-import type { ObjectSchema } from "../decorators/attributes/types";
+import type { ObjectSchema } from "../decorators/attributes/types.js";
 
 /**
  * Represents relationship metadata that includes a foreign key reference to another entity.

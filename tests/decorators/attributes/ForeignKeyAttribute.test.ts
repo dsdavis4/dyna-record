@@ -3,8 +3,8 @@ import {
   Entity,
   ForeignKeyAttribute,
   StringAttribute
-} from "../../../src/decorators";
-import type { NullableForeignKey, ForeignKey } from "../../../src/types";
+} from "../../../src/decorators/index.js";
+import type { NullableForeignKey, ForeignKey } from "../../../src/types.js";
 import {
   MockTable,
   Order,
@@ -12,8 +12,8 @@ import {
   MyClassWithAllAttributeTypes,
   Customer,
   Course
-} from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+} from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodNullable, ZodOptional, ZodString } from "zod";
 
 describe("ForeignKeyAttribute", () => {

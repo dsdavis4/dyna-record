@@ -1,22 +1,22 @@
-import type DynaRecord from "../../DynaRecord";
-import { generateId } from "../../id";
-import type { DynamoTableItem, EntityClass } from "../../types";
+import type DynaRecord from "../../DynaRecord.js";
+import { generateId } from "../../id.js";
+import type { DynamoTableItem, EntityClass } from "../../types.js";
 import {
   type ConditionCheck,
   TransactGetBuilder,
   TransactWriteBuilder
-} from "../../dynamo-utils";
-import { entityToTableItem, isString, tableItemToEntity } from "../../utils";
-import OperationBase from "../OperationBase";
-import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils";
-import type { CreateOptions, CreateOperationOptions } from "./types";
+} from "../../dynamo-utils/index.js";
+import { entityToTableItem, isString, tableItemToEntity } from "../../utils.js";
+import OperationBase from "../OperationBase.js";
+import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils/index.js";
+import type { CreateOptions, CreateOperationOptions } from "./types.js";
 import {
   type EntityDefinedAttributes,
   type EntityAttributeDefaultFields,
   type EntityAttributesOnly
-} from "../types";
-import { isBelongsToRelationship } from "../../metadata/utils";
-import type { BelongsToOrOwnedByRelationship } from "../../metadata";
+} from "../types.js";
+import { isBelongsToRelationship } from "../../metadata/utils.js";
+import type { BelongsToOrOwnedByRelationship } from "../../metadata/index.js";
 
 /**
  * Represents an operation to create a new entity record in DynamoDB, including all necessary

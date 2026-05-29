@@ -1,15 +1,15 @@
-import type DynaRecord from "../DynaRecord";
+import type DynaRecord from "../DynaRecord.js";
 import {
   TransactGetBuilder,
   type TransactGetItemResponses
-} from "../dynamo-utils";
-import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder";
-import { NotFoundError } from "../errors";
+} from "../dynamo-utils/index.js";
+import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder.js";
+import { NotFoundError } from "../errors.js";
 import Metadata, {
   type TableMetadata,
   type JoinTableMetadata
-} from "../metadata";
-import type { ForeignKey, EntityClass, DynamoTableItem } from "../types";
+} from "../metadata/index.js";
+import type { ForeignKey, EntityClass, DynamoTableItem } from "../types.js";
 
 /**
  * Exclude the type1 type2 instance keys

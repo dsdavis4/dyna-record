@@ -4,9 +4,9 @@ import {
   IdAttribute,
   NumberAttribute,
   StringAttribute
-} from "../../../src";
-import Metadata from "../../../src/metadata";
-import { MockTable } from "../../integration/mockModels";
+} from "../../../src/index.js";
+import Metadata from "../../../src/metadata/index.js";
+import { MockTable } from "../../integration/mockModels.js";
 
 @Entity
 class CustomIdModel extends MockTable {

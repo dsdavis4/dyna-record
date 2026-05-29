@@ -1,4 +1,4 @@
-import DynaRecord from "../../index";
+import DynaRecord from "../../index.js";
 import {
   Table,
   Entity,
@@ -16,15 +16,15 @@ import {
   EnumAttribute,
   IdAttribute,
   ObjectAttribute
-} from "../../src/decorators";
-import type { ObjectSchema, InferObjectSchema } from "../../src/decorators";
-import { JoinTable } from "../../src/relationships";
+} from "../../src/decorators/index.js";
+import type { ObjectSchema, InferObjectSchema } from "../../src/decorators/index.js";
+import { JoinTable } from "../../src/relationships/index.js";
 import type {
   PartitionKey,
   SortKey,
   ForeignKey,
   NullableForeignKey
-} from "../../src/types";
+} from "../../src/types.js";
 
 export const addressSchema = {
   street: { type: "string" },

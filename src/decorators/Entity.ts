@@ -1,5 +1,5 @@
-import Metadata from "../metadata";
-import type DynaRecord from "../DynaRecord";
+import Metadata from "../metadata/index.js";
+import type DynaRecord from "../DynaRecord.js";
 
 /**
  * A class decorator for marking a class as an entity within the context of the ORM system. This decorator is essential for registering the class as a distinct entity in the ORM's metadata system, enabling the ORM to recognize and manage instances of this class as part of its data model. By designating classes as entities, it facilitates their integration into the ORM framework, allowing for operations such as querying, persisting, and managing relationships between entities.

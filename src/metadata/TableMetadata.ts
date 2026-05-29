@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AttributeMetadata } from ".";
-import { dateSerializer } from "../decorators";
+import { AttributeMetadata } from "./index.js";
+import { dateSerializer } from "../decorators/index.js";
 import type {
   AttributeKind,
   TableMetadataOptions,
@@ -9,11 +9,11 @@ import type {
   DefaultDateFields,
   KeysAttributeMetadataOptions,
   EntityMetadataStorage
-} from "./types";
+} from "./types.js";
 import {
   type SerializedTableMetadata,
   TableMetadataTransform
-} from "./schemas";
+} from "./schemas.js";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 

@@ -1,5 +1,5 @@
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata from "../../src/metadata";
+import Metadata from "../../src/metadata/index.js";
 import { z } from "zod";
 vi.mock("../../src/metadata");
 

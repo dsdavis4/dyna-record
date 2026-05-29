@@ -1,5 +1,5 @@
-import type DynaRecord from "../../DynaRecord";
-import Update from "./Update";
+import type DynaRecord from "../../DynaRecord.js";
+import Update from "./Update.js";
 
 /**
  * Runs Update operation with out committing the transaction

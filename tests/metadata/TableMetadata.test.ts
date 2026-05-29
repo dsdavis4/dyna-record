@@ -12,7 +12,7 @@ import {
   locationSchema,
   nullableUnionSchema,
   paymentSchema
-} from "../integration/mockModels";
+} from "../integration/mockModels.js";
 
 describe("TableMetadata", () => {
   describe("MockTable.metadata()", () => {

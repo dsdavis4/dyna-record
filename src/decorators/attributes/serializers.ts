@@ -1,6 +1,6 @@
 import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import type { ObjectSchema, FieldDef } from "./types";
-import type { Serializers } from "../../metadata/types";
+import type { ObjectSchema, FieldDef } from "./types.js";
+import type { Serializers } from "../../metadata/types.js";
 
 /**
  * Provides serialization and deserialization functions for date attributes when interfacing with a DynamoDB table, enabling the conversion between the table's string-based date representation and JavaScript's `Date` object. DynamoDb dos not support Date types naturally, this utility allows for Date attributes to be serialized to an entity and stored as ISO strings in Dynamo.
