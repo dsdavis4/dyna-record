@@ -2,11 +2,26 @@
   "name": "dyna-record",
   "version": "0.6.7",
   "description": "Typescript Data Modeler and ORM for Dynamo",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
+    "build": "tsup",
+    "watch": "tsup --watch",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.dev.json --noEmit",
     "typecheck:tests": "tsc -p tsconfig.dev.json --noEmit",
     "test": "tsc -p tsconfig.dev.json --noEmit && vitest run",
@@ -43,6 +58,7 @@
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.5.0",
     "prettier": "^3.2.5",
+    "tsup": "^8.5.1",
     "typedoc": "^0.27.6",
     "typedoc-plugin-missing-exports": "^3.1.0",
     "typescript": "^6.0.3",
