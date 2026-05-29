@@ -55,7 +55,7 @@ export const extractForeignKeyFromEntity = (
 ): ForeignKey | null | undefined => {
   return isRelationshipMetadataWithForeignKey(relMeta) &&
     isKeyOfObject(entity, relMeta.foreignKey)
-    ? (entity[relMeta.foreignKey] as ForeignKey | null | undefined)
+    ? entity[relMeta.foreignKey]
     : undefined;
 };
 

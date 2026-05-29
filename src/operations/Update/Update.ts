@@ -412,7 +412,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const tableAttrs = entityToTableItem(
       this.EntityClass,
-      regularAttrs as Partial<T>
+      regularAttrs
     );
     const expression = expressionBuilder(tableAttrs, allDocumentPathOps);
 
