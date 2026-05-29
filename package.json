@@ -51,7 +51,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.17.4",
+    "@arethetypeswrong/cli": "^0.18.2",
     "@aws-sdk/types": "^3.502.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.19.19",
