@@ -1,4 +1,7 @@
-## 1.0.0 - YYYY-MM-DD (DRAFT — date filled at release)
+## 0.7.0 - 2026-05-28
+
+> This release carries breaking changes large enough to warrant a 1.0.0 cut, but stays at `0.7.0` deliberately: the surface area of the migration (TypeScript 6, dual ESM/CJS publish, build-tool swap to tsup, Jest → Vitest, engine floor to Node 22) is broad enough that real-world consumer issues are likely. Pre-1.0 semver keeps the door open for further breaking changes during the stabilization window without committing to a "stable" stamp prematurely. A future `1.0.0` will lock the modern shape once it's proven in the wild.
+
 
 ### Added
 

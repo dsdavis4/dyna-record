@@ -3,6 +3,7 @@
   "include": [
     "eslint.config.mjs",
     "vitest.config.ts",
+    "tsup.config.ts",
     "**/*.test.ts",
     "tests"
   ],

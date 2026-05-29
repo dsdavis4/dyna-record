@@ -1,6 +1,6 @@
 {
   "name": "dyna-record",
-  "version": "0.6.7",
+  "version": "0.7.0",
   "description": "Typescript Data Modeler and ORM for Dynamo",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -31,7 +31,7 @@
     "eslint:fix": "npx eslint . --fix",
     "prettier": "npx prettier . --write",
     "docs": "npx typedoc",
-    "postinstall": "patch-package",
+    "prepare": "patch-package",
     "prepublishOnly": "npm run build && npx publint && npm pack --pack-destination /tmp && npx attw /tmp/dyna-record-$npm_package_version.tgz --profile node16"
   },
   "repository": {

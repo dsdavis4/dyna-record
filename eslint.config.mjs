@@ -13,10 +13,9 @@ export default defineConfig(
       "docs/**",
       "tmp/**",
       "scripts/**",
+      "patches/**",
       ".debug/**",
-      "eslint.config.mjs",
-      "global-setup.js",
-      "jest.config.js"
+      "eslint.config.mjs"
     ]
   },
   eslint.configs.recommended,
