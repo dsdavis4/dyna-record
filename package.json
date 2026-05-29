@@ -6,6 +6,7 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "import": {
@@ -29,7 +30,9 @@
     "eslint": "npx eslint .",
     "eslint:fix": "npx eslint . --fix",
     "prettier": "npx prettier . --write",
-    "docs": "npx typedoc"
+    "docs": "npx typedoc",
+    "postinstall": "patch-package",
+    "prepublishOnly": "npm run build && npx publint && npm pack --pack-destination /tmp && npx attw /tmp/dyna-record-$npm_package_version.tgz --profile node16"
   },
   "repository": {
     "type": "git",
@@ -48,6 +51,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.4",
     "@aws-sdk/types": "^3.502.0",
     "@eslint/js": "^9.39.3",
     "@tsconfig/recommended": "^1.0.3",
@@ -57,7 +61,9 @@
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^16.5.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.2.5",
+    "publint": "^0.3.21",
     "tsup": "^8.5.1",
     "typedoc": "^0.27.6",
     "typedoc-plugin-missing-exports": "^3.1.0",

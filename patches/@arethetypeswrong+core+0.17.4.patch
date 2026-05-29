@@ -1,0 +1,28 @@
+diff --git a/node_modules/@arethetypeswrong/core/dist/createPackage.js b/node_modules/@arethetypeswrong/core/dist/createPackage.js
+index 1b8fb1c..38c0a4b 100644
+--- a/node_modules/@arethetypeswrong/core/dist/createPackage.js
++++ b/node_modules/@arethetypeswrong/core/dist/createPackage.js
+@@ -12,6 +12,7 @@ var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (
+ var _Package_files;
+ import { untar } from "@andrewbranch/untar.js";
+ import { Gunzip } from "fflate";
++import { gunzipSync } from "zlib";
+ import { major, maxSatisfying, minor, valid, validRange } from "semver";
+ import ts from "typescript";
+ import { parsePackageSpec } from "./utils.js";
+@@ -223,9 +224,12 @@ export function createPackageFromTarballData(tarball) {
+ }
+ function extractTarball(tarball) {
+     var _a;
+-    // Use streaming API to work around https://github.com/101arrowz/fflate/issues/207
+-    let unzipped;
+-    new Gunzip((chunk) => (unzipped = chunk)).push(tarball, /*final*/ true);
++    // Patched (dyna-record): the fflate Gunzip streaming callback only captures
++    // the last chunk, losing data for tarballs that span multiple chunks
++    // (>~64KB unzipped). Use Node's zlib.gunzipSync for reliable single-shot
++    // decompression. See https://github.com/arethetypeswrong/arethetypeswrong.github.io
++    void Gunzip; // keep import live in case upstream switches back
++    const unzipped = new Uint8Array(gunzipSync(tarball));
+     const data = untar(unzipped);
+     const prefix = data[0].filename.substring(0, data[0].filename.indexOf("/") + 1);
+     const packageJsonText = (_a = data.find((f) => f.filename === `${prefix}package.json`)) === null || _a === void 0 ? void 0 : _a.fileData;
