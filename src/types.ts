@@ -1,5 +1,8 @@
 import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import type { BelongsToRelationship, RelationshipMetadata } from "./metadata/index.js";
+import type {
+  BelongsToRelationship,
+  RelationshipMetadata
+} from "./metadata/index.js";
 import type DynaRecord from "./DynaRecord.js";
 
 /**

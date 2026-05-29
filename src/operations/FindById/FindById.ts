@@ -11,7 +11,10 @@ import type {
   IncludedAssociations,
   SortedQueryResults
 } from "./types.js";
-import { buildEntityRelationshipMetaObj, consistentReadVal } from "../utils/index.js";
+import {
+  buildEntityRelationshipMetaObj,
+  consistentReadVal
+} from "../utils/index.js";
 import { type QueryResult, type QueryResults } from "../Query/index.js";
 import {
   isHasAndBelongsToManyRelationship,

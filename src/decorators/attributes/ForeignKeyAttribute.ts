@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type DynaRecord from "../../DynaRecord.js";
 import Metadata from "../../metadata/index.js";
-import type { EntityClass, ForeignKey, NullableForeignKey } from "../../types.js";
+import type {
+  EntityClass,
+  ForeignKey,
+  NullableForeignKey
+} from "../../types.js";
 import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
 
 /**

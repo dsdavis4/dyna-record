@@ -30,7 +30,11 @@ import type {
   UpdateOptions,
   UpdateOperationOptions
 } from "./types.js";
-import type { DynamoTableItem, EntityClass, WithRequired } from "../../types.js";
+import type {
+  DynamoTableItem,
+  EntityClass,
+  WithRequired
+} from "../../types.js";
 import Metadata from "../../metadata/index.js";
 import {
   type EntityAttributesInstance,

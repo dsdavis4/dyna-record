@@ -5,7 +5,10 @@ import {
   objectToTableItem,
   tableItemToObject
 } from "../../../src/decorators/index.js";
-import type { ObjectSchema, InferObjectSchema } from "../../../src/decorators/index.js";
+import type {
+  ObjectSchema,
+  InferObjectSchema
+} from "../../../src/decorators/index.js";
 import {
   MockTable,
   MyClassWithAllAttributeTypes,

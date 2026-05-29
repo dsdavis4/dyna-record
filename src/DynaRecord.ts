@@ -1,4 +1,7 @@
-import Metadata, { tableDefaultFields, type TableMetadata } from "./metadata/index.js";
+import Metadata, {
+  tableDefaultFields,
+  type TableMetadata
+} from "./metadata/index.js";
 import { DateAttribute, StringAttribute } from "./decorators/index.js";
 import {
   FindById,

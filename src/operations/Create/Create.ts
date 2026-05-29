@@ -8,7 +8,10 @@ import {
 } from "../../dynamo-utils/index.js";
 import { entityToTableItem, isString, tableItemToEntity } from "../../utils.js";
 import OperationBase from "../OperationBase.js";
-import { extractForeignKeyFromEntity, buildBelongsToLinkKey } from "../utils/index.js";
+import {
+  extractForeignKeyFromEntity,
+  buildBelongsToLinkKey
+} from "../utils/index.js";
 import type { CreateOptions, CreateOperationOptions } from "./types.js";
 import {
   type EntityDefinedAttributes,

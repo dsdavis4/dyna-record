@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, PartitionKeyAttribute } from "../../../src/decorators/index.js";
+import {
+  Entity,
+  PartitionKeyAttribute
+} from "../../../src/decorators/index.js";
 import { type PartitionKey } from "../../../src/types.js";
 import { Customer, MockTable, Student } from "../../integration/mockModels.js";
 import Metadata from "../../../src/metadata/index.js";

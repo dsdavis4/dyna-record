@@ -1,7 +1,11 @@
 import Metadata from "../../metadata/index.js";
 import type DynaRecord from "../../DynaRecord.js";
 import type { EntityClass, ForeignKeyProperty } from "../../types.js";
-import type { BelongsToField, BelongsToProps, BelongsToTarget } from "./types.js";
+import type {
+  BelongsToField,
+  BelongsToProps,
+  BelongsToTarget
+} from "./types.js";
 import type { ForeignEntityAttribute } from "../types.js";
 
 /**

@@ -14,10 +14,17 @@ import {
   Employee,
   type Founder
 } from "./mockModels.js";
-import { Entity, NumberAttribute, StringAttribute } from "../../src/decorators/index.js";
+import {
+  Entity,
+  NumberAttribute,
+  StringAttribute
+} from "../../src/decorators/index.js";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
-import { NotFoundError, NullConstraintViolationError } from "../../src/errors.js";
+import {
+  NotFoundError,
+  NullConstraintViolationError
+} from "../../src/errors.js";
 import { type MockTableEntityTableItem } from "./utils.js";
 import Logger from "../../src/Logger.js";
 

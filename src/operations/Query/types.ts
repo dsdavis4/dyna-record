@@ -6,7 +6,10 @@ import type {
   SortKeyCondition
 } from "../../query-utils/index.js";
 import type { IsAny, PartitionKey, SortKey } from "../../types.js";
-import type { EntityAttributesInstance, EntityFilterableKeys } from "../types.js";
+import type {
+  EntityAttributesInstance,
+  EntityFilterableKeys
+} from "../types.js";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.

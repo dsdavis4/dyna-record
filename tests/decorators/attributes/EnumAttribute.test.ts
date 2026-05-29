@@ -3,7 +3,10 @@ import { Entity, EnumAttribute } from "../../../src/decorators/index.js";
 import { MockTable } from "../../integration/mockModels.js";
 import Metadata from "../../../src/metadata/index.js";
 import { ZodEnum, ZodNullable, ZodOptional } from "zod";
-import { type ForeignKey, type NullableForeignKey } from "../../../src/index.js";
+import {
+  type ForeignKey,
+  type NullableForeignKey
+} from "../../../src/index.js";
 
 type EnumValues = "val-1" | "val-2";
 

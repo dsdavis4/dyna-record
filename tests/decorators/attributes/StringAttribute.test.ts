@@ -8,7 +8,10 @@ import {
 } from "../../integration/mockModels.js";
 import Metadata from "../../../src/metadata/index.js";
 import { ZodNullable, ZodOptional, ZodString } from "zod";
-import { type ForeignKey, type NullableForeignKey } from "../../../src/index.js";
+import {
+  type ForeignKey,
+  type NullableForeignKey
+} from "../../../src/index.js";
 
 describe("StringAttribute", () => {
   it("uses the provided table alias as attribute metadata if one is provided", () => {

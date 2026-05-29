@@ -10,7 +10,10 @@ import {
   ForeignKeyAttribute,
   ObjectAttribute
 } from "../../src/decorators/index.js";
-import type { ObjectSchema, InferObjectSchema } from "../../src/decorators/index.js";
+import type {
+  ObjectSchema,
+  InferObjectSchema
+} from "../../src/decorators/index.js";
 import type { ForeignKey, PartitionKey, SortKey } from "../../src/types.js";
 
 @Table({

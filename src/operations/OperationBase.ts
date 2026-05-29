@@ -1,5 +1,8 @@
 import type DynaRecord from "../DynaRecord.js";
-import Metadata, { type EntityMetadata, type TableMetadata } from "../metadata/index.js";
+import Metadata, {
+  type EntityMetadata,
+  type TableMetadata
+} from "../metadata/index.js";
 import type { EntityClass } from "../types.js";
 
 /**

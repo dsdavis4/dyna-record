@@ -17,7 +17,10 @@ import {
   IdAttribute,
   ObjectAttribute
 } from "../../src/decorators/index.js";
-import type { ObjectSchema, InferObjectSchema } from "../../src/decorators/index.js";
+import type {
+  ObjectSchema,
+  InferObjectSchema
+} from "../../src/decorators/index.js";
 import { JoinTable } from "../../src/relationships/index.js";
 import type {
   PartitionKey,
