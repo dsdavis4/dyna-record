@@ -28,7 +28,7 @@ import {
   ArrayOfUnionsEntity
 } from "./mockModels";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { v4 as uuidv4 } from "uuid";
+import { generateId } from "../../src/id";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
 import {
   BelongsTo,
@@ -45,14 +45,14 @@ import {
 } from "./utils";
 import Logger from "../../src/Logger";
 
-vi.mock("uuid");
+vi.mock("../../src/id");
 
 const mockTransactGetItems = vi.fn();
 const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
 const mockTransactGetCommand = vi.mocked(TransactGetCommand);
 
 const mockSend = vi.fn();
-const mockedUuidv4 = vi.mocked(uuidv4);
+const mockedGenerateId = vi.mocked(generateId);
 
 vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -115,7 +115,7 @@ describe("Create", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    mockedUuidv4.mockReset();
+    mockedGenerateId.mockReset();
   });
 
   it("will create an entity and without relationship transactions if none are needed", async () => {
@@ -123,7 +123,7 @@ describe("Create", () => {
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({ mlsNum: "123" });
 
@@ -168,7 +168,7 @@ describe("Create", () => {
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({ mlsNum: "123" });
 
@@ -263,7 +263,7 @@ describe("Create", () => {
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const instance = await MyClassWithAllAttributeTypes.create({
       stringAttribute: "1",
@@ -396,7 +396,7 @@ describe("Create", () => {
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({
       // Begin reserved keys
@@ -514,7 +514,7 @@ describe("Create", () => {
     expect.assertions(3);
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     mockSend.mockImplementationOnce(() => {
       throw new TransactionCanceledException({
@@ -1088,7 +1088,7 @@ describe("Create", () => {
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const instance = await MyClassWithAllAttributeTypes.create({
       stringAttribute: "1",
@@ -1261,7 +1261,7 @@ describe("Create", () => {
     expect.assertions(5);
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const customer: MockTableEntityTableItem<Customer> = {
       PK: "Customer#123",
@@ -1442,7 +1442,7 @@ describe("Create", () => {
     expect.assertions(5);
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const org: MockTableEntityTableItem<Organization> = {
       PK: "Organization#123",
@@ -1573,7 +1573,7 @@ describe("Create", () => {
       expect.assertions(5);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
         PK: "PaymentMethod#123",
@@ -1701,7 +1701,7 @@ describe("Create", () => {
       expect.assertions(5);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const desk: MockTableEntityTableItem<Desk> = {
         PK: "Desk#123",
@@ -1828,7 +1828,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
         PK: "PaymentMethod#123",
@@ -1880,7 +1880,7 @@ describe("Create", () => {
       expect.assertions(5);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
         myPk: "Assignment|123",
@@ -2072,7 +2072,7 @@ describe("Create", () => {
       expect.assertions(5);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const org: MockTableEntityTableItem<Organization> = {
         PK: "Organization#123",
@@ -2274,7 +2274,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
         myPk: "Assignment|123",
@@ -2343,7 +2343,7 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
 
       const employee = await Employee.create({
         name: "MockName",
@@ -2422,7 +2422,7 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2456,7 +2456,7 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2490,7 +2490,7 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2524,7 +2524,7 @@ describe("Create", () => {
     expect.assertions(5);
 
     vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const warehouse: MockTableEntityTableItem<Warehouse> = {
       PK: "Warehouse#123",
@@ -2653,7 +2653,7 @@ describe("Create", () => {
         expect.assertions(2);
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2679,7 +2679,7 @@ describe("Create", () => {
         expect.assertions(2);
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2705,7 +2705,7 @@ describe("Create", () => {
         expect.assertions(2);
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2732,7 +2732,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2796,7 +2796,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2863,7 +2863,7 @@ describe("Create", () => {
       expect.assertions(1);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2934,7 +2934,7 @@ describe("Create", () => {
       expect.assertions(1);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2987,7 +2987,7 @@ describe("Create", () => {
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const instance = await MyClassWithAllAttributeTypes.create(
           {
@@ -3110,7 +3110,7 @@ describe("Create", () => {
         expect.assertions(5);
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const customer: MockTableEntityTableItem<Customer> = {
           PK: "Customer#123",
@@ -3278,7 +3278,7 @@ describe("Create", () => {
         expect.assertions(3);
 
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const instance = await MyClassWithAllAttributeTypes.create(
           {
@@ -3356,7 +3356,7 @@ describe("Create", () => {
   describe("create deeply nested object with nullable fields omitted", () => {
     beforeEach(() => {
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
       mockSend.mockResolvedValue({});
     });
 
@@ -3376,7 +3376,7 @@ describe("Create", () => {
       });
 
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockedGenerateId).toHaveBeenCalledTimes(1);
       expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
       expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
         {
@@ -3409,7 +3409,7 @@ describe("Create", () => {
   describe("create with array of objects", () => {
     beforeEach(() => {
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      mockedGenerateId.mockReturnValueOnce("uuid1");
       mockSend.mockResolvedValue({});
     });
 
@@ -3428,7 +3428,7 @@ describe("Create", () => {
       });
 
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockedGenerateId).toHaveBeenCalledTimes(1);
       expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
       expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
         {
@@ -4547,7 +4547,7 @@ describe("Create", () => {
       expect.assertions(3);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("du-uuid-1");
+      mockedGenerateId.mockReturnValueOnce("du-uuid-1");
 
       const testDate = new Date("2024-06-15T12:00:00.000Z");
 
@@ -4622,7 +4622,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("du-uuid-2");
+      mockedGenerateId.mockReturnValueOnce("du-uuid-2");
 
       const instance = await DiscriminatedUnionEntity.create({
         payment: {
@@ -4647,7 +4647,7 @@ describe("Create", () => {
     describe("types", () => {
       beforeEach(() => {
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("du-uuid-type");
+        mockedGenerateId.mockReturnValueOnce("du-uuid-type");
       });
 
       it("accepts a valid complete variant on create", async () => {
@@ -4886,7 +4886,7 @@ describe("Create", () => {
       expect.assertions(3);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-1");
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-1");
 
       const testDate = new Date("2024-06-15T12:00:00.000Z");
 
@@ -4988,7 +4988,7 @@ describe("Create", () => {
       expect.assertions(2);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-2");
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-2");
 
       const instance = await ArrayOfUnionsEntity.create({
         dashboard: {
@@ -5005,7 +5005,7 @@ describe("Create", () => {
       expect.assertions(1);
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-3");
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-3");
 
       await ArrayOfUnionsEntity.create({
         dashboard: {
@@ -5034,7 +5034,7 @@ describe("Create", () => {
     describe("types", () => {
       beforeEach(() => {
         vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("aou-uuid-type");
+        mockedGenerateId.mockReturnValueOnce("aou-uuid-type");
       });
 
       it("accepts valid mixed variants in array on create", async () => {

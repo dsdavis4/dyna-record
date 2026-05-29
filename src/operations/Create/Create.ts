@@ -1,5 +1,5 @@
 import type DynaRecord from "../../DynaRecord";
-import { v4 as uuidv4 } from "uuid";
+import { generateId } from "../../id";
 import type { DynamoTableItem, EntityClass } from "../../types";
 import {
   type ConditionCheck,
@@ -123,7 +123,7 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     const id =
       idField === undefined
-        ? uuidv4()
+        ? generateId()
         : entityAttrs[idField as keyof typeof entityAttrs];
 
     const createdAt = new Date();
