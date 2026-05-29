@@ -1,5 +1,12 @@
 import { defineConfig } from "vitest/config";
 
+// Pinned to vitest 3.x: vitest 4.x (4.1.7 as of mid-2026) has a regression
+// that fails to parse TC39 Stage 3 decorators in test files, surfacing as
+// an opaque `SyntaxError: Invalid or unexpected token` for any file using
+// `@Entity`, `@Table`, `@Attribute`, etc. Track upstream:
+//   https://github.com/vitest-dev/vitest/issues
+// Test for fix by dropping a minimal decorator file into tests/ and running
+// it under the candidate vitest version; if it passes, the pin can move.
 export default defineConfig({
   test: {
     globals: true,

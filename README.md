@@ -43,18 +43,21 @@ yarn add dyna-record
 pnpm add dyna-record
 ```
 
-dyna-record ships both ESM and CJS via a conditional `exports` map. Both forms work:
+dyna-record is **ESM-only** as of 0.7.0:
 
 ```ts
-// ESM (recommended)
+// ESM
 import DynaRecord, { Entity, Table } from "dyna-record";
 ```
 
+If your project is still on CommonJS, use a dynamic import:
+
 ```js
-// CommonJS
-const DynaRecord = require("dyna-record");
-const { Entity, Table } = require("dyna-record");
+// CommonJS (any modern Node) via dynamic import
+const { default: DynaRecord, Entity, Table } = await import("dyna-record");
 ```
+
+Direct `require("dyna-record")` only works on Node 22.12+ via Node's stabilized `require(esm)` and is not an officially supported contract — prefer dynamic `import()` for portability.
 
 > dyna-record uses **TC39 Stage 3 decorators** (the TypeScript 5+/6 default). Do **not** enable `experimentalDecorators` in your `tsconfig.json`.
 
