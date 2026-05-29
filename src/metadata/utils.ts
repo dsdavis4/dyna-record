@@ -1,4 +1,4 @@
-import Metadata from ".//index.js";
+import Metadata from "./index.js";
 import type {
   RelationshipMetadata,
   HasManyRelationship,
