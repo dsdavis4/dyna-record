@@ -2,7 +2,6 @@
 
 > This release carries breaking changes large enough to warrant a 1.0.0 cut, but stays at `0.7.0` deliberately: the surface area of the migration (TypeScript 6, dual ESM/CJS publish, build-tool swap to tsup, Jest → Vitest, engine floor to Node 22) is broad enough that real-world consumer issues are likely. Pre-1.0 semver keeps the door open for further breaking changes during the stabilization window without committing to a "stable" stamp prematurely. A future `1.0.0` will lock the modern shape once it's proven in the wild.
 
-
 ### Added
 
 - **Dual ESM + CJS publish via `exports` map:** The package now publishes both ESM (`import DynaRecord from "dyna-record"`) and CJS (`const DynaRecord = require("dyna-record")`) entries via a conditional `exports` map. ESM consumers under TypeScript 6 + `moduleResolution: NodeNext` or `bundler` resolve types cleanly via the `import.types` condition; CJS consumers resolve types via `require.types` (`.d.cts`). The package is verified against [publint](https://publint.dev) and [@arethetypeswrong/cli](https://arethetypeswrong.github.io) as part of `prepublishOnly`.

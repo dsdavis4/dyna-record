@@ -14,5 +14,10 @@ export default defineConfig({
   splitting: false,
   // Keep AWS SDK + zod external — they are runtime deps consumers install
   // alongside dyna-record. Don't inline them into the bundle.
-  external: ["@aws-sdk/client-dynamodb", "@aws-sdk/lib-dynamodb", "@aws-sdk/util-dynamodb", "zod"]
+  external: [
+    "@aws-sdk/client-dynamodb",
+    "@aws-sdk/lib-dynamodb",
+    "@aws-sdk/util-dynamodb",
+    "zod"
+  ]
 });

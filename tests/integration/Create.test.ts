@@ -2343,7 +2343,9 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       const employee = await Employee.create({
         name: "MockName",
@@ -2422,7 +2424,9 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2456,7 +2460,9 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2490,7 +2496,9 @@ describe("Create", () => {
 
       vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedGenerateId.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({

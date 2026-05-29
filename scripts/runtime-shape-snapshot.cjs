@@ -10,20 +10,22 @@ const path = require("path");
 
 const targetArg = process.argv[2];
 if (!targetArg) {
-  console.error("Usage: node scripts/runtime-shape-snapshot.cjs <path-to-built-entry>");
+  console.error(
+    "Usage: node scripts/runtime-shape-snapshot.cjs <path-to-built-entry>"
+  );
   process.exit(1);
 }
 
 const targetPath = path.resolve(process.cwd(), targetArg);
 const mod = require(targetPath);
 
-const isPlainData = (descriptor) =>
+const isPlainData = descriptor =>
   descriptor !== undefined &&
   "value" in descriptor &&
   !("get" in descriptor) &&
   !("set" in descriptor);
 
-const describeValue = (value) => {
+const describeValue = value => {
   const type = typeof value;
   if (type === "function") {
     const proto = value.prototype;
@@ -39,20 +41,20 @@ const describeValue = (value) => {
       prototypeOwn:
         proto !== undefined && proto !== null
           ? Object.getOwnPropertyNames(proto).sort()
-          : null,
+          : null
     };
   }
   if (type === "object" && value !== null) {
     return {
       type,
       constructor: value.constructor ? value.constructor.name : null,
-      ownKeys: Object.getOwnPropertyNames(value).sort(),
+      ownKeys: Object.getOwnPropertyNames(value).sort()
     };
   }
   return { type };
 };
 
-const describeModule = (m) => {
+const describeModule = m => {
   const keys = Object.keys(m).sort();
   const descriptors = {};
   const exports = {};
@@ -61,7 +63,7 @@ const describeModule = (m) => {
     descriptors[key] = {
       shape: isPlainData(descriptor) ? "data" : "accessor",
       enumerable: descriptor ? descriptor.enumerable : null,
-      configurable: descriptor ? descriptor.configurable : null,
+      configurable: descriptor ? descriptor.configurable : null
     };
     exports[key] = describeValue(m[key]);
   }
@@ -70,7 +72,12 @@ const describeModule = (m) => {
 
 const snapshot = {
   target: targetArg,
-  __esModule: mod.__esModule === true ? true : mod.__esModule === false ? false : undefined,
+  __esModule:
+    mod.__esModule === true
+      ? true
+      : mod.__esModule === false
+        ? false
+        : undefined,
   module: describeModule(mod),
   default:
     mod.default !== undefined
@@ -79,9 +86,9 @@ const snapshot = {
           ...describeValue(mod.default),
           ...(typeof mod.default === "object" && mod.default !== null
             ? { module: describeModule(mod.default) }
-            : {}),
+            : {})
         }
-      : { present: false },
+      : { present: false }
 };
 
 console.log(JSON.stringify(snapshot, null, 2));
