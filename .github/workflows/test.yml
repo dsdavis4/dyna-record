@@ -34,3 +34,21 @@ jobs:
 
       - name: Run unit tests with coverage
         run: npm test -- --coverage
+
+  # Aggregator job: publishes a single stable status check name (`run-tests`)
+  # regardless of the matrix shape. Branch protection on main can target this
+  # one name so it doesn't have to be updated every time the matrix changes
+  # (e.g., adding Node 26, dropping Node 22).
+  run-tests:
+    name: run-tests
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify matrix succeeded
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "Matrix jobs did not all succeed (result: ${{ needs.test.result }})"
+            exit 1
+          fi
+          echo "All matrix entries passed."
