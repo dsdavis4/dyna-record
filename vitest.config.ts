@@ -13,12 +13,12 @@ export default defineConfig({
       TZ: "UTC"
     },
     include: ["**/*.test.ts"],
-    // Pin fake-timer behavior to a Jest-compatible subset. Vitest's default
-    // toFake list also mocks queueMicrotask, process.nextTick, performance —
-    // Jest's modern timers do NOT mock those. The repo has 95+ setSystemTime
-    // sites in Create.test.ts / Update.test.ts / Delete.test.ts that depend
-    // on timestamp-derived PK/SK assertions; matching Jest's subset keeps
-    // those assertions deterministic post-migration.
+    // Conservative pin: 95+ setSystemTime sites in Create.test.ts /
+    // Update.test.ts / Delete.test.ts depend on timestamp-derived PK/SK
+    // assertions. The suite uses none of queueMicrotask, process.nextTick,
+    // setImmediate, clearTimeout/Interval, or hrtime under fake timers, so
+    // we pin to the minimum surface that the suite actually exercises —
+    // future timer-touching tests just need to add what they need here.
     fakeTimers: {
       toFake: ["setTimeout", "setInterval", "Date", "performance"]
     },

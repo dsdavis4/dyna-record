@@ -3,6 +3,9 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: ["index.ts"],
   format: ["esm", "cjs"],
+  // target aligns with engines.node (>=22) so esbuild skips downleveling
+  // syntax already available on the supported runtime.
+  target: "node22",
   dts: true,
   sourcemap: true,
   clean: true,
