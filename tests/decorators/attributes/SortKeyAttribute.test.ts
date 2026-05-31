@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, SortKeyAttribute } from "../../../src/decorators";
-import { type SortKey } from "../../../src/types";
-import Metadata from "../../../src/metadata";
-import { Customer, MockTable, Student } from "../../integration/mockModels";
+import { Entity, SortKeyAttribute } from "../../../src/decorators/index.js";
+import { type SortKey } from "../../../src/types.js";
+import Metadata from "../../../src/metadata/index.js";
+import { Customer, MockTable, Student } from "../../integration/mockModels.js";
 import { ZodString } from "zod";
 
 describe("SortKeyAttribute", () => {

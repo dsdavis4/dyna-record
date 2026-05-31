@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
-import type { AttributeDecoratorContext, AttributeOptions } from "../types";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
+import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
 
 /**
  * Extends {@link AttributeOptions} but requires that the allowed values are set on `values`

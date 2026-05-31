@@ -1,5 +1,5 @@
-import type DynaRecord from "../../DynaRecord";
-import type { EntityDefinedAttributes } from "../types";
+import type DynaRecord from "../../DynaRecord.js";
+import type { EntityDefinedAttributes } from "../types.js";
 
 /**
  * Extracts the keys of properties in type `T` that are explicitly allowed to be `undefined`.

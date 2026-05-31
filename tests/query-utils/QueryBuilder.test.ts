@@ -1,5 +1,5 @@
-import QueryBuilder from "../../src/query-utils/QueryBuilder";
-import DynaRecord from "../../index";
+import QueryBuilder from "../../src/query-utils/QueryBuilder.js";
+import DynaRecord from "../../index.js";
 import {
   Table,
   Entity,
@@ -9,9 +9,12 @@ import {
   HasMany,
   ForeignKeyAttribute,
   ObjectAttribute
-} from "../../src/decorators";
-import type { ObjectSchema, InferObjectSchema } from "../../src/decorators";
-import type { ForeignKey, PartitionKey, SortKey } from "../../src/types";
+} from "../../src/decorators/index.js";
+import type {
+  ObjectSchema,
+  InferObjectSchema
+} from "../../src/decorators/index.js";
+import type { ForeignKey, PartitionKey, SortKey } from "../../src/types.js";
 
 @Table({
   name: "mock-table",

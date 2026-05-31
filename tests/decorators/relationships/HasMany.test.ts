@@ -4,9 +4,9 @@ import {
   HasMany,
   BelongsTo,
   StringAttribute
-} from "../../../src/decorators";
-import type { ForeignKey } from "../../../src/types";
-import { MockTable } from "../../integration/mockModels";
+} from "../../../src/decorators/index.js";
+import type { ForeignKey } from "../../../src/types.js";
+import { MockTable } from "../../integration/mockModels.js";
 
 describe("HasMany", () => {
   describe("types", () => {

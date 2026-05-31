@@ -1,3 +1,3 @@
-export { default as Update } from "./Update";
-export * from "./types";
-export { default as UpdateDryRun } from "./UpdateDryRun";
+export { default as Update } from "./Update.js";
+export * from "./types.js";
+export { default as UpdateDryRun } from "./UpdateDryRun.js";

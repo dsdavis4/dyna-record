@@ -1,7 +1,7 @@
 import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
-import Metadata from "../../src/metadata";
+import Metadata from "../../src/metadata/index.js";
 import { z } from "zod";
-jest.mock("../../src/metadata");
+vi.mock("../../src/metadata");
 
 describe("Attribute metadata", () => {
   describe("types", () => {

@@ -1,6 +1,7 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["index.ts"],
+  "entryPointStrategy": "resolve",
   "out": "./docs",
   "plugin": ["typedoc-plugin-missing-exports"],
   "excludeExternals": true

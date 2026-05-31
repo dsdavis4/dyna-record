@@ -3,8 +3,8 @@ import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import Metadata, {
   type AttributeMetadataStorage,
   type TableMetadata
-} from "../metadata";
-import type { StringObj } from "../types";
+} from "../metadata/index.js";
+import type { StringObj } from "../types.js";
 import type {
   AndFilter,
   AndOrFilter,
@@ -16,8 +16,8 @@ import type {
   KeyConditions,
   OrFilter,
   QueryCommandProps
-} from "./types";
-import { consistentReadVal } from "../operations/utils";
+} from "./types.js";
+import { consistentReadVal } from "../operations/utils/index.js";
 
 /**
  * Represents the resolved components of an attribute path for use in DynamoDB expressions.

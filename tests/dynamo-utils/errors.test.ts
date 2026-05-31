@@ -1,4 +1,4 @@
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 
 describe("errors", () => {
   describe("ConditionalCheckFailedError", () => {

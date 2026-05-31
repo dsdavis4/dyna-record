@@ -1,23 +1,23 @@
-import type DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord.js";
 import type {
   BelongsToOrOwnedByRelationship,
   RelationshipMetadata
-} from "../../metadata";
-import Metadata from "../../metadata";
+} from "../../metadata/index.js";
+import Metadata from "../../metadata/index.js";
 import {
   doesEntityBelongToRelAsHasMany,
   doesEntityBelongToRelAsHasOne,
   isBelongsToRelationship,
   isRelationshipMetadataWithForeignKey
-} from "../../metadata/utils";
+} from "../../metadata/utils.js";
 import type {
   DynamoTableItem,
   EntityClass,
   ForeignKey,
   RelationshipMetaObj
-} from "../../types";
-import { isKeyOfObject } from "../../utils";
-import { type EntityAttributesOnly } from "../types";
+} from "../../types.js";
+import { isKeyOfObject } from "../../utils.js";
+import { type EntityAttributesOnly } from "../types.js";
 
 /**
  * Creates an object including
@@ -55,7 +55,7 @@ export const extractForeignKeyFromEntity = (
 ): ForeignKey | null | undefined => {
   return isRelationshipMetadataWithForeignKey(relMeta) &&
     isKeyOfObject(entity, relMeta.foreignKey)
-    ? (entity[relMeta.foreignKey] as ForeignKey | null | undefined)
+    ? entity[relMeta.foreignKey]
     : undefined;
 };
 

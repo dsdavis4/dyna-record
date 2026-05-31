@@ -1,8 +1,12 @@
 import { z } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
-import type { EntityClass, ForeignKey, NullableForeignKey } from "../../types";
-import type { AttributeDecoratorContext, AttributeOptions } from "../types";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
+import type {
+  EntityClass,
+  ForeignKey,
+  NullableForeignKey
+} from "../../types.js";
+import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
 
 /**
  * A decorator for annotating class fields as foreign keys within the context of a single-table design entity, aimed at establishing and managing relationships between different entities in a relational manner. This decorator enables the clear and explicit declaration of foreign key relationships, contributing to the ORM's ability to navigate and resolve these associations efficiently.

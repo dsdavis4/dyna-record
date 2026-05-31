@@ -9,11 +9,11 @@ import type {
   OwnedByRelationship,
   BelongsToOrOwnedByRelationship,
   ForeignKeyAttributeMetadata
-} from ".";
-import type DynaRecord from "../DynaRecord";
-import { ValidationError } from "../errors";
-import { type EntityDefinedAttributes } from "../operations";
-import Metadata from ".";
+} from "./index.js";
+import type DynaRecord from "../DynaRecord.js";
+import { ValidationError } from "../errors.js";
+import { type EntityDefinedAttributes } from "../operations/index.js";
+import Metadata from "./index.js";
 import {
   isBelongsToRelationship,
   isHasAndBelongsToManyRelationship,
@@ -22,7 +22,7 @@ import {
   isOwnedByRelationship,
   isRelationshipMetadataWithForeignKey,
   isForeignKeyAttributeMetadata
-} from "./utils";
+} from "./utils.js";
 
 type EntityClass = new (...args: unknown[]) => DynaRecord;
 

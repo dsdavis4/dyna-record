@@ -23,40 +23,40 @@ import {
   ArrayOfUnionsEntity,
   Vendor,
   Discovery
-} from "./mockModels";
+} from "./mockModels.js";
 import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand
 } from "@aws-sdk/lib-dynamodb";
-import Logger from "../../src/Logger";
+import Logger from "../../src/Logger.js";
 import {
   type OtherTableEntityTableItem,
   type MockTableEntityTableItem
-} from "./utils";
+} from "./utils.js";
 
-const mockGet = jest.fn();
-const mockSend = jest.fn();
-const mockQuery = jest.fn();
-const mockedDynamoDBClient = jest.mocked(DynamoDBClient);
-const mockedDynamoDBDocumentClient = jest.mocked(DynamoDBDocumentClient);
-const mockedGetCommand = jest.mocked(GetCommand);
-const mockedQueryCommand = jest.mocked(QueryCommand);
+const mockGet = vi.fn();
+const mockSend = vi.fn();
+const mockQuery = vi.fn();
+const mockedDynamoDBClient = vi.mocked(DynamoDBClient);
+const mockedDynamoDBDocumentClient = vi.mocked(DynamoDBDocumentClient);
+const mockedGetCommand = vi.mocked(GetCommand);
+const mockedQueryCommand = vi.mocked(QueryCommand);
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "GetCommand") {
               return await Promise.resolve(mockGet());
@@ -68,10 +68,10 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         };
       })
     },
-    GetCommand: jest.fn().mockImplementation(() => {
+    GetCommand: vi.fn().mockImplementation(() => {
       return { name: "GetCommand" };
     }),
-    QueryCommand: jest.fn().mockImplementation(() => {
+    QueryCommand: vi.fn().mockImplementation(() => {
       return { name: "QueryCommand" };
     })
   };
@@ -79,7 +79,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 describe("FindById", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("will initialize a Dynamo client", async () => {

@@ -26,53 +26,53 @@ import {
   ArrayOfObjectsEntity,
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity
-} from "./mockModels";
+} from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { v4 as uuidv4 } from "uuid";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { generateId } from "../../src/id.js";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
   BelongsTo,
   Entity,
   ForeignKeyAttribute,
   HasOne,
   StringAttribute
-} from "../../src/decorators";
-import type { ForeignKey, NullableForeignKey } from "../../src/types";
-import { ValidationError } from "../../src";
+} from "../../src/decorators/index.js";
+import type { ForeignKey, NullableForeignKey } from "../../src/types.js";
+import { ValidationError } from "../../src/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
-} from "./utils";
-import Logger from "../../src/Logger";
+} from "./utils.js";
+import Logger from "../../src/Logger.js";
 
-jest.mock("uuid");
+vi.mock("../../src/id");
 
-const mockTransactGetItems = jest.fn();
-const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+const mockTransactGetItems = vi.fn();
+const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
+const mockTransactGetCommand = vi.mocked(TransactGetCommand);
 
-const mockSend = jest.fn();
-const mockedUuidv4 = jest.mocked(uuidv4);
+const mockSend = vi.fn();
+const mockedGenerateId = vi.mocked(generateId);
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    TransactionCanceledException: jest.fn().mockImplementation((...params) => {
+    TransactionCanceledException: vi.fn().mockImplementation((...params) => {
       const obj = Object.create(TransactionCanceledException.prototype);
       Object.assign(obj, ...params);
       return obj;
     }),
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "TransactWriteCommand") {
               return await Promise.resolve(
@@ -87,10 +87,10 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
       })
     },
 
-    TransactWriteCommand: jest.fn().mockImplementation(() => {
+    TransactWriteCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     }),
-    TransactGetCommand: jest.fn().mockImplementation(() => {
+    TransactGetCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactGetCommand" };
     })
   };
@@ -106,24 +106,24 @@ class MyModelNullableAttribute extends MockTable {
 
 describe("Create", () => {
   beforeAll(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterAll(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
-    mockedUuidv4.mockReset();
+    vi.clearAllMocks();
+    mockedGenerateId.mockReset();
   });
 
   it("will create an entity and without relationship transactions if none are needed", async () => {
     expect.assertions(4);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({ mlsNum: "123" });
 
@@ -166,9 +166,9 @@ describe("Create", () => {
   it("will discard optional attributes which are passed as undefined", async () => {
     expect.assertions(4);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({ mlsNum: "123" });
 
@@ -212,7 +212,7 @@ describe("Create", () => {
   it("will create an entity that has a custom id field", async () => {
     expect.assertions(5);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
     const user = await User.create({
       name: "test-name",
@@ -261,9 +261,9 @@ describe("Create", () => {
   it("can create an entity with all attribute types", async () => {
     expect.assertions(4);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const instance = await MyClassWithAllAttributeTypes.create({
       stringAttribute: "1",
@@ -394,9 +394,9 @@ describe("Create", () => {
   it("has runtime schema validation to ensure that reserved keys are not set on create. They will be omitted from create", async () => {
     expect.assertions(4);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const home = await Home.create({
       // Begin reserved keys
@@ -513,8 +513,8 @@ describe("Create", () => {
   it("will ensure standalone foreign key references exist", async () => {
     expect.assertions(3);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     mockSend.mockImplementationOnce(() => {
       throw new TransactionCanceledException({
@@ -1086,9 +1086,9 @@ describe("Create", () => {
   it("will strip null nullable fields within object attributes on create so they are not stored in DynamoDB", async () => {
     expect.assertions(5);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const instance = await MyClassWithAllAttributeTypes.create({
       stringAttribute: "1",
@@ -1260,8 +1260,8 @@ describe("Create", () => {
   it("will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and denormalizes links)", async () => {
     expect.assertions(5);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const customer: MockTableEntityTableItem<Customer> = {
       PK: "Customer#123",
@@ -1441,8 +1441,8 @@ describe("Create", () => {
   it("with a custom id field - will create an entity that BelongsTo an entity who HasMany of it (checks parents exists and creates denormalizes records to partitions)", async () => {
     expect.assertions(5);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const org: MockTableEntityTableItem<Organization> = {
       PK: "Organization#123",
@@ -1572,8 +1572,8 @@ describe("Create", () => {
     it("will create the entity if the parent is not already associated to an entity of this type", async () => {
       expect.assertions(5);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
         PK: "PaymentMethod#123",
@@ -1700,8 +1700,8 @@ describe("Create", () => {
     it("with custom id field - will create the entity if the parent is not already associated to an entity of this type", async () => {
       expect.assertions(5);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const desk: MockTableEntityTableItem<Desk> = {
         PK: "Desk#123",
@@ -1827,8 +1827,8 @@ describe("Create", () => {
     it("throws an error if the request fails because the parent already has an entity of this type associated with it", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const paymentMethod: MockTableEntityTableItem<PaymentMethod> = {
         PK: "PaymentMethod#123",
@@ -1879,8 +1879,8 @@ describe("Create", () => {
     it("will create the entity and de-normalize the linked records", async () => {
       expect.assertions(5);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
         myPk: "Assignment|123",
@@ -2071,8 +2071,8 @@ describe("Create", () => {
     it("with a custom id field - will create the entity and de-normalize the linked records", async () => {
       expect.assertions(5);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const org: MockTableEntityTableItem<Organization> = {
         PK: "Organization#123",
@@ -2273,8 +2273,8 @@ describe("Create", () => {
     it("will throw an error if the request fails because the conditions fail (Assignment already has grade associated with it or parent entities don't exist)", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const assignment: OtherTableEntityTableItem<Assignment> = {
         myPk: "Assignment|123",
@@ -2341,9 +2341,11 @@ describe("Create", () => {
     it("will create the entity, ensure the referenced entity exists and create a reference link", async () => {
       expect.assertions(4);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       const employee = await Employee.create({
         name: "MockName",
@@ -2420,9 +2422,11 @@ describe("Create", () => {
     it("will throw an error if the entity being created already exists", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2454,9 +2458,11 @@ describe("Create", () => {
     it("will throw an error if the referenced entity does not exist", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2488,9 +2494,11 @@ describe("Create", () => {
     it("will throw an error if the reference link already exists", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-      mockedUuidv4.mockReturnValueOnce("uuid1").mockReturnValueOnce("uuid2");
+      mockedGenerateId
+        .mockReturnValueOnce("uuid1")
+        .mockReturnValueOnce("uuid2");
 
       mockSend.mockImplementationOnce(() => {
         throw new TransactionCanceledException({
@@ -2523,8 +2531,8 @@ describe("Create", () => {
   it("will denormalize object attributes to related entity partitions (HasMany with ObjectAttribute)", async () => {
     expect.assertions(5);
 
-    jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-    mockedUuidv4.mockReturnValueOnce("uuid1");
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    mockedGenerateId.mockReturnValueOnce("uuid1");
 
     const warehouse: MockTableEntityTableItem<Warehouse> = {
       PK: "Warehouse#123",
@@ -2652,8 +2660,8 @@ describe("Create", () => {
       it("when there is a id attribute alias", async () => {
         expect.assertions(2);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2678,8 +2686,8 @@ describe("Create", () => {
       it("alternate table style - when there is not an id attribute alias", async () => {
         expect.assertions(2);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2704,8 +2712,8 @@ describe("Create", () => {
       it("when there is a a custom id field", async () => {
         expect.assertions(2);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         mockSend.mockImplementationOnce(() => {
           throw new TransactionCanceledException({
@@ -2731,8 +2739,8 @@ describe("Create", () => {
     it("will return an AggregateError for a failed conditional check", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2795,8 +2803,8 @@ describe("Create", () => {
     it("will return an AggregateError for multiple failed conditional checks", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2862,8 +2870,8 @@ describe("Create", () => {
     it("will throw the original error if the type is TransactionCanceledException but there are no ConditionalCheckFailed reasons", async () => {
       expect.assertions(1);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2933,8 +2941,8 @@ describe("Create", () => {
     it("allows non TransactionCanceledException errors to bubble up", async () => {
       expect.assertions(1);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
 
       const customer: MockTableEntityTableItem<Customer> = {
         PK: "Customer#123",
@@ -2985,9 +2993,9 @@ describe("Create", () => {
       it("can create an entity with all attribute types without condition checks", async () => {
         expect.assertions(4);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
 
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const instance = await MyClassWithAllAttributeTypes.create(
           {
@@ -3109,8 +3117,8 @@ describe("Create", () => {
       it("will create an entity that BelongsTo an entity who HasMany of it without condition checks", async () => {
         expect.assertions(5);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const customer: MockTableEntityTableItem<Customer> = {
           PK: "Customer#123",
@@ -3277,8 +3285,8 @@ describe("Create", () => {
       it("will create an entity with standalone foreign keys even if referenced entities don't exist", async () => {
         expect.assertions(3);
 
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("uuid1");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("uuid1");
 
         const instance = await MyClassWithAllAttributeTypes.create(
           {
@@ -3355,8 +3363,8 @@ describe("Create", () => {
 
   describe("create deeply nested object with nullable fields omitted", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
       mockSend.mockResolvedValue({});
     });
 
@@ -3376,7 +3384,7 @@ describe("Create", () => {
       });
 
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockedGenerateId).toHaveBeenCalledTimes(1);
       expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
       expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
         {
@@ -3408,8 +3416,8 @@ describe("Create", () => {
 
   describe("create with array of objects", () => {
     beforeEach(() => {
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("uuid1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
       mockSend.mockResolvedValue({});
     });
 
@@ -3428,7 +3436,7 @@ describe("Create", () => {
       });
 
       expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
-      expect(mockedUuidv4).toHaveBeenCalledTimes(1);
+      expect(mockedGenerateId).toHaveBeenCalledTimes(1);
       expect(mockTransactWriteCommand.mock.calls).toHaveLength(1);
       expect(mockTransactWriteCommand.mock.calls[0][0].TransactItems).toEqual([
         {
@@ -4546,8 +4554,8 @@ describe("Create", () => {
     it("can create an entity with a discriminated union field", async () => {
       expect.assertions(3);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("du-uuid-1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("du-uuid-1");
 
       const testDate = new Date("2024-06-15T12:00:00.000Z");
 
@@ -4621,8 +4629,8 @@ describe("Create", () => {
     it("can create an entity with a different discriminated union variant", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("du-uuid-2");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("du-uuid-2");
 
       const instance = await DiscriminatedUnionEntity.create({
         payment: {
@@ -4646,8 +4654,8 @@ describe("Create", () => {
 
     describe("types", () => {
       beforeEach(() => {
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("du-uuid-type");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("du-uuid-type");
       });
 
       it("accepts a valid complete variant on create", async () => {
@@ -4885,8 +4893,8 @@ describe("Create", () => {
     it("can create an entity with an array of discriminated union items", async () => {
       expect.assertions(3);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-1");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-1");
 
       const testDate = new Date("2024-06-15T12:00:00.000Z");
 
@@ -4987,8 +4995,8 @@ describe("Create", () => {
     it("can create an entity with an empty array of union items", async () => {
       expect.assertions(2);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-2");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-2");
 
       const instance = await ArrayOfUnionsEntity.create({
         dashboard: {
@@ -5004,8 +5012,8 @@ describe("Create", () => {
     it("omits nullable fields when not provided in array union items on create", async () => {
       expect.assertions(1);
 
-      jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-      mockedUuidv4.mockReturnValueOnce("aou-uuid-3");
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("aou-uuid-3");
 
       await ArrayOfUnionsEntity.create({
         dashboard: {
@@ -5033,8 +5041,8 @@ describe("Create", () => {
 
     describe("types", () => {
       beforeEach(() => {
-        jest.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
-        mockedUuidv4.mockReturnValueOnce("aou-uuid-type");
+        vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+        mockedGenerateId.mockReturnValueOnce("aou-uuid-type");
       });
 
       it("accepts valid mixed variants in array on create", async () => {

@@ -1,7 +1,7 @@
-import type DynaRecord from "./DynaRecord";
-import type { DynamoTableItem, Nullable } from "./types";
-import Metadata from "./metadata";
-import { type EntityAttributesOnly } from "./operations";
+import type DynaRecord from "./DynaRecord.js";
+import type { DynamoTableItem, Nullable } from "./types.js";
+import Metadata from "./metadata/index.js";
+import { type EntityAttributesOnly } from "./operations/index.js";
 
 /**
  * Convert an entity to its aliased table item fields to for dynamo interactions

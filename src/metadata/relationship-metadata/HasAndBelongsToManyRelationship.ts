@@ -1,4 +1,4 @@
-import RelationshipMetadata from "./RelationshipMetadata";
+import RelationshipMetadata from "./RelationshipMetadata.js";
 
 /**
  * Represents the metadata for a "HasAndBelongsToMany" relationship metadata within the ORM system.

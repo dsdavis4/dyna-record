@@ -1,10 +1,10 @@
-import type { DynamoTableItem } from "../../types";
+import type { DynamoTableItem } from "../../types.js";
 import type {
   UpdateExpression,
   UpdateSetExpression,
   UpdateRemoveExpression,
   DocumentPathOperation
-} from "./types";
+} from "./types.js";
 
 /**
  * Sorted attributes by operand

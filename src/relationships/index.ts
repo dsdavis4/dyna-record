@@ -1,1 +1,1 @@
-export { default as JoinTable } from "./JoinTable";
+export { default as JoinTable } from "./JoinTable.js";

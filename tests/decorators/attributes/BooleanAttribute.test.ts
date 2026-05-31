@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, BooleanAttribute } from "../../../src/decorators";
-import { MockTable } from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+import { Entity, BooleanAttribute } from "../../../src/decorators/index.js";
+import { MockTable } from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodBoolean, ZodNullable, ZodOptional } from "zod";
 
 @Entity

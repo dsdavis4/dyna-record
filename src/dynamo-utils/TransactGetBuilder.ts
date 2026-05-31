@@ -1,6 +1,10 @@
-import DynamoClient from "./DynamoClient";
-import { chunkArray } from "../utils";
-import type { Get, TransactGetItemResponses, TransactGetItems } from "./types";
+import DynamoClient from "./DynamoClient.js";
+import { chunkArray } from "../utils.js";
+import type {
+  Get,
+  TransactGetItemResponses,
+  TransactGetItems
+} from "./types.js";
 
 // https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactGetItems.html
 const MAX_TRANSACTION_ITEMS = 100;

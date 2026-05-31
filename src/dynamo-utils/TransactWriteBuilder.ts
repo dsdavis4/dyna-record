@@ -1,17 +1,17 @@
-import DynamoClient from "./DynamoClient";
+import DynamoClient from "./DynamoClient.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
   ConditionalCheckFailedError,
   TransactionWriteFailedError
-} from "./errors";
-import Logger from "../Logger";
+} from "./errors.js";
+import Logger from "../Logger.js";
 import type {
   TransactWriteItems,
   ConditionCheck,
   Put,
   Update,
   Delete
-} from "./types";
+} from "./types.js";
 
 /**
  * Build and executes a [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html) request

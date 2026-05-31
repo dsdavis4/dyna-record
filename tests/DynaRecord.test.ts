@@ -1,6 +1,6 @@
-import Logger from "../src/Logger";
-import { type DynamoTableItem } from "../src/types";
-import { Course, Customer } from "./integration/mockModels";
+import Logger from "../src/Logger.js";
+import { type DynamoTableItem } from "../src/types.js";
+import { Course, Customer } from "./integration/mockModels.js";
 
 describe("DynaRecord", () => {
   describe("tableItemToEntity", () => {

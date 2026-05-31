@@ -1,8 +1,8 @@
-export { default as TransactWriteBuilder } from "./TransactWriteBuilder";
-export { default as TransactGetBuilder } from "./TransactGetBuilder";
-export { default as DynamoClient } from "./DynamoClient";
+export { default as TransactWriteBuilder } from "./TransactWriteBuilder.js";
+export { default as TransactGetBuilder } from "./TransactGetBuilder.js";
+export { default as DynamoClient } from "./DynamoClient.js";
 
-export * from "./TransactWriteBuilder";
-export * from "./TransactGetBuilder";
-export * from "./errors";
-export * from "./types";
+export * from "./TransactWriteBuilder.js";
+export * from "./TransactGetBuilder.js";
+export * from "./errors.js";
+export * from "./types.js";

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type DynaRecord from "../../DynaRecord";
-import Metadata from "../../metadata";
-import { type PartitionKey } from "../../types";
-import type { NonNullAttributeOptions } from "../types";
+import type DynaRecord from "../../DynaRecord.js";
+import Metadata from "../../metadata/index.js";
+import { type PartitionKey } from "../../types.js";
+import type { NonNullAttributeOptions } from "../types.js";
 
 /**
  * A decorator for designating the field for the partition key on the dynamo table.

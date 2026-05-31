@@ -11,10 +11,9 @@ export default defineConfig(
       "coverage/**",
       "node_modules/**",
       "docs/**",
+      "tmp/**",
       ".debug/**",
-      "eslint.config.mjs",
-      "global-setup.js",
-      "jest.config.js"
+      "eslint.config.mjs"
     ]
   },
   eslint.configs.recommended,

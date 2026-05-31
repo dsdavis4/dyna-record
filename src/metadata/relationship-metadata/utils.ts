@@ -1,9 +1,9 @@
-import BelongsToRelationship from "./BelongsToRelationship";
-import HasAndBelongsToManyRelationship from "./HasAndBelongsToManyRelationship";
-import HasManyRelationship from "./HasManyRelationship";
-import HasOneRelationship from "./HasOneRelationship";
-import OwnedByRelationship from "./OwnedByRelationship";
-import type { RelationshipMetadata } from "./types";
+import BelongsToRelationship from "./BelongsToRelationship.js";
+import HasAndBelongsToManyRelationship from "./HasAndBelongsToManyRelationship.js";
+import HasManyRelationship from "./HasManyRelationship.js";
+import HasOneRelationship from "./HasOneRelationship.js";
+import OwnedByRelationship from "./OwnedByRelationship.js";
+import type { RelationshipMetadata } from "./types.js";
 
 export const createRelationshipInstance = (
   options: RelationshipMetadata

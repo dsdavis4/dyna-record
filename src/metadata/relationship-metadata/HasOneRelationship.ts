@@ -1,5 +1,5 @@
-import type { ForeignKeyProperty } from "../../types";
-import RelationshipMetadata from "./RelationshipMetadata";
+import type { ForeignKeyProperty } from "../../types.js";
+import RelationshipMetadata from "./RelationshipMetadata.js";
 
 /**
  * Represents the metadata for a "HasOne" relationship metadata in the ORM system,

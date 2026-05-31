@@ -1,12 +1,12 @@
-import type DynaRecord from "../DynaRecord";
-import { type DefaultFields } from "../metadata";
+import type DynaRecord from "../DynaRecord.js";
+import { type DefaultFields } from "../metadata/index.js";
 import type {
   ForeignKey,
   NullableForeignKey,
   Optional,
   PartitionKey,
   SortKey
-} from "../types";
+} from "../types.js";
 
 /**
  * Represents the type of the partition key attribute for a given entity. It identifies the specific property of the entity that is marked as the partition key, which uniquely identifies each instance of the entity in the database.

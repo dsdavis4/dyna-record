@@ -1,12 +1,15 @@
-import type DynaRecord from "../../DynaRecord";
+import type DynaRecord from "../../DynaRecord.js";
 import type {
   KeyConditions as QueryKeyConditions,
   QueryOptions as QueryBuilderOptions,
   FilterTypes,
   SortKeyCondition
-} from "../../query-utils";
-import type { IsAny, PartitionKey, SortKey } from "../../types";
-import type { EntityAttributesInstance, EntityFilterableKeys } from "../types";
+} from "../../query-utils/index.js";
+import type { IsAny, PartitionKey, SortKey } from "../../types.js";
+import type {
+  EntityAttributesInstance,
+  EntityFilterableKeys
+} from "../types.js";
 
 /**
  * Extends the basic query builder options by adding an optional sort key condition for more precise querying capabilities.

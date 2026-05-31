@@ -8,46 +8,46 @@ import {
   type User,
   UserWebsite,
   type Website
-} from "../integration/mockModels";
+} from "../integration/mockModels.js";
 import {
   TransactWriteCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils";
+import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
-} from "../integration/utils";
-import { NotFoundError } from "../../src";
-import Logger from "../../src/Logger";
+} from "../integration/utils.js";
+import { NotFoundError } from "../../src/index.js";
+import Logger from "../../src/Logger.js";
 
-const mockTransactWriteCommand = jest.mocked(TransactWriteCommand);
-const mockTransactGetCommand = jest.mocked(TransactGetCommand);
+const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
+const mockTransactGetCommand = vi.mocked(TransactGetCommand);
 
-const mockSend = jest.fn();
-const mockTransactGetItems = jest.fn();
-const mockTransactWriteItems = jest.fn();
+const mockSend = vi.fn();
+const mockTransactGetItems = vi.fn();
+const mockTransactWriteItems = vi.fn();
 
-jest.mock("@aws-sdk/client-dynamodb", () => {
+vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
-    TransactionCanceledException: jest.fn().mockImplementation((...params) => {
+    TransactionCanceledException: vi.fn().mockImplementation((...params) => {
       const obj = Object.create(TransactionCanceledException.prototype);
       Object.assign(obj, ...params);
       return obj;
     }),
-    DynamoDBClient: jest.fn().mockImplementation(() => {
+    DynamoDBClient: vi.fn().mockImplementation(() => {
       return { key: "MockDynamoDBClient" };
     })
   };
 });
 
-jest.mock("@aws-sdk/lib-dynamodb", () => {
+vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
     DynamoDBDocumentClient: {
-      from: jest.fn().mockImplementation(() => {
+      from: vi.fn().mockImplementation(() => {
         return {
-          send: jest.fn().mockImplementation(async command => {
+          send: vi.fn().mockImplementation(async command => {
             mockSend(command);
             if (command.name === "TransactGetCommand") {
               return await Promise.resolve(mockTransactGetItems());
@@ -60,10 +60,10 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
         };
       })
     },
-    TransactGetCommand: jest.fn().mockImplementation(() => {
+    TransactGetCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactGetCommand" };
     }),
-    TransactWriteCommand: jest.fn().mockImplementation(() => {
+    TransactWriteCommand: vi.fn().mockImplementation(() => {
       return { name: "TransactWriteCommand" };
     })
   };
@@ -71,7 +71,7 @@ jest.mock("@aws-sdk/lib-dynamodb", () => {
 
 describe("JoinTable", () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockSend.mockReset();
     mockTransactGetItems.mockReset();

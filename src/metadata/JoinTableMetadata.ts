@@ -1,6 +1,6 @@
-import type DynaRecord from "../DynaRecord";
-import type { JoinTable } from "../relationships";
-import type { EntityClass } from "../types";
+import type DynaRecord from "../DynaRecord.js";
+import type { JoinTable } from "../relationships/index.js";
+import type { EntityClass } from "../types.js";
 
 type Entity = EntityClass<DynaRecord>;
 type ForeignKey = keyof JoinTable<DynaRecord, DynaRecord>;

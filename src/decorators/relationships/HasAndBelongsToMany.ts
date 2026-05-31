@@ -1,7 +1,7 @@
-import Metadata from "../../metadata";
-import { type JoinTable } from "../../relationships";
-import type DynaRecord from "../../DynaRecord";
-import type { EntityClass } from "../../types";
+import Metadata from "../../metadata/index.js";
+import { type JoinTable } from "../../relationships/index.js";
+import type DynaRecord from "../../DynaRecord.js";
+import type { EntityClass } from "../../types.js";
 
 /**
  * The key on the related Entity which is associated with this Entity

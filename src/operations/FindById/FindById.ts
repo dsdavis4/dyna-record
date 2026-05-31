@@ -1,22 +1,25 @@
-import type DynaRecord from "../../DynaRecord";
-import { type RelationshipMetadata } from "../../metadata";
-import { includedRelationshipsFilter } from "../../query-utils/Filters";
-import { DynamoClient } from "../../dynamo-utils";
-import type { Optional, RelationshipLookup } from "../../types";
-import { safeAssign, tableItemToEntity } from "../../utils";
-import OperationBase from "../OperationBase";
+import type DynaRecord from "../../DynaRecord.js";
+import { type RelationshipMetadata } from "../../metadata/index.js";
+import { includedRelationshipsFilter } from "../../query-utils/Filters.js";
+import { DynamoClient } from "../../dynamo-utils/index.js";
+import type { Optional, RelationshipLookup } from "../../types.js";
+import { safeAssign, tableItemToEntity } from "../../utils.js";
+import OperationBase from "../OperationBase.js";
 import type {
   FindByIdOptions,
   FindByIdIncludesRes,
   IncludedAssociations,
   SortedQueryResults
-} from "./types";
-import { buildEntityRelationshipMetaObj, consistentReadVal } from "../utils";
-import { type QueryResult, type QueryResults } from "../Query";
+} from "./types.js";
+import {
+  buildEntityRelationshipMetaObj,
+  consistentReadVal
+} from "../utils/index.js";
+import { type QueryResult, type QueryResults } from "../Query/index.js";
 import {
   isHasAndBelongsToManyRelationship,
   isHasManyRelationship
-} from "../../metadata/utils";
+} from "../../metadata/utils.js";
 
 /**
  * Facilitates the retrieval of an entity by its identifier (ID) from the database, potentially including its associated entities based on specified relationships.

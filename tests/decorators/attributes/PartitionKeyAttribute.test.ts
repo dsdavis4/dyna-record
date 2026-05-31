@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, PartitionKeyAttribute } from "../../../src/decorators";
-import { type PartitionKey } from "../../../src/types";
-import { Customer, MockTable, Student } from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+import {
+  Entity,
+  PartitionKeyAttribute
+} from "../../../src/decorators/index.js";
+import { type PartitionKey } from "../../../src/types.js";
+import { Customer, MockTable, Student } from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodString } from "zod";
 
 describe("PartitionKeyAttribute", () => {

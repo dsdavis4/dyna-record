@@ -1,3 +1,45 @@
+## 0.7.0 - 2026-05-29
+
+> Modernization release. Brings the library onto TypeScript 6, ESM-only publishing, plain `tsc` build, Node 22 runtime floor, Vitest tests, and a clean low-maintenance dev-dependency surface. **The public API surface is unchanged** — every entity decorator, relationship decorator, `DynaRecord` method, and exported type re-exports the same shape from the same import path. Stays at `0.7.0` (not `1.0.0`) to keep semver headroom while the new shape settles in real consumer projects; a future `1.0.0` will lock it in.
+
+### Added
+
+- **ESM publish via `exports` map.** `import DynaRecord from "dyna-record"` works directly. Types resolve correctly under TypeScript 6 + `moduleResolution: NodeNext` or `bundler`.
+- **`sideEffects: false`** so consumer bundlers can tree-shake unused exports aggressively.
+- **`publint` as the publish gate** (run automatically via `prepublishOnly`).
+
+### Changed
+
+- **TypeScript 6 (`^6.0.3`)** is the new minimum compiler requirement. `tsconfig.json` is fully explicit (no `@tsconfig/recommended` extends) with `module: NodeNext`, `moduleResolution: NodeNext`, `target/lib: ES2025`, `types: ["node"]`.
+- **Build: plain `tsc`** emits multi-file output mirroring `src/` structure (preserves consumer tree-shaking at file granularity). No bundler dependency.
+- **Test runner: Vitest (`^3.2.4`)** replaces Jest + ts-jest. The test API surface is near-identical (`describe`, `it`, `expect`, `vi.*` matching `jest.*`). Pass count, per-suite breakdown, and coverage match the pre-migration Jest baseline (30 suites, 983 tests). Coverage instrumentation switched from Istanbul to V8; the same 85/60/85/85 thresholds (branches/functions/lines/statements) are enforced.
+- **ID generation:** ID defaults use Node's built-in `globalThis.crypto.randomUUID()` (same v4 format, same string shape). Mocking-friendly via a thin `src/id.ts` indirection.
+- **Source uses `.js` extensions on relative imports** — spec-compliant Node ESM under `moduleResolution: NodeNext`. Internal style change only; no consumer-visible effect.
+
+### Removed
+
+- **`uuid` dependency.** Replaced internally by `crypto.randomUUID()`; was never re-exported, so there is no consumer-visible type change.
+- **Node `<22` runtime support.** Node 18 EOL'd in 2025; Node 20 EOL'd April 2026.
+- **CJS publish.** No `dist/index.cjs`, no `.d.cts`, no `require` condition, no `main` field. ESM-only.
+
+### Breaking
+
+- **Node engine floor raised to `>=22`.** Aligns with the AWS Lambda `nodejs22.x` runtime baseline.
+- **ESM-only.** Consumers must `import` (or use Node 22+'s `await import()` from CJS context). Direct `require('dyna-record')` no longer works without Node 22.12+'s stabilized `require(esm)`.
+- **Deep imports of internal `dist/...` paths are no longer reachable.** Only the root `.` entry (and `./package.json`) is advertised through the `exports` map. Any consumer who was importing from `dyna-record/dist/...` will need to switch to the root entry — all publicly-supported symbols are re-exported there.
+
+### Migration
+
+- Bump your CI / runtime to Node `>=22` (for AWS Lambda: switch to the `nodejs22.x` runtime).
+- Bump your TypeScript dev-dependency to `>=6`.
+- If you have any `require('dyna-record')` call sites in CJS code, replace with `await import('dyna-record')`, or upgrade to Node `22.12+` for unflagged `require(esm)` support.
+- Replace any `import X from "dyna-record/dist/..."` with `import { X } from "dyna-record"`.
+- No source changes are required for the `uuid` removal; the package was never re-exported.
+
+### Notes
+
+- **`experimentalDecorators` was never officially supported** by dyna-record; this release clarifies that **TC39 Stage 3 decorators are the only supported decorator flavor**. The library has been built around Stage 3 decorators since the 0.x line — this is a clarification, not a behavior change.
+
 ## 0.6.8 - 2026-05-11
 
 ### Added

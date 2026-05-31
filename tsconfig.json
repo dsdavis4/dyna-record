@@ -1,14 +1,21 @@
 {
-  "extends": "@tsconfig/recommended/tsconfig.json",
+  "include": ["src/**/*", "index.ts"],
   "exclude": ["**/*.test.ts", "**/tests/*", "dist"],
   "compilerOptions": {
-    "declaration": true,
-    "declarationMap": true,
-    "strictNullChecks": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2025",
+    "lib": ["ES2025"],
+    "types": ["node"],
     "strict": true,
-    "target": "ES2022",
+    "strictNullChecks": true,
     "noImplicitOverride": true,
     "strictPropertyInitialization": false,
-    "outDir": "./dist" /* Specify an output folder for all emitted files. */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist"
   }
 }

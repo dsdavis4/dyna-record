@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Entity, EnumAttribute } from "../../../src/decorators";
-import { MockTable } from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+import { Entity, EnumAttribute } from "../../../src/decorators/index.js";
+import { MockTable } from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodEnum, ZodNullable, ZodOptional } from "zod";
-import { type ForeignKey, type NullableForeignKey } from "../../../src";
+import {
+  type ForeignKey,
+  type NullableForeignKey
+} from "../../../src/index.js";
 
 type EnumValues = "val-1" | "val-2";
 

@@ -1,6 +1,6 @@
-import type DynaRecord from "../../DynaRecord";
-import type { ForeignKey, NullableForeignKey, Optional } from "../../types";
-import type { ForeignEntityAttribute } from "../types";
+import type DynaRecord from "../../DynaRecord.js";
+import type { ForeignKey, NullableForeignKey, Optional } from "../../types.js";
+import type { ForeignEntityAttribute } from "../types.js";
 
 type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
   NullableForeignKey<T>

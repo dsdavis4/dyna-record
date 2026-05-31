@@ -4,8 +4,11 @@ import {
   ObjectAttribute,
   objectToTableItem,
   tableItemToObject
-} from "../../../src/decorators";
-import type { ObjectSchema, InferObjectSchema } from "../../../src/decorators";
+} from "../../../src/decorators/index.js";
+import type {
+  ObjectSchema,
+  InferObjectSchema
+} from "../../../src/decorators/index.js";
 import {
   MockTable,
   MyClassWithAllAttributeTypes,
@@ -17,8 +20,8 @@ import {
   paymentSchema,
   nullableUnionSchema,
   arrayOfUnionsSchema
-} from "../../integration/mockModels";
-import Metadata from "../../../src/metadata";
+} from "../../integration/mockModels.js";
+import Metadata from "../../../src/metadata/index.js";
 import { ZodObject, ZodDiscriminatedUnion } from "zod";
 
 const testSchema = {

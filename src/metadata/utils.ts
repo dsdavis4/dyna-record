@@ -1,4 +1,4 @@
-import Metadata from "./";
+import Metadata from "./index.js";
 import type {
   RelationshipMetadata,
   HasManyRelationship,
@@ -7,14 +7,14 @@ import type {
   HasAndBelongsToManyRelationship,
   OwnedByRelationship,
   ForeignKeyAttributeMetadata
-} from ".";
-import type DynaRecord from "../DynaRecord";
+} from "./index.js";
+import type DynaRecord from "../DynaRecord.js";
 import type {
   BelongsToOrOwnedByRelationship,
   RelationshipMetadataWithForeignKey
-} from "./types";
-import type { EntityClass } from "../types";
-import type AttributeMetadata from "./AttributeMetadata";
+} from "./types.js";
+import type { EntityClass } from "../types.js";
+import type AttributeMetadata from "./AttributeMetadata.js";
 
 /**
  * Type guard to check if the relationship is a HasMany

@@ -1,8 +1,8 @@
-import type BelongsToRelationship from "./BelongsToRelationship";
-import type HasAndBelongsToManyRelationship from "./HasAndBelongsToManyRelationship";
-import type HasManyRelationship from "./HasManyRelationship";
-import type HasOneRelationship from "./HasOneRelationship";
-import type OwnedByRelationship from "./OwnedByRelationship";
+import type BelongsToRelationship from "./BelongsToRelationship.js";
+import type HasAndBelongsToManyRelationship from "./HasAndBelongsToManyRelationship.js";
+import type HasManyRelationship from "./HasManyRelationship.js";
+import type HasOneRelationship from "./HasOneRelationship.js";
+import type OwnedByRelationship from "./OwnedByRelationship.js";
 
 /**
  * A union type that encompasses all possible relationship metadata classes within the ORM system. This type is used to represent the metadata for various types of relationships that can exist between entities, such as "BelongsTo", "HasMany", "HasOne", and "HasAndBelongsToMany" relationships.
