@@ -395,7 +395,7 @@ type DistributeEntityAttributes<E> = E extends DynaRecord
  * @template T - The root entity being queried.
  * @template Names - Union of entity name string literals to narrow to.
  */
-type NarrowByNames<T extends DynaRecord, Names extends string> = [
+export type NarrowByNames<T extends DynaRecord, Names extends string> = [
   ResolveEntityByName<T, Names>
 ] extends [never]
   ? QueryResults<T>
@@ -522,7 +522,7 @@ type ResolveOrBlockEntityNames<T extends DynaRecord, F> = F extends {
  * @template T - The root entity being queried.
  * @template Names - The resolved entity name union to check.
  */
-type ShouldNarrow<T extends DynaRecord, Names> =
+export type ShouldNarrow<T extends DynaRecord, Names> =
   IsAny<Names> extends true
     ? false
     : [Names] extends [never]
@@ -622,7 +622,7 @@ type FallbackToOrBlocks<T extends DynaRecord, F, SK> =
  * and `skCondition` narrowing because DynamoDB ANDs them — a record must satisfy
  * the key condition, the top-level filter, and at least one `$or` block.
  */
-type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
+export type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
   EntityNamesFromKeys<T, FilterKeysOf<F>> extends infer Names
     ? ShouldNarrow<T, Names> extends true
       ? IntersectKeysWithOr<T, Names & string, F, SK>
@@ -634,7 +634,7 @@ type FallbackToFilterKeys<T extends DynaRecord, F, SK> =
  * `skCondition` narrow to a disjoint set. Since DynamoDB ANDs them, the
  * result is the intersection of all narrowing signals.
  */
-type IntersectTypeWithOr<T extends DynaRecord, F, SK = unknown> =
+export type IntersectTypeWithOr<T extends DynaRecord, F, SK = unknown> =
   ResolveOrBlockEntityNames<T, F> extends infer OrNames
     ? ShouldNarrow<T, OrNames> extends true
       ? StrictIntersectWithSK<

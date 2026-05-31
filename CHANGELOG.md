@@ -1,3 +1,19 @@
+## 0.7.1 - 2026-05-30
+
+### Fixed
+
+- **Inferred return types now resolve correctly in consumers under strict module resolution.** The 0.7.0 `exports` map closed off deep `dist/...` paths, which inadvertently left a handful of internal types referenced by inferred return signatures unreachable through the public entry. Under `moduleResolution: bundler` or `nodenext`, this surfaced two ways:
+
+  - **`TS2883`** ("The inferred type of X cannot be named without a reference to Y") at consumer call sites for any inferred return type that names `Optional<T>` — e.g. `findById`, `findById` with includes.
+  - **Silent degradation to `any`** (with `TS7006` cascades on downstream callback parameters such as `.map((u) => …)`) for the deeply-recursive conditional types in `InferQueryResults`. The threshold is relationship-count-driven: at ~16+ relationships on an entity, TS partially resolves the conditional and writes a deferred reference to internal narrowing helpers; with no reachable path to those helpers, the result collapsed to `any` rather than erroring. Entities with a handful of relationships were unaffected.
+
+  The fix re-exports the affected types from the package root so the public entry can name them:
+
+  - `Optional` (from `./types.js`) — appears directly in `findById`'s return signature.
+  - `ShouldNarrow`, `NarrowByNames`, `FallbackToFilterKeys`, `IntersectTypeWithOr` (from `./operations/index.js`) — the top-level branching helpers in the `InferQueryResults<T, F, SK>` conditional chain.
+
+  No source changes are required for consumers; bumping to 0.7.1 is sufficient. Note that this regression only reproduces through real npm resolution — `npm link`, workspace paths, and `file:` dependencies all bypass the `exports` map under most tooling and will not surface it.
+
 ## 0.7.0 - 2026-05-29
 
 > Modernization release. Brings the library onto TypeScript 6, ESM-only publishing, plain `tsc` build, Node 22 runtime floor, Vitest tests, and a clean low-maintenance dev-dependency surface. **The public API surface is unchanged** — every entity decorator, relationship decorator, `DynaRecord` method, and exported type re-exports the same shape from the same import path. Stays at `0.7.0` (not `1.0.0`) to keep semver headroom while the new shape settles in real consumer projects; a future `1.0.0` will lock it in.
