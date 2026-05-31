@@ -11,13 +11,18 @@ export type {
   TypedSortKeyCondition,
   SKScopedFilterParams,
   InferQueryResults,
-  PartitionEntityNames
+  PartitionEntityNames,
+  ShouldNarrow,
+  NarrowByNames,
+  FallbackToFilterKeys,
+  IntersectTypeWithOr
 } from "./operations/index.js";
 export type {
   PartitionKey,
   SortKey,
   ForeignKey,
-  NullableForeignKey
+  NullableForeignKey,
+  Optional
 } from "./types.js";
 export type { AttributeKind } from "./metadata/types.js";
 export type { SerializedTableMetadata } from "./metadata/schemas.js";
