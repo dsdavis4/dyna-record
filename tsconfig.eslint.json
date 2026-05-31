@@ -1,11 +1,5 @@
 {
   "extends": "./tsconfig.dev.json",
-  "include": [
-    "eslint.config.mjs",
-    "vitest.config.ts",
-    "tsup.config.ts",
-    "**/*.test.ts",
-    "tests"
-  ],
+  "include": ["eslint.config.mjs", "vitest.config.ts", "**/*.test.ts", "tests"],
   "exclude": []
 }
