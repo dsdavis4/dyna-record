@@ -18,6 +18,7 @@ export type {
   IntersectTypeWithOr
 } from "./operations/index.js";
 export type {
+  Brand,
   PartitionKey,
   SortKey,
   ForeignKey,

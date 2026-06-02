@@ -1,3 +1,9 @@
+## 0.7.2 - 2026-06-01
+
+### Added
+
+- **`Brand` re-exported from the package root.** `Brand<K, T>` is the utility behind `PartitionKey`, `SortKey`, `ForeignKey`, and `NullableForeignKey` — it was previously only reachable via the internal `./types.js` path, which the 0.7.0 `exports` map closed off. Exporting it from the root lets consumers declare their own branded primitives (e.g. `type OrgId = Brand<string, "OrgId">`) without dipping into internal paths, and keeps the public type graph self-contained under TypeScript 6's isolated/portable declarations model. No source changes are required for existing consumers; bumping to 0.7.2 is sufficient.
+
 ## 0.7.1 - 2026-05-30
 
 ### Fixed
