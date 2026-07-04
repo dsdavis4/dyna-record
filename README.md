@@ -14,6 +14,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Installation](#installation)
   - [Configuration](#configuration)
 - [Defining Entities](#defining-entities)
+  - [Entity inheritance and shared base classes](#entity-inheritance-and-shared-base-classes)
   - [Attributes](#attributes)
   - [Relationships](#relationships)
 - [CRUD Operations](#crud-operations)
@@ -156,6 +157,54 @@ class Course extends MyTable {
 ```
 
 > **Note:** `declare readonly type` is a pure TypeScript type annotation with zero runtime impact. The ORM sets `type` to the class name automatically. The declaration simply tells TypeScript the exact literal type, enabling typed query filters and return type narrowing.
+
+#### Entity inheritance and shared base classes
+
+Entities do not have to extend the table class directly. The `@Entity` decorator resolves an entity's table by walking the class hierarchy until it finds a class decorated with `@Table`, so shared attributes and relationships can live in an abstract base class between the table and the concrete entities:
+
+```typescript
+import {
+  Entity,
+  StringAttribute,
+  NumberAttribute,
+  BooleanAttribute
+} from "dyna-record";
+
+// Not decorated with @Entity — this class is never registered as an entity,
+// never appears in table metadata, and no records of its own type exist
+abstract class Vehicle extends MyTable {
+  @StringAttribute({ alias: "Make" })
+  public readonly make: string;
+
+  @NumberAttribute({ alias: "Year" })
+  public readonly year: number;
+}
+
+@Entity
+class Car extends Vehicle {
+  declare readonly type: "Car";
+
+  @NumberAttribute({ alias: "Doors" })
+  public readonly doors: number;
+}
+
+@Entity
+class Motorcycle extends Vehicle {
+  declare readonly type: "Motorcycle";
+
+  @BooleanAttribute({ alias: "HasSidecar" })
+  public readonly hasSidecar: boolean;
+}
+```
+
+`Car` and `Motorcycle` are full entities of `MyTable`: each inherits `make` and `year` (including runtime schema validation for them), and all CRUD operations work as if the attributes were declared on the entity itself. The abstract base class is only a container for shared code — it cannot be queried or persisted.
+
+A few things to keep in mind:
+
+- If an entity class does not extend a class decorated with `@Table` anywhere in its hierarchy, the `@Entity` decorator throws at class definition time.
+- Extending a **concrete** entity (e.g. `class Pickup extends Truck`) is supported at runtime, but TypeScript will not allow the subclass to narrow the inherited `type` literal (`"Pickup"` is not assignable to `"Truck"`). Prefer abstract base classes for shared attributes.
+- There is no polymorphic querying: entities are stored and queried by their exact class name. Querying `Car` will never return `Motorcycle` records, even though they share a base class.
+- A base class couples its subclasses to one table, since it must extend a specific table class. To share a shape across entities in different tables, use a TypeScript interface instead (each entity must still declare its own decorated attributes).
 
 ### Attributes
 

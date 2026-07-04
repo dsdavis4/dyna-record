@@ -32,7 +32,8 @@ import {
   ArrayOfObjectsEntity,
   DeepNestedEntity,
   DiscriminatedUnionEntity,
-  ArrayOfUnionsEntity
+  ArrayOfUnionsEntity,
+  Car
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
@@ -12675,6 +12676,69 @@ describe("Update", () => {
             discriminator: "type",
             path: ["dashboard", "widgets", 0, "type"],
             message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+  });
+
+  describe("entity inheritance", () => {
+    it("can update an attribute inherited from an abstract base class", async () => {
+      expect.assertions(5);
+
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      expect(await Car.update("123", { make: "Honda" })).toBeUndefined();
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "Car#123",
+                    SK: "Car"
+                  },
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Make": "Make",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Make": "Honda",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  },
+                  UpdateExpression:
+                    "SET #Make = :Make, #UpdatedAt = :UpdatedAt"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("enforces schema validation for attributes inherited from the base class", async () => {
+      expect.assertions(5);
+
+      try {
+        await Car.update("123", { make: 123 } as any);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received number",
+            path: ["make"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);

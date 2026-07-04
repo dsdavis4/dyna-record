@@ -41,7 +41,7 @@ interface DynaRecordBase {
 /**
  * Serves as an abstract base class for entities in the ORM system. It defines standard fields such as `id`, `type`, `createdAt`, and `updatedAt`, and provides static methods for CRUD operations and queries. This class encapsulates common behaviors and properties that all entities share, leveraging decorators for attribute metadata and supporting operations like finding, creating, updating, and deleting entities.
  *
- * Table classes should extend this class, and each entity should extend the table class
+ * Table classes should extend this class, and each entity should extend the table class — either directly or through intermediate abstract base classes that hold shared attributes
  *
  * Entities extending `DynaRecord` can utilize these operations to interact with their corresponding records in the database, including handling relationships between different entities.
  * @example

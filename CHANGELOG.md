@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixed
+
+- **Entities can now extend base classes (entity inheritance).** The `@Entity` decorator previously assumed an entity's direct parent class was the `@Table` class, so an entity extending an abstract base class (or another entity) registered a bogus table name and crashed on first use with `TypeError: Cannot destructure property 'defaultAttributes' of ... as it is undefined`. The decorator now resolves the table by walking the class hierarchy until it finds a class decorated with `@Table` — the same strategy the partition/sort key decorators already used. Shared attributes and relationships declared on an intermediate abstract base class register on each concrete entity (including runtime schema validation); the base class itself is never registered as an entity and never appears in table metadata. An entity whose hierarchy contains no `@Table` class now throws a descriptive error at class definition time instead of failing later with the opaque `TypeError`.
+
 ## 0.7.2 - 2026-06-01
 
 ### Added

@@ -911,6 +911,33 @@ class Discovery extends MockTable {
   public readonly vendor: Vendor;
 }
 
+// Abstract base class holding shared persisted attributes. Intentionally NOT
+// decorated with @Entity — only the concrete subclasses below are registered
+// entities, and the base class itself must never appear in table metadata
+abstract class Vehicle extends MockTable {
+  @StringAttribute({ alias: "Make" })
+  public readonly make: string;
+
+  @NumberAttribute({ alias: "Year" })
+  public readonly year: number;
+}
+
+@Entity
+class Car extends Vehicle {
+  declare readonly type: "Car";
+
+  @NumberAttribute({ alias: "Doors" })
+  public readonly doors: number;
+}
+
+@Entity
+class Motorcycle extends Vehicle {
+  declare readonly type: "Motorcycle";
+
+  @BooleanAttribute({ alias: "HasSidecar" })
+  public readonly hasSidecar: boolean;
+}
+
 export {
   // MockTable exports
   MockTable,
@@ -949,6 +976,9 @@ export {
   DiscriminatedUnionEntity,
   Vendor,
   Discovery,
+  Vehicle,
+  Car,
+  Motorcycle,
   // OtherTable exports
   OtherTable,
   Teacher,

@@ -25,7 +25,9 @@ import {
   DeepNestedEntity,
   ArrayOfObjectsEntity,
   DiscriminatedUnionEntity,
-  ArrayOfUnionsEntity
+  ArrayOfUnionsEntity,
+  Vehicle,
+  Car
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { generateId } from "../../src/id.js";
@@ -5215,6 +5217,85 @@ describe("Create", () => {
             discriminator: "type",
             path: ["dashboard", "widgets", 0, "type"],
             message: "Invalid input"
+          }
+        ]);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    });
+  });
+
+  describe("entity inheritance", () => {
+    it("will create an entity registered through an abstract base class, including inherited attributes", async () => {
+      expect.assertions(5);
+
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+
+      mockedGenerateId.mockReturnValueOnce("uuid1");
+
+      const car = await Car.create({ make: "Toyota", year: 2020, doors: 4 });
+
+      expect(car).toEqual({
+        pk: "Car#uuid1",
+        sk: "Car",
+        type: "Car",
+        id: "uuid1",
+        make: "Toyota",
+        year: 2020,
+        doors: 4,
+        createdAt: new Date("2023-10-16T03:31:35.918Z"),
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(car).toBeInstanceOf(Car);
+      expect(car).toBeInstanceOf(Vehicle);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  TableName: "mock-table",
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Car#uuid1",
+                    SK: "Car",
+                    Type: "Car",
+                    Id: "uuid1",
+                    Make: "Toyota",
+                    Year: 2020,
+                    Doors: 4,
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("enforces schema validation for attributes inherited from the base class", async () => {
+      expect.assertions(5);
+
+      try {
+        await Car.create({ doors: 4 } as any);
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(ValidationError);
+        expect(e.message).toEqual("Validation errors");
+        expect(e.cause).toEqual([
+          {
+            code: "invalid_type",
+            expected: "string",
+            message: "Invalid input: expected string, received undefined",
+            path: ["make"]
+          },
+          {
+            code: "invalid_type",
+            expected: "number",
+            message: "Invalid input: expected number, received undefined",
+            path: ["year"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);

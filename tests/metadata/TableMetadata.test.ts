@@ -3134,9 +3134,206 @@ describe("TableMetadata", () => {
               }
             },
             idField: "vendorId"
+          },
+          Car: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              make: {
+                name: "make",
+                alias: "Make",
+                kind: "string",
+                nullable: false
+              },
+              year: {
+                name: "year",
+                alias: "Year",
+                kind: "number",
+                nullable: false
+              },
+              doors: {
+                name: "doors",
+                alias: "Doors",
+                kind: "number",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              Make: {
+                name: "make",
+                alias: "Make",
+                kind: "string",
+                nullable: false
+              },
+              Year: {
+                name: "year",
+                alias: "Year",
+                kind: "number",
+                nullable: false
+              },
+              Doors: {
+                name: "doors",
+                alias: "Doors",
+                kind: "number",
+                nullable: false
+              }
+            },
+            relationships: {}
+          },
+          Motorcycle: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              make: {
+                name: "make",
+                alias: "Make",
+                kind: "string",
+                nullable: false
+              },
+              year: {
+                name: "year",
+                alias: "Year",
+                kind: "number",
+                nullable: false
+              },
+              hasSidecar: {
+                name: "hasSidecar",
+                alias: "HasSidecar",
+                kind: "boolean",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              Make: {
+                name: "make",
+                alias: "Make",
+                kind: "string",
+                nullable: false
+              },
+              Year: {
+                name: "year",
+                alias: "Year",
+                kind: "number",
+                nullable: false
+              },
+              HasSidecar: {
+                name: "hasSidecar",
+                alias: "HasSidecar",
+                kind: "boolean",
+                nullable: false
+              }
+            },
+            relationships: {}
           }
         }
       });
+    });
+
+    it("includes entities registered through an abstract base class but not the base class itself", () => {
+      expect.assertions(3);
+
+      const metadata = MockTable.metadata();
+
+      // Car and Motorcycle extend the abstract Vehicle class, which extends
+      // MockTable. The concrete entities belong to the table's metadata...
+      expect(metadata.entities.Car).toBeDefined();
+      expect(metadata.entities.Motorcycle).toBeDefined();
+      // ...but the abstract base class is not an entity and is never registered
+      expect(metadata.entities.Vehicle).toBeUndefined();
     });
   });
 

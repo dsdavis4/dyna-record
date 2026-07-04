@@ -22,7 +22,9 @@ import {
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity,
   Vendor,
-  Discovery
+  Discovery,
+  Vehicle,
+  Car
 } from "./mockModels.js";
 import {
   DynamoDBDocumentClient,
@@ -2389,6 +2391,50 @@ describe("FindById", () => {
           Logger.log(v);
         }
       }
+    });
+  });
+
+  describe("entity inheritance", () => {
+    it("will find an entity registered through an abstract base class and serialize inherited attributes", async () => {
+      expect.assertions(5);
+
+      mockGet.mockResolvedValueOnce({
+        Item: {
+          PK: "Car#123",
+          SK: "Car",
+          Id: "123",
+          Type: "Car",
+          Make: "Toyota",
+          Year: 2020,
+          Doors: 4,
+          UpdatedAt: "2023-09-15T04:26:31.148Z"
+        }
+      });
+
+      const result = await Car.findById("123");
+
+      expect(result).toBeInstanceOf(Car);
+      expect(result).toBeInstanceOf(Vehicle);
+      expect(result).toEqual({
+        pk: "Car#123",
+        sk: "Car",
+        id: "123",
+        type: "Car",
+        make: "Toyota",
+        year: 2020,
+        doors: 4,
+        updatedAt: new Date("2023-09-15T04:26:31.148Z")
+      });
+      expect(mockedGetCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            Key: { PK: "Car#123", SK: "Car" },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "GetCommand" }]]);
     });
   });
 });
