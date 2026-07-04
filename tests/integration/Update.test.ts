@@ -12715,8 +12715,7 @@ describe("Update", () => {
                     ":Make": "Honda",
                     ":UpdatedAt": "2023-10-16T03:31:35.918Z"
                   },
-                  UpdateExpression:
-                    "SET #Make = :Make, #UpdatedAt = :UpdatedAt"
+                  UpdateExpression: "SET #Make = :Make, #UpdatedAt = :UpdatedAt"
                 }
               }
             ]
