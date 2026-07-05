@@ -130,14 +130,14 @@ class MetadataStorage {
   }
 
   /**
-   * Add an entity to metadata storage
-   * @param entityName
-   * @param tableName
+   * Add an entity to metadata storage. The table the entity belongs to is
+   * resolved by walking the entity's class hierarchy until a class decorated
+   * with the Table decorator is found, supporting entities that extend other
+   * entities or intermediate abstract classes.
+   * @param entityClass
    */
-  public addEntity(
-    entityClass: EntityMetadata["EntityClass"],
-    tableClassName: string
-  ): void {
+  public addEntity(entityClass: EntityMetadata["EntityClass"]): void {
+    const tableClassName = this.resolveTableClassName(entityClass);
     this.#entities[entityClass.name] = new EntityMetadata(
       entityClass,
       tableClassName
@@ -249,6 +249,29 @@ class MetadataStorage {
       );
       this.#initialized = true;
     }
+  }
+
+  /**
+   * Walks an entity class's hierarchy and returns the name of the first
+   * ancestor registered as a table via the Table decorator. Throws if the
+   * entity does not extend a table class anywhere in its hierarchy.
+   * @param entityClass
+   * @returns Name of the table class the entity belongs to
+   */
+  private resolveTableClassName(
+    entityClass: EntityMetadata["EntityClass"]
+  ): string {
+    let current: unknown = Object.getPrototypeOf(entityClass);
+
+    // The constructor chain ends at Function.prototype, whose name is ""
+    while (typeof current === "function" && current.name !== "") {
+      if (current.name in this.#tables) return current.name;
+      current = Object.getPrototypeOf(current);
+    }
+
+    throw new Error(
+      `Entity ${entityClass.name} must extend a class decorated with @Table, either directly or through its class hierarchy`
+    );
   }
 
   /**

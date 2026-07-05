@@ -4,7 +4,7 @@ import type DynaRecord from "../DynaRecord.js";
 /**
  * A class decorator for defining and customizing the table metadata associated with an entity class within the ORM system. This decorator enriches the entity with additional metadata, specifying how the entity relates to the underlying database table. By providing custom table options, such as table names or schema definitions, this decorator plays a crucial role in bridging the gap between the ORM's abstract entities and their concrete database representations.
  *
- * IMPORTANT - All entity classes should extend a table
+ * IMPORTANT - All entity classes should extend a table, either directly or through intermediate base classes (see {@link Entity})
  *
  * @param props The {@link TableMetadataOptions} object containing metadata configuration for the table. This can include options like the table's name, delimiter and default field customizations.
  * @returns A class decorator factory function that takes a target class extending `DynaRecord` and a context object provided by the TypeScript runtime. The decorator function registers the provided metadata options with the ORM's metadata system, ensuring the entity is properly configured and recognized by the ORM.
