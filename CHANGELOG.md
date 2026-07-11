@@ -1,3 +1,12 @@
+## 1.0.0 - 2026-07-10
+
+> **Stable release.** This is the `1.0.0` promised by the 0.7.0 modernization note — the public API surface that settled across the 0.7.x line is now locked in under semantic versioning. **There are no API or behavioral changes from 0.7.3**: every entity decorator, relationship decorator, `DynaRecord` method, and exported type keeps the same shape and the same import path. Bumping from `0.7.x` to `1.0.0` requires no source changes.
+
+### Changed
+
+- **Semantic-versioning commitment.** From this release forward, breaking changes to the public API will only ship in a new major version. The TypeScript 6 / ESM-only / Node 22 baseline established in 0.7.0 is the supported foundation going forward.
+- **Dependency refresh.** Dev and transitive dependencies were updated (`package-lock.json`) with no change to the published runtime footprint.
+
 ## 0.7.3 - 2026-07-04
 
 ### Fixed
