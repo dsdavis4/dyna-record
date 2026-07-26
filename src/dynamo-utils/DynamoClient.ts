@@ -41,13 +41,48 @@ class DynamoClient {
 
   /**
    * Queries DynamoDB based on the provided parameters and returns the matching items.
+   *
+   * A single DynamoDB `Query` returns at most 1MB of data and a `LastEvaluatedKey`
+   * cursor when more results exist. This method drains every page by following that
+   * cursor, so callers always receive the complete result set rather than a silently
+   * truncated first page.
+   *
+   * If `params.Limit` is provided it is treated as a cap on the total number of items
+   * returned (not a per-page limit), and pagination stops once it is reached. This
+   * keeps the door open for adding a bounded/cursor-based read API later without
+   * changing this method's behavior.
    * @param params The parameters for the QueryCommand to DynamoDB.
    * @returns A Promise resolving to an array of the queried items.
    */
   public static async query(params: QueryCommandInput): Promise<QueryItems> {
     Logger.log("query", { params });
-    const response = await dynamo.send(new QueryCommand(params));
-    return response.Items ?? [];
+
+    const items: QueryItems = [];
+    let exclusiveStartKey: QueryCommandInput["ExclusiveStartKey"];
+
+    do {
+      const remaining =
+        params.Limit !== undefined ? params.Limit - items.length : undefined;
+
+      const response = await dynamo.send(
+        new QueryCommand({
+          ...params,
+          ExclusiveStartKey: exclusiveStartKey,
+          ...(remaining !== undefined && { Limit: remaining })
+        })
+      );
+
+      if (response.Items !== undefined) {
+        items.push(...response.Items);
+      }
+
+      exclusiveStartKey = response.LastEvaluatedKey;
+    } while (
+      exclusiveStartKey !== undefined &&
+      (params.Limit === undefined || items.length < params.Limit)
+    );
+
+    return items;
   }
 
   /**
