@@ -10,7 +10,10 @@ import {
   type GetCommandOutput,
   type TransactWriteCommandInput,
   type TransactWriteCommandOutput,
-  type TransactGetCommandInput
+  type TransactGetCommandInput,
+  SearchVectorsCommand,
+  type SearchVectorsCommandInput,
+  type SearchVectorsCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
@@ -108,6 +111,28 @@ class DynamoClient {
   ): Promise<TransactWriteCommandOutput> {
     Logger.log("transactWriteItems", { params });
     return await dynamo.send(new TransactWriteCommand(params));
+  }
+
+  /**
+   * Performs a vector similarity search against a DynamoDB vector index and
+   * returns the matching results.
+   *
+   * Log output redacts the query vector: only a placeholder with the
+   * dimension count is logged, never the vector values.
+   * @param params The parameters for the SearchVectorsCommand to DynamoDB.
+   * @returns A Promise resolving to the array of search results.
+   */
+  public static async searchVectors(
+    params: SearchVectorsCommandInput
+  ): Promise<NonNullable<SearchVectorsCommandOutput["SearchResults"]>> {
+    Logger.log("searchVectors", {
+      params: {
+        ...params,
+        SearchVector: `[vector:${String(params.SearchVector?.length ?? 0)}]`
+      }
+    });
+    const response = await dynamo.send(new SearchVectorsCommand(params));
+    return response.SearchResults ?? [];
   }
 }
 
