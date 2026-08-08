@@ -25,3 +25,10 @@ export class FilterError extends Error {
 export class ValidationError extends Error {
   public readonly code = "ValidationError";
 }
+
+/**
+ * Represents an error indicating that generating a vector embedding for a searchable attribute failed. This error is thrown when the embedding provider configured on the vector index rejects or errors during a create/update of a searchable entity, or when the provider returns a vector whose dimensions do not match the index's model descriptor. The originating provider error, when one exists, is carried on `cause`. The whole write fails — no item is written searchable-but-not-embedded.
+ */
+export class EmbeddingError extends Error {
+  public readonly code = "EmbeddingError";
+}

@@ -1,6 +1,7 @@
 import type DynaRecord from "./DynaRecord.js";
 import type { DynamoTableItem, Nullable } from "./types.js";
 import Metadata from "./metadata/index.js";
+import { vectorSearchKeys } from "./metadata/VectorIndexMetadata.js";
 import { type EntityAttributesOnly } from "./operations/index.js";
 
 /**
@@ -52,14 +53,21 @@ export const tableItemToEntity = <T extends DynaRecord>(
     if (attrName in tableAttributes) {
       const attrMeta = tableAttributes[attrName];
       const { name: entityKey, serializers } = attrMeta;
-      if (isKeyOfEntity(entity, entityKey)) {
+
+      // The library-managed content hash is registered attribute metadata but
+      // has no declared class field, so the declared-key guard alone would
+      // drop it. It must round-trip so updates can skip re-embedding an
+      // unchanged searchable value
+      const isContentHash = entityKey === vectorSearchKeys.contentHash;
+
+      if (isKeyOfEntity(entity, entityKey) || isContentHash) {
         const rawVal: unknown = tableItem[attrName];
         const val =
           serializers?.toEntityAttribute === undefined
             ? rawVal
             : serializers.toEntityAttribute(rawVal);
 
-        safeAssign(entity, entityKey, val);
+        safeAssign(entity, entityKey as keyof DynaRecord, val);
       }
     }
   });

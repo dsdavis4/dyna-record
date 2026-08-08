@@ -20,6 +20,13 @@ import {
 } from "../types.js";
 import { isBelongsToRelationship } from "../../metadata/utils.js";
 import type { BelongsToOrOwnedByRelationship } from "../../metadata/index.js";
+import Metadata from "../../metadata/index.js";
+import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
+import {
+  embedSearchableValue,
+  type SearchableWriteAttributes
+} from "../../embedding/embed.js";
+import type { Optional } from "../../types.js";
 
 /**
  * Represents an operation to create a new entity record in DynamoDB, including all necessary
@@ -80,6 +87,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
+    // Start the embedding concurrently with the belongs-to prefetch below so
+    // a searchable write adds no serial round trip
+    const searchableWritePromise = this.startSearchableEmbed(entityAttrs);
+
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(
       entityData,
@@ -102,9 +113,49 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       );
     }
 
+    // Patch the vector and content hash onto the canonical Put item only. The
+    // belongs-to link records above spread copies of tableItem before this
+    // patch, so denormalized copies never carry the vector
+    const searchableWrite = await searchableWritePromise;
+    if (searchableWrite !== undefined) {
+      tableItem[vectorSearchKeys.vector] = searchableWrite.vector;
+      tableItem[vectorSearchKeys.contentHash] = searchableWrite.contentHash;
+    }
+
     await this.#transactionBuilder.executeTransaction();
 
     return tableItemToEntity<T>(this.EntityClass, tableItem);
+  }
+
+  /**
+   * Starts embedding the entity's searchable attribute value when one is
+   * present in the payload. Returns undefined for entities with no searchable
+   * attribute and for null or empty values — a row without the vector
+   * attribute is not indexed, so there is nothing to embed (and the provider
+   * is never called with empty text).
+   * @param entityAttrs - The parsed entity attributes being created.
+   * @returns A promise of the vector and content hash, or undefined when no embedding applies.
+   * @private
+   */
+  private startSearchableEmbed(
+    entityAttrs: EntityDefinedAttributes<DynaRecord>
+  ): Optional<Promise<SearchableWriteAttributes>> {
+    const searchableMeta = this.entityMetadata.searchableAttribute;
+    if (searchableMeta === undefined) return undefined;
+
+    const value = entityAttrs[searchableMeta.name as keyof typeof entityAttrs];
+    if (!isString(value) || value === "") return undefined;
+
+    const [index] = Metadata.getVectorIndexes(
+      this.entityMetadata.tableClassName
+    );
+
+    return embedSearchableValue(
+      value,
+      index,
+      this.EntityClass.name,
+      searchableMeta.name
+    );
   }
 
   /**
@@ -371,10 +422,19 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
         [this.sortKeyAlias]: relationshipType
       };
 
+      // These items are raw fetched records that bypass entity serialization,
+      // so a searchable parent's vector must be stripped here — the vector
+      // lives on canonical rows only (the registered content hash is harmless
+      // on copies)
+      const {
+        [vectorSearchKeys.vector]: _parentVector,
+        ...denormalizedItem
+      } = tableItem;
+
       this.#transactionBuilder.addPut(
         {
           TableName: this.tableMetadata.name,
-          Item: { ...tableItem, ...key },
+          Item: { ...denormalizedItem, ...key },
           ConditionExpression: `attribute_not_exists(${this.partitionKeyAlias})`
         },
 

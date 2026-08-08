@@ -16,12 +16,73 @@ import {
   type SearchVectorsCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger.js";
+import { vectorSearchKeys } from "../metadata/VectorIndexMetadata.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
 
 // Initialize the DynamoDB Document Client with a specific AWS region.
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
+
+/**
+ * Returns a copy of transact write params safe for logging: vector embedding
+ * values riding in Put items or Update expression values are replaced with a
+ * placeholder carrying the dimension count. Embeddings reconstruct their
+ * source text under published inversion techniques, so vector values must
+ * never reach logs — the command itself keeps the real values
+ */
+const redactVectorWrites = (
+  params: TransactWriteCommandInput
+): TransactWriteCommandInput => {
+  const vectorValueKey = `:${vectorSearchKeys.vector}`;
+
+  const hasVector = params.TransactItems?.some(
+    transactItem =>
+      Array.isArray(transactItem.Put?.Item?.[vectorSearchKeys.vector]) ||
+      Array.isArray(
+        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey]
+      )
+  );
+
+  if (hasVector !== true) return params;
+
+  return {
+    ...params,
+    TransactItems: params.TransactItems?.map(transactItem => {
+      const putVector: unknown =
+        transactItem.Put?.Item?.[vectorSearchKeys.vector];
+      if (transactItem.Put !== undefined && Array.isArray(putVector)) {
+        return {
+          ...transactItem,
+          Put: {
+            ...transactItem.Put,
+            Item: {
+              ...transactItem.Put.Item,
+              [vectorSearchKeys.vector]: `[vector:${String(putVector.length)}]`
+            }
+          }
+        };
+      }
+
+      const updateVector: unknown =
+        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey];
+      if (transactItem.Update !== undefined && Array.isArray(updateVector)) {
+        return {
+          ...transactItem,
+          Update: {
+            ...transactItem.Update,
+            ExpressionAttributeValues: {
+              ...transactItem.Update.ExpressionAttributeValues,
+              [vectorValueKey]: `[vector:${String(updateVector.length)}]`
+            }
+          }
+        };
+      }
+
+      return transactItem;
+    })
+  };
+};
 
 /**
  * A utility class for interacting with DynamoDB, providing static methods
@@ -109,7 +170,7 @@ class DynamoClient {
   public static async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
-    Logger.log("transactWriteItems", { params });
+    Logger.log("transactWriteItems", { params: redactVectorWrites(params) });
     return await dynamo.send(new TransactWriteCommand(params));
   }
 

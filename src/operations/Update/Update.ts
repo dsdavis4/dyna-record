@@ -33,6 +33,7 @@ import type {
 import type {
   DynamoTableItem,
   EntityClass,
+  Optional,
   WithRequired
 } from "../../types.js";
 import Metadata from "../../metadata/index.js";
@@ -41,12 +42,25 @@ import {
   type EntityAttributesOnly
 } from "../types.js";
 import { NotFoundError } from "../../errors.js";
+import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
+import {
+  computeContentHash,
+  embedSearchableValue,
+  type SearchableWriteAttributes
+} from "../../embedding/embed.js";
 import {
   isBelongsToRelationship,
   isHasManyRelationship
 } from "../../metadata/utils.js";
 
 type Entity = EntityAttributesInstance<DynaRecord>;
+
+/**
+ * The canonical row's queued update item. The transaction builder stores the
+ * item by reference, allowing the searchable write to append vector clauses
+ * after the embedding resolves
+ */
+type CanonicalUpdateItem = Parameters<TransactWriteBuilder["addUpdate"]>[0];
 
 type PartialEntityWithId = WithRequired<
   Partial<EntityAttributesOnly<DynaRecord>>,
@@ -152,7 +166,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
     const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
-    this.buildUpdateItemTransaction(id, expression);
+    const canonicalUpdate = this.buildUpdateItemTransaction(id, expression);
     this.addStandaloneForeignKeyConditionChecks(
       entityAttrs,
       referentialIntegrityCheck
@@ -168,6 +182,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         id,
         entities,
         belongsToRelMetaBeingUpdated
+      );
+
+      // The prefetched entity supplies the stored content hash so an update
+      // carrying an unchanged searchable value skips the embedding call
+      await this.applySearchableWrite(
+        entityAttrs,
+        canonicalUpdate,
+        preFetch.entityPreUpdate
       );
 
       const updatedEntity = {
@@ -188,6 +210,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         preFetch.newBelongsToEntityLookup,
         referentialIntegrityCheck
       );
+    } else {
+      // Relationship-free entities have no prefetch and therefore no stored
+      // hash to compare — a payload carrying the searchable attribute embeds
+      // unconditionally rather than adding a new read
+      await this.applySearchableWrite(entityAttrs, canonicalUpdate, undefined);
     }
 
     await this.commitTransaction();
@@ -429,12 +456,16 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    *
    * @param id - The unique identifier of the entity being updated.
    * @param updateExpression - The DynamoDB update expression describing the changes.
+   * @returns The queued update item — the transaction builder stores it by
+   * reference, so the searchable write can append vector clauses to the
+   * canonical row's update (and only the canonical row's) after the
+   * embedding resolves, without changing the transaction's item order.
    * @private
    */
   private buildUpdateItemTransaction(
     id: string,
     updateExpression: UpdateExpression
-  ): void {
+  ): CanonicalUpdateItem {
     const { name: tableName } = this.tableMetadata;
     const pk = this.tableMetadata.partitionKeyAttribute.name;
     const sk = this.tableMetadata.sortKeyAttribute.name;
@@ -445,15 +476,159 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     };
     const tableKeys = entityToTableItem(this.EntityClass, keys);
 
+    const updateItem: CanonicalUpdateItem = {
+      TableName: tableName,
+      Key: tableKeys,
+      ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
+      ...updateExpression
+    };
+
     this.transactionBuilder.addUpdate(
-      {
-        TableName: tableName,
-        Key: tableKeys,
-        ConditionExpression: `attribute_exists(${this.partitionKeyAlias})`,
-        ...updateExpression
-      },
+      updateItem,
       `${this.EntityClass.name} with ID '${id}' does not exist`
     );
+
+    return updateItem;
+  }
+
+  /**
+   * Whether this operation embeds searchable attribute values. Overridden by
+   * {@link UpdateDryRun}, whose foreign-key-nullification payloads can never
+   * contain a searchable attribute
+   * @returns true for ordinary updates
+   */
+  protected supportsSearchableEmbedding(): boolean {
+    return true;
+  }
+
+  /**
+   * Applies the searchable write to the canonical row's queued update when
+   * the payload contains the entity's searchable attribute.
+   *
+   * **What it does:**
+   * - A null or empty value removes the vector and content hash — the row
+   *   leaves the vector index. The provider is never called with empty text.
+   * - When the prefetched entity's stored content hash matches the new
+   *   value's hash, the value is unchanged — no embedding call, no vector
+   *   write.
+   * - Otherwise embeds the value and appends the vector and hash to the
+   *   canonical row's update only; the shared expression the denormalized
+   *   sinks receive stays vector-free.
+   *
+   * @param attributes - The parsed partial attributes being updated.
+   * @param canonicalUpdate - The canonical row's queued update item.
+   * @param entityPreUpdate - The prefetched entity, when the entity's relationships required a prefetch.
+   * @private
+   */
+  private async applySearchableWrite(
+    attributes: UpdateOptions<DynaRecord>,
+    canonicalUpdate: CanonicalUpdateItem,
+    entityPreUpdate: Optional<Entity>
+  ): Promise<void> {
+    if (!this.supportsSearchableEmbedding()) return;
+
+    const searchableMeta = this.entityMetadata.searchableAttribute;
+    if (
+      searchableMeta === undefined ||
+      !isKeyOfObject(attributes, searchableMeta.name)
+    ) {
+      return;
+    }
+
+    const value: unknown = attributes[searchableMeta.name];
+
+    if (value === null || value === "") {
+      this.appendVectorClauses(canonicalUpdate, undefined);
+      return;
+    }
+
+    if (!isString(value)) return;
+
+    const contentHash = computeContentHash(value);
+    const storedHash = (entityPreUpdate as Optional<Record<string, unknown>>)?.[
+      vectorSearchKeys.contentHash
+    ];
+
+    if (storedHash === contentHash) return;
+
+    const [index] = Metadata.getVectorIndexes(
+      this.entityMetadata.tableClassName
+    );
+
+    const searchableWrite = await embedSearchableValue(
+      value,
+      index,
+      this.EntityClass.name,
+      searchableMeta.name
+    );
+
+    this.appendVectorClauses(canonicalUpdate, searchableWrite);
+  }
+
+  /**
+   * Appends the vector and content hash clauses to the canonical row's queued
+   * update — a SET of both when a searchable write is provided, a REMOVE of
+   * both when the searchable value was cleared.
+   *
+   * The queued item's expression attribute maps are shared by reference with
+   * the expression object the denormalized sinks spread, so fresh copies are
+   * assigned first — the vector clauses must never reach denormalized copies
+   * or link records.
+   *
+   * @param canonicalUpdate - The canonical row's queued update item.
+   * @param searchableWrite - The vector and hash to SET, or undefined to REMOVE both.
+   * @private
+   */
+  private appendVectorClauses(
+    canonicalUpdate: CanonicalUpdateItem,
+    searchableWrite: Optional<SearchableWriteAttributes>
+  ): void {
+    const vectorName = `#${vectorSearchKeys.vector}`;
+    const hashName = `#${vectorSearchKeys.contentHash}`;
+
+    canonicalUpdate.ExpressionAttributeNames = {
+      ...canonicalUpdate.ExpressionAttributeNames,
+      [vectorName]: vectorSearchKeys.vector,
+      [hashName]: vectorSearchKeys.contentHash
+    };
+
+    const expression = canonicalUpdate.UpdateExpression ?? "";
+    const removeIdx = expression.indexOf("REMOVE ");
+    const setPart = (
+      removeIdx === -1 ? expression : expression.slice(0, removeIdx)
+    ).trim();
+    const removePart = (
+      removeIdx === -1 ? "" : expression.slice(removeIdx)
+    ).trim();
+
+    if (searchableWrite !== undefined) {
+      const vectorValue = `:${vectorSearchKeys.vector}`;
+      const hashValue = `:${vectorSearchKeys.contentHash}`;
+
+      canonicalUpdate.ExpressionAttributeValues = {
+        ...canonicalUpdate.ExpressionAttributeValues,
+        [vectorValue]: searchableWrite.vector,
+        [hashValue]: searchableWrite.contentHash
+      };
+
+      const vectorSets = `${vectorName} = ${vectorValue}, ${hashName} = ${hashValue}`;
+      const newSetPart =
+        setPart === "" ? `SET ${vectorSets}` : `${setPart}, ${vectorSets}`;
+
+      canonicalUpdate.UpdateExpression = [newSetPart, removePart]
+        .filter(part => part !== "")
+        .join(" ");
+    } else {
+      const vectorRemoves = `${vectorName}, ${hashName}`;
+      const newRemovePart =
+        removePart === ""
+          ? `REMOVE ${vectorRemoves}`
+          : `${removePart}, ${vectorRemoves}`;
+
+      canonicalUpdate.UpdateExpression = [setPart, newRemovePart]
+        .filter(part => part !== "")
+        .join(" ");
+    }
   }
 
   /**

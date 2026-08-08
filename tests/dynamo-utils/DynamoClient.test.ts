@@ -1,10 +1,15 @@
 import DynamoClient from "../../src/dynamo-utils/DynamoClient.js";
-import { QueryCommand, SearchVectorsCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  QueryCommand,
+  SearchVectorsCommand,
+  TransactWriteCommand
+} from "@aws-sdk/lib-dynamodb";
 import Logger from "../../src/Logger.js";
 
 const mockSend = vi.fn();
 const mockedQueryCommand = vi.mocked(QueryCommand);
 const mockedSearchVectorsCommand = vi.mocked(SearchVectorsCommand);
+const mockedTransactWriteCommand = vi.mocked(TransactWriteCommand);
 
 vi.mock("@aws-sdk/client-dynamodb", () => {
   return {
@@ -30,6 +35,9 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
     }),
     SearchVectorsCommand: vi.fn().mockImplementation(input => {
       return { name: "SearchVectorsCommand", input };
+    }),
+    TransactWriteCommand: vi.fn().mockImplementation(input => {
+      return { name: "TransactWriteCommand", input };
     })
   };
 });
@@ -196,6 +204,178 @@ describe("DynamoClient", () => {
       expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
         expect.objectContaining({ SearchVector: [0.1, 0.2, 0.3] })
       );
+    });
+  });
+
+  describe("transactWriteItems", () => {
+    it("redacts embedding vectors in Put items from log output, logging a placeholder with the dimension count instead", async () => {
+      expect.assertions(3);
+
+      const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {});
+      mockSend.mockResolvedValueOnce({});
+
+      const params = {
+        TransactItems: [
+          {
+            Put: {
+              TableName: "mock-table",
+              Item: {
+                PK: "Listing#123",
+                SK: "Listing",
+                Description: "A listing",
+                __dyna_vector: [0.111, 0.222, 0.333],
+                __dyna_vector_hash: "abc123"
+              }
+            }
+          },
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Store#456", SK: "Store" },
+              ConditionExpression: "attribute_exists(PK)"
+            }
+          }
+        ]
+      };
+
+      await DynamoClient.transactWriteItems(params);
+
+      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", {
+        params: {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "mock-table",
+                Item: {
+                  PK: "Listing#123",
+                  SK: "Listing",
+                  Description: "A listing",
+                  __dyna_vector: "[vector:3]",
+                  __dyna_vector_hash: "abc123"
+                }
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "mock-table",
+                Key: { PK: "Store#456", SK: "Store" },
+                ConditionExpression: "attribute_exists(PK)"
+              }
+            }
+          ]
+        }
+      });
+      // The float array must never reach the logger in any argument
+      const loggedText = JSON.stringify(logSpy.mock.calls);
+      expect(loggedText).not.toContain("0.111");
+      expect(loggedText).not.toContain("0.222");
+    });
+
+    it("redacts embedding vectors in Update expression attribute values from log output", async () => {
+      expect.assertions(2);
+
+      const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {});
+      mockSend.mockResolvedValueOnce({});
+
+      await DynamoClient.transactWriteItems({
+        TransactItems: [
+          {
+            Update: {
+              TableName: "mock-table",
+              Key: { PK: "Listing#123", SK: "Listing" },
+              UpdateExpression:
+                "SET #Description = :Description, #__dyna_vector = :__dyna_vector",
+              ExpressionAttributeNames: {
+                "#Description": "Description",
+                "#__dyna_vector": "__dyna_vector"
+              },
+              ExpressionAttributeValues: {
+                ":Description": "A listing",
+                ":__dyna_vector": [0.111, 0.222]
+              }
+            }
+          }
+        ]
+      });
+
+      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", {
+        params: {
+          TransactItems: [
+            {
+              Update: expect.objectContaining({
+                ExpressionAttributeValues: {
+                  ":Description": "A listing",
+                  ":__dyna_vector": "[vector:2]"
+                }
+              })
+            }
+          ]
+        }
+      });
+      expect(JSON.stringify(logSpy.mock.calls)).not.toContain("0.111");
+    });
+
+    it("does not mutate the caller's params when redacting vectors for logging", async () => {
+      expect.assertions(3);
+
+      vi.spyOn(Logger, "log").mockImplementation(() => {});
+      mockSend.mockResolvedValueOnce({});
+
+      const putVector = [0.1, 0.2];
+      const updateVector = [0.3, 0.4];
+      const params = {
+        TransactItems: [
+          {
+            Put: {
+              TableName: "mock-table",
+              Item: { PK: "Listing#123", __dyna_vector: putVector }
+            }
+          },
+          {
+            Update: {
+              TableName: "mock-table",
+              Key: { PK: "Listing#456", SK: "Listing" },
+              UpdateExpression: "SET #__dyna_vector = :__dyna_vector",
+              ExpressionAttributeValues: { ":__dyna_vector": updateVector }
+            }
+          }
+        ]
+      };
+
+      await DynamoClient.transactWriteItems(params);
+
+      expect(params.TransactItems[0].Put?.Item?.__dyna_vector).toEqual([
+        0.1, 0.2
+      ]);
+      expect(
+        params.TransactItems[1].Update?.ExpressionAttributeValues?.[
+          ":__dyna_vector"
+        ]
+      ).toEqual([0.3, 0.4]);
+      // The command itself must receive the real vectors, not placeholders
+      expect(mockedTransactWriteCommand).toHaveBeenCalledWith(params);
+    });
+
+    it("logs params untouched when the transaction carries no vectors", async () => {
+      expect.assertions(1);
+
+      const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {});
+      mockSend.mockResolvedValueOnce({});
+
+      const params = {
+        TransactItems: [
+          {
+            Put: {
+              TableName: "mock-table",
+              Item: { PK: "Customer#123", SK: "Customer", Name: "Some Name" }
+            }
+          }
+        ]
+      };
+
+      await DynamoClient.transactWriteItems(params);
+
+      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", { params });
     });
   });
 });

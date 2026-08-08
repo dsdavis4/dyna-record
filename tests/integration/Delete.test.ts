@@ -1,3 +1,4 @@
+import DynaRecord from "../../index.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
   MockTable,
@@ -12,13 +13,29 @@ import {
   type Address,
   Organization,
   Employee,
-  type Founder
+  type Founder,
+  mockEmbeddingProvider,
+  mockEmbeddingProviderCalls
 } from "./mockModels.js";
 import {
+  BelongsTo,
   Entity,
+  ForeignKeyAttribute,
+  HasMany,
   NumberAttribute,
-  StringAttribute
+  PartitionKeyAttribute,
+  Searchable,
+  SortKeyAttribute,
+  StringAttribute,
+  Table
 } from "../../src/decorators/index.js";
+import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
+import type {
+  NullableForeignKey,
+  PartitionKey,
+  SortKey,
+  Searchable as SearchableText
+} from "../../src/types.js";
 import { TransactWriteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
 import {
@@ -1634,5 +1651,168 @@ describe("Delete", () => {
         Logger.log("Testing types");
       });
     });
+  });
+});
+
+@Table({
+  name: "search-delete-table",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" }
+  }
+})
+abstract class SearchDeleteTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+@Entity
+class DeletableStore extends SearchDeleteTable {
+  declare readonly type: "DeletableStore";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasMany(() => DeletableListing, { foreignKey: "storeId" })
+  public readonly listings: DeletableListing[];
+}
+
+@Entity
+class DeletableListing extends SearchDeleteTable {
+  declare readonly type: "DeletableListing";
+
+  @Searchable()
+  @StringAttribute({ alias: "Description" })
+  public readonly description: SearchableText;
+
+  @ForeignKeyAttribute(() => DeletableStore, {
+    alias: "StoreId",
+    nullable: true
+  })
+  public readonly storeId?: NullableForeignKey<DeletableStore>;
+
+  @BelongsTo(() => DeletableStore, { foreignKey: "storeId" })
+  public readonly store: DeletableStore;
+}
+
+SearchDeleteTable.vectorIndex({
+  name: "deletable-search-index",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider
+});
+
+describe("Delete searchable entities (vector write path)", () => {
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  it("will never call the embedding provider when deleting a parent whose searchable children have their foreign keys nullified", async () => {
+    expect.assertions(2);
+
+    const store = {
+      PK: "DeletableStore#123",
+      SK: "DeletableStore",
+      Id: "123",
+      Type: "DeletableStore",
+      Name: "Mock Store",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+
+    // Searchable listing denormalized to the store partition
+    const listingStoreLink = {
+      PK: "DeletableStore#123",
+      SK: "DeletableListing#456",
+      Id: "456",
+      Type: "DeletableListing",
+      Description: "A listing description",
+      StoreId: "123",
+      CreatedAt: "2023-10-03T00:00:00.000Z",
+      UpdatedAt: "2023-10-04T00:00:00.000Z"
+    };
+
+    // Initial prefetch of the store partition
+    mockQuery.mockResolvedValueOnce({ Items: [store, listingStoreLink] });
+
+    // Nullification prefetch of the listing partition — the canonical row
+    // carries vector attributes
+    const listing = {
+      ...listingStoreLink,
+      PK: "DeletableListing#456",
+      SK: "DeletableListing",
+      __dyna_vector: [0.1, 0.2],
+      __dyna_vector_hash: "stored-content-hash"
+    };
+    mockQuery.mockResolvedValueOnce({ Items: [listing] });
+
+    await DeletableStore.delete("123");
+
+    // The FK-nullification path can never enter the embedding branch
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Delete the store
+              Delete: {
+                TableName: "search-delete-table",
+                Key: { PK: "DeletableStore#123", SK: "DeletableStore" }
+              }
+            },
+            {
+              // Nullify the listing's foreign key without vector clauses —
+              // the listing's searchable value is untouched, so its vector
+              // stays valid
+              Update: {
+                TableName: "search-delete-table",
+                Key: { PK: "DeletableListing#456", SK: "DeletableListing" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression: "SET #UpdatedAt = :UpdatedAt REMOVE #StoreId",
+                ExpressionAttributeNames: {
+                  "#StoreId": "StoreId",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            },
+            {
+              // Delete the denormalized store from the listing partition
+              Delete: {
+                TableName: "search-delete-table",
+                Key: { PK: "DeletableListing#456", SK: "DeletableStore" }
+              }
+            },
+            {
+              // Delete the denormalized listing from the store partition
+              Delete: {
+                TableName: "search-delete-table",
+                Key: { PK: "DeletableStore#123", SK: "DeletableListing#456" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
   });
 });

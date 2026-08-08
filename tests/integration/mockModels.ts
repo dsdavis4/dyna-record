@@ -942,11 +942,22 @@ class Motorcycle extends Vehicle {
 }
 
 /**
- * Deterministic embedding provider for vector search mock models. Pure
+ * The text values passed to {@link mockEmbeddingProvider}, recorded so tests
+ * can assert exactly when embedding occurs (and with what text). Tests should
+ * clear this between runs
+ */
+export const mockEmbeddingProviderCalls: string[] = [];
+
+/**
+ * Deterministic embedding provider for vector search mock models. Plain
  * function so mock models carry no test-framework dependency
  */
-export const mockEmbeddingProvider = (_text: string): Promise<number[]> =>
-  Promise.resolve(new Array<number>(TitanTextEmbedV2.dimensions).fill(0.1));
+export const mockEmbeddingProvider = (text: string): Promise<number[]> => {
+  mockEmbeddingProviderCalls.push(text);
+  return Promise.resolve(
+    new Array<number>(TitanTextEmbedV2.dimensions).fill(0.1)
+  );
+};
 
 @Table({
   name: "search-table",

@@ -1,12 +1,15 @@
+import DynaRecord from "../../index.js";
 import {
   TransactGetCommand,
   TransactWriteCommand
 } from "@aws-sdk/lib-dynamodb";
 import {
+  Article,
   ContactInformation,
   Customer,
   Grade,
   Home,
+  Listing,
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
@@ -14,6 +17,7 @@ import {
   type PaymentMethod,
   PaymentMethodProvider,
   Person,
+  Store,
   Teacher,
   User,
   type Desk,
@@ -27,7 +31,8 @@ import {
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity,
   Vehicle,
-  Car
+  Car,
+  mockEmbeddingProviderCalls
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { generateId } from "../../src/id.js";
@@ -37,10 +42,20 @@ import {
   Entity,
   ForeignKeyAttribute,
   HasOne,
-  StringAttribute
+  PartitionKeyAttribute,
+  Searchable,
+  SortKeyAttribute,
+  StringAttribute,
+  Table
 } from "../../src/decorators/index.js";
-import type { ForeignKey, NullableForeignKey } from "../../src/types.js";
-import { ValidationError } from "../../src/index.js";
+import type {
+  ForeignKey,
+  NullableForeignKey,
+  PartitionKey,
+  SortKey,
+  Searchable as SearchableText
+} from "../../src/types.js";
+import { EmbeddingError, ValidationError } from "../../src/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
@@ -5302,5 +5317,413 @@ describe("Create", () => {
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       }
     });
+  });
+});
+
+const mockNoteEmbed = vi.fn();
+
+@Table({
+  name: "note-table",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" }
+  }
+})
+abstract class NoteTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+@Entity
+class Note extends NoteTable {
+  declare readonly type: "Note";
+
+  @Searchable()
+  @StringAttribute({ alias: "Body" })
+  public readonly body: SearchableText;
+}
+
+// Small-dimension descriptor so tests can assert exact vector values, with a
+// controllable provider for failure and truncation scenarios
+NoteTable.vectorIndex({
+  name: "note-search-index",
+  model: {
+    name: "test-embed-model",
+    dimensions: 3,
+    distanceFunction: "COSINE",
+    scoreToSimilarity: score => 1 - score
+  },
+  provider: async text => await mockNoteEmbed(text)
+});
+
+describe("Create searchable entities (vector write path)", () => {
+  const expectedTitanVector = new Array<number>(1024).fill(0.1);
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockedGenerateId.mockReset();
+    mockNoteEmbed.mockReset();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  it("will embed the searchable attribute and write the vector and content hash to the canonical row only", async () => {
+    expect.assertions(5);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    // Raw fetched parent rows bypass entity serialization, so this fetched
+    // store carries vector attributes to prove the raw-copy path strips the
+    // vector (the registered content hash is harmless on copies)
+    const store = {
+      PK: "Store#123",
+      SK: "Store",
+      Id: "123",
+      Type: "Store",
+      Name: "Mock Store",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z",
+      __dyna_vector: [0.5, 0.5],
+      __dyna_vector_hash: "parent-content-hash"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: store }]
+    });
+
+    const listing = await Listing.create({
+      description: "Hand thrown ceramic mug",
+      category: "Mugs",
+      storeId: "123"
+    });
+
+    const listingAttributes = {
+      Id: "uuid1",
+      Type: "Listing",
+      Description: "Hand thrown ceramic mug",
+      Category: "Mugs",
+      StoreId: "123",
+      CreatedAt: "2023-10-16T03:31:35.918Z",
+      UpdatedAt: "2023-10-16T03:31:35.918Z"
+    };
+
+    expect(listing).toEqual({
+      pk: "Listing#uuid1",
+      sk: "Listing",
+      id: "uuid1",
+      type: "Listing",
+      description: "Hand thrown ceramic mug",
+      category: "Mugs",
+      storeId: "123",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z"),
+      __dyna_vector_hash:
+        "e32555cacfdcdc656814296b39494465c8f02b4de64cef9d689c7b4563867c62"
+    });
+    expect(mockEmbeddingProviderCalls).toEqual(["Hand thrown ceramic mug"]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "TransactGetCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockTransactGetCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "search-table",
+                Key: { PK: "Store#123", SK: "Store" }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Canonical row carries the vector and content hash
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Listing#uuid1",
+                  SK: "Listing",
+                  ...listingAttributes,
+                  __dyna_vector: expectedTitanVector,
+                  __dyna_vector_hash:
+                    "e32555cacfdcdc656814296b39494465c8f02b4de64cef9d689c7b4563867c62"
+                }
+              }
+            },
+            {
+              // Check that the associated Store exists
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Store#123", SK: "Store" },
+                TableName: "search-table"
+              }
+            },
+            {
+              // Denormalized Listing in the Store partition carries neither
+              // the vector nor the hash
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Store#123",
+                  SK: "Listing#uuid1",
+                  ...listingAttributes
+                }
+              }
+            },
+            {
+              // Denormalized Store in the Listing partition: the raw copy
+              // strips the parent's vector; the registered hash rides along
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Listing#uuid1",
+                  SK: "Store",
+                  Id: "123",
+                  Type: "Store",
+                  Name: "Mock Store",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z",
+                  __dyna_vector_hash: "parent-content-hash"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will embed for a relationship-free searchable entity", async () => {
+    expect.assertions(4);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    const article = await Article.create({
+      title: "Hello",
+      content: "Fresh article content"
+    });
+
+    expect(article).toEqual({
+      pk: "Article#uuid1",
+      sk: "Article",
+      id: "uuid1",
+      type: "Article",
+      title: "Hello",
+      content: "Fresh article content",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z"),
+      __dyna_vector_hash:
+        "71fb3d7b167639ba1808010667eaceab2d4503ad68f8e60dda97446efc8ef284"
+    });
+    expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Article#uuid1",
+                  SK: "Article",
+                  Id: "uuid1",
+                  Type: "Article",
+                  Title: "Hello",
+                  Content: "Fresh article content",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  __dyna_vector: expectedTitanVector,
+                  __dyna_vector_hash:
+                    "71fb3d7b167639ba1808010667eaceab2d4503ad68f8e60dda97446efc8ef284"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will not call the provider or write vector attributes when the searchable value is not present", async () => {
+    expect.assertions(3);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    const article = await Article.create({ title: "Hello" });
+
+    expect(article).toEqual({
+      pk: "Article#uuid1",
+      sk: "Article",
+      id: "uuid1",
+      type: "Article",
+      title: "Hello",
+      createdAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
+    });
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Article#uuid1",
+                  SK: "Article",
+                  Id: "uuid1",
+                  Type: "Article",
+                  Title: "Hello",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will not call the provider or write vector attributes for a non-searchable entity on a table with vector indexes", async () => {
+    expect.assertions(2);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    await Store.create({ name: "My Store" });
+
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Store#uuid1",
+                  SK: "Store",
+                  Id: "uuid1",
+                  Type: "Store",
+                  Name: "My Store",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("rejects with an EmbeddingError carrying the provider error as cause and sends no transaction when the provider fails", async () => {
+    expect.assertions(5);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    const providerError = new Error("bedrock unavailable");
+    mockNoteEmbed.mockRejectedValueOnce(providerError);
+
+    const error: unknown = await Note.create({
+      body: "A searchable note body"
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(EmbeddingError);
+    expect((error as EmbeddingError).code).toEqual("EmbeddingError");
+    expect((error as EmbeddingError).message).toEqual(
+      "Embedding failed for Note.body via the test-embed-model provider on vector index note-search-index"
+    );
+    expect((error as EmbeddingError).cause).toEqual(providerError);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects with an EmbeddingError before any AWS call when the provider returns the wrong dimensions", async () => {
+    expect.assertions(4);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    mockNoteEmbed.mockResolvedValueOnce([0.1, 0.2]);
+
+    const error: unknown = await Note.create({
+      body: "A searchable note body"
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(EmbeddingError);
+    expect((error as EmbeddingError).message).toEqual(
+      "Embedding provider returned a 2-dimension vector for Note.body; the test-embed-model descriptor requires 3 dimensions"
+    );
+    // Error messages carry identities only — never the searchable text
+    expect((error as EmbeddingError).message).not.toContain(
+      "A searchable note body"
+    );
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("truncates embedding values to 7 significant digits before writing (float32 precision)", async () => {
+    expect.assertions(1);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    mockNoteEmbed.mockResolvedValueOnce([0.123456789, 1234567.89, 0.000012345678]);
+
+    await Note.create({ body: "A searchable note body" });
+
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "note-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Note#uuid1",
+                  SK: "Note",
+                  Id: "uuid1",
+                  Type: "Note",
+                  Body: "A searchable note body",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  __dyna_vector: [0.1234568, 1234568, 0.00001234568],
+                  __dyna_vector_hash:
+                    "328f38050b93328277a9ef87300a65ca618e5d47d0a876452dbfb2cf7be373f3"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
   });
 });
