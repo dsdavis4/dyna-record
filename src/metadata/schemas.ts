@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { EntityClass } from "../types.js";
 import type DynaRecord from "../DynaRecord.js";
 import type { ObjectSchema } from "../decorators/attributes/types.js";
+import type { EmbeddingModelDescriptor } from "../embedding/types.js";
+import { vectorSearchKeys } from "./VectorIndexMetadata.js";
 
 /**
  * Common serialized fields shared by every attribute kind.
@@ -127,6 +129,51 @@ const EntityMetadataTransform = z
   }));
 
 /**
+ * Zod schema that transforms vector index metadata to the serializable
+ * provisioning format surfaced through `metadata()`. Emits everything
+ * consumers need to provision the index in IaC:
+ *
+ * - `name` — the DynamoDB IndexName
+ * - `model` — the embedding model descriptor's name only (never the provider
+ *   value, client config, or credentials — the provider is stripped)
+ * - `vectorAttribute` — table alias of the library-managed vector attribute
+ * - `dimensions` / `distanceFunction` — from the model descriptor
+ * - `projection` — always `"ALL"`
+ * - `searchSchema` — `hash` (the scoping foreign key's table alias, scoped
+ *   indexes only) and `inlineFilters` (sorted table aliases including the
+ *   auto-declared entity type filter)
+ * - `fingerprint` — stable hash of the search-schema configuration so IaC can
+ *   detect that a decorator change implies a destructive index replacement
+ * - `scopedBy` — the scope parent's entity class name, when scoped (thunks
+ *   serialize as names, the way relationship metadata serializes its target)
+ *
+ * @returns A serialized vector index metadata object
+ */
+const VectorIndexMetadataTransform = z
+  .object({
+    name: z.string(),
+    model: z.custom<EmbeddingModelDescriptor>(),
+    scopedBy: z.custom<() => EntityClass<DynaRecord>>().optional(),
+    hashAlias: z.string().optional(),
+    inlineFilterAliases: z.array(z.string()),
+    fingerprint: z.string()
+  })
+  .transform(index => ({
+    name: index.name,
+    model: index.model.name,
+    vectorAttribute: vectorSearchKeys.vector,
+    dimensions: index.model.dimensions,
+    distanceFunction: index.model.distanceFunction,
+    projection: "ALL" as const,
+    searchSchema: {
+      ...(index.hashAlias !== undefined && { hash: index.hashAlias }),
+      inlineFilters: index.inlineFilterAliases
+    },
+    fingerprint: index.fingerprint,
+    ...(index.scopedBy !== undefined && { scopedBy: index.scopedBy().name })
+  }));
+
+/**
  * Zod schema that transforms table metadata to a serializable format.
  * This is the main schema used to serialize {@link TableMetadata} instances,
  * extracting only serializable values and converting EntityClass references to strings.
@@ -138,6 +185,7 @@ const EntityMetadataTransform = z
  * @property {AttributeMetadataTransform} partitionKeyAttribute - Metadata for the table's partition key attribute
  * @property {AttributeMetadataTransform} sortKeyAttribute - Metadata for the table's sort key attribute
  * @property {Record<string, EntityMetadataTransform>} entities - Entities mapped to the table, keyed by entity class name
+ * @property {VectorIndexMetadataTransform[]} [vectorIndexes] - Vector indexes defined on the table, present when at least one index is defined
  *
  * @returns A serialized table metadata object containing only serializable values
  *
@@ -154,7 +202,8 @@ export const TableMetadataTransform = z.object({
   defaultTableAttributes: z.record(z.string(), AttributeMetadataTransform),
   partitionKeyAttribute: AttributeMetadataTransform,
   sortKeyAttribute: AttributeMetadataTransform,
-  entities: z.record(z.string(), EntityMetadataTransform)
+  entities: z.record(z.string(), EntityMetadataTransform),
+  vectorIndexes: z.array(VectorIndexMetadataTransform).optional()
 });
 
 /**
@@ -170,3 +219,13 @@ export const TableMetadataTransform = z.object({
  * ```
  */
 export type SerializedTableMetadata = z.output<typeof TableMetadataTransform>;
+
+/**
+ * Type representing the serialized output of a single vector index definition.
+ * This type is inferred from the {@link VectorIndexMetadataTransform} schema —
+ * the IaC provisioning contract for a vector index, with the model serialized
+ * as its descriptor name and the provider stripped.
+ */
+export type SerializedVectorIndexMetadata = z.output<
+  typeof VectorIndexMetadataTransform
+>;

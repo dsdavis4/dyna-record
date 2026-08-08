@@ -45,6 +45,19 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
 export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 
 /**
+ * A branded string type marking an attribute as the entity's searchable text
+ * for vector search. Apply the `@Searchable()` decorator over a string
+ * attribute decorator to a property of this type.
+ *
+ * The brand never leaks into consumer ergonomics: `Searchable` is assignable
+ * to `string` on read, and `create`/`update` inputs accept plain strings
+ * (the brand is stripped by the input mapped types).
+ *
+ * @typeParam T - The underlying string type. Defaults to `string`.
+ */
+export type Searchable<T extends string = string> = Brand<T, "Searchable">;
+
+/**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
  */
 export type DynamoTableItem = Record<string, NativeAttributeValue>;

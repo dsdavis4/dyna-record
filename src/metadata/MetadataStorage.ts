@@ -1,20 +1,42 @@
+import { z } from "zod";
 import type DynaRecord from "../DynaRecord.js";
-import type { MakeOptional } from "../types.js";
+import type { EntityClass, MakeOptional, Optional } from "../types.js";
 import TableMetadata from "./TableMetadata.js";
 import EntityMetadata from "./EntityMetadata.js";
 import AttributeMetadata from "./AttributeMetadata.js";
 import JoinTableMetadata from "./JoinTableMetadata.js";
+import VectorIndexMetadata, {
+  vectorSearchKeys,
+  type VectorIndexOptions
+} from "./VectorIndexMetadata.js";
 import { createRelationshipInstance } from "./relationship-metadata/utils.js";
 import type { RelationshipMetadata } from "./relationship-metadata/index.js";
 import type {
   AttributeMetadataStorage,
   DefaultFields,
   EntityMetadataStorage,
+  ForeignKeyAttributeMetadata,
   JoinTableMetadataStorage,
   TableMetadataOptions,
   TableMetadataStorage,
   AttributeMetadataOptions
 } from "./types.js";
+
+// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
+const MAX_VECTOR_INDEXES_PER_TABLE = 5;
+
+/**
+ * DynamoDB allows at most 18 inline filters per vector index. dyna-record's
+ * count includes the entity type filter the library declares automatically on
+ * every index (the HASH element does not count against this quota)
+ */
+const MAX_INLINE_FILTERS_PER_INDEX = 18;
+
+/**
+ * Attribute kinds whose values are embeddable text. @Searchable may only be
+ * layered over decorators producing these kinds
+ */
+const SEARCHABLE_ATTRIBUTE_KINDS = ["string", "enum"];
 
 /**
  * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.
@@ -25,8 +47,30 @@ class MetadataStorage {
   readonly #tables: TableMetadataStorage = {};
   readonly #entities: EntityMetadataStorage = {};
   readonly #joinTables: JoinTableMetadataStorage = {};
+  readonly #vectorIndexes: Record<string, VectorIndexMetadata[]> = {};
+
+  /**
+   * Side registry of @Searchable marks (attribute names keyed by entity name).
+   * Layered decorators write here rather than into attribute metadata — no
+   * TC39 decorator composition order guarantees the base attribute's metadata
+   * exists when the layer runs. Reconciled against attribute metadata in init()
+   */
+  readonly #searchableAttributes: Record<string, string[]> = {};
+
+  /**
+   * Side registry of @SearchFilterable marks (attribute names keyed by entity
+   * name). Reconciled against attribute metadata in init()
+   */
+  readonly #filterableAttributes: Record<string, string[]> = {};
 
   #initialized: boolean = false;
+
+  /**
+   * A metadata validation failure is cached and re-thrown on every subsequent
+   * metadata access — otherwise the first operation would throw and later
+   * operations would silently proceed on invalid metadata
+   */
+  #initializationError?: Error;
 
   /**
    * Returns entity metadata given an entity name
@@ -207,6 +251,74 @@ class MetadataStorage {
   }
 
   /**
+   * Marks an entity attribute as the entity's searchable text. Used with
+   * @Searchable. The mark is reconciled against attribute metadata at
+   * metadata initialization
+   * @param entityName
+   * @param attributeName
+   */
+  public addSearchableAttribute(
+    entityName: string,
+    attributeName: string
+  ): void {
+    const marks = (this.#searchableAttributes[entityName] ??= []);
+    if (!marks.includes(attributeName)) {
+      marks.push(attributeName);
+    }
+  }
+
+  /**
+   * Marks an entity attribute as an inline filter on the vector indexes
+   * containing the entity. Used with @SearchFilterable. The mark is
+   * reconciled against attribute metadata at metadata initialization
+   * @param entityName
+   * @param attributeName
+   */
+  public addFilterableAttribute(
+    entityName: string,
+    attributeName: string
+  ): void {
+    const marks = (this.#filterableAttributes[entityName] ??= []);
+    if (!marks.includes(attributeName)) {
+      marks.push(attributeName);
+    }
+  }
+
+  /**
+   * Adds a vector index to metadata storage. Mutates the store directly and
+   * intentionally never touches a metadata accessor — accessors trigger
+   * init(), which would freeze metadata against a partial entity graph when
+   * index constants are declared at module evaluation. Entity thunks in the
+   * options are resolved at metadata initialization, not here.
+   * @param tableClassName - Name of the table class the index is defined on
+   * @param options - {@link VectorIndexOptions}
+   * @returns The registered {@link VectorIndexMetadata}
+   */
+  public addVectorIndex(
+    tableClassName: string,
+    options: VectorIndexOptions
+  ): VectorIndexMetadata {
+    if (!(tableClassName in this.#tables)) {
+      throw new Error(
+        `vectorIndex can only be defined on a table class decorated with @Table. ${tableClassName} is not a registered table`
+      );
+    }
+    const meta = new VectorIndexMetadata(tableClassName, options);
+    (this.#vectorIndexes[tableClassName] ??= []).push(meta);
+    return meta;
+  }
+
+  /**
+   * Returns the vector indexes defined on a table
+   * @param {string} tableClassName - Name of the table class
+   * @returns Array of {@link VectorIndexMetadata}
+   */
+  public getVectorIndexes(tableClassName: string): VectorIndexMetadata[] {
+    this.init();
+    return this.#vectorIndexes[tableClassName] ?? [];
+  }
+
+  /**
    * Adds the partition key attribute to Table metadata storage
    * @param entityClass
    * @param options
@@ -239,7 +351,15 @@ class MetadataStorage {
   }
 
   /**
-   * Initialize metadata object
+   * Initialize metadata object.
+   *
+   * Vector search reconciliation and validation run after the initialized
+   * flag is set (accessor calls during init would re-enter it — infinite
+   * recursion). A validation failure is cached and re-thrown on every
+   * subsequent metadata access. Validation completeness is scoped to the
+   * entity modules already evaluated at first metadata access — an entity
+   * module loaded after initialization is registered but never reconciled
+   * or validated.
    */
   private init(): void {
     if (!this.#initialized) {
@@ -248,7 +368,317 @@ class MetadataStorage {
         entityMeta => new entityMeta.EntityClass()
       );
       this.#initialized = true;
+      try {
+        this.initVectorSearch();
+      } catch (error) {
+        this.#initializationError = error as Error;
+      }
     }
+
+    if (this.#initializationError !== undefined) {
+      throw this.#initializationError;
+    }
+  }
+
+  /**
+   * Reconciles the @Searchable/@SearchFilterable side registries and vector
+   * index definitions against attribute metadata, and runs every vector
+   * search validation. Operates on the stores directly
+   */
+  private initVectorSearch(): void {
+    this.reconcileSearchableMarks();
+    this.reconcileFilterableMarks();
+    this.validateVectorSearchAliases();
+    this.resolveVectorIndexes();
+  }
+
+  /**
+   * Reconciles the searchable marks written by the layered `@Searchable`
+   * decorator against the attribute metadata registered by the base attribute
+   * decorators. Rejects multiple @Searchable attributes on an entity and
+   * @Searchable marks that do not resolve to a string attribute
+   */
+  private reconcileSearchableMarks(): void {
+    for (const [entityName, marks] of Object.entries(
+      this.#searchableAttributes
+    )) {
+      if (!(entityName in this.#entities)) continue;
+      const entityMetadata = this.#entities[entityName];
+
+      if (marks.length > 1) {
+        throw new Error(
+          `Entity ${entityName} declares @Searchable on multiple attributes (${marks.join(
+            ", "
+          )}). Only one searchable attribute is allowed per entity`
+        );
+      }
+
+      const [attributeName] = marks;
+      if (
+        !(attributeName in entityMetadata.attributes) ||
+        !SEARCHABLE_ATTRIBUTE_KINDS.includes(
+          entityMetadata.attributes[attributeName].kind
+        )
+      ) {
+        throw new Error(
+          `@Searchable on ${entityName}.${attributeName} must be layered over a string or enum attribute decorator (EX: @StringAttribute, @EnumAttribute)`
+        );
+      }
+      entityMetadata.searchableAttribute =
+        entityMetadata.attributes[attributeName];
+    }
+  }
+
+  /**
+   * Reconciles the filterable marks written by the layered `@SearchFilterable`
+   * decorator against the attribute metadata registered by the base attribute
+   * decorators. Rejects marks that do not resolve to a registered attribute
+   */
+  private reconcileFilterableMarks(): void {
+    for (const [entityName, marks] of Object.entries(
+      this.#filterableAttributes
+    )) {
+      if (!(entityName in this.#entities)) continue;
+      const entityMetadata = this.#entities[entityName];
+
+      for (const attributeName of marks) {
+        if (!(attributeName in entityMetadata.attributes)) {
+          throw new Error(
+            `@SearchFilterable on ${entityName}.${attributeName} must be layered over an attribute decorator (EX: @StringAttribute)`
+          );
+        }
+        entityMetadata.searchFilterableAttributes.push(
+          entityMetadata.attributes[attributeName]
+        );
+      }
+    }
+  }
+
+  /**
+   * Rejects consumer attributes whose table alias collides with a
+   * library-managed vector search alias. Alias-level check — reservedKeys
+   * matches property names only, so alias collisions need their own check
+   */
+  private validateVectorSearchAliases(): void {
+    const reservedAliases: string[] = Object.values(vectorSearchKeys);
+
+    for (const [entityName, entityMetadata] of Object.entries(this.#entities)) {
+      for (const attrMeta of Object.values(entityMetadata.attributes)) {
+        if (reservedAliases.includes(attrMeta.alias)) {
+          throw new Error(
+            `Attribute ${entityName}.${attrMeta.name} uses the table alias ${attrMeta.alias}, which is reserved for the library-managed vector search attributes`
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolves and validates the vector indexes of every table: per-table index
+   * quota, provider presence, scoped membership, inline filter consistency
+   * and quota. Registers the library-managed content hash attribute on
+   * searchable entities so it round-trips serialization and prefetch (the
+   * vector attribute is intentionally never registered — serialization and
+   * copy paths drop unregistered attributes, which keeps the vector off
+   * denormalized records automatically)
+   */
+  private resolveVectorIndexes(): void {
+    for (const [tableClassName, tableMetadata] of Object.entries(
+      this.#tables
+    )) {
+      const indexes = this.#vectorIndexes[tableClassName] ?? [];
+      const searchableEntities = Object.entries(this.#entities)
+        .filter(
+          ([, entityMeta]) =>
+            entityMeta.tableClassName === tableClassName &&
+            entityMeta.searchableAttribute !== undefined
+        )
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      if (indexes.length > MAX_VECTOR_INDEXES_PER_TABLE) {
+        throw new Error(
+          `Table ${tableClassName} defines ${String(
+            indexes.length
+          )} vector indexes. DynamoDB supports at most ${String(
+            MAX_VECTOR_INDEXES_PER_TABLE
+          )} vector indexes per table`
+        );
+      }
+
+      if (searchableEntities.length > 0 && indexes.length === 0) {
+        throw new Error(
+          `Table ${tableClassName} has searchable entities (${searchableEntities
+            .map(([entityName]) => entityName)
+            .join(
+              ", "
+            )}) but no vector index with an embedding provider. Define one with ${tableClassName}.vectorIndex({ name, model, provider })`
+        );
+      }
+
+      for (const index of indexes) {
+        this.resolveVectorIndex(index, tableMetadata, searchableEntities);
+      }
+
+      // The content hash is a registered library-managed attribute so it
+      // round-trips serialization and prefetch, enabling the
+      // unchanged-content embed skip. It is reserved (by property name and by
+      // alias), so it is omitted from create/update validation schemas
+      for (const [entityName] of searchableEntities) {
+        this.addEntityAttribute(entityName, {
+          attributeName: vectorSearchKeys.contentHash,
+          alias: vectorSearchKeys.contentHash,
+          kind: "string",
+          nullable: true,
+          type: z.string()
+        });
+      }
+    }
+  }
+
+  /**
+   * Resolves and validates a single vector index: provider presence, scoped
+   * membership (the scope parent's declared adjacency union the include
+   * list), the scoping foreign key on every member's canonical row, inline
+   * filter alias consistency, and the 18 inline filter quota counting the
+   * auto-declared entity type filter (the HASH does not count)
+   * @param index - The vector index to resolve
+   * @param tableMetadata - Metadata of the table the index is defined on
+   * @param searchableEntities - The table's searchable entities, sorted by entity name
+   */
+  private resolveVectorIndex(
+    index: VectorIndexMetadata,
+    tableMetadata: TableMetadata,
+    searchableEntities: Array<[string, EntityMetadata]>
+  ): void {
+    if (searchableEntities.length > 0 && index.provider === undefined) {
+      throw new Error(
+        `Vector index ${index.name} has no embedding provider configured. Set provider (an embed function) on ${index.tableClassName}.vectorIndex`
+      );
+    }
+
+    let members = searchableEntities;
+    let hashAlias: Optional<string>;
+
+    if (index.scopedBy !== undefined) {
+      ({ members, hashAlias } = this.resolveScopedMembers(
+        index.scopedBy(),
+        index,
+        searchableEntities
+      ));
+    }
+
+    // One inline filter is one table attribute: a filterable property must
+    // resolve to the same table alias across every member entity
+    const filterAliasByProperty = new Map<string, string>();
+    for (const [, entityMetadata] of members) {
+      for (const attrMeta of entityMetadata.searchFilterableAttributes) {
+        const existingAlias = filterAliasByProperty.get(attrMeta.name);
+        if (existingAlias !== undefined && existingAlias !== attrMeta.alias) {
+          throw new Error(
+            `@SearchFilterable property ${attrMeta.name} resolves to different table aliases (${existingAlias}, ${attrMeta.alias}) across members of vector index ${index.name}. One inline filter is one table attribute; align the alias across entities`
+          );
+        }
+        filterAliasByProperty.set(attrMeta.name, attrMeta.alias);
+      }
+    }
+
+    // The entity type discriminator is auto-declared as an inline filter on
+    // every index and counts against the quota; the HASH does not count
+    const typeAlias = tableMetadata.defaultAttributes.type.alias;
+    const inlineFilterAliases = [
+      ...new Set([typeAlias, ...filterAliasByProperty.values()])
+    ].sort();
+
+    if (inlineFilterAliases.length > MAX_INLINE_FILTERS_PER_INDEX) {
+      throw new Error(
+        `Vector index ${index.name} declares ${String(
+          inlineFilterAliases.length
+        )} inline filters counting the entity type filter the library adds automatically. DynamoDB supports at most ${String(
+          MAX_INLINE_FILTERS_PER_INDEX
+        )} inline filters per index`
+      );
+    }
+
+    index.resolveSearchSchema({
+      memberEntities: members.map(([entityName]) => entityName),
+      hashAlias,
+      inlineFilterAliases
+    });
+  }
+
+  /**
+   * Resolves a scoped index's members — the scope parent's declared adjacency
+   * union the include list — and the HASH alias (the members' scoping foreign
+   * key). Rejects a searchable entity carrying the scoping foreign key that is
+   * neither declared nor included, and a member without the scoping foreign
+   * key on its canonical row
+   * @param scopeParent - The resolved scope parent entity class
+   * @param index - The vector index being resolved
+   * @param searchableEntities - The table's searchable entities, sorted by entity name
+   * @returns The index's members and the HASH alias
+   */
+  private resolveScopedMembers(
+    scopeParent: EntityClass<DynaRecord>,
+    index: VectorIndexMetadata,
+    searchableEntities: Array<[string, EntityMetadata]>
+  ): {
+    members: Array<[string, EntityMetadata]>;
+    hashAlias: Optional<string>;
+  } {
+    if (!(scopeParent.name in this.#entities)) {
+      throw new Error(
+        `Vector index ${index.name} is scoped by ${scopeParent.name}, which is not a registered entity`
+      );
+    }
+    const parentMetadata = this.#entities[scopeParent.name];
+
+    const memberNames = new Set([
+      ...parentMetadata.hasRelationships.map(rel => rel.target.name),
+      ...(index.include ?? []).map(entityThunk => entityThunk().name)
+    ]);
+
+    for (const [entityName, entityMetadata] of searchableEntities) {
+      if (
+        !memberNames.has(entityName) &&
+        this.findScopingFk(entityMetadata, scopeParent) !== undefined
+      ) {
+        throw new Error(
+          `Entity ${entityName} is searchable and has a foreign key to ${scopeParent.name} but is not a member of vector index ${index.name}. Declare a relationship from ${scopeParent.name} to ${entityName} or add () => ${entityName} to the index's include list`
+        );
+      }
+    }
+
+    const members = searchableEntities.filter(([entityName]) =>
+      memberNames.has(entityName)
+    );
+
+    const memberScopingFks = members.map(([entityName, entityMetadata]) => {
+      const scopingFk = this.findScopingFk(entityMetadata, scopeParent);
+      if (scopingFk === undefined) {
+        throw new Error(
+          `Entity ${entityName} is a member of vector index ${index.name} but has no foreign key attribute referencing ${scopeParent.name} on its own record (HasAndBelongsToMany relationships store foreign keys on the join table). Add a @ForeignKeyAttribute referencing ${scopeParent.name} to ${entityName}`
+        );
+      }
+      return scopingFk;
+    });
+
+    return { members, hashAlias: memberScopingFks[0]?.alias };
+  }
+
+  /**
+   * Returns the entity's foreign key attribute referencing the scope parent,
+   * if one exists on its canonical record
+   * @param entityMetadata - Metadata of the entity to inspect
+   * @param scopeParent - The scope parent entity class
+   * @returns The scoping foreign key attribute metadata, if present
+   */
+  private findScopingFk(
+    entityMetadata: EntityMetadata,
+    scopeParent: EntityClass<DynaRecord>
+  ): Optional<ForeignKeyAttributeMetadata> {
+    return entityMetadata.foreignKeyAttributes.find(
+      attrMeta => attrMeta.foreignKeyTarget === scopeParent
+    );
   }
 
   /**

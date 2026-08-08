@@ -1,6 +1,8 @@
 import Metadata, {
   tableDefaultFields,
-  type TableMetadata
+  type TableMetadata,
+  type VectorIndexMetadata,
+  type VectorIndexOptions
 } from "./metadata/index.js";
 import { DateAttribute, StringAttribute } from "./decorators/index.js";
 import {
@@ -494,10 +496,51 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
+   * Define a vector index on a table class. Returns the typed index
+   * construct, which exposes the configuration and is the future home of the
+   * index `search` surface.
+   *
+   * Only table classes (classes decorated with `@Table`) may define vector
+   * indexes; calling this on an entity class throws. Defining an index never
+   * triggers metadata initialization and never resolves the entity thunks —
+   * index constants can be declared at module evaluation, and membership is
+   * resolved and validated when metadata initializes (first operation or an
+   * explicit `metadata()` call).
+   *
+   * @param options - {@link VectorIndexOptions}
+   * @returns The registered {@link VectorIndexMetadata} construct
+   *
+   * @example Scoped index (searches run per scope value)
+   * ```typescript
+   * const storeSearchIndex = MyTable.vectorIndex({
+   *   name: "store-search-index",
+   *   model: TitanTextEmbedV2,
+   *   provider: myEmbedFunction,
+   *   scopedBy: () => Store,
+   *   include: [() => Review] // FK-only members without a declared inverse
+   * });
+   * ```
+   *
+   * @example Global index (no HASH; searches are global)
+   * ```typescript
+   * const globalSearchIndex = MyTable.vectorIndex({
+   *   name: "global-search-index",
+   *   model: TitanTextEmbedV2,
+   *   provider: myEmbedFunction
+   * });
+   * ```
+   */
+  public static vectorIndex(options: VectorIndexOptions): VectorIndexMetadata {
+    return Metadata.addVectorIndex(this.name, options);
+  }
+
+  /**
    * Returns serialized table metadata containing only serializable values.
    * This method returns a plain object representation of the table metadata,
    * with functions, class instances, and other non-serializable data converted
-   * to their string representations or omitted.
+   * to their string representations or omitted. Vector index definitions are
+   * included with the model descriptor's name only — never the provider
+   * value, client config, or credentials.
    * @returns A plain object representation of the table metadata
    *
    * @example
@@ -509,7 +552,8 @@ abstract class DynaRecord implements DynaRecordBase {
   public static metadata(): ReturnType<TableMetadata["toJSON"]> {
     const tableMetadata = Metadata.getTable(this.name);
     const entities = Metadata.getEntitiesForTable(this.name);
-    return tableMetadata.toJSON(entities);
+    const vectorIndexes = Metadata.getVectorIndexes(this.name);
+    return tableMetadata.toJSON(entities, vectorIndexes);
   }
 }
 

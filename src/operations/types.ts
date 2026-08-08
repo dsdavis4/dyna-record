@@ -5,6 +5,7 @@ import type {
   NullableForeignKey,
   Optional,
   PartitionKey,
+  Searchable,
   SortKey
 } from "../types.js";
 
@@ -39,18 +40,27 @@ export type FunctionFields<T> = {
 }[keyof T];
 
 /**
- * Allow ForeignKey attributes to be passes to the create method by using their inferred primitive type
+ * Allow branded attributes (ForeignKey, Searchable) to be passed to the create/update
+ * methods by using their inferred primitive type
  * Ex:
  *  If ModelA has: attr1: ForeignKey
  *  This allows" ModelA.create({ attr1: "someVal" })
  *  Instead of: ModelA.create({ attr1: "someVal" as ForeignKey })
+ *
+ * Each brand needs both a plain and an optional/nullable branch — a single
+ * conditional fails against the optional form (EX: `Searchable | undefined`),
+ * the same reason ForeignKey needs the separate NullableForeignKey branch
  */
 export type ForeignKeyToValue<T> = {
   [K in keyof T]: T[K] extends NullableForeignKey
     ? Optional<string>
     : T[K] extends ForeignKey
       ? string
-      : T[K];
+      : T[K] extends Searchable
+        ? string
+        : T[K] extends Optional<Searchable>
+          ? Optional<string>
+          : T[K];
 };
 
 /**

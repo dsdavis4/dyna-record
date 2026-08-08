@@ -65,6 +65,18 @@ class EntityMetadata {
   public idField?: string;
 
   /**
+   * Attribute metadata for the entity's @Searchable attribute, when one is declared.
+   * Reconciled from the searchable mark at metadata initialization
+   */
+  public searchableAttribute?: AttributeMetadata;
+
+  /**
+   * Attribute metadata for the entity's @SearchFilterable attributes.
+   * Reconciled from the filterable marks at metadata initialization
+   */
+  public readonly searchFilterableAttributes: AttributeMetadata[];
+
+  /**
    * Zod schema for runtime validation on entity attributes. Validates all attributes (used on Create)
    */
   #schema?: ZodType;
@@ -92,6 +104,7 @@ class EntityMetadata {
     this.attributes = {};
     this.tableAttributes = {};
     this.relationships = {};
+    this.searchFilterableAttributes = [];
   }
 
   /**

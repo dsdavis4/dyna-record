@@ -14,6 +14,8 @@ import {
   type SerializedTableMetadata,
   TableMetadataTransform
 } from "./schemas.js";
+import type VectorIndexMetadata from "./VectorIndexMetadata.js";
+import { vectorSearchKeys } from "./VectorIndexMetadata.js";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
@@ -68,6 +70,7 @@ class TableMetadata {
    *   - updatedAt
    *   - foreignKey
    *   - foreignEntityType
+   *   - the library-managed vector search attributes ({@link vectorSearchKeys})
    */
   public reservedKeys: Record<string, true>;
 
@@ -99,6 +102,9 @@ class TableMetadata {
     this.reservedKeys = Object.fromEntries(
       defaultAttrNames.map(key => [key, true])
     );
+    // The library-managed vector search attributes are reserved on every table
+    this.reservedKeys[vectorSearchKeys.vector] = true;
+    this.reservedKeys[vectorSearchKeys.contentHash] = true;
   }
 
   /**
@@ -165,10 +171,16 @@ class TableMetadata {
   /**
    * Serializes the table metadata to a plain object containing only serializable values.
    * This removes functions, Zod types, serializers, and other non-serializable data.
+   * Vector index metadata is emitted with the model descriptor's name only — never
+   * the provider value, client config, or credentials.
    * @param {EntityMetadataStorage} entities - Entities that belong to this table, keyed by entity class name
+   * @param {VectorIndexMetadata[]} vectorIndexes - Vector indexes defined on the table
    * @returns A plain object representation of the metadata
    */
-  public toJSON(entities: EntityMetadataStorage): SerializedTableMetadata {
+  public toJSON(
+    entities: EntityMetadataStorage,
+    vectorIndexes: VectorIndexMetadata[] = []
+  ): SerializedTableMetadata {
     return TableMetadataTransform.parse({
       name: this.name,
       delimiter: this.delimiter,
@@ -177,7 +189,8 @@ class TableMetadata {
       partitionKeyAttribute: this.partitionKeyAttribute,
       sortKeyAttribute: this.sortKeyAttribute,
       reservedKeys: this.reservedKeys,
-      entities
+      entities,
+      ...(vectorIndexes.length > 0 && { vectorIndexes })
     });
   }
 }

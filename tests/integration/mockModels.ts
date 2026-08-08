@@ -15,12 +15,15 @@ import {
   NumberAttribute,
   EnumAttribute,
   IdAttribute,
-  ObjectAttribute
+  ObjectAttribute,
+  Searchable,
+  SearchFilterable
 } from "../../src/decorators/index.js";
 import type {
   ObjectSchema,
   InferObjectSchema
 } from "../../src/decorators/index.js";
+import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
 import { JoinTable } from "../../src/relationships/index.js";
 import type {
   PartitionKey,
@@ -938,6 +941,101 @@ class Motorcycle extends Vehicle {
   public readonly hasSidecar: boolean;
 }
 
+/**
+ * Deterministic embedding provider for vector search mock models. Pure
+ * function so mock models carry no test-framework dependency
+ */
+export const mockEmbeddingProvider = (_text: string): Promise<number[]> =>
+  Promise.resolve(new Array<number>(TitanTextEmbedV2.dimensions).fill(0.1));
+
+@Table({
+  name: "search-table",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" }
+  }
+})
+abstract class SearchTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+@Entity
+class Store extends SearchTable {
+  declare readonly type: "Store";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasMany(() => Listing, { foreignKey: "storeId" })
+  public readonly listings: Listing[];
+}
+
+@Entity
+class Listing extends SearchTable {
+  declare readonly type: "Listing";
+
+  @Searchable()
+  @StringAttribute({ alias: "Description" })
+  public readonly description: Searchable;
+
+  @SearchFilterable()
+  @StringAttribute({ alias: "Category" })
+  public readonly category: string;
+
+  @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
+  public readonly storeId: ForeignKey<Store>;
+
+  @BelongsTo(() => Store, { foreignKey: "storeId" })
+  public readonly store: Store;
+}
+
+// FK-only scoped index member: carries the scoping foreign key but has no
+// declared inverse relationship on Store, so it joins the index via include
+@Entity
+class Review extends SearchTable {
+  declare readonly type: "Review";
+
+  @Searchable()
+  @StringAttribute({ alias: "Body" })
+  public readonly body: Searchable;
+
+  @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
+  public readonly storeId: ForeignKey<Store>;
+}
+
+// Global-index-only member with a nullable searchable attribute
+@Entity
+class Article extends SearchTable {
+  declare readonly type: "Article";
+
+  @StringAttribute({ alias: "Title" })
+  public readonly title: string;
+
+  @Searchable()
+  @StringAttribute({ alias: "Content", nullable: true })
+  public readonly content?: Searchable;
+}
+
+export const storeSearchIndex = SearchTable.vectorIndex({
+  name: "store-search-index",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider,
+  scopedBy: () => Store,
+  include: [() => Review]
+});
+
+export const globalSearchIndex = SearchTable.vectorIndex({
+  name: "global-search-index",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider
+});
+
 export {
   // MockTable exports
   MockTable,
@@ -987,5 +1085,11 @@ export {
   Assignment,
   Profile,
   StudentCourse,
-  Grade
+  Grade,
+  // SearchTable exports
+  SearchTable,
+  Store,
+  Listing,
+  Review,
+  Article
 };

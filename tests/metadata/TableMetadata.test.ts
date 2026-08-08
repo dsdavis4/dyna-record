@@ -1,5 +1,6 @@
 import {
   MockTable,
+  SearchTable,
   OtherTable,
   addressSchema,
   arrayOfObjectsSchema,
@@ -3979,6 +3980,477 @@ describe("TableMetadata", () => {
             relationships: {}
           }
         }
+      });
+    });
+  });
+
+  describe("SearchTable.metadata()", () => {
+    it("returns the complete table metadata for a table with searchable entities and vector indexes", () => {
+      expect.assertions(1);
+
+      const metadata = SearchTable.metadata();
+
+      expect(metadata).toStrictEqual({
+        name: "search-table",
+        delimiter: "#",
+        defaultAttributes: {
+          id: { name: "id", alias: "Id", nullable: false, kind: "string" },
+          type: {
+            name: "type",
+            alias: "Type",
+            nullable: false,
+            kind: "string"
+          },
+          createdAt: {
+            name: "createdAt",
+            alias: "CreatedAt",
+            nullable: false,
+            kind: "date"
+          },
+          updatedAt: {
+            name: "updatedAt",
+            alias: "UpdatedAt",
+            nullable: false,
+            kind: "date"
+          }
+        },
+        defaultTableAttributes: {
+          Id: { name: "id", alias: "Id", nullable: false, kind: "string" },
+          Type: {
+            name: "type",
+            alias: "Type",
+            nullable: false,
+            kind: "string"
+          },
+          CreatedAt: {
+            name: "createdAt",
+            alias: "CreatedAt",
+            nullable: false,
+            kind: "date"
+          },
+          UpdatedAt: {
+            name: "updatedAt",
+            alias: "UpdatedAt",
+            nullable: false,
+            kind: "date"
+          }
+        },
+        partitionKeyAttribute: {
+          name: "pk",
+          alias: "PK",
+          nullable: false,
+          kind: "string"
+        },
+        sortKeyAttribute: {
+          name: "sk",
+          alias: "SK",
+          nullable: false,
+          kind: "string"
+        },
+        entities: {
+          Store: {
+            tableClassName: "SearchTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                nullable: false,
+                kind: "string"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                nullable: false,
+                kind: "string"
+              }
+            },
+            relationships: {
+              listings: {
+                type: "HasMany",
+                propertyName: "listings",
+                target: "Listing",
+                foreignKey: "storeId"
+              }
+            }
+          },
+          Listing: {
+            tableClassName: "SearchTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              description: {
+                name: "description",
+                alias: "Description",
+                nullable: false,
+                kind: "string"
+              },
+              category: {
+                name: "category",
+                alias: "Category",
+                nullable: false,
+                kind: "string"
+              },
+              storeId: {
+                name: "storeId",
+                alias: "StoreId",
+                nullable: false,
+                kind: "foreignKey",
+                foreignKeyTarget: "Store"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              Description: {
+                name: "description",
+                alias: "Description",
+                nullable: false,
+                kind: "string"
+              },
+              Category: {
+                name: "category",
+                alias: "Category",
+                nullable: false,
+                kind: "string"
+              },
+              StoreId: {
+                name: "storeId",
+                alias: "StoreId",
+                nullable: false,
+                kind: "foreignKey",
+                foreignKeyTarget: "Store"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            relationships: {
+              store: {
+                type: "BelongsTo",
+                propertyName: "store",
+                target: "Store",
+                foreignKey: "storeId"
+              }
+            }
+          },
+          Review: {
+            tableClassName: "SearchTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              body: {
+                name: "body",
+                alias: "Body",
+                nullable: false,
+                kind: "string"
+              },
+              storeId: {
+                name: "storeId",
+                alias: "StoreId",
+                nullable: false,
+                kind: "foreignKey",
+                foreignKeyTarget: "Store"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              Body: {
+                name: "body",
+                alias: "Body",
+                nullable: false,
+                kind: "string"
+              },
+              StoreId: {
+                name: "storeId",
+                alias: "StoreId",
+                nullable: false,
+                kind: "foreignKey",
+                foreignKeyTarget: "Store"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            relationships: {}
+          },
+          Article: {
+            tableClassName: "SearchTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              title: {
+                name: "title",
+                alias: "Title",
+                nullable: false,
+                kind: "string"
+              },
+              content: {
+                name: "content",
+                alias: "Content",
+                nullable: true,
+                kind: "string"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                nullable: false,
+                kind: "string"
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                nullable: false,
+                kind: "string"
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                nullable: false,
+                kind: "date"
+              },
+              Title: {
+                name: "title",
+                alias: "Title",
+                nullable: false,
+                kind: "string"
+              },
+              Content: {
+                name: "content",
+                alias: "Content",
+                nullable: true,
+                kind: "string"
+              },
+              __dyna_vector_hash: {
+                name: "__dyna_vector_hash",
+                alias: "__dyna_vector_hash",
+                nullable: true,
+                kind: "string"
+              }
+            },
+            relationships: {}
+          }
+        },
+        vectorIndexes: [
+          {
+            name: "store-search-index",
+            model: "amazon.titan-embed-text-v2:0",
+            vectorAttribute: "__dyna_vector",
+            dimensions: 1024,
+            distanceFunction: "COSINE",
+            projection: "ALL",
+            searchSchema: {
+              hash: "StoreId",
+              inlineFilters: ["Category", "Type"]
+            },
+            fingerprint:
+              "7cdc15caa2c93c6ad26aab49ada053811b853968f87240d6459b2db24be43a54",
+            scopedBy: "Store"
+          },
+          {
+            name: "global-search-index",
+            model: "amazon.titan-embed-text-v2:0",
+            vectorAttribute: "__dyna_vector",
+            dimensions: 1024,
+            distanceFunction: "COSINE",
+            projection: "ALL",
+            searchSchema: { inlineFilters: ["Category", "Type"] },
+            fingerprint:
+              "b967a86113af5acd9a09ac0fccd82357a7ef2afc38418c62ebd8653d733359a0"
+          }
+        ]
       });
     });
   });
