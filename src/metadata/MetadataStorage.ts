@@ -409,7 +409,8 @@ class MetadataStorage {
       try {
         this.initVectorSearch();
       } catch (error) {
-        this.#initializationError = error as Error;
+        this.#initializationError =
+          error instanceof Error ? error : new Error(String(error));
       }
     }
 

@@ -5655,16 +5655,16 @@ describe("Create searchable entities (vector write path)", () => {
     const providerError = new Error("bedrock unavailable");
     mockNoteEmbed.mockRejectedValueOnce(providerError);
 
-    const error: unknown = await Note.create({
-      body: "A searchable note body"
-    }).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(EmbeddingError);
-    expect((error as EmbeddingError).code).toEqual("EmbeddingError");
-    expect((error as EmbeddingError).message).toEqual(
-      "Embedding failed for Note.body via the test-embed-model provider on vector index note-search-index"
-    );
-    expect((error as EmbeddingError).cause).toEqual(providerError);
+    try {
+      await Note.create({ body: "A searchable note body" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(EmbeddingError);
+      expect(e.code).toEqual("EmbeddingError");
+      expect(e.message).toEqual(
+        "Embedding failed for Note.body via the test-embed-model provider on vector index note-search-index"
+      );
+      expect(e.cause).toEqual(providerError);
+    }
     expect(mockSend).not.toHaveBeenCalled();
   });
 
@@ -5675,18 +5675,16 @@ describe("Create searchable entities (vector write path)", () => {
 
     mockNoteEmbed.mockResolvedValueOnce([0.1, 0.2]);
 
-    const error: unknown = await Note.create({
-      body: "A searchable note body"
-    }).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(EmbeddingError);
-    expect((error as EmbeddingError).message).toEqual(
-      "Embedding provider returned a 2-dimension vector for Note.body; the test-embed-model descriptor requires 3 dimensions"
-    );
-    // Error messages carry identities only — never the searchable text
-    expect((error as EmbeddingError).message).not.toContain(
-      "A searchable note body"
-    );
+    try {
+      await Note.create({ body: "A searchable note body" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(EmbeddingError);
+      expect(e.message).toEqual(
+        "Embedding provider returned a 2-dimension vector for Note.body; the test-embed-model descriptor requires 3 dimensions"
+      );
+      // Error messages carry identities only — never the searchable text
+      expect(e.message).not.toContain("A searchable note body");
+    }
     expect(mockSend).not.toHaveBeenCalled();
   });
 

@@ -292,9 +292,9 @@ describe("FilterExpressionBuilder", () => {
 
       try {
         builder.filterParams({ price: "cheap" });
-      } catch (error) {
+      } catch (error: any) {
         expect(error).toBeInstanceOf(FilterError);
-        expect((error as FilterError).cause).toEqual([
+        expect(error.cause).toEqual([
           expect.objectContaining({ code: "invalid_type" })
         ]);
       }

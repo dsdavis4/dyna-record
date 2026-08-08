@@ -545,9 +545,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     if (!isString(value)) return;
 
     const contentHash = computeContentHash(value);
-    const storedHash = (entityPreUpdate as Optional<Record<string, unknown>>)?.[
-      vectorSearchKeys.contentHash
-    ];
+
+    // The stored hash is deliberately absent from the entity type (it is
+    // library-managed), so it is read through `in` narrowing
+    const storedHash =
+      entityPreUpdate !== undefined &&
+      vectorSearchKeys.contentHash in entityPreUpdate
+        ? entityPreUpdate[vectorSearchKeys.contentHash]
+        : undefined;
 
     if (storedHash === contentHash) return;
 
