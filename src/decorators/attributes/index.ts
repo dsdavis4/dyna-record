@@ -9,7 +9,7 @@ export { default as EnumAttribute } from "./EnumAttribute.js";
 export { default as IdAttribute } from "./IdAttribute.js";
 // Single specifier carries both meanings: the decorator (value) and the brand (type)
 export { Searchable } from "./Searchable.js";
-export { default as SearchFilterable } from "./SearchFilterable.js";
+export { SearchFilterable } from "./SearchFilterable.js";
 export { default as ObjectAttribute } from "./ObjectAttribute.js";
 export type { ObjectAttributeOptions } from "./ObjectAttribute.js";
 export * from "./serializers.js";

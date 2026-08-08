@@ -58,6 +58,27 @@ export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 export type Searchable<T extends string = string> = Brand<T, "Searchable">;
 
 /**
+ * Brand for attributes declared as inline filters on the vector indexes
+ * containing the entity. Apply the `@SearchFilterable()` decorator over the
+ * attribute's base decorator; the decorator requires this brand on the
+ * property type, which is how filter typing knows the exact declared
+ * filterable set at compile time.
+ *
+ * The brand uses its own phantom key (not the shared `Brand` utility)
+ * because filterables compose with other branded types — a foreign key
+ * filterable is both a `ForeignKey` and filterable, and two brands sharing
+ * one `__brand` key would annihilate in the intersection. The phantom key
+ * also carries the underlying type so create/update inputs recover it.
+ *
+ * The brand never leaks into consumer ergonomics: it is assignable to its
+ * underlying type on read, and create/update inputs accept plain values.
+ */
+export type SearchFilterable<T extends string | number | boolean = string> =
+  T & {
+    readonly __searchFilterable: T;
+  };
+
+/**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
  */
 export type DynamoTableItem = Record<string, NativeAttributeValue>;

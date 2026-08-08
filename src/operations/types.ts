@@ -60,7 +60,11 @@ export type ForeignKeyToValue<T> = {
         ? string
         : T[K] extends Optional<Searchable>
           ? Optional<string>
-          : T[K];
+          : T[K] extends { readonly __searchFilterable: infer U }
+            ? U
+            : T[K] extends Optional<{ readonly __searchFilterable: infer U }>
+              ? Optional<U>
+              : T[K];
 };
 
 /**

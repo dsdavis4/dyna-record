@@ -986,7 +986,7 @@ class Listing extends SearchTable {
 
   @SearchFilterable()
   @StringAttribute({ alias: "Category" })
-  public readonly category: string;
+  public readonly category: SearchFilterable;
 
   @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
   public readonly storeId: ForeignKey<Store>;

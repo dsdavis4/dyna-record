@@ -27,6 +27,10 @@ export type {
 } from "./types.js";
 export type { AttributeKind } from "./metadata/types.js";
 export type {
+  SearchFilterParams,
+  SearchFilterValue
+} from "./filter-utils/index.js";
+export type {
   SerializedTableMetadata,
   SerializedVectorIndexMetadata
 } from "./metadata/schemas.js";

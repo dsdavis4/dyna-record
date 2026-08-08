@@ -12,6 +12,7 @@ import VectorIndexMetadata, {
 import { createRelationshipInstance } from "./relationship-metadata/utils.js";
 import type { RelationshipMetadata } from "./relationship-metadata/index.js";
 import type {
+  AttributeKind,
   AttributeMetadataStorage,
   DefaultFields,
   EntityMetadataStorage,
@@ -33,10 +34,47 @@ const MAX_VECTOR_INDEXES_PER_TABLE = 5;
 const MAX_INLINE_FILTERS_PER_INDEX = 18;
 
 /**
- * Attribute kinds whose values are embeddable text. @Searchable may only be
- * layered over decorators producing these kinds
+ * Whether each attribute kind's values are embeddable text for @Searchable.
+ * Exhaustive over {@link AttributeKind} — adding a new kind fails compilation
+ * here until the new kind declares a stance. Must stay in agreement with the
+ * `Searchable` brand's type-level constraint in src/types.ts
  */
-const SEARCHABLE_ATTRIBUTE_KINDS = ["string", "enum"];
+const SEARCHABLE_BY_KIND = {
+  string: true,
+  enum: true,
+  number: false,
+  boolean: false,
+  date: false,
+  object: false,
+  foreignKey: false
+} as const satisfies Record<AttributeKind, boolean>;
+
+/**
+ * Whether each attribute kind's values are equality-comparable scalars for
+ * @SearchFilterable. Exhaustive over {@link AttributeKind} — adding a new
+ * kind fails compilation here until the new kind declares a stance. Must stay
+ * in agreement with the `SearchFilterable` brand's type-level constraint in
+ * src/types.ts (dates and objects have no reliable equality semantics as
+ * inline filters)
+ */
+const FILTERABLE_BY_KIND = {
+  string: true,
+  number: true,
+  boolean: true,
+  enum: true,
+  foreignKey: true,
+  date: false,
+  object: false
+} as const satisfies Record<AttributeKind, boolean>;
+
+const attributeKindsWhere = (
+  kindMap: Record<AttributeKind, boolean>
+): AttributeKind[] =>
+  (Object.keys(kindMap) as AttributeKind[]).filter(kind => kindMap[kind]);
+
+const SEARCHABLE_ATTRIBUTE_KINDS = attributeKindsWhere(SEARCHABLE_BY_KIND);
+
+const FILTERABLE_ATTRIBUTE_KINDS = attributeKindsWhere(FILTERABLE_BY_KIND);
 
 /**
  * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.
@@ -442,9 +480,14 @@ class MetadataStorage {
       const entityMetadata = this.#entities[entityName];
 
       for (const attributeName of marks) {
-        if (!(attributeName in entityMetadata.attributes)) {
+        if (
+          !(attributeName in entityMetadata.attributes) ||
+          !FILTERABLE_ATTRIBUTE_KINDS.includes(
+            entityMetadata.attributes[attributeName].kind
+          )
+        ) {
           throw new Error(
-            `@SearchFilterable on ${entityName}.${attributeName} must be layered over an attribute decorator (EX: @StringAttribute)`
+            `@SearchFilterable on ${entityName}.${attributeName} must be layered over a string, number, boolean, enum, or foreign key attribute decorator (EX: @StringAttribute)`
           );
         }
         entityMetadata.searchFilterableAttributes.push(

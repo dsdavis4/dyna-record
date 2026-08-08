@@ -1,5 +1,17 @@
 import type DynaRecord from "../../DynaRecord.js";
 import Metadata from "../../metadata/index.js";
+import type {
+  Optional,
+  SearchFilterable as SearchFilterableBrand
+} from "../../types.js";
+
+/**
+ * Local alias so the decorator and the brand can share the exported
+ * `SearchFilterable` name — the single `export { SearchFilterable }` below
+ * carries both the value (decorator) and type (brand) meanings.
+ */
+type SearchFilterable<T extends string | number | boolean = string> =
+  SearchFilterableBrand<T>;
 
 /**
  * A layered decorator declaring an attribute as an inline filter on the
@@ -38,7 +50,10 @@ import Metadata from "../../metadata/index.js";
  * }
  * ```
  */
-function SearchFilterable<T extends DynaRecord, K>() {
+function SearchFilterable<
+  T extends DynaRecord,
+  K extends Optional<SearchFilterableBrand<string | number | boolean>>
+>() {
   return function (
     _value: undefined,
     context: ClassFieldDecoratorContext<T, K>
@@ -52,4 +67,4 @@ function SearchFilterable<T extends DynaRecord, K>() {
   };
 }
 
-export default SearchFilterable;
+export { SearchFilterable };

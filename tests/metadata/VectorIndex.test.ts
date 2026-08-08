@@ -17,6 +17,7 @@ import type {
   ForeignKey,
   PartitionKey,
   Searchable as SearchableText,
+  SearchFilterable as FilterableText,
   SortKey
 } from "../../src/index.js";
 
@@ -423,6 +424,54 @@ describe("VectorIndex", () => {
       ).toBe("status");
     });
 
+    it("rejects @SearchFilterable layered over a date attribute", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        DateAttribute,
+        Searchable,
+        SearchFilterable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      FreshTable.vectorIndex({
+        name: "fresh-index",
+        model: TitanTextEmbedV2,
+        provider: testProvider
+      });
+
+      @Entity
+      class DateFilterable extends FreshTable {
+        declare readonly type: "DateFilterable";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        // @ts-expect-error: Date properties cannot carry the SearchFilterable brand - the runtime check must agree
+        @SearchFilterable()
+        @DateAttribute({ alias: "PublishedOn" })
+        public readonly publishedOn: Date;
+      }
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "@SearchFilterable on DateFilterable.publishedOn must be layered over a string, number, boolean, enum, or foreign key attribute decorator (EX: @StringAttribute)"
+      );
+    });
+
     it("rejects a searchable entity carrying the scoping foreign key that is neither declared nor included, naming the fix", async () => {
       const {
         default: DynaRecord,
@@ -781,7 +830,7 @@ describe("VectorIndex", () => {
 
         @SearchFilterable()
         @StringAttribute({ alias: "Status" })
-        public readonly status: string;
+        public readonly status: FilterableText;
       }
 
       @Entity
@@ -794,7 +843,7 @@ describe("VectorIndex", () => {
 
         @SearchFilterable()
         @StringAttribute({ alias: "State" })
-        public readonly status: string;
+        public readonly status: FilterableText;
       }
 
       expect(() => FreshTable.metadata()).toThrow(
@@ -840,71 +889,71 @@ describe("VectorIndex", () => {
 
         @SearchFilterable()
         @StringAttribute({ alias: "F01" })
-        public readonly f01: string;
+        public readonly f01: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F02" })
-        public readonly f02: string;
+        public readonly f02: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F03" })
-        public readonly f03: string;
+        public readonly f03: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F04" })
-        public readonly f04: string;
+        public readonly f04: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F05" })
-        public readonly f05: string;
+        public readonly f05: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F06" })
-        public readonly f06: string;
+        public readonly f06: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F07" })
-        public readonly f07: string;
+        public readonly f07: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F08" })
-        public readonly f08: string;
+        public readonly f08: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F09" })
-        public readonly f09: string;
+        public readonly f09: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F10" })
-        public readonly f10: string;
+        public readonly f10: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F11" })
-        public readonly f11: string;
+        public readonly f11: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F12" })
-        public readonly f12: string;
+        public readonly f12: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F13" })
-        public readonly f13: string;
+        public readonly f13: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F14" })
-        public readonly f14: string;
+        public readonly f14: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F15" })
-        public readonly f15: string;
+        public readonly f15: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F16" })
-        public readonly f16: string;
+        public readonly f16: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F17" })
-        public readonly f17: string;
+        public readonly f17: FilterableText;
       }
 
       const metadata = FreshTable.metadata();
@@ -952,75 +1001,75 @@ describe("VectorIndex", () => {
 
         @SearchFilterable()
         @StringAttribute({ alias: "F01" })
-        public readonly f01: string;
+        public readonly f01: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F02" })
-        public readonly f02: string;
+        public readonly f02: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F03" })
-        public readonly f03: string;
+        public readonly f03: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F04" })
-        public readonly f04: string;
+        public readonly f04: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F05" })
-        public readonly f05: string;
+        public readonly f05: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F06" })
-        public readonly f06: string;
+        public readonly f06: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F07" })
-        public readonly f07: string;
+        public readonly f07: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F08" })
-        public readonly f08: string;
+        public readonly f08: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F09" })
-        public readonly f09: string;
+        public readonly f09: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F10" })
-        public readonly f10: string;
+        public readonly f10: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F11" })
-        public readonly f11: string;
+        public readonly f11: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F12" })
-        public readonly f12: string;
+        public readonly f12: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F13" })
-        public readonly f13: string;
+        public readonly f13: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F14" })
-        public readonly f14: string;
+        public readonly f14: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F15" })
-        public readonly f15: string;
+        public readonly f15: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F16" })
-        public readonly f16: string;
+        public readonly f16: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F17" })
-        public readonly f17: string;
+        public readonly f17: FilterableText;
 
         @SearchFilterable()
         @StringAttribute({ alias: "F18" })
-        public readonly f18: string;
+        public readonly f18: FilterableText;
       }
 
       expect(() => FreshTable.metadata()).toThrow(
@@ -1102,7 +1151,7 @@ describe("VectorIndex", () => {
 
         @SearchFilterable()
         @StringAttribute({ alias: "Status" })
-        public readonly status: string;
+        public readonly status: FilterableText;
       }
 
       // If defining the index had initialized metadata, Note would have been
