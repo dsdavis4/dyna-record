@@ -20,6 +20,26 @@ import { vectorSearchKeys } from "./VectorIndexMetadata.js";
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
 /**
+ * Projection applied to ordinary reads (`findById`, `query`, internal
+ * prefetches) on a table with a vector index, excluding the vector attribute.
+ * DynamoDB has no exclusion form, so this is an inclusion list: the union of
+ * table aliases across every entity mapped to the table, minus the vector
+ * alias. The union is what makes it safe on adjacency-list queries whose
+ * results span entity types. It saves network bytes and latency, not billed
+ * capacity — reads bill on full item size regardless of projection
+ */
+export interface ReadProjection {
+  /**
+   * The `ProjectionExpression` string of `#`-aliased attribute names
+   */
+  expression: string;
+  /**
+   * The `ExpressionAttributeNames` entries backing the expression
+   */
+  attributeNames: Record<string, string>;
+}
+
+/**
  * Default fields with default table alias. Can be overwritten through {@link TableMetadataOptions} defaultFields
  */
 export const tableDefaultFields: Record<
@@ -73,6 +93,14 @@ class TableMetadata {
    *   - the library-managed vector search attributes ({@link vectorSearchKeys})
    */
   public reservedKeys: Record<string, true>;
+
+  /**
+   * The vector-excluding {@link ReadProjection} applied to ordinary reads.
+   * Set at metadata initialization, and only on tables that declare a vector
+   * index — reads on tables without one are untouched. Never serialized
+   * through {@link toJSON}
+   */
+  public readProjection?: ReadProjection;
 
   constructor(options: TableMetadataOptions) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);

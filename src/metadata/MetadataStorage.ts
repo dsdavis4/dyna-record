@@ -576,7 +576,55 @@ class MetadataStorage {
           type: z.string()
         });
       }
+
+      // Built after the content hash registration above so the hash is part
+      // of the projected union — updates read it through the prefetch
+      if (indexes.length > 0) {
+        this.buildReadProjection(tableClassName, tableMetadata);
+      }
     }
+  }
+
+  /**
+   * Builds the vector-excluding read projection for a table with a vector
+   * index. DynamoDB has no exclusion form, so the projection is an inclusion
+   * list: the union of table aliases across every entity mapped to the table
+   * (plus the table's key and default attributes), minus the vector alias.
+   * The union is what makes it safe on adjacency-list queries whose results
+   * span entity types
+   * @param tableClassName - Name of the table class
+   * @param tableMetadata - The table's metadata
+   */
+  private buildReadProjection(
+    tableClassName: string,
+    tableMetadata: TableMetadata
+  ): void {
+    const aliases = new Set<string>([
+      tableMetadata.partitionKeyAttribute.alias,
+      tableMetadata.sortKeyAttribute.alias,
+      ...Object.values(tableMetadata.defaultAttributes).map(
+        attrMeta => attrMeta.alias
+      )
+    ]);
+
+    for (const entityMetadata of Object.values(this.#entities)) {
+      if (entityMetadata.tableClassName !== tableClassName) continue;
+
+      for (const attrMeta of Object.values(entityMetadata.attributes)) {
+        aliases.add(attrMeta.alias);
+      }
+    }
+
+    aliases.delete(vectorSearchKeys.vector);
+
+    const sortedAliases = [...aliases].sort((a, b) => a.localeCompare(b));
+
+    tableMetadata.readProjection = {
+      expression: sortedAliases.map(alias => `#${alias}`).join(", "),
+      attributeNames: Object.fromEntries(
+        sortedAliases.map(alias => [`#${alias}`, alias])
+      )
+    };
   }
 
   /**

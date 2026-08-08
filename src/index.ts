@@ -27,6 +27,7 @@ export type {
 } from "./types.js";
 export type { AttributeKind } from "./metadata/types.js";
 export type {
+  SearchFilter,
   SearchFilterParams,
   SearchFilterValue
 } from "./filter-utils/index.js";
@@ -42,3 +43,9 @@ export type {
   EmbeddingProvider,
   VectorDistanceFunction
 } from "./embedding/types.js";
+export type {
+  SearchOptions,
+  SearchQuery,
+  SearchResult,
+  SearchResults
+} from "./operations/index.js";

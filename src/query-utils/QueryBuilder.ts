@@ -72,20 +72,29 @@ class QueryBuilder {
     const hasIndex = indexName !== undefined;
     const hasFilter = filterParams !== undefined;
 
+    // Present only on tables with a vector index: the vector-excluding
+    // inclusion projection. Reads on tables without one are untouched
+    const { readProjection } = this.#tableMetadata;
+
     return {
       TableName: this.#tableMetadata.name,
       ...(hasIndex && { IndexName: indexName }),
       ...(hasFilter && { FilterExpression: filterParams.expression }),
       KeyConditionExpression: keyFilter.expression,
-      ExpressionAttributeNames:
-        this.#expressionBuilder.expressionAttributeNames(
+      ExpressionAttributeNames: {
+        ...this.#expressionBuilder.expressionAttributeNames(
           Object.keys(this.#props.key),
           this.#props.options?.filter
         ),
+        ...readProjection?.attributeNames
+      },
       ExpressionAttributeValues: this.expressionAttributeValueParams(
         keyFilter,
         filterParams
       ),
+      ...(readProjection !== undefined && {
+        ProjectionExpression: readProjection.expression
+      }),
       ConsistentRead: consistentReadVal(this.#props.options?.consistentRead)
     };
   }

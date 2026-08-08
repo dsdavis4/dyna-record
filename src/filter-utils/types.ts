@@ -167,6 +167,20 @@ export type FilterAttributeResolver = (
 export type SearchFilterValue = string | number | boolean;
 
 /**
+ * The runtime shape of vector search filter conditions: equality-only
+ * scalar conditions keyed by attribute name. `$or` blocks and the `type`
+ * discriminator are rejected at the type level (and at runtime for plain JS
+ * callers — operator objects and arrays are likewise rejected by the search
+ * capability set). The public search surfaces narrow the accepted keys to the
+ * searched entities' `@SearchFilterable` attributes via
+ * {@link SearchFilterParams}.
+ */
+export type SearchFilter = Record<string, SearchFilterValue> & {
+  type?: never;
+  $or?: never;
+};
+
+/**
  * Union of a single entity's attribute keys that can appear in a search
  * filter: exactly the attributes carrying the `SearchFilterable` brand,
  * which the `@SearchFilterable()` decorator requires on the property type.
