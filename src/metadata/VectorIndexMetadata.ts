@@ -4,6 +4,18 @@ import type {
   EmbeddingModelDescriptor,
   EmbeddingProvider
 } from "../embedding/types.js";
+// This import is circular (operations depend on metadata) but safe: both
+// sides reference each other only inside function bodies, never during
+// module evaluation
+import { Search, isSearchQuery } from "../operations/Search/index.js";
+import type {
+  IndexSearchOptions,
+  InferSearchResults,
+  NarrowMembersByName,
+  SearchQuery,
+  SearchResults
+} from "../operations/Search/types.js";
+import { ValidationError } from "../errors.js";
 import type { EntityClass, Optional } from "../types.js";
 
 /**
@@ -81,22 +93,41 @@ interface ResolveSearchSchemaParams {
 
 /**
  * Represents the metadata for a vector index defined on a table class through
- * the static `vectorIndex` factory. Holds the consumer-supplied configuration
- * (name, model descriptor, provider, scope and membership thunks) plus the
- * search schema resolved at metadata initialization (members, `HASH` alias,
- * inline filter aliases, and the search-schema fingerprint).
+ * the static `vectorIndex` factory, and carries the index-anchored `search`
+ * surface. Holds the consumer-supplied configuration (name, model descriptor,
+ * provider, scope and membership thunks) plus the search schema resolved at
+ * metadata initialization (members, `HASH` alias, inline filter aliases, and
+ * the search-schema fingerprint).
  *
  * Entity thunks (`scopedBy`, `include`) are never resolved at definition
  * time — resolution happens during metadata initialization so index constants
  * can be declared at module evaluation without freezing metadata against a
  * partial entity graph.
  *
- * This construct is also the future home of the index `search` surface.
+ * The type parameters are instantiated by the `vectorIndex` factory's
+ * overloads and drive the `search` surface only: `Members` is the index's
+ * member entity union (scope parent's searchable adjacency union the
+ * `include:` list; unnarrowed for global indexes) and `Scoped` selects the
+ * scope-id-first search signature. Metadata-internal code uses the defaults.
  *
+ * @template Members - Union of the index's member entity types.
+ * @template Scoped - Whether the index is scoped (`scopedBy`).
  * @param {string} tableClassName - Name of the table class the index is defined on.
  * @param {VectorIndexOptions} options - Configuration options for the vector index.
  */
-class VectorIndexMetadata {
+class VectorIndexMetadata<
+  Members extends DynaRecord = DynaRecord,
+  Scoped extends boolean = boolean
+> {
+  /**
+   * Phantom type markers carrying the factory-instantiated type parameters.
+   * `declare` emits nothing at runtime — they exist so the overloaded
+   * `search` signatures can select on scopedness and so member typing
+   * survives assignment. Never assigned or read
+   */
+  declare readonly __members?: Members;
+  declare readonly __scoped?: Scoped;
+
   /**
    * The name of the table class the index is defined on
    */
@@ -182,6 +213,82 @@ class VectorIndexMetadata {
       )
       .digest("hex");
   }
+
+  /**
+   * Searches the vector index. Compiles to exactly one `SearchVectors`
+   * operation; results are the index's member entity union with `similarity`
+   * and the raw `score`, ordered most-similar-first.
+   *
+   * Scoped indexes take the scope value first — they are searchable only per
+   * scope value. Global indexes take the query first and no scope id.
+   *
+   * @example Scoped index
+   * ```typescript
+   * const results = await storeSearchIndex.search("storeId", "ceramic mugs", {
+   *   in: "Listing",
+   *   filter: { category: "Mugs" },
+   *   topK: 25
+   * });
+   * ```
+   *
+   * @example Global index
+   * ```typescript
+   * const results = await globalSearchIndex.search("fresh articles");
+   * ```
+   *
+   * @param scopeId - The scope value to search within (scoped indexes only).
+   * @param query - The query text to embed, or `{ vector }` with a precomputed vector.
+   * @param options - {@link IndexSearchOptions}
+   * @returns A promise resolving to the typed search results.
+   */
+  public async search<const In extends Members["type"] = never>(
+    this: VectorIndexMetadata<Members, true>,
+    scopeId: string,
+    query: SearchQuery,
+    options?: IndexSearchOptions<Members, In>
+  ): Promise<InferSearchResults<NarrowMembersByName<Members, In>>>;
+
+  public async search<const In extends Members["type"] = never>(
+    this: VectorIndexMetadata<Members, false>,
+    query: SearchQuery,
+    options?: IndexSearchOptions<Members, In>
+  ): Promise<InferSearchResults<NarrowMembersByName<Members, In>>>;
+
+  public async search(
+    scopeIdOrQuery: string | SearchQuery,
+    queryOrOptions?: SearchQuery | IndexSearchOptions<Members, never>,
+    maybeOptions?: IndexSearchOptions<Members, never>
+  ): Promise<SearchResults> {
+    // Scopedness is known from the definition options alone — resolving the
+    // signature shape never triggers metadata initialization. The guards
+    // back the overload dispatch for plain JS callers
+    if (this.scopedBy !== undefined) {
+      if (typeof scopeIdOrQuery !== "string" || !isSearchQuery(queryOrOptions)) {
+        throw new ValidationError(
+          `Vector index ${this.name} is scoped — search takes the scope id first: search(scopeId, query, options)`
+        );
+      }
+
+      return await new Search(this).run(queryOrOptions, {
+        ...maybeOptions,
+        scopeId: scopeIdOrQuery
+      });
+    }
+
+    const options = isSearchQuery(queryOrOptions) ? undefined : queryOrOptions;
+
+    return await new Search(this).run(scopeIdOrQuery, options);
+  }
 }
+
+/**
+ * The search-schema surface of a vector index, independent of the factory's
+ * instantiated type parameters. The search runtime and embedding helpers
+ * consume this shape so every index instantiation is accepted.
+ */
+export type VectorIndexSchema = Omit<
+  VectorIndexMetadata,
+  "search" | "__members" | "__scoped"
+>;
 
 export default VectorIndexMetadata;

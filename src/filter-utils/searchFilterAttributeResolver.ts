@@ -1,6 +1,6 @@
 import { z, type ZodType } from "zod";
 import { FilterError } from "../errors.js";
-import Metadata, { type VectorIndexMetadata } from "../metadata/index.js";
+import Metadata, { type VectorIndexSchema } from "../metadata/index.js";
 import type { FilterAttribute, FilterAttributeResolver } from "./types.js";
 
 /**
@@ -21,7 +21,7 @@ import type { FilterAttribute, FilterAttributeResolver } from "./types.js";
  * @returns The index-member {@link FilterAttributeResolver}
  */
 export function searchFilterAttributeResolver(
-  index: VectorIndexMetadata
+  index: VectorIndexSchema
 ): FilterAttributeResolver {
   let filterableAttributes: Record<string, FilterAttribute> | undefined;
 

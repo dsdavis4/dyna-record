@@ -232,6 +232,7 @@ describe("VectorIndex", () => {
         provider: testProvider
       });
 
+      // @ts-expect-error: the compile-time assist rejects a second @Searchable attribute; these tests exercise the runtime backstop
       @Entity
       class DoubleSearchable extends FreshTable {
         declare readonly type: "DoubleSearchable";
@@ -278,6 +279,7 @@ describe("VectorIndex", () => {
         provider: testProvider
       });
 
+      // @ts-expect-error: the compile-time assist rejects a second @Searchable attribute; these tests exercise the runtime backstop
       @Entity
       class DoubleSearchable extends FreshTable {
         declare readonly type: "DoubleSearchable";
@@ -1212,6 +1214,7 @@ describe("VectorIndex", () => {
       // completeness is scoped to the import graph evaluated at first
       // metadata access — this invalid entity is never reconciled and its
       // double @Searchable marks are never validated
+      // @ts-expect-error: the compile-time assist rejects a second @Searchable attribute; this test exercises late registration
       @Entity
       class LateEntity extends FreshTable {
         declare readonly type: "LateEntity";
@@ -1265,11 +1268,11 @@ describe("VectorIndex", () => {
 
     it("scopedBy must be a thunk returning an entity class", () => {
       const _define = (): void => {
+        // @ts-expect-error: scopedBy must be a thunk returning an entity class
         void SearchTable.vectorIndex({
           name: "typed-index",
           model: TitanTextEmbedV2,
           provider: mockEmbeddingProvider,
-          // @ts-expect-error: scopedBy must be a thunk returning an entity class
           scopedBy: () => "Store"
         });
       };

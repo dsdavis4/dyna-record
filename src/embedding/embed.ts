@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { EmbeddingError } from "../errors.js";
-import type VectorIndexMetadata from "../metadata/VectorIndexMetadata.js";
+import type { VectorIndexSchema } from "../metadata/VectorIndexMetadata.js";
 import type { Optional } from "../types.js";
 
 /**
@@ -54,7 +54,7 @@ const truncateVector = (vector: number[]): number[] =>
  */
 const embedText = async (
   text: string,
-  index: Optional<VectorIndexMetadata>,
+  index: Optional<VectorIndexSchema>,
   subject: string
 ): Promise<number[]> => {
   // Metadata validation guarantees a provider-configured index exists for
@@ -97,7 +97,7 @@ const embedText = async (
  */
 export const embedSearchableValue = async (
   text: string,
-  index: Optional<VectorIndexMetadata>,
+  index: Optional<VectorIndexSchema>,
   entityName: string,
   attributeName: string
 ): Promise<SearchableWriteAttributes> => {
@@ -120,7 +120,7 @@ export const embedSearchableValue = async (
  */
 export const embedQueryVector = async (
   text: string,
-  index: VectorIndexMetadata
+  index: VectorIndexSchema
 ): Promise<number[]> => {
   const vector = await embedText(text, index, "the search query");
 

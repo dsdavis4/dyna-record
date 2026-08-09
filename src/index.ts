@@ -47,5 +47,17 @@ export type {
   SearchOptions,
   SearchQuery,
   SearchResult,
-  SearchResults
+  SearchResults,
+  HasMultipleSearchableAttributes,
+  HasSearchableRelationships,
+  IncludedEntities,
+  IndexSearchOptions,
+  InferSearchResults,
+  NarrowMembersByName,
+  ParentSearchOptions,
+  ParentSearchedEntities,
+  SearchableAttributeKeys,
+  SearchableRelationshipEntities,
+  SearchableRelationshipProperties,
+  SearchNotAvailable
 } from "./operations/index.js";

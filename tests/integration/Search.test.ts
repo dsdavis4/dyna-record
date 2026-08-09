@@ -8,10 +8,13 @@ import {
   Listing,
   Review,
   Store,
+  mockEmbeddingProvider,
   mockEmbeddingProviderCalls,
   globalSearchIndex,
   storeSearchIndex
 } from "./mockModels.js";
+import { createInstance } from "../../src/utils.js";
+import { type EntityAttributesOnly } from "../../src/operations/index.js";
 import {
   BelongsTo,
   Entity,
@@ -128,6 +131,24 @@ class ScopedShop extends ScopedFilterTable {
 
   @HasMany(() => ScopedProduct, { foreignKey: "shopId" })
   public readonly products: ScopedProduct[];
+
+  // A relationship to a non-searchable entity — invalid as a search in: value
+  @HasMany(() => ScopedSupplier, { foreignKey: "shopId" })
+  public readonly suppliers: ScopedSupplier[];
+}
+
+@Entity
+class ScopedSupplier extends ScopedFilterTable {
+  declare readonly type: "ScopedSupplier";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => ScopedShop, { alias: "ShopId" })
+  public readonly shopId: ForeignKey<ScopedShop>;
+
+  @BelongsTo(() => ScopedShop, { foreignKey: "shopId" })
+  public readonly shop: ScopedShop;
 }
 
 @Entity
@@ -725,5 +746,423 @@ describe("Search", () => {
         })
       );
     });
+  });
+});
+
+// A table whose parent scopes two vector indexes — the parent search surface
+// is ambiguous and errors with guidance
+@Table({
+  name: "dual-index-table",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" }
+  }
+})
+abstract class DualIndexTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+@Entity
+class DualParent extends DualIndexTable {
+  declare readonly type: "DualParent";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasMany(() => DualChild, { foreignKey: "parentId" })
+  public readonly children: DualChild[];
+}
+
+@Entity
+class DualChild extends DualIndexTable {
+  declare readonly type: "DualChild";
+
+  @Searchable()
+  @StringAttribute({ alias: "Body" })
+  public readonly body: SearchableText;
+
+  @ForeignKeyAttribute(() => DualParent, { alias: "ParentId" })
+  public readonly parentId: ForeignKey<DualParent>;
+
+  @BelongsTo(() => DualParent, { foreignKey: "parentId" })
+  public readonly parent: DualParent;
+}
+
+DualIndexTable.vectorIndex({
+  name: "dual-index-one",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider,
+  scopedBy: () => DualParent
+});
+
+DualIndexTable.vectorIndex({
+  name: "dual-index-two",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider,
+  scopedBy: () => DualParent
+});
+
+describe("public search surfaces", () => {
+  const expectedTitanVector = new Array<number>(1024).fill(0.1);
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  it("static parent search compiles the scoped search through the parent's index", async () => {
+    expect.assertions(3);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    const results = await Store.search("123", "hand thrown mugs");
+
+    expect(results).toEqual([]);
+    expect(mockEmbeddingProviderCalls).toEqual(["hand thrown mugs"]);
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#StoreId = :StoreId",
+          ExpressionAttributeNames: { "#StoreId": "StoreId" },
+          ExpressionAttributeValues: { ":StoreId": "123" }
+        }
+      ]
+    ]);
+  });
+
+  it("static parent search maps the in relationship property to its entity type and merges filters", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    await Store.search("123", "mugs", {
+      in: "listings",
+      filter: { category: "Mugs" },
+      topK: 25
+    });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 25,
+          SearchConditionExpression:
+            "#StoreId = :StoreId AND #Type = :Type AND #Category = :Category1",
+          ExpressionAttributeNames: {
+            "#StoreId": "StoreId",
+            "#Type": "Type",
+            "#Category": "Category"
+          },
+          ExpressionAttributeValues: {
+            ":StoreId": "123",
+            ":Type": "Listing",
+            ":Category1": "Mugs"
+          }
+        }
+      ]
+    ]);
+  });
+
+  it("instance search searches within the instance's own scope", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    const store = Store.tableItemToEntity({
+      PK: "Store#456",
+      SK: "Store",
+      Id: "456",
+      Type: "Store",
+      Name: "Mock Store",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    });
+
+    await store.search("mugs", { in: "listings" });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#StoreId = :StoreId AND #Type = :Type",
+          ExpressionAttributeNames: {
+            "#StoreId": "StoreId",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":StoreId": "456",
+            ":Type": "Listing"
+          }
+        }
+      ]
+    ]);
+  });
+
+  it("index construct search on a scoped index takes the scope id first and narrows by member entity name", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    // Review is an include: member — it has no relationship property on
+    // Store, so the index construct is where it is searchable by name
+    await storeSearchIndex.search("123", "sturdy handle", { in: "Review" });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#StoreId = :StoreId AND #Type = :Type",
+          ExpressionAttributeNames: {
+            "#StoreId": "StoreId",
+            "#Type": "Type"
+          },
+          ExpressionAttributeValues: {
+            ":StoreId": "123",
+            ":Type": "Review"
+          }
+        }
+      ]
+    ]);
+  });
+
+  it("index construct search on a global index takes the query first", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    await globalSearchIndex.search("fresh articles", { topK: 5 });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "global-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 5
+        }
+      ]
+    ]);
+  });
+
+  it("errors when searching a parent with no vector index scoped by it", async () => {
+    expect.assertions(3);
+
+    try {
+      // @ts-expect-error: search is unavailable on parents without searchable relationships (AE6)
+      await Listing.search("123", "anything");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Listing has no vector index scoped by it — search is unavailable. Define one with scopedBy: () => Listing"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("errors with guidance when the parent scopes more than one vector index", async () => {
+    expect.assertions(3);
+
+    try {
+      await DualParent.search("123", "anything");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "DualParent scopes more than one vector index (dual-index-one, dual-index-two) — the parent search surface is ambiguous. Search through the index construct instead: myIndex.search(...)"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("errors at runtime when in names a non-relationship (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      await Store.search("123", "mugs", { in: "unknown" as "listings" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        'Invalid search option in: "unknown" is not a relationship of Store'
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("errors when a scoped index construct is called with the global signature (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      // @ts-expect-error: a scoped index search takes the scope id first
+      await storeSearchIndex.search("mugs");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Vector index store-search-index is scoped — search takes the scope id first: search(scopeId, query, options)"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("types", () => {
+  it("in accepts only searchable relationship property names on the parent surfaces", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: searchable relationship name
+      await Store.search("1", "q", { in: "listings" });
+
+      // @ts-expect-error: suppliers targets a non-searchable entity
+      await ScopedShop.search("1", "q", { in: "suppliers" });
+
+      // @ts-expect-error: unknown relationship name
+      await Store.search("1", "q", { in: "unknown" });
+
+      // @ts-expect-error: the array form is reserved for future widening
+      await Store.search("1", "q", { in: ["listings"] });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("search is unavailable on parents without searchable relationships", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-error: Listing has no searchable relationships (AE6)
+      await Listing.search("1", "q");
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("result unions infer from the searched relationships and index members", () => {
+    const _test = async (): Promise<void> => {
+      const results = await Store.search("1", "q");
+      // @ts-expect-no-error: parent search results are the searchable adjacency
+      void results[0]?.entity.description;
+      // @ts-expect-error: include members are absent from parent-level unions — search the index construct to receive them
+      void results[0]?.entity.body;
+
+      const narrowed = await Store.search("1", "q", { in: "listings" });
+      // @ts-expect-no-error: narrowed to the relationship's target entity
+      void narrowed[0]?.entity.category;
+
+      const indexResults = await storeSearchIndex.search("1", "q");
+      // @ts-expect-no-error: attributes shared by the full member union
+      void indexResults[0]?.entity.storeId;
+      // @ts-expect-error: category exists only on Listing within the member union
+      void indexResults[0]?.entity.category;
+
+      const reviews = await storeSearchIndex.search("1", "q", {
+        in: "Review"
+      });
+      // @ts-expect-no-error: include members appear in index-level unions (AE4)
+      void reviews[0]?.entity.body;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("static and instance surfaces infer identically for class-typed instances", () => {
+    const _test = async (): Promise<void> => {
+      const store = createInstance(
+        Store,
+        {} as EntityAttributesOnly<Store>
+      );
+
+      const results = await store.search("q", { in: "listings" });
+      // @ts-expect-no-error: instance search infers the relationship target
+      void results[0]?.entity.category;
+      // @ts-expect-error: body is not on the searched entity
+      void results[0]?.entity.body;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("hydrated instances search through the permissive overload", () => {
+    const _test = async (): Promise<void> => {
+      const store = await Store.findById("1");
+      if (store !== undefined) {
+        // @ts-expect-no-error: hydrated instances are typed without relationship properties; the permissive overload applies
+        await store.search("q", { in: "listings" });
+      }
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("filter keys narrow to the searched entities' filterable attributes", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: category is @SearchFilterable on Listing
+      await Store.search("1", "q", { filter: { category: "Mugs" } });
+
+      // @ts-expect-error: description is searchable, not filterable
+      await Store.search("1", "q", { filter: { description: "x" } });
+
+      // @ts-expect-error: operator objects are not searchable filters
+      await Store.search("1", "q", { filter: { category: { $beginsWith: "M" } } });
+
+      // @ts-expect-error: $or is not supported in search filters
+      await Store.search("1", "q", { filter: { $or: [{ category: "M" }] } });
+
+      // @ts-expect-no-error: filterable foreign key equality
+      await scopedFilterIndex.search("1", "q", { filter: { shopId: "5" } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("the query input is text or a vector, never both", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: precomputed vector input
+      await globalSearchIndex.search({ vector: [1] });
+
+      // @ts-expect-error: text and vector cannot be combined
+      await globalSearchIndex.search({ vector: [1], text: "x" });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("scoped index search requires the scope id first; global indexes take none", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-error: a scoped index search takes the scope id first
+      await storeSearchIndex.search("q");
+
+      // @ts-expect-no-error: scope id first on a scoped index
+      await storeSearchIndex.search("id", "q");
+
+      // @ts-expect-error: a global index takes no scope id
+      await globalSearchIndex.search("id", "q");
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("index search in values are the index's member entity names", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: Listing is a member of the scoped index
+      await storeSearchIndex.search("1", "q", { in: "Listing" });
+
+      // @ts-expect-error: Article is not a member of the store-scoped index
+      await storeSearchIndex.search("1", "q", { in: "Article" });
+    };
+
+    expect(_test).toBeDefined();
   });
 });

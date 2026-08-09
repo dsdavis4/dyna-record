@@ -10,7 +10,7 @@ import {
 } from "../../filter-utils/index.js";
 import Metadata, {
   type TableMetadata,
-  type VectorIndexMetadata
+  type VectorIndexSchema
 } from "../../metadata/index.js";
 import type { StringObj } from "../../types.js";
 import { isString, tableItemToEntity } from "../../utils.js";
@@ -61,10 +61,10 @@ interface SearchCondition {
  *   `score`.
  */
 class Search {
-  readonly #index: VectorIndexMetadata;
+  readonly #index: VectorIndexSchema;
   readonly #tableMetadata: TableMetadata;
 
-  constructor(index: VectorIndexMetadata) {
+  constructor(index: VectorIndexSchema) {
     this.#index = index;
     // Looking up the table triggers lazy metadata initialization, which
     // resolves the index's search schema (members, HASH, inline filters)
@@ -232,7 +232,13 @@ class Search {
       resolveAttribute: this.buildFilterAttributeResolver()
     });
 
-    const filterParams = builder.filterParams(filter);
+    // The filter type admits undefined values (optional keys of the typed
+    // filter params); an explicitly-undefined condition is no condition
+    const definedConditions = Object.fromEntries(
+      Object.entries(filter).filter(([, value]) => value !== undefined)
+    );
+
+    const filterParams = builder.filterParams(definedConditions);
 
     return {
       expression: filterParams.expression,

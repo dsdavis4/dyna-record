@@ -3,6 +3,7 @@ import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type ZodType } from "zod";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
+import type { Optional } from "../types.js";
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
@@ -175,7 +176,7 @@ export type SearchFilterValue = string | number | boolean;
  * searched entities' `@SearchFilterable` attributes via
  * {@link SearchFilterParams}.
  */
-export type SearchFilter = Record<string, SearchFilterValue> & {
+export type SearchFilter = Record<string, Optional<SearchFilterValue>> & {
   type?: never;
   $or?: never;
 };
