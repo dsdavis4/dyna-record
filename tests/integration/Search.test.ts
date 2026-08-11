@@ -690,9 +690,9 @@ describe("Search", () => {
     );
     mockSearchVectors.mockRejectedValueOnce(awsError);
 
-    await expect(
-      new Search(globalSearchIndex).run("articles")
-    ).rejects.toBe(awsError);
+    await expect(new Search(globalSearchIndex).run("articles")).rejects.toBe(
+      awsError
+    );
   });
 
   describe("ordinary reads exclude the vector through the union-of-aliases projection", () => {
@@ -1217,7 +1217,9 @@ describe("types", () => {
       await Store.search("1", "q", { filter: { description: "x" } });
 
       // @ts-expect-error: operator objects are not searchable filters
-      await Store.search("1", "q", { filter: { category: { $beginsWith: "M" } } });
+      await Store.search("1", "q", {
+        filter: { category: { $beginsWith: "M" } }
+      });
 
       // @ts-expect-error: $or is not supported in search filters
       await Store.search("1", "q", { filter: { $or: [{ category: "M" }] } });

@@ -424,10 +424,8 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       // These items are raw fetched records that bypass entity serialization,
       // so a searchable parent's vector must be stripped here — the vector
       // lives on canonical rows only
-      const {
-        [vectorSearchKeys.vector]: _parentVector,
-        ...denormalizedItem
-      } = tableItem;
+      const { [vectorSearchKeys.vector]: _parentVector, ...denormalizedItem } =
+        tableItem;
 
       this.#transactionBuilder.addPut(
         {

@@ -13078,7 +13078,7 @@ describe("Update searchable entities (vector write path)", () => {
                 ExpressionAttributeValues: {
                   ":Description": "An updated listing description",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                  ":__dyna_vector": expectedTitanVector,
+                  ":__dyna_vector": expectedTitanVector
                 }
               }
             },
@@ -13206,7 +13206,7 @@ describe("Update searchable entities (vector write path)", () => {
                 ExpressionAttributeValues: {
                   ":Content": "Fresh article content",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                  ":__dyna_vector": expectedTitanVector,
+                  ":__dyna_vector": expectedTitanVector
                 }
               }
             }
@@ -13246,9 +13246,7 @@ describe("Update searchable entities (vector write path)", () => {
       description: "Updated parent description"
     });
 
-    expect(mockEmbeddingProviderCalls).toEqual([
-      "Updated parent description"
-    ]);
+    expect(mockEmbeddingProviderCalls).toEqual(["Updated parent description"]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
         {
@@ -13269,7 +13267,7 @@ describe("Update searchable entities (vector write path)", () => {
                 ExpressionAttributeValues: {
                   ":Description": "Updated parent description",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                  ":__dyna_vector": expectedTitanVector,
+                  ":__dyna_vector": expectedTitanVector
                 }
               }
             },

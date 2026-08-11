@@ -264,7 +264,10 @@ class VectorIndexMetadata<
     // signature shape never triggers metadata initialization. The guards
     // back the overload dispatch for plain JS callers
     if (this.scopedBy !== undefined) {
-      if (typeof scopeIdOrQuery !== "string" || !isSearchQuery(queryOrOptions)) {
+      if (
+        typeof scopeIdOrQuery !== "string" ||
+        !isSearchQuery(queryOrOptions)
+      ) {
         throw new ValidationError(
           `Vector index ${this.name} is scoped — search takes the scope id first: search(scopeId, query, options)`
         );

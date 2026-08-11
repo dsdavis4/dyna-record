@@ -5449,7 +5449,7 @@ describe("Create searchable entities (vector write path)", () => {
       category: "Mugs",
       storeId: "123",
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
-      updatedAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(mockEmbeddingProviderCalls).toEqual(["Hand thrown ceramic mug"]);
     expect(mockSend.mock.calls).toEqual([
@@ -5483,7 +5483,7 @@ describe("Create searchable entities (vector write path)", () => {
                   PK: "Listing#uuid1",
                   SK: "Listing",
                   ...listingAttributes,
-                  __dyna_vector: expectedTitanVector,
+                  __dyna_vector: expectedTitanVector
                 }
               }
             },
@@ -5550,7 +5550,7 @@ describe("Create searchable entities (vector write path)", () => {
       title: "Hello",
       content: "Fresh article content",
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
-      updatedAt: new Date("2023-10-16T03:31:35.918Z"),
+      updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
     expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
@@ -5571,7 +5571,7 @@ describe("Create searchable entities (vector write path)", () => {
                   Content: "Fresh article content",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
-                  __dyna_vector: expectedTitanVector,
+                  __dyna_vector: expectedTitanVector
                 }
               }
             }
@@ -5755,7 +5755,9 @@ describe("Create searchable entities (vector write path)", () => {
 
     mockedGenerateId.mockReturnValueOnce("uuid1");
 
-    mockNoteEmbed.mockResolvedValueOnce([0.123456789, 1234567.89, 0.000012345678]);
+    mockNoteEmbed.mockResolvedValueOnce([
+      0.123456789, 1234567.89, 0.000012345678
+    ]);
 
     await Note.create({ body: "A searchable note body" });
 
@@ -5775,7 +5777,7 @@ describe("Create searchable entities (vector write path)", () => {
                   Body: "A searchable note body",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
-                  __dyna_vector: [0.1234568, 1234568, 0.00001234568],
+                  __dyna_vector: [0.1234568, 1234568, 0.00001234568]
                 }
               }
             }

@@ -1,5 +1,8 @@
 import type DynaRecord from "../../DynaRecord.js";
-import type { SearchFilter, SearchFilterParams } from "../../filter-utils/index.js";
+import type {
+  SearchFilter,
+  SearchFilterParams
+} from "../../filter-utils/index.js";
 import type { EntityAttributesInstance } from "../types.js";
 import type {
   AssertDynaRecord,
@@ -192,7 +195,9 @@ export type SearchableRelationshipEntities<T extends DynaRecord> =
 export type ParentSearchedEntities<
   T extends DynaRecord,
   In extends SearchableRelationshipProperties<T>
-> = [In] extends [never] ? SearchableRelationshipEntities<T> : RelationshipTarget<T, In>;
+> = [In] extends [never]
+  ? SearchableRelationshipEntities<T>
+  : RelationshipTarget<T, In>;
 
 /**
  * Options of the parent search surfaces (`Parent.search` and
@@ -226,9 +231,7 @@ export interface ParentSearchOptions<
  */
 export type IncludedEntities<
   Inc extends ReadonlyArray<() => new () => DynaRecord>
-> = Inc[number] extends () => new () => infer E
-  ? AssertDynaRecord<E>
-  : never;
+> = Inc[number] extends () => new () => infer E ? AssertDynaRecord<E> : never;
 
 /**
  * The runtime shape of the parent search options — the generic

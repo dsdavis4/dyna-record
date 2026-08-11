@@ -298,7 +298,11 @@ class MetadataStorage {
     entityName: string,
     attributeName: string
   ): void {
-    this.addAttributeMark(this.#searchableAttributes, entityName, attributeName);
+    this.addAttributeMark(
+      this.#searchableAttributes,
+      entityName,
+      attributeName
+    );
   }
 
   /**
@@ -312,7 +316,11 @@ class MetadataStorage {
     entityName: string,
     attributeName: string
   ): void {
-    this.addAttributeMark(this.#filterableAttributes, entityName, attributeName);
+    this.addAttributeMark(
+      this.#filterableAttributes,
+      entityName,
+      attributeName
+    );
   }
 
   /**

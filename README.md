@@ -1312,7 +1312,10 @@ Vector indexes are declared on the table class with `vectorIndex`. The returned 
 
 ```typescript
 import { TitanTextEmbedV2, type EmbeddingProvider } from "dyna-record";
-import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import {
+  BedrockRuntimeClient,
+  InvokeModelCommand
+} from "@aws-sdk/client-bedrock-runtime";
 
 const bedrock = new BedrockRuntimeClient({ region: "us-west-2" });
 
@@ -1518,7 +1521,7 @@ Notes on the contract:
 
 Vector search changes the write and read economics of searchable rows — dyna-record's design choices here exist to manage that, so it's worth understanding what they can and cannot save you:
 
-- **Vector writes dominate, and the unchanged-value skip is the mitigation.** DynamoDB bills a full vector write (`max(1024, 4 × dimensions)` bytes — 4 KB at Titan's 1024 dimensions) on every material write to a vector-bearing row, even updates that don't touch the searchable attribute. dyna-record's unchanged-value comparison avoids the *embedding call* on unchanged values; the vector write billing on other updates is inherent to keeping the vector on the row.
+- **Vector writes dominate, and the unchanged-value skip is the mitigation.** DynamoDB bills a full vector write (`max(1024, 4 × dimensions)` bytes — 4 KB at Titan's 1024 dimensions) on every material write to a vector-bearing row, even updates that don't touch the searchable attribute. dyna-record's unchanged-value comparison avoids the _embedding call_ on unchanged values; the vector write billing on other updates is inherent to keeping the vector on the row.
 - **dyna-record truncates embeddings to 7 significant digits** (float32 precision — verified zero effect on search results). This roughly halves the searchable row's storage and ordinary write-capacity footprint. It does **not** reduce vector billing — no precision trick does.
 - **Searchable rows are permanently larger, and reads bill on full item size.** dyna-record excludes the vector from `findById`, `query`, and internal pre-fetches via projection, which saves bandwidth and latency — but DynamoDB bills reads on the full item regardless of projection, so every ordinary read of a searchable row costs more forever. Factor this in before marking high-read-traffic entities searchable.
 
