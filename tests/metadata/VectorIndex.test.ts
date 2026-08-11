@@ -586,6 +586,52 @@ describe("VectorIndex", () => {
       });
     });
 
+    it("rejects an include list on a global index, naming the rule", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      // @ts-expect-error: include is scoped-only — a global index already spans every searchable entity
+      FreshTable.vectorIndex({
+        name: "global-index",
+        model: TitanTextEmbedV2,
+        provider: testProvider,
+        include: [() => Note]
+      });
+
+      const error = captureError(() => FreshTable.metadata());
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toEqual(
+        "Vector index global-index is global but declares an include list. include adds members to a scoped index — a global index already spans every searchable entity of the table"
+      );
+    });
+
     it("rejects a declared member without the scoping foreign key on its canonical row (HasAndBelongsToMany), naming the fix", async () => {
       const {
         default: DynaRecord,

@@ -648,6 +648,12 @@ class MetadataStorage {
       );
     }
 
+    if (index.scopedBy === undefined && index.include !== undefined) {
+      throw new Error(
+        `Vector index ${index.name} is global but declares an include list. include adds members to a scoped index — a global index already spans every searchable entity of the table`
+      );
+    }
+
     let members = searchableEntities;
     let hashAlias: Optional<string>;
 

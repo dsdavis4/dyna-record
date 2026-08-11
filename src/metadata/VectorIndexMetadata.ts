@@ -216,8 +216,14 @@ class VectorIndexMetadata<
 
   /**
    * Searches the vector index. Compiles to exactly one `SearchVectors`
-   * operation; results are the index's member entity union with `similarity`
-   * and the raw `score`, ordered most-similar-first.
+   * operation; results carry complete typed entity instances with
+   * `similarity` and the raw `score`, ordered most-similar-first.
+   *
+   * The return type is inferred from `in:`: present, results narrow to that
+   * member entity; omitted, results are the index's full member union
+   * (including `include:` members), discriminated via `entity.type`. Global
+   * indexes return the base result type — their member set is only known at
+   * runtime.
    *
    * Scoped indexes take the scope value first — they are searchable only per
    * scope value. Global indexes take the query first and no scope id.

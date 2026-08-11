@@ -474,6 +474,10 @@ abstract class DynaRecord implements DynaRecordBase {
    * `SearchVectors` operation; results carry complete typed entity instances
    * with `similarity` and the raw `score`, ordered most-similar-first.
    *
+   * The return type is inferred from `in:`: present, results narrow to that
+   * relationship's target entity; omitted, results are the union of every
+   * searchable relationship target, discriminated via `entity.type`.
+   *
    * Available only on classes with at least one relationship to a searchable
    * entity (compile error otherwise, runtime error in plain JS), and only
    * when exactly one vector index is scoped by this class — with more than
@@ -558,6 +562,18 @@ abstract class DynaRecord implements DynaRecordBase {
     options?: ParentSearchOptions<T, In>
   ): Promise<InferSearchResults<ParentSearchedEntities<T, In>>>;
 
+  /**
+   * Vector-searches the entities related to this instance, within its own
+   * scope. This signature applies to hydrated instances (`findById`, `query`,
+   * search results), which are typed without relationship properties — the
+   * inference channel — so `in:` is a plain relationship-name string and
+   * results are the base union; the runtime guards are authoritative. Use the
+   * static `search` for full inference.
+   *
+   * @param query - The query text to embed, or `{ vector }` with a precomputed vector.
+   * @param options - Search options: `in`, `filter`, `topK`.
+   * @returns A promise resolving to the search results.
+   */
   public async search(
     query: SearchQuery,
     options?: ParentSearchRuntimeOptions
@@ -678,9 +694,15 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Define a vector index on a table class. Returns the typed index
-   * construct, which exposes the configuration and is the future home of the
-   * index `search` surface.
+   * Defines a **scoped** vector index on a table class and returns the typed
+   * index construct — the index's `search` surface and provisioning
+   * definition.
+   *
+   * The scope parent's foreign key becomes the index `HASH`, so searches run
+   * within exactly one scope value at a time. Members are the scope parent's
+   * searchable relationships union the `include:` list, and the construct's
+   * `search` takes the scope id first with `in:` and result unions typed to
+   * that membership.
    *
    * Only table classes (classes decorated with `@Table`) may define vector
    * indexes; calling this on an entity class throws. Defining an index never
@@ -689,31 +711,20 @@ abstract class DynaRecord implements DynaRecordBase {
    * resolved and validated when metadata initializes (first operation or an
    * explicit `metadata()` call).
    *
-   * @param options - {@link VectorIndexOptions}
+   * @param options - {@link VectorIndexOptions} with `scopedBy` (and optionally `include`)
    * @returns The registered {@link VectorIndexMetadata} construct
    *
-   * @example Scoped index (searches run per scope value)
+   * @example
    * ```typescript
-   * const storeSearchIndex = MyTable.vectorIndex({
-   *   name: "store-search-index",
+   * const orgSearchIndex = MyTable.vectorIndex({
+   *   name: "org-search-index",
    *   model: TitanTextEmbedV2,
    *   provider: myEmbedFunction,
-   *   scopedBy: () => Store,
+   *   scopedBy: () => Organization,
    *   include: [() => Review] // FK-only members without a declared inverse
    * });
    * ```
-   *
-   * @example Global index (no HASH; searches are global)
-   * ```typescript
-   * const globalSearchIndex = MyTable.vectorIndex({
-   *   name: "global-search-index",
-   *   model: TitanTextEmbedV2,
-   *   provider: myEmbedFunction
-   * });
-   * ```
    */
-  // Scoped index: members are the scope parent's searchable adjacency union
-  // the include list, and search takes the scope id first
   public static vectorIndex<
     Scope extends DynaRecord,
     Inc extends ReadonlyArray<() => EntityClass<DynaRecord>> = []
@@ -727,10 +738,41 @@ abstract class DynaRecord implements DynaRecordBase {
     true
   >;
 
-  // Global index: the member union is not statically enumerable (any
-  // searchable entity of the table is a member), so search is unnarrowed
+  /**
+   * Defines a **global** vector index on a table class and returns the typed
+   * index construct — the index's `search` surface and provisioning
+   * definition.
+   *
+   * A global index has no `HASH`: its members are every searchable entity of
+   * the table, and the construct's `search` takes the query first with no
+   * scope id. `include:` is rejected — there is nothing to add to a
+   * membership that already spans the table. Because entity classes are only
+   * discovered at metadata initialization, the member union is not statically
+   * enumerable: `in:` remains available as a plain entity-name string
+   * (validated against the resolved membership at runtime) and results type
+   * as the base entity union — discriminate on `entity.type` to narrow.
+   *
+   * Only table classes (classes decorated with `@Table`) may define vector
+   * indexes; calling this on an entity class throws. Defining an index never
+   * triggers metadata initialization and never resolves the entity thunks —
+   * index constants can be declared at module evaluation, and membership is
+   * resolved and validated when metadata initializes (first operation or an
+   * explicit `metadata()` call).
+   *
+   * @param options - {@link VectorIndexOptions} without `scopedBy`
+   * @returns The registered {@link VectorIndexMetadata} construct
+   *
+   * @example
+   * ```typescript
+   * const globalSearchIndex = MyTable.vectorIndex({
+   *   name: "global-search-index",
+   *   model: TitanTextEmbedV2,
+   *   provider: myEmbedFunction
+   * });
+   * ```
+   */
   public static vectorIndex(
-    options: VectorIndexOptions & { scopedBy?: undefined }
+    options: VectorIndexOptions & { scopedBy?: undefined; include?: undefined }
   ): VectorIndexMetadata<DynaRecord, false>;
 
   public static vectorIndex(options: VectorIndexOptions): VectorIndexMetadata {

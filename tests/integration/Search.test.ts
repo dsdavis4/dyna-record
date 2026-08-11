@@ -14,7 +14,11 @@ import {
   storeSearchIndex
 } from "./mockModels.js";
 import { createInstance } from "../../src/utils.js";
-import { type EntityAttributesOnly } from "../../src/operations/index.js";
+import {
+  type EntityAttributesOnly,
+  type SearchResult,
+  type SearchResults
+} from "../../src/operations/index.js";
 import {
   BelongsTo,
   Entity,
@@ -132,9 +136,29 @@ class ScopedShop extends ScopedFilterTable {
   @HasMany(() => ScopedProduct, { foreignKey: "shopId" })
   public readonly products: ScopedProduct[];
 
+  // A second searchable relationship, so the no-in result union spans
+  // multiple entity types
+  @HasMany(() => ScopedNote, { foreignKey: "shopId" })
+  public readonly notes: ScopedNote[];
+
   // A relationship to a non-searchable entity — invalid as a search in: value
   @HasMany(() => ScopedSupplier, { foreignKey: "shopId" })
   public readonly suppliers: ScopedSupplier[];
+}
+
+@Entity
+class ScopedNote extends ScopedFilterTable {
+  declare readonly type: "ScopedNote";
+
+  @Searchable()
+  @StringAttribute({ alias: "NoteBody" })
+  public readonly noteBody: SearchableText;
+
+  @ForeignKeyAttribute(() => ScopedShop, { alias: "ShopId" })
+  public readonly shopId: ForeignKey<ScopedShop>;
+
+  @BelongsTo(() => ScopedShop, { foreignKey: "shopId" })
+  public readonly shop: ScopedShop;
 }
 
 @Entity
@@ -1051,27 +1075,73 @@ describe("types", () => {
 
   it("result unions infer from the searched relationships and index members", () => {
     const _test = async (): Promise<void> => {
+      // Parent search results are exactly the searchable adjacency (Listing).
+      // Include members (Review) are absent from parent-level unions — they
+      // have no relationship property on the parent to infer from
       const results = await Store.search("1", "q");
-      // @ts-expect-no-error: parent search results are the searchable adjacency
-      void results[0]?.entity.description;
-      // @ts-expect-error: include members are absent from parent-level unions — search the index construct to receive them
-      void results[0]?.entity.body;
+      // @ts-expect-no-error: exactly the searchable adjacency
+      const _parentExact: Array<SearchResult<Listing>> = results;
+      // @ts-expect-error: Review is not part of the parent-level union
+      const _parentNoReview: Array<SearchResult<Review>> = results;
 
       const narrowed = await Store.search("1", "q", { in: "listings" });
       // @ts-expect-no-error: narrowed to the relationship's target entity
-      void narrowed[0]?.entity.category;
+      const _narrowedExact: Array<SearchResult<Listing>> = narrowed;
 
+      // Index-construct results are the full member union — including the
+      // include: member Review (AE4)
       const indexResults = await storeSearchIndex.search("1", "q");
-      // @ts-expect-no-error: attributes shared by the full member union
-      void indexResults[0]?.entity.storeId;
-      // @ts-expect-error: category exists only on Listing within the member union
-      void indexResults[0]?.entity.category;
+      // @ts-expect-no-error: exact member union
+      const _indexExact: Array<SearchResult<Listing> | SearchResult<Review>> =
+        indexResults;
+      // @ts-expect-error: NOT assignable to one member — the union is wider
+      const _indexNotNarrowed: Array<SearchResult<Listing>> = indexResults;
 
       const reviews = await storeSearchIndex.search("1", "q", {
         in: "Review"
       });
-      // @ts-expect-no-error: include members appear in index-level unions (AE4)
-      void reviews[0]?.entity.body;
+      // @ts-expect-no-error: include members narrow like any other member
+      const _reviewExact: Array<SearchResult<Review>> = reviews;
+      // @ts-expect-error: narrowed away from Listing
+      const _reviewNoListing: Array<SearchResult<Listing>> = reviews;
+
+      // Global-construct results are the unnarrowed base type — the member
+      // set is only known at runtime
+      const everything = await globalSearchIndex.search("q");
+      // @ts-expect-no-error: the base result type
+      const _globalBase: SearchResults = everything;
+      // @ts-expect-error: never silently narrowed to a specific entity
+      const _globalNotNarrowed: Array<SearchResult<Listing>> = everything;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("result unions widen across the parent's searchable relationships and narrow by in", () => {
+    const _test = async (): Promise<void> => {
+      // No in: the union spans every searchable relationship target
+      const widened = await ScopedShop.search("1", "q");
+      // @ts-expect-no-error: exactly the union of both searchable targets
+      const _exact: Array<
+        SearchResult<ScopedProduct> | SearchResult<ScopedNote>
+      > = widened;
+      // @ts-expect-error: NOT assignable to just ScopedProduct — the union is wider
+      const _notJustProducts: Array<SearchResult<ScopedProduct>> = widened;
+      // @ts-expect-error: NOT assignable to just ScopedNote — the union is wider
+      const _notJustNotes: Array<SearchResult<ScopedNote>> = widened;
+
+      // in: narrows the union to the one relationship's target
+      const products = await ScopedShop.search("1", "q", { in: "products" });
+      // @ts-expect-no-error: narrowed to ScopedProduct
+      const _productsExact: Array<SearchResult<ScopedProduct>> = products;
+      // @ts-expect-error: ScopedNote narrowed away
+      const _productsNoNotes: Array<SearchResult<ScopedNote>> = products;
+
+      const notes = await ScopedShop.search("1", "q", { in: "notes" });
+      // @ts-expect-no-error: narrowed to ScopedNote
+      const _notesExact: Array<SearchResult<ScopedNote>> = notes;
+      // @ts-expect-error: ScopedProduct narrowed away
+      const _notesNoProducts: Array<SearchResult<ScopedProduct>> = notes;
     };
 
     expect(_test).toBeDefined();
@@ -1086,9 +1156,9 @@ describe("types", () => {
 
       const results = await store.search("q", { in: "listings" });
       // @ts-expect-no-error: instance search infers the relationship target
-      void results[0]?.entity.category;
-      // @ts-expect-error: body is not on the searched entity
-      void results[0]?.entity.body;
+      const _exact: Array<SearchResult<Listing>> = results;
+      // @ts-expect-error: not the un-narrowed member union
+      const _notWidened: Array<SearchResult<Review>> = results;
     };
 
     expect(_test).toBeDefined();
