@@ -18,6 +18,11 @@ export const entityToTableItem = (
 
   return Object.entries(entityData).reduce<DynamoTableItem>(
     (acc, [key, rawVal]) => {
+      // The content hash is registered so it round-trips hydration, but it
+      // is written only through the canonical write paths — serialized items
+      // (denormalized copies) never carry vector-search bookkeeping
+      if (key === vectorSearchKeys.contentHash) return acc;
+
       if (key in attributesMeta) {
         const attrMeta = attributesMeta[key];
         const { alias, serializers } = attrMeta;

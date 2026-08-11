@@ -5,6 +5,7 @@ import {
 } from "../dynamo-utils/index.js";
 import TransactionBuilder from "../dynamo-utils/TransactWriteBuilder.js";
 import { NotFoundError } from "../errors.js";
+import { vectorSearchKeys } from "../metadata/VectorIndexMetadata.js";
 import Metadata, {
   type TableMetadata,
   type JoinTableMetadata
@@ -232,11 +233,21 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     const { parentEntity, linkedEntity } = entities;
     const { parentId, linkedEntityId } = ids;
 
+    // The prefetched record is a raw canonical row that bypasses entity
+    // serialization, so a searchable entity's vector and content hash must
+    // be stripped here — vector-search bookkeeping lives on canonical rows
+    // only
+    const {
+      [vectorSearchKeys.vector]: _linkedVector,
+      [vectorSearchKeys.contentHash]: _linkedContentHash,
+      ...denormalizedRecord
+    } = linkedRecord;
+
     transactionBuilder.addPut(
       {
         TableName: tableName,
         Item: {
-          ...linkedRecord,
+          ...denormalizedRecord,
           ...this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta)
         },
         ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist

@@ -69,6 +69,21 @@ class TransactionBuilder {
   }
 
   /**
+   * Replaces the tracked condition-failure message for an already-queued
+   * update item, for conditions appended to the item after it was queued
+   * @param item The queued update item, matched by reference
+   * @param errMsg The replacement error message
+   */
+  public overrideConditionFailedMsg(item: Update, errMsg: string): void {
+    const idx = this.#transactionItems.findIndex(
+      transactionItem => transactionItem.Update === item
+    );
+    if (idx !== -1) {
+      this.#errorMessages[idx] = errMsg;
+    }
+  }
+
+  /**
    * Add a delete operation to the transaction
    * @param item
    */

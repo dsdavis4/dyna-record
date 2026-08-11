@@ -13,9 +13,7 @@ import {
   globalSearchIndex,
   storeSearchIndex
 } from "./mockModels.js";
-import { createInstance } from "../../src/utils.js";
 import {
-  type EntityAttributesOnly,
   type SearchResult,
   type SearchResults
 } from "../../src/operations/index.js";
@@ -622,6 +620,40 @@ describe("Search", () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
+    it("rejects prototype-chain filter keys with the same guard as unknown keys", async () => {
+      expect.assertions(3);
+
+      try {
+        await new Search(storeSearchIndex).run("mugs", {
+          scopeId: "123",
+          filter: { constructor: "x" } as unknown as SearchFilter
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          'Invalid search filter key "constructor": attribute "constructor" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("rejects a null filter value with a FilterError rather than a TypeError", async () => {
+      expect.assertions(3);
+
+      try {
+        await new Search(storeSearchIndex).run("mugs", {
+          scopeId: "123",
+          filter: { category: null } as unknown as SearchFilter
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          'Invalid filter value for attribute "category": the value does not match the attribute\'s type'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
     it("rejects the type discriminator as a filter key", async () => {
       expect.assertions(2);
 
@@ -899,22 +931,12 @@ describe("public search surfaces", () => {
     ]);
   });
 
-  it("instance search searches within the instance's own scope", async () => {
+  it("compiles an empty filter to no condition", async () => {
     expect.assertions(1);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    const store = Store.tableItemToEntity({
-      PK: "Store#456",
-      SK: "Store",
-      Id: "456",
-      Type: "Store",
-      Name: "Mock Store",
-      CreatedAt: "2023-10-01T00:00:00.000Z",
-      UpdatedAt: "2023-10-02T00:00:00.000Z"
-    });
-
-    await store.search("mugs", { in: "listings" });
+    await Store.search("123", "mugs", { filter: {} });
 
     expect(mockedSearchVectorsCommand.mock.calls).toEqual([
       [
@@ -923,15 +945,31 @@ describe("public search surfaces", () => {
           IndexName: "store-search-index",
           SearchVector: expectedTitanVector,
           TopK: 10,
-          SearchConditionExpression: "#StoreId = :StoreId AND #Type = :Type",
-          ExpressionAttributeNames: {
-            "#StoreId": "StoreId",
-            "#Type": "Type"
-          },
-          ExpressionAttributeValues: {
-            ":StoreId": "456",
-            ":Type": "Listing"
-          }
+          SearchConditionExpression: "#StoreId = :StoreId",
+          ExpressionAttributeNames: { "#StoreId": "StoreId" },
+          ExpressionAttributeValues: { ":StoreId": "123" }
+        }
+      ]
+    ]);
+  });
+
+  it("treats explicitly-undefined filter values as no condition and omits their attribute names", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    await Store.search("123", "mugs", { filter: { category: undefined } });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#StoreId = :StoreId",
+          ExpressionAttributeNames: { "#StoreId": "StoreId" },
+          ExpressionAttributeValues: { ":StoreId": "123" }
         }
       ]
     ]);
@@ -1043,6 +1081,35 @@ describe("public search surfaces", () => {
     }
     expect(mockSend).not.toHaveBeenCalled();
   });
+
+  it("errors when a global index construct is called with the scoped signature (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      // @ts-expect-error: a global index takes no scope id
+      await globalSearchIndex.search("123", "fresh articles");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Vector index global-search-index is global — it does not take a scope id: search(query, options)"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("errors at runtime when in is a prototype-chain key rather than an own relationship (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      await Store.search("123", "mugs", { in: "constructor" as "listings" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        'Invalid search option in: "constructor" is not a relationship of Store'
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
 });
 
 describe("types", () => {
@@ -1142,35 +1209,6 @@ describe("types", () => {
       const _notesExact: Array<SearchResult<ScopedNote>> = notes;
       // @ts-expect-error: ScopedProduct narrowed away
       const _notesNoProducts: Array<SearchResult<ScopedProduct>> = notes;
-    };
-
-    expect(_test).toBeDefined();
-  });
-
-  it("static and instance surfaces infer identically for class-typed instances", () => {
-    const _test = async (): Promise<void> => {
-      const store = createInstance(
-        Store,
-        {} as EntityAttributesOnly<Store>
-      );
-
-      const results = await store.search("q", { in: "listings" });
-      // @ts-expect-no-error: instance search infers the relationship target
-      const _exact: Array<SearchResult<Listing>> = results;
-      // @ts-expect-error: not the un-narrowed member union
-      const _notWidened: Array<SearchResult<Review>> = results;
-    };
-
-    expect(_test).toBeDefined();
-  });
-
-  it("hydrated instances search through the permissive overload", () => {
-    const _test = async (): Promise<void> => {
-      const store = await Store.findById("1");
-      if (store !== undefined) {
-        // @ts-expect-no-error: hydrated instances are typed without relationship properties; the permissive overload applies
-        await store.search("q", { in: "listings" });
-      }
     };
 
     expect(_test).toBeDefined();

@@ -592,6 +592,24 @@ class MetadataStorage {
         );
       }
 
+      // Writes embed through one index and store the result on the shared
+      // vector attribute, so every index on the table must produce vectors
+      // identically — validated here so the write path's index pick is
+      // correct by construction
+      const [firstIndex] = indexes;
+      for (const index of indexes) {
+        if (
+          index.provider !== firstIndex.provider ||
+          index.model.name !== firstIndex.model.name ||
+          index.model.dimensions !== firstIndex.model.dimensions ||
+          index.model.distanceFunction !== firstIndex.model.distanceFunction
+        ) {
+          throw new Error(
+            `Vector indexes ${firstIndex.name} and ${index.name} on table ${tableClassName} declare different embedding configurations. All vector indexes on a table share the ${vectorSearchKeys.vector} attribute, so they must use the same provider, model, dimensions, and distance function`
+          );
+        }
+      }
+
       for (const index of indexes) {
         this.resolveVectorIndex(index, tableMetadata, searchableEntities);
       }
@@ -792,6 +810,18 @@ class MetadataStorage {
       }
       return scopingFk;
     });
+
+    // The scoped search compiles one HASH equality on one table attribute:
+    // the scope foreign key must resolve to the same alias across every
+    // member (mirrors the @SearchFilterable alias-consistency check)
+    const [firstScopingFk] = memberScopingFks;
+    for (const scopingFk of memberScopingFks) {
+      if (scopingFk.alias !== firstScopingFk.alias) {
+        throw new Error(
+          `The foreign key referencing ${scopeParent.name} resolves to different table aliases (${firstScopingFk.alias}, ${scopingFk.alias}) across members of vector index ${index.name}. The scoped HASH is one table attribute; align the alias across entities`
+        );
+      }
+    }
 
     return { members, hashAlias: memberScopingFks[0]?.alias };
   }

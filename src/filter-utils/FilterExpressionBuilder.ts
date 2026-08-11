@@ -384,7 +384,13 @@ class FilterExpressionBuilder {
    * @returns
    */
   private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
-    return (filter as BeginsWithFilter).$beginsWith !== undefined;
+    // The null check keeps an untyped caller's null condition value on the
+    // equality path, where the value guard rejects it with a FilterError
+    return (
+      typeof filter === "object" &&
+      filter !== null &&
+      (filter as BeginsWithFilter).$beginsWith !== undefined
+    );
   }
 
   /**
@@ -393,7 +399,11 @@ class FilterExpressionBuilder {
    * @returns
    */
   private isContainsFilter(filter: FilterTypes): filter is ContainsFilter {
-    return (filter as ContainsFilter).$contains !== undefined;
+    return (
+      typeof filter === "object" &&
+      filter !== null &&
+      (filter as ContainsFilter).$contains !== undefined
+    );
   }
 
   /**

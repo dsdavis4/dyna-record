@@ -188,9 +188,14 @@ class Search {
 
     if (options?.filter !== undefined) {
       const filterCondition = this.buildFilterCondition(options.filter);
-      terms.push(filterCondition.expression);
-      names = { ...names, ...filterCondition.names };
-      values = { ...values, ...filterCondition.values };
+      // An empty or all-undefined filter compiles to no condition at all —
+      // pushing an empty term (or its names) would send a malformed
+      // expression to DynamoDB
+      if (filterCondition.expression !== "") {
+        terms.push(filterCondition.expression);
+        names = { ...names, ...filterCondition.names };
+        values = { ...values, ...filterCondition.values };
+      }
     }
 
     return { expression: terms.join(" AND "), names, values };
@@ -242,7 +247,7 @@ class Search {
 
     return {
       expression: filterParams.expression,
-      names: builder.expressionAttributeNames([], filter),
+      names: builder.expressionAttributeNames([], definedConditions),
       values: builder.expressionAttributeValues(filterParams.values)
     };
   }

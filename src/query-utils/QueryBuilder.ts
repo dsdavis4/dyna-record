@@ -128,7 +128,7 @@ class QueryBuilder {
     attributeKey: string,
     filterKey: string
   ): FilterAttribute {
-    if (!(attributeKey in this.#attributeMetadata)) {
+    if (!Object.hasOwn(this.#attributeMetadata, attributeKey)) {
       throw new Error(
         `Invalid filter key "${filterKey}": attribute "${attributeKey}" does not exist on this entity. ` +
           `Valid attributes are: ${Object.keys(this.#attributeMetadata).join(", ")}`

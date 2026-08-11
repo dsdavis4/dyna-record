@@ -41,6 +41,7 @@ import {
   BelongsTo,
   Entity,
   ForeignKeyAttribute,
+  HasMany,
   HasOne,
   PartitionKeyAttribute,
   Searchable,
@@ -5340,12 +5341,29 @@ abstract class NoteTable extends DynaRecord {
 }
 
 @Entity
+class Notebook extends NoteTable {
+  declare readonly type: "Notebook";
+
+  @StringAttribute({ alias: "Title" })
+  public readonly title: string;
+
+  @HasMany(() => Note, { foreignKey: "notebookId" })
+  public readonly notes: Note[];
+}
+
+@Entity
 class Note extends NoteTable {
   declare readonly type: "Note";
 
   @Searchable()
   @StringAttribute({ alias: "Body" })
   public readonly body: SearchableText;
+
+  @ForeignKeyAttribute(() => Notebook, { alias: "NotebookId", nullable: true })
+  public readonly notebookId?: NullableForeignKey<Notebook>;
+
+  @BelongsTo(() => Notebook, { foreignKey: "notebookId" })
+  public readonly notebook?: Notebook;
 }
 
 // Small-dimension descriptor so tests can assert exact vector values, with a
@@ -5497,7 +5515,8 @@ describe("Create searchable entities (vector write path)", () => {
             },
             {
               // Denormalized Store in the Listing partition: the raw copy
-              // strips the parent's vector; the registered hash rides along
+              // strips the parent's vector and content hash — copies carry
+              // no vector-search bookkeeping
               Put: {
                 TableName: "search-table",
                 ConditionExpression: "attribute_not_exists(PK)",
@@ -5508,8 +5527,7 @@ describe("Create searchable entities (vector write path)", () => {
                   Type: "Store",
                   Name: "Mock Store",
                   CreatedAt: "2024-01-01T00:00:00.000Z",
-                  UpdatedAt: "2024-01-02T00:00:00.000Z",
-                  __dyna_vector_hash: "parent-content-hash"
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
                 }
               }
             }
@@ -5666,6 +5684,59 @@ describe("Create searchable entities (vector write path)", () => {
       expect(e.cause).toEqual(providerError);
     }
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("does not emit an unhandled rejection when the prefetch fails while the embed is in flight", async () => {
+    expect.assertions(3);
+
+    // Real timers so the runtime gets genuine event-loop turns to surface
+    // any unhandled rejection
+    vi.useRealTimers();
+
+    const unhandledRejections: unknown[] = [];
+    const captureUnhandled = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", captureUnhandled);
+
+    try {
+      mockedGenerateId.mockReturnValueOnce("uuid1");
+
+      // The embed settles only after the create has already rejected through
+      // the failed prefetch — the window the rejection absorber covers
+      let rejectEmbed: (err: Error) => void = () => undefined;
+      mockNoteEmbed.mockImplementationOnce(
+        async () =>
+          await new Promise((_resolve, reject) => {
+            rejectEmbed = reject;
+          })
+      );
+
+      const prefetchError = new Error("prefetch unavailable");
+      mockTransactGetItems.mockRejectedValueOnce(prefetchError);
+
+      try {
+        await Note.create({
+          body: "A searchable note body",
+          notebookId: "notebook-1"
+        });
+      } catch (e: any) {
+        expect(e).toEqual(prefetchError);
+      }
+
+      rejectEmbed(new Error("embed failed after the create already rejected"));
+
+      // Two macrotask turns: one for the rejection to settle, one for the
+      // runtime to report it if it were unhandled
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(unhandledRejections).toEqual([]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactGetCommand" }]]);
+    } finally {
+      process.off("unhandledRejection", captureUnhandled);
+      vi.useFakeTimers();
+    }
   });
 
   it("rejects with an EmbeddingError before any AWS call when the provider returns the wrong dimensions", async () => {

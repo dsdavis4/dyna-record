@@ -530,69 +530,6 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Same as the static `search` method but on an instance, searching within
-   * this instance's own scope.
-   *
-   * Full inference (`in:` narrowing, filter keys, result unions) applies to
-   * class-typed instances. Hydrated results (`findById`, `query`, search)
-   * are typed without relationship properties — the inference channel — so
-   * on those the permissive overload applies and the runtime guards are
-   * authoritative; use the static surface for full inference.
-   *
-   * @param query - The query text to embed, or `{ vector }` with a precomputed vector.
-   * @param options - {@link ParentSearchOptions}
-   * @returns A promise resolving to the typed search results.
-   *
-   * @example
-   * ```typescript
-   * const results = await store.search("hand thrown ceramic mugs", {
-   *   in: "listings"
-   * });
-   * ```
-   */
-  public async search<
-    T extends this,
-    const In extends SearchableRelationshipProperties<T> = never
-  >(
-    this: T &
-      (HasSearchableRelationships<T> extends false
-        ? SearchNotAvailable
-        : unknown),
-    query: SearchQuery,
-    options?: ParentSearchOptions<T, In>
-  ): Promise<InferSearchResults<ParentSearchedEntities<T, In>>>;
-
-  /**
-   * Vector-searches the entities related to this instance, within its own
-   * scope. This signature applies to hydrated instances (`findById`, `query`,
-   * search results), which are typed without relationship properties — the
-   * inference channel — so `in:` is a plain relationship-name string and
-   * results are the base union; the runtime guards are authoritative. Use the
-   * static `search` for full inference.
-   *
-   * @param query - The query text to embed, or `{ vector }` with a precomputed vector.
-   * @param options - Search options: `in`, `filter`, `topK`.
-   * @returns A promise resolving to the search results.
-   */
-  public async search(
-    query: SearchQuery,
-    options?: ParentSearchRuntimeOptions
-  ): Promise<SearchResults>;
-
-  public async search(
-    query: SearchQuery,
-    options?: ParentSearchRuntimeOptions
-  ): Promise<SearchResults> {
-    const InstanceClass = this.constructor as EntityClass<DynaRecord>;
-    return await DynaRecord.runParentSearch(
-      InstanceClass,
-      this.id,
-      query,
-      options
-    );
-  }
-
-  /**
    * Resolves and executes a parent-anchored search: finds the one vector
    * index scoped by the parent class, maps the `in:` relationship property
    * to its target entity, and runs the search scoped to the parent's id
@@ -637,7 +574,7 @@ abstract class DynaRecord implements DynaRecordBase {
     // search runtime narrows by the target's entity name
     let entityName: Optional<string>;
     if (options?.in !== undefined) {
-      if (!(options.in in entityMetadata.relationships)) {
+      if (!Object.hasOwn(entityMetadata.relationships, options.in)) {
         throw new ValidationError(
           `Invalid search option in: "${options.in}" is not a relationship of ${ParentClass.name}`
         );

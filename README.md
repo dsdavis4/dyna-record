@@ -1360,7 +1360,7 @@ Creating or updating a searchable entity embeds the value synchronously through 
 
 Three surfaces, each compiling to exactly one `SearchVectors` operation. Results are ordered most-similar-first; each result carries the complete typed entity (`entity`), a `similarity` (higher is better, converted per the model's distance function — for COSINE, `1 − score`), and the raw AWS `score`.
 
-The **parent surfaces** — static and instance — are available when exactly one index is scoped by the class. Starting from the simplest call and adding one option at a time:
+The **parent surface** (`Parent.search(scopeId, query, options)`) is available when exactly one index is scoped by the class. Starting from the simplest call and adding one option at a time:
 
 ```typescript
 // No options: searches the organization's whole scoped index — Products,
@@ -1397,11 +1397,6 @@ const brandFootwear = await Organization.search("orgId", "hiking boots", {
 const topFifty = await Organization.search("orgId", "hiking boots", {
   topK: 50
 });
-
-// The instance surface runs the identical search when given the same
-// options — the instance supplies only the scope id
-const org = await Organization.findById("orgId");
-const sameResults = await org.search("waterproof hiking boots");
 
 // Every result carries the typed entity, similarity, and raw score;
 // discriminate on entity.type when the search spans multiple entity types

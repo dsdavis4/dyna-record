@@ -281,9 +281,15 @@ class VectorIndexMetadata<
       });
     }
 
-    const options = isSearchQuery(queryOrOptions) ? undefined : queryOrOptions;
+    // Mirror of the scoped guard above: a scoped-shape call on a global
+    // index would otherwise silently embed the scope id as the query text
+    if (isSearchQuery(queryOrOptions) || maybeOptions !== undefined) {
+      throw new ValidationError(
+        `Vector index ${this.name} is global — it does not take a scope id: search(query, options)`
+      );
+    }
 
-    return await new Search(this).run(scopeIdOrQuery, options);
+    return await new Search(this).run(scopeIdOrQuery, queryOrOptions);
   }
 }
 

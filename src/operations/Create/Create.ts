@@ -88,8 +88,11 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     const tableItem = entityToTableItem(this.EntityClass, entityData);
 
     // Start the embedding concurrently with the belongs-to prefetch below so
-    // a searchable write adds no serial round trip
+    // a searchable write adds no serial round trip. The rejection absorber
+    // covers the concurrent window — if the prefetch throws first, the embed
+    // rejection would otherwise be unhandled; the await below still rethrows
     const searchableWritePromise = this.startSearchableEmbed(entityAttrs);
+    void searchableWritePromise?.catch(() => undefined);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(
@@ -423,11 +426,11 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       };
 
       // These items are raw fetched records that bypass entity serialization,
-      // so a searchable parent's vector must be stripped here — the vector
-      // lives on canonical rows only (the registered content hash is harmless
-      // on copies)
+      // so a searchable parent's vector and content hash must be stripped
+      // here — vector-search bookkeeping lives on canonical rows only
       const {
         [vectorSearchKeys.vector]: _parentVector,
+        [vectorSearchKeys.contentHash]: _parentContentHash,
         ...denormalizedItem
       } = tableItem;
 

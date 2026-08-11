@@ -12918,7 +12918,10 @@ describe("Update searchable entities (vector write path)", () => {
       }
     };
 
-    // The stored hash matches, so no provider call and no vector write occur
+    // The stored hash matches, so no provider call and no vector write occur.
+    // The canonical row's condition pins the stored hash the skip was decided
+    // on — a concurrent clear committing in the prefetch-to-commit window
+    // fails the write instead of leaving the row silently unindexed
     expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
@@ -12928,11 +12931,22 @@ describe("Update searchable entities (vector write path)", () => {
               Update: {
                 TableName: "search-table",
                 Key: { PK: "Listing#123", SK: "Listing" },
-                ConditionExpression: "attribute_exists(PK)",
-                ...expression
+                ConditionExpression:
+                  "attribute_exists(PK) AND #__dyna_vector_hash = :__dyna_vector_hash",
+                UpdateExpression: expression.UpdateExpression,
+                ExpressionAttributeNames: {
+                  ...expression.ExpressionAttributeNames,
+                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                },
+                ExpressionAttributeValues: {
+                  ...expression.ExpressionAttributeValues,
+                  ":__dyna_vector_hash": storedContentHash
+                }
               }
             },
             {
+              // The denormalized copy keeps the plain expression — no pin,
+              // no vector clauses
               Update: {
                 TableName: "search-table",
                 Key: { PK: "Store#456", SK: "Listing#123" },
@@ -12944,6 +12958,41 @@ describe("Update searchable entities (vector write path)", () => {
         }
       ]
     ]);
+  });
+
+  it("fails loudly with a retryable error when the pinned stored hash was cleared by a concurrent write", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    // The prefetch query passes through; the transaction is canceled because
+    // the canonical row's pinned hash condition no longer holds — a
+    // concurrent write cleared the searchable value in the window
+    mockSend
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+    try {
+      await Listing.update("123", {
+        description: "The very same description"
+      });
+    } catch (e: any) {
+      expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Listing with ID '123' does not exist or its searchable value was changed by a concurrent write — retry the update"
+        )
+      ]);
+    }
   });
 
   it("will embed a changed searchable value and append the vector write to the canonical row only", async () => {
@@ -13269,8 +13318,9 @@ describe("Update searchable entities (vector write path)", () => {
             },
             {
               // Denormalized Listing in the new Store partition: built from
-              // the serialized entity, so the unregistered vector cannot
-              // appear; the registered hash rides along
+              // the serialized entity, which emits neither the unregistered
+              // vector nor the content hash — copies carry no vector-search
+              // bookkeeping
               Put: {
                 TableName: "search-table",
                 ConditionExpression: "attribute_not_exists(PK)",
@@ -13282,7 +13332,6 @@ describe("Update searchable entities (vector write path)", () => {
                   Description: "The very same description",
                   Category: "Mugs",
                   StoreId: "789",
-                  __dyna_vector_hash: storedContentHash,
                   CreatedAt: "2023-10-01T00:00:00.000Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z"
                 }

@@ -554,7 +554,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         ? entityPreUpdate[vectorSearchKeys.contentHash]
         : undefined;
 
-    if (storedHash === contentHash) return;
+    if (entityPreUpdate !== undefined && storedHash === contentHash) {
+      this.pinContentHashCondition(canonicalUpdate, contentHash, entityPreUpdate.id);
+      return;
+    }
 
     const [index] = Metadata.getVectorIndexes(
       this.entityMetadata.tableClassName
@@ -568,6 +571,51 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
 
     this.appendVectorClauses(canonicalUpdate, searchableWrite);
+  }
+
+  /**
+   * Pins the canonical row's condition to the stored content hash the embed
+   * skip was decided on. The skip reads the hash through the prefetch; a
+   * concurrent clear committing between the prefetch and this transaction
+   * would otherwise leave the row with searchable text but no vector — a
+   * state no serial ordering of the two updates can produce, and one that
+   * silently drops the row from the vector index. The pinned condition fails
+   * this write loudly instead; a retry re-reads, finds no stored hash, and
+   * embeds.
+   *
+   * @param canonicalUpdate - The canonical row's queued update item.
+   * @param expectedHash - The stored hash the skip decision was made against.
+   * @param id - The entity id, for the condition failure message.
+   * @private
+   */
+  private pinContentHashCondition(
+    canonicalUpdate: CanonicalUpdateItem,
+    expectedHash: string,
+    id: string
+  ): void {
+    const hashName = `#${vectorSearchKeys.contentHash}`;
+    const hashValue = `:${vectorSearchKeys.contentHash}`;
+
+    // Fresh copies: the queued item's expression attribute maps are shared
+    // by reference with the expression the denormalized sinks spread (see
+    // appendVectorClauses)
+    canonicalUpdate.ExpressionAttributeNames = {
+      ...canonicalUpdate.ExpressionAttributeNames,
+      [hashName]: vectorSearchKeys.contentHash
+    };
+    canonicalUpdate.ExpressionAttributeValues = {
+      ...canonicalUpdate.ExpressionAttributeValues,
+      [hashValue]: expectedHash
+    };
+    canonicalUpdate.ConditionExpression =
+      canonicalUpdate.ConditionExpression === undefined
+        ? `${hashName} = ${hashValue}`
+        : `${canonicalUpdate.ConditionExpression} AND ${hashName} = ${hashValue}`;
+
+    this.transactionBuilder.overrideConditionFailedMsg(
+      canonicalUpdate,
+      `${this.EntityClass.name} with ID '${id}' does not exist or its searchable value was changed by a concurrent write — retry the update`
+    );
   }
 
   /**

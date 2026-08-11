@@ -1155,6 +1155,139 @@ describe("VectorIndex", () => {
         "Table FreshTable defines 6 vector indexes. DynamoDB supports at most 5 vector indexes per table"
       );
     });
+
+    it("rejects a scoped index whose members store the scope foreign key under different aliases", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        ForeignKeyAttribute,
+        HasMany,
+        BelongsTo,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Shop extends FreshTable {
+        declare readonly type: "Shop";
+
+        @HasMany(() => Product, { foreignKey: "shopId" })
+        public readonly products: Product[];
+
+        @HasMany(() => Coupon, { foreignKey: "shopId" })
+        public readonly coupons: Coupon[];
+      }
+
+      @Entity
+      class Product extends FreshTable {
+        declare readonly type: "Product";
+
+        @Searchable()
+        @StringAttribute({ alias: "Description" })
+        public readonly description: SearchableText;
+
+        @ForeignKeyAttribute(() => Shop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<Shop>;
+
+        @BelongsTo(() => Shop, { foreignKey: "shopId" })
+        public readonly shop: Shop;
+      }
+
+      // The scoping foreign key resolves to a different table alias than
+      // Product's — the scoped HASH cannot be one table attribute
+      @Entity
+      class Coupon extends FreshTable {
+        declare readonly type: "Coupon";
+
+        @Searchable()
+        @StringAttribute({ alias: "Blurb" })
+        public readonly blurb: SearchableText;
+
+        @ForeignKeyAttribute(() => Shop, { alias: "OwnerShopId" })
+        public readonly shopId: ForeignKey<Shop>;
+
+        @BelongsTo(() => Shop, { foreignKey: "shopId" })
+        public readonly shop: Shop;
+      }
+
+      FreshTable.vectorIndex({
+        name: "fresh-index",
+        model: TitanTextEmbedV2,
+        provider: testProvider,
+        scopedBy: () => Shop
+      });
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "The foreign key referencing Shop resolves to different table aliases (OwnerShopId, ShopId) across members of vector index fresh-index. The scoped HASH is one table attribute; align the alias across entities"
+      );
+    });
+
+    it("rejects a table whose vector indexes declare different embedding configurations", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Doc extends FreshTable {
+        declare readonly type: "Doc";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      FreshTable.vectorIndex({
+        name: "fresh-index-one",
+        model: TitanTextEmbedV2,
+        provider: testProvider
+      });
+
+      // Same table, different model — writes embed once onto the shared
+      // vector attribute, so the configurations must agree
+      FreshTable.vectorIndex({
+        name: "fresh-index-two",
+        model: {
+          name: "other-model",
+          dimensions: 256,
+          distanceFunction: "EUCLIDEAN",
+          scoreToSimilarity: score => score
+        },
+        provider: testProvider
+      });
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "Vector indexes fresh-index-one and fresh-index-two on table FreshTable declare different embedding configurations. All vector indexes on a table share the __dyna_vector attribute, so they must use the same provider, model, dimensions, and distance function"
+      );
+    });
   });
 
   describe("initialization timing", () => {

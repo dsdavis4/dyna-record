@@ -88,7 +88,7 @@ export function searchFilterAttributeResolver(
 
     const attributes = getFilterableAttributes();
 
-    if (!(attributeKey in attributes)) {
+    if (!Object.hasOwn(attributes, attributeKey)) {
       throw new FilterError(
         `Invalid search filter key "${filterKey}": attribute "${attributeKey}" is not declared @SearchFilterable on the members of vector index ${index.name}. Filterable attributes are: ${Object.keys(attributes).join(", ")}`
       );
