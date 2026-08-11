@@ -60,18 +60,18 @@ class EntityMetadata {
   public readonly EntityClass: EntityClass;
 
   /**
-   * Optional attribute of an entity, used with @IdAttribute decorator when an entity has a custom id field
+   * Optional attribute of an entity, used with the `IdAttribute` decorator when an entity has a custom id field
    */
   public idField?: string;
 
   /**
-   * Attribute metadata for the entity's @Searchable attribute, when one is declared.
+   * Attribute metadata for the entity's `Searchable` attribute, when one is declared.
    * Reconciled from the searchable mark at metadata initialization
    */
   public searchableAttribute?: AttributeMetadata;
 
   /**
-   * Attribute metadata for the entity's @SearchFilterable attributes.
+   * Attribute metadata for the entity's `SearchFilterable` attributes.
    * Reconciled from the filterable marks at metadata initialization
    */
   public readonly searchFilterableAttributes: AttributeMetadata[];

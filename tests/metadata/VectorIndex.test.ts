@@ -1180,6 +1180,55 @@ describe("VectorIndex", () => {
       );
     });
 
+    it("rejects a scoped index whose scopedBy resolves to an unregistered class", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      // Never passed through @Entity — a plausible authoring mistake for the
+      // scopedBy thunk (plain class, typo'd reference, missing decorator)
+      class UndecoratedParent extends FreshTable {
+        declare readonly type: "UndecoratedParent";
+      }
+
+      @Entity
+      class Doc extends FreshTable {
+        declare readonly type: "Doc";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+      void Doc;
+
+      FreshTable.vectorIndex({
+        name: "fresh-index",
+        model: TitanTextEmbedV2,
+        provider: testProvider,
+        scopedBy: () => UndecoratedParent
+      });
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "Vector index fresh-index is scoped by UndecoratedParent, which is not a registered entity"
+      );
+    });
+
     it("rejects a table whose vector indexes declare different embedding configurations", async () => {
       const {
         default: DynaRecord,

@@ -12785,6 +12785,12 @@ class SearchParent extends SearchParentTable {
   @StringAttribute({ alias: "Description" })
   public readonly description: SearchableText;
 
+  // Independently nullable non-searchable attribute: nulling it alongside a
+  // searchable change exercises the vector SET merge into an expression that
+  // already carries a REMOVE clause
+  @StringAttribute({ alias: "Notes", nullable: true })
+  public readonly notes?: string;
+
   @HasMany(() => SearchChild, { foreignKey: "parentId" })
   public readonly children: SearchChild[];
 }
@@ -13282,6 +13288,89 @@ describe("Update searchable entities (vector write path)", () => {
                   "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will merge the vector SET clause into an expression that already carries a REMOVE clause", async () => {
+    expect.assertions(2);
+
+    const parent = {
+      PK: "SearchParent#p1",
+      SK: "SearchParent",
+      Id: "p1",
+      Type: "SearchParent",
+      Description: "Old description",
+      Notes: "to be removed",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+    const childCopy = {
+      PK: "SearchParent#p1",
+      SK: "SearchChild#c1",
+      Id: "c1",
+      Type: "SearchChild",
+      ParentId: "p1",
+      CreatedAt: "2023-10-03T00:00:00.000Z",
+      UpdatedAt: "2023-10-04T00:00:00.000Z"
+    };
+
+    mockQuery.mockResolvedValueOnce({ Items: [parent, childCopy] });
+
+    // Changing the searchable value while nulling another attribute in the
+    // same call: the shared expression already ends in a REMOVE clause, so
+    // the vector SET must splice in ahead of it on the canonical row only
+    await SearchParent.update("p1", {
+      description: "Updated parent description",
+      notes: null
+    });
+
+    expect(mockEmbeddingProviderCalls).toEqual(["Updated parent description"]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchParent#p1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #Notes",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#Notes": "Notes",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The copy keeps the SET + REMOVE expression with no vector
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchChild#c1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt REMOVE #Notes",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#Notes": "Notes",
                   "#UpdatedAt": "UpdatedAt"
                 },
                 ExpressionAttributeValues: {

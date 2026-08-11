@@ -695,6 +695,53 @@ describe("Search", () => {
     );
   });
 
+  describe("malformed SearchVectors responses are rejected with clear errors", () => {
+    it("rejects a result missing Item or Score", async () => {
+      expect.assertions(2);
+
+      mockSearchVectors.mockResolvedValueOnce({
+        SearchResults: [{ Score: 0.2 }]
+      });
+
+      try {
+        await new Search(globalSearchIndex).run("articles");
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(Error);
+        expect(e.message).toEqual(
+          "Malformed search result. Missing item or score"
+        );
+      }
+    });
+
+    it("rejects an item whose entity type discriminator is missing or not a string", async () => {
+      expect.assertions(2);
+
+      mockSearchVectors.mockResolvedValueOnce({
+        SearchResults: [
+          {
+            Item: {
+              PK: "Article#1",
+              SK: "Article",
+              Id: "1",
+              Type: 123, // non-string discriminator
+              Title: "T"
+            },
+            Score: 0.2
+          }
+        ]
+      });
+
+      try {
+        await new Search(globalSearchIndex).run("articles");
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(Error);
+        expect(e.message).toEqual(
+          "Malformed data. Unable to infer entity type"
+        );
+      }
+    });
+  });
+
   describe("ordinary reads exclude the vector through the union-of-aliases projection", () => {
     const expectedProjectionNames = {
       "#Body": "Body",
@@ -1216,8 +1263,8 @@ describe("types", () => {
       // @ts-expect-error: description is searchable, not filterable
       await Store.search("1", "q", { filter: { description: "x" } });
 
-      // @ts-expect-error: operator objects are not searchable filters
       await Store.search("1", "q", {
+        // @ts-expect-error: operator objects are not searchable filters
         filter: { category: { $beginsWith: "M" } }
       });
 
