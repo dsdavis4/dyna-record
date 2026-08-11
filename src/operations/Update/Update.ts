@@ -598,7 +598,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     };
 
     const expression = canonicalUpdate.UpdateExpression ?? "";
-    const removeIdx = expression.indexOf("REMOVE ");
+    // The REMOVE keyword is always followed by a #-aliased name and preceded
+    // by the start or a space — an attribute aliased "REMOVE" appears as
+    // "#REMOVE =" or ":REMOVE" and never matches
+    const removeMatch = /(?:^| )REMOVE #/.exec(expression);
+    const removeIdx =
+      removeMatch === null
+        ? -1
+        : removeMatch.index + (removeMatch[0].startsWith(" ") ? 1 : 0);
     const setPart = (
       removeIdx === -1 ? expression : expression.slice(0, removeIdx)
     ).trim();

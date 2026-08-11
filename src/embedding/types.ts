@@ -9,10 +9,14 @@
  * consumed by index definitions, validations, and typing.
  */
 
+import type { VectorDistanceFunction } from "@aws-sdk/client-dynamodb";
+
 /**
- * A distance function supported by DynamoDB vector indexes.
+ * A distance function supported by DynamoDB vector indexes. Re-exported from
+ * the AWS SDK so the accepted values track the service definition instead of
+ * a hand-maintained duplicate.
  */
-export type VectorDistanceFunction = "COSINE" | "EUCLIDEAN" | "DOT_PRODUCT";
+export type { VectorDistanceFunction };
 
 /**
  * An embed function supplied by the consumer on a vector index definition.

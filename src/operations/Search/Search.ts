@@ -243,13 +243,7 @@ class Search {
     return {
       expression: filterParams.expression,
       names: builder.expressionAttributeNames([], filter),
-      values: Object.entries(filterParams.values).reduce<
-        Record<string, NativeAttributeValue>
-      >(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
-        (acc, [placeholder, value]) => ({ ...acc, [`:${placeholder}`]: value }),
-        {}
-      )
+      values: builder.expressionAttributeValues(filterParams.values)
     };
   }
 

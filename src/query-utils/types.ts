@@ -9,10 +9,7 @@ import type {
 // in filter-utils. Re-exported here so query consumers keep a single import
 // site for query building types
 export type {
-  AndFilter,
-  AndOrFilter,
   BeginsWithFilter,
-  ContainsFilter,
   FilterExpression,
   FilterParams,
   FilterTypes,

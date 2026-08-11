@@ -299,10 +299,7 @@ class MetadataStorage {
     entityName: string,
     attributeName: string
   ): void {
-    const marks = (this.#searchableAttributes[entityName] ??= []);
-    if (!marks.includes(attributeName)) {
-      marks.push(attributeName);
-    }
+    this.addAttributeMark(this.#searchableAttributes, entityName, attributeName);
   }
 
   /**
@@ -316,7 +313,22 @@ class MetadataStorage {
     entityName: string,
     attributeName: string
   ): void {
-    const marks = (this.#filterableAttributes[entityName] ??= []);
+    this.addAttributeMark(this.#filterableAttributes, entityName, attributeName);
+  }
+
+  /**
+   * Records a decorator mark in a side registry, deduplicating repeat
+   * applications
+   * @param registry - The side registry to record into
+   * @param entityName - Name of the entity the mark applies to
+   * @param attributeName - Name of the marked attribute
+   */
+  private addAttributeMark(
+    registry: Record<string, string[]>,
+    entityName: string,
+    attributeName: string
+  ): void {
+    const marks = (registry[entityName] ??= []);
     if (!marks.includes(attributeName)) {
       marks.push(attributeName);
     }
@@ -454,9 +466,10 @@ class MetadataStorage {
 
       const [attributeName] = marks;
       if (
-        !(attributeName in entityMetadata.attributes) ||
-        !SEARCHABLE_ATTRIBUTE_KINDS.includes(
-          entityMetadata.attributes[attributeName].kind
+        !this.isMarkedAttributeValid(
+          entityMetadata,
+          attributeName,
+          SEARCHABLE_ATTRIBUTE_KINDS
         )
       ) {
         throw new Error(
@@ -482,9 +495,10 @@ class MetadataStorage {
 
       for (const attributeName of marks) {
         if (
-          !(attributeName in entityMetadata.attributes) ||
-          !FILTERABLE_ATTRIBUTE_KINDS.includes(
-            entityMetadata.attributes[attributeName].kind
+          !this.isMarkedAttributeValid(
+            entityMetadata,
+            attributeName,
+            FILTERABLE_ATTRIBUTE_KINDS
           )
         ) {
           throw new Error(
@@ -496,6 +510,25 @@ class MetadataStorage {
         );
       }
     }
+  }
+
+  /**
+   * Whether a decorator mark resolves to a registered attribute of an
+   * allowed kind
+   * @param entityMetadata - Metadata of the marked entity
+   * @param attributeName - Name of the marked attribute
+   * @param allowedKinds - The attribute kinds the mark's decorator allows
+   * @returns Whether the mark is valid
+   */
+  private isMarkedAttributeValid(
+    entityMetadata: EntityMetadata,
+    attributeName: string,
+    allowedKinds: AttributeKind[]
+  ): boolean {
+    return (
+      attributeName in entityMetadata.attributes &&
+      allowedKinds.includes(entityMetadata.attributes[attributeName].kind)
+    );
   }
 
   /**

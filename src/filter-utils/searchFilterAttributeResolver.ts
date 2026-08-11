@@ -20,15 +20,25 @@ import type { FilterAttribute, FilterAttributeResolver } from "./types.js";
  * @param index - Metadata of the vector index being searched
  * @returns The index-member {@link FilterAttributeResolver}
  */
+/**
+ * Filterable-attribute maps cached per index. The map is invariant once
+ * metadata initialization has resolved the index's members, and searches
+ * construct a fresh resolver per call — without the cache every filtered
+ * search would rebuild it
+ */
+const filterableAttributesByIndex = new WeakMap<
+  VectorIndexSchema,
+  Record<string, FilterAttribute>
+>();
+
 export function searchFilterAttributeResolver(
   index: VectorIndexSchema
 ): FilterAttributeResolver {
-  let filterableAttributes: Record<string, FilterAttribute> | undefined;
-
   // Built lazily so resolvers can be created before metadata initialization
   // has resolved the index's member entities
   const getFilterableAttributes = (): Record<string, FilterAttribute> => {
-    if (filterableAttributes !== undefined) return filterableAttributes;
+    const cached = filterableAttributesByIndex.get(index);
+    if (cached !== undefined) return cached;
 
     // The index's member entities are resolved during metadata
     // initialization, which is lazy — looking up the index's table triggers
@@ -49,7 +59,7 @@ export function searchFilterAttributeResolver(
       }
     }
 
-    filterableAttributes = Object.entries(typesByProperty).reduce<
+    const filterableAttributes = Object.entries(typesByProperty).reduce<
       Record<string, FilterAttribute>
     >((acc, [name, { alias, types }]) => {
       const [firstType, ...otherTypes] = types;
@@ -65,6 +75,7 @@ export function searchFilterAttributeResolver(
       };
     }, {});
 
+    filterableAttributesByIndex.set(index, filterableAttributes);
     return filterableAttributes;
   };
 

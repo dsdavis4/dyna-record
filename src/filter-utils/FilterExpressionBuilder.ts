@@ -164,6 +164,25 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Maps a compiled filter's value placeholders to `ExpressionAttributeValues`
+   * entries by prefixing each placeholder with `:`
+   * @param values - The compiled {@link FilterExpression} values
+   * @returns The `ExpressionAttributeValues` map
+   */
+  public expressionAttributeValues(
+    values: FilterExpression["values"]
+  ): FilterExpression["values"] {
+    return Object.entries(values).reduce<FilterExpression["values"]>(
+      (params, [placeholder, value]) => ({
+        ...params,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
+        [`:${placeholder}`]: value
+      }),
+      {}
+    );
+  }
+
+  /**
    * Creates an AND OR filter
    * @param filter
    * @returns

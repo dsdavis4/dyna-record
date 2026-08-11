@@ -25,6 +25,15 @@ const dynamo = DynamoDBDocumentClient.from(
 );
 
 /**
+ * Returns the log placeholder for a redacted vector, carrying only its
+ * dimension count
+ * @param dimensions - The vector's dimension count
+ * @returns The placeholder string
+ */
+const vectorPlaceholder = (dimensions: number): string =>
+  `[vector:${String(dimensions)}]`;
+
+/**
  * Returns a copy of transact write params safe for logging: vector embedding
  * values riding in Put items or Update expression values are replaced with a
  * placeholder carrying the dimension count. Embeddings reconstruct their
@@ -58,7 +67,7 @@ const redactVectorWrites = (
             ...transactItem.Put,
             Item: {
               ...transactItem.Put.Item,
-              [vectorSearchKeys.vector]: `[vector:${String(putVector.length)}]`
+              [vectorSearchKeys.vector]: vectorPlaceholder(putVector.length)
             }
           }
         };
@@ -73,7 +82,7 @@ const redactVectorWrites = (
             ...transactItem.Update,
             ExpressionAttributeValues: {
               ...transactItem.Update.ExpressionAttributeValues,
-              [vectorValueKey]: `[vector:${String(updateVector.length)}]`
+              [vectorValueKey]: vectorPlaceholder(updateVector.length)
             }
           }
         };
@@ -189,7 +198,7 @@ class DynamoClient {
     Logger.log("searchVectors", {
       params: {
         ...params,
-        SearchVector: `[vector:${String(params.SearchVector?.length ?? 0)}]`
+        SearchVector: vectorPlaceholder(params.SearchVector?.length ?? 0)
       }
     });
     const response = await dynamo.send(new SearchVectorsCommand(params));

@@ -114,11 +114,7 @@ class QueryBuilder {
       ? { ...keyParams.values, ...filterParams?.values }
       : keyParams.values;
 
-    return Object.entries(valueParams).reduce<Record<string, unknown>>(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
-      (params, [attrName, value]) => ({ ...params, [`:${attrName}`]: value }),
-      {}
-    );
+    return this.#expressionBuilder.expressionAttributeValues(valueParams);
   }
 
   /**
