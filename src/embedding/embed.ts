@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { EmbeddingError } from "../errors.js";
 import type { VectorIndexSchema } from "../metadata/VectorIndexMetadata.js";
 import type { Optional } from "../types.js";
@@ -11,25 +10,6 @@ import type { Optional } from "../types.js";
  * truncated vector matches its full-precision twin at distance 0)
  */
 const EMBEDDING_SIGNIFICANT_DIGITS = 7;
-
-/**
- * The vector and content hash produced for a searchable attribute's value,
- * ready to be written to the canonical row
- */
-export interface SearchableWriteAttributes {
-  vector: number[];
-  contentHash: string;
-}
-
-/**
- * Returns the sha256 content hash of a searchable attribute's value. Stored
- * on the canonical row so an update carrying an unchanged value skips the
- * embedding call and the vector write
- * @param text - The searchable attribute's value
- * @returns The sha256 hex digest of the value
- */
-export const computeContentHash = (text: string): string =>
-  createHash("sha256").update(text).digest("hex");
 
 /**
  * Truncates each embedding value to {@link EMBEDDING_SIGNIFICANT_DIGITS}
@@ -87,26 +67,22 @@ const embedText = async (
 
 /**
  * Embeds a searchable attribute's value through the vector index's configured
- * embedding provider and returns the truncated vector with the value's
- * content hash.
+ * embedding provider and returns the truncated vector.
  * @param text - The searchable attribute's value to embed
  * @param index - The vector index whose provider and model descriptor to use
  * @param entityName - Name of the entity being written
  * @param attributeName - Name of the searchable attribute
- * @returns The truncated embedding vector and the value's content hash
+ * @returns The truncated embedding vector
  */
 export const embedSearchableValue = async (
   text: string,
   index: Optional<VectorIndexSchema>,
   entityName: string,
   attributeName: string
-): Promise<SearchableWriteAttributes> => {
+): Promise<number[]> => {
   const vector = await embedText(text, index, `${entityName}.${attributeName}`);
 
-  return {
-    vector: truncateVector(vector),
-    contentHash: computeContentHash(text)
-  };
+  return truncateVector(vector);
 };
 
 /**

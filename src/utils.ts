@@ -1,7 +1,6 @@
 import type DynaRecord from "./DynaRecord.js";
 import type { DynamoTableItem, Nullable } from "./types.js";
 import Metadata from "./metadata/index.js";
-import { vectorSearchKeys } from "./metadata/VectorIndexMetadata.js";
 import { type EntityAttributesOnly } from "./operations/index.js";
 
 /**
@@ -18,11 +17,6 @@ export const entityToTableItem = (
 
   return Object.entries(entityData).reduce<DynamoTableItem>(
     (acc, [key, rawVal]) => {
-      // The content hash is registered so it round-trips hydration, but it
-      // is written only through the canonical write paths — serialized items
-      // (denormalized copies) never carry vector-search bookkeeping
-      if (key === vectorSearchKeys.contentHash) return acc;
-
       if (key in attributesMeta) {
         const attrMeta = attributesMeta[key];
         const { alias, serializers } = attrMeta;
@@ -59,20 +53,14 @@ export const tableItemToEntity = <T extends DynaRecord>(
       const attrMeta = tableAttributes[attrName];
       const { name: entityKey, serializers } = attrMeta;
 
-      // The library-managed content hash is registered attribute metadata but
-      // has no declared class field, so the declared-key guard alone would
-      // drop it. It must round-trip so updates can skip re-embedding an
-      // unchanged searchable value
-      const isContentHash = entityKey === vectorSearchKeys.contentHash;
-
-      if (isKeyOfEntity(entity, entityKey) || isContentHash) {
+      if (isKeyOfEntity(entity, entityKey)) {
         const rawVal: unknown = tableItem[attrName];
         const val =
           serializers?.toEntityAttribute === undefined
             ? rawVal
             : serializers.toEntityAttribute(rawVal);
 
-        safeAssign(entity, entityKey as keyof DynaRecord, val);
+        safeAssign(entity, entityKey, val);
       }
     }
   });

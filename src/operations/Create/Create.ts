@@ -22,10 +22,7 @@ import { isBelongsToRelationship } from "../../metadata/utils.js";
 import type { BelongsToOrOwnedByRelationship } from "../../metadata/index.js";
 import Metadata from "../../metadata/index.js";
 import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
-import {
-  embedSearchableValue,
-  type SearchableWriteAttributes
-} from "../../embedding/embed.js";
+import { embedSearchableValue } from "../../embedding/embed.js";
 import type { Optional } from "../../types.js";
 
 /**
@@ -116,13 +113,12 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       );
     }
 
-    // Patch the vector and content hash onto the canonical Put item only. The
-    // belongs-to link records above spread copies of tableItem before this
-    // patch, so denormalized copies never carry the vector
-    const searchableWrite = await searchableWritePromise;
-    if (searchableWrite !== undefined) {
-      tableItem[vectorSearchKeys.vector] = searchableWrite.vector;
-      tableItem[vectorSearchKeys.contentHash] = searchableWrite.contentHash;
+    // Patch the vector onto the canonical Put item only. The belongs-to link
+    // records above spread copies of tableItem before this patch, so
+    // denormalized copies never carry the vector
+    const searchableVector = await searchableWritePromise;
+    if (searchableVector !== undefined) {
+      tableItem[vectorSearchKeys.vector] = searchableVector;
     }
 
     await this.#transactionBuilder.executeTransaction();
@@ -137,12 +133,12 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    * attribute is not indexed, so there is nothing to embed (and the provider
    * is never called with empty text).
    * @param entityAttrs - The parsed entity attributes being created.
-   * @returns A promise of the vector and content hash, or undefined when no embedding applies.
+   * @returns A promise of the truncated vector, or undefined when no embedding applies.
    * @private
    */
   private startSearchableEmbed(
     entityAttrs: EntityDefinedAttributes<DynaRecord>
-  ): Optional<Promise<SearchableWriteAttributes>> {
+  ): Optional<Promise<number[]>> {
     const searchableMeta = this.entityMetadata.searchableAttribute;
     if (searchableMeta === undefined) return undefined;
 
@@ -426,11 +422,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       };
 
       // These items are raw fetched records that bypass entity serialization,
-      // so a searchable parent's vector and content hash must be stripped
-      // here — vector-search bookkeeping lives on canonical rows only
+      // so a searchable parent's vector must be stripped here — the vector
+      // lives on canonical rows only
       const {
         [vectorSearchKeys.vector]: _parentVector,
-        [vectorSearchKeys.contentHash]: _parentContentHash,
         ...denormalizedItem
       } = tableItem;
 

@@ -223,8 +223,7 @@ describe("DynamoClient", () => {
                 PK: "Listing#123",
                 SK: "Listing",
                 Description: "A listing",
-                __dyna_vector: [0.111, 0.222, 0.333],
-                __dyna_vector_hash: "abc123"
+                __dyna_vector: [0.111, 0.222, 0.333]
               }
             }
           },
@@ -250,8 +249,7 @@ describe("DynamoClient", () => {
                   PK: "Listing#123",
                   SK: "Listing",
                   Description: "A listing",
-                  __dyna_vector: "[vector:3]",
-                  __dyna_vector_hash: "abc123"
+                  __dyna_vector: "[vector:3]"
                 }
               }
             },

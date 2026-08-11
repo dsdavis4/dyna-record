@@ -130,9 +130,8 @@ class TableMetadata {
     this.reservedKeys = Object.fromEntries(
       defaultAttrNames.map(key => [key, true])
     );
-    // The library-managed vector search attributes are reserved on every table
+    // The library-managed vector attribute is reserved on every table
     this.reservedKeys[vectorSearchKeys.vector] = true;
-    this.reservedKeys[vectorSearchKeys.contentHash] = true;
   }
 
   /**

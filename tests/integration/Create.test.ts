@@ -5417,8 +5417,7 @@ describe("Create searchable entities (vector write path)", () => {
       Name: "Mock Store",
       CreatedAt: "2024-01-01T00:00:00.000Z",
       UpdatedAt: "2024-01-02T00:00:00.000Z",
-      __dyna_vector: [0.5, 0.5],
-      __dyna_vector_hash: "parent-content-hash"
+      __dyna_vector: [0.5, 0.5]
     };
 
     mockTransactGetItems.mockResolvedValueOnce({
@@ -5451,8 +5450,6 @@ describe("Create searchable entities (vector write path)", () => {
       storeId: "123",
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z"),
-      __dyna_vector_hash:
-        "e32555cacfdcdc656814296b39494465c8f02b4de64cef9d689c7b4563867c62"
     });
     expect(mockEmbeddingProviderCalls).toEqual(["Hand thrown ceramic mug"]);
     expect(mockSend.mock.calls).toEqual([
@@ -5487,8 +5484,6 @@ describe("Create searchable entities (vector write path)", () => {
                   SK: "Listing",
                   ...listingAttributes,
                   __dyna_vector: expectedTitanVector,
-                  __dyna_vector_hash:
-                    "e32555cacfdcdc656814296b39494465c8f02b4de64cef9d689c7b4563867c62"
                 }
               }
             },
@@ -5556,8 +5551,6 @@ describe("Create searchable entities (vector write path)", () => {
       content: "Fresh article content",
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z"),
-      __dyna_vector_hash:
-        "71fb3d7b167639ba1808010667eaceab2d4503ad68f8e60dda97446efc8ef284"
     });
     expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
@@ -5579,8 +5572,6 @@ describe("Create searchable entities (vector write path)", () => {
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
                   __dyna_vector: expectedTitanVector,
-                  __dyna_vector_hash:
-                    "71fb3d7b167639ba1808010667eaceab2d4503ad68f8e60dda97446efc8ef284"
                 }
               }
             }
@@ -5785,8 +5776,6 @@ describe("Create searchable entities (vector write path)", () => {
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
                   __dyna_vector: [0.1234568, 1234568, 0.00001234568],
-                  __dyna_vector_hash:
-                    "328f38050b93328277a9ef87300a65ca618e5d47d0a876452dbfb2cf7be373f3"
                 }
               }
             }

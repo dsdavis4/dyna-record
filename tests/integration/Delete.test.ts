@@ -1758,8 +1758,7 @@ describe("Delete searchable entities (vector write path)", () => {
       ...listingStoreLink,
       PK: "DeletableListing#456",
       SK: "DeletableListing",
-      __dyna_vector: [0.1, 0.2],
-      __dyna_vector_hash: "stored-content-hash"
+      __dyna_vector: [0.1, 0.2]
     };
     mockQuery.mockResolvedValueOnce({ Items: [listing] });
 

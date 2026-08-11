@@ -1349,11 +1349,12 @@ export const globalSearchIndex = MyTable.vectorIndex({
 
 ### How writes embed
 
-Creating or updating a searchable entity embeds the value synchronously through your provider and writes the vector and a content hash onto the entity's canonical row inside the operation's single transaction — there is no second write, no eventual-consistency pipeline, and rows are searchable sub-second after the write acknowledges. Denormalized relationship copies never carry the vector.
+Creating or updating a searchable entity embeds the value synchronously through your provider and writes the vector onto the entity's canonical row inside the operation's single transaction — there is no second write, no eventual-consistency pipeline, and rows are searchable sub-second after the write acknowledges. Denormalized relationship copies never carry the vector.
 
 - **Failure semantics:** if the provider rejects or returns the wrong dimensions, the whole write fails with `EmbeddingError` (the provider error on `cause`) — no row is ever written searchable-but-not-embedded. Error messages carry entity, attribute, model, and dimension identities only, never your text.
-- **Unchanged values skip embedding:** updates compare the stored content hash and skip the provider call and the vector write when the searchable value is unchanged. Exception: entities with no relationships have no pre-update fetch to supply the stored hash, so an update carrying the searchable attribute embeds unconditionally rather than forcing a new read.
-- **Clearing:** setting a nullable searchable attribute to `null` (or `""`) removes the vector and hash — the row leaves the index. Empty text never reaches your provider.
+- **Unchanged values skip embedding:** updates compare the incoming searchable value against the stored one (read through the pre-update fetch) and skip the provider call and the vector write when it is unchanged. Exception: entities with no relationships have no pre-update fetch to supply the stored value, so an update carrying the searchable attribute embeds unconditionally rather than forcing a new read.
+- **`forceEmbed` overrides the skip:** `update(id, { description }, { forceEmbed: true })` embeds even when the value appears unchanged. This is the affordance for indexing rows that predate searchability — loop a backfill over existing entities re-saving their own values — and for re-embedding a table after switching embedding models.
+- **Clearing:** setting a nullable searchable attribute to `null` (or `""`) removes the vector — the row leaves the index. Empty text never reaches your provider.
 - **Latency:** the provider call bounds write latency. Measured against Bedrock Titan V2: ~320 ms p50 / ~400 ms p90 per embed — roughly 7× the DynamoDB write it accompanies. The embed runs concurrently with the operation's existing reads where possible.
 
 ### Searching
@@ -1517,7 +1518,7 @@ Notes on the contract:
 
 Vector search changes the write and read economics of searchable rows — dyna-record's design choices here exist to manage that, so it's worth understanding what they can and cannot save you:
 
-- **Vector writes dominate, and the hash skip is the mitigation.** DynamoDB bills a full vector write (`max(1024, 4 × dimensions)` bytes — 4 KB at Titan's 1024 dimensions) on every material write to a vector-bearing row, even updates that don't touch the searchable attribute. dyna-record's stored content hash avoids the *embedding call* on unchanged values; the vector write billing on other updates is inherent to keeping the vector on the row.
+- **Vector writes dominate, and the unchanged-value skip is the mitigation.** DynamoDB bills a full vector write (`max(1024, 4 × dimensions)` bytes — 4 KB at Titan's 1024 dimensions) on every material write to a vector-bearing row, even updates that don't touch the searchable attribute. dyna-record's unchanged-value comparison avoids the *embedding call* on unchanged values; the vector write billing on other updates is inherent to keeping the vector on the row.
 - **dyna-record truncates embeddings to 7 significant digits** (float32 precision — verified zero effect on search results). This roughly halves the searchable row's storage and ordinary write-capacity footprint. It does **not** reduce vector billing — no precision trick does.
 - **Searchable rows are permanently larger, and reads bill on full item size.** dyna-record excludes the vector from `findById`, `query`, and internal pre-fetches via projection, which saves bandwidth and latency — but DynamoDB bills reads on the full item regardless of projection, so every ordinary read of a searchable row costs more forever. Factor this in before marking high-read-traffic entities searchable.
 

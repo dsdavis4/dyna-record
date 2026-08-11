@@ -234,14 +234,10 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     const { parentId, linkedEntityId } = ids;
 
     // The prefetched record is a raw canonical row that bypasses entity
-    // serialization, so a searchable entity's vector and content hash must
-    // be stripped here — vector-search bookkeeping lives on canonical rows
-    // only
-    const {
-      [vectorSearchKeys.vector]: _linkedVector,
-      [vectorSearchKeys.contentHash]: _linkedContentHash,
-      ...denormalizedRecord
-    } = linkedRecord;
+    // serialization, so a searchable entity's vector must be stripped here —
+    // the vector lives on canonical rows only
+    const { [vectorSearchKeys.vector]: _linkedVector, ...denormalizedRecord } =
+      linkedRecord;
 
     transactionBuilder.addPut(
       {

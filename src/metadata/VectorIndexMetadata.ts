@@ -19,20 +19,15 @@ import { ValidationError } from "../errors.js";
 import type { EntityClass, Optional } from "../types.js";
 
 /**
- * Table aliases of the library-managed vector search attributes. These
- * aliases are reserved by dyna-record and may not be used as the alias of a
- * consumer-defined attribute (enforced at metadata initialization).
- *
- *   - **vector**: the attribute holding the embedding vector. It is
- *     intentionally never registered in any entity's attribute metadata so
- *     serialization and copy paths drop it automatically.
- *   - **contentHash**: the content hash of the embedded text, registered as a
- *     library-managed attribute on searchable entities so it round-trips
- *     serialization and prefetch (enabling the unchanged-content embed skip).
+ * Table alias of the library-managed vector attribute. The alias is reserved
+ * by dyna-record and may not be used as the alias of a consumer-defined
+ * attribute (enforced at metadata initialization). The vector is
+ * intentionally never registered in any entity's attribute metadata, so
+ * serialization and copy paths drop it automatically — it lives on canonical
+ * rows only.
  */
 export const vectorSearchKeys = {
-  vector: "__dyna_vector",
-  contentHash: "__dyna_vector_hash"
+  vector: "__dyna_vector"
 } as const;
 
 /**

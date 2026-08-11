@@ -4168,12 +4168,6 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "foreignKey",
                 foreignKeyTarget: "Store"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
-                nullable: true,
-                kind: "string"
               }
             },
             tableAttributes: {
@@ -4219,12 +4213,6 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "foreignKey",
                 foreignKeyTarget: "Store"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
-                nullable: true,
-                kind: "string"
               }
             },
             relationships: {
@@ -4275,12 +4263,6 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "foreignKey",
                 foreignKeyTarget: "Store"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
-                nullable: true,
-                kind: "string"
               }
             },
             tableAttributes: {
@@ -4320,12 +4302,6 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "foreignKey",
                 foreignKeyTarget: "Store"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
-                nullable: true,
-                kind: "string"
               }
             },
             relationships: {}
@@ -4368,12 +4344,6 @@ describe("TableMetadata", () => {
                 alias: "Content",
                 nullable: true,
                 kind: "string"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
-                nullable: true,
-                kind: "string"
               }
             },
             tableAttributes: {
@@ -4410,12 +4380,6 @@ describe("TableMetadata", () => {
               Content: {
                 name: "content",
                 alias: "Content",
-                nullable: true,
-                kind: "string"
-              },
-              __dyna_vector_hash: {
-                name: "__dyna_vector_hash",
-                alias: "__dyna_vector_hash",
                 nullable: true,
                 kind: "string"
               }

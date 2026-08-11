@@ -353,7 +353,6 @@ describe("Search", () => {
       Description: "Hand thrown ceramic mug",
       Category: "Mugs",
       StoreId: "123",
-      __dyna_vector_hash: "listing-content-hash",
       CreatedAt: "2023-10-01T00:00:00.000Z",
       UpdatedAt: "2023-10-02T00:00:00.000Z"
     };
@@ -365,7 +364,6 @@ describe("Search", () => {
       Type: "Review",
       Body: "Beautiful glaze, sturdy handle",
       StoreId: "123",
-      __dyna_vector_hash: "review-content-hash",
       CreatedAt: "2023-10-03T00:00:00.000Z",
       UpdatedAt: "2023-10-04T00:00:00.000Z"
     };
@@ -392,7 +390,6 @@ describe("Search", () => {
       description: "Hand thrown ceramic mug",
       category: "Mugs",
       storeId: "123",
-      __dyna_vector_hash: "listing-content-hash",
       createdAt: new Date("2023-10-01T00:00:00.000Z"),
       updatedAt: new Date("2023-10-02T00:00:00.000Z")
     });
@@ -403,7 +400,6 @@ describe("Search", () => {
       type: "Review",
       body: "Beautiful glaze, sturdy handle",
       storeId: "123",
-      __dyna_vector_hash: "review-content-hash",
       createdAt: new Date("2023-10-03T00:00:00.000Z"),
       updatedAt: new Date("2023-10-04T00:00:00.000Z")
     });
@@ -701,7 +697,6 @@ describe("Search", () => {
 
   describe("ordinary reads exclude the vector through the union-of-aliases projection", () => {
     const expectedProjectionNames = {
-      "#__dyna_vector_hash": "__dyna_vector_hash",
       "#Body": "Body",
       "#Category": "Category",
       "#Content": "Content",
@@ -718,7 +713,7 @@ describe("Search", () => {
     };
 
     const expectedProjectionExpression =
-      "#__dyna_vector_hash, #Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #SK, #StoreId, #Title, #Type, #UpdatedAt";
+      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #SK, #StoreId, #Title, #Type, #UpdatedAt";
 
     it("findById on a vector-indexed table projects every alias except the vector", async () => {
       expect.assertions(1);
@@ -773,7 +768,7 @@ describe("Search", () => {
       ]);
     });
 
-    it("the update prefetch carries the projection, returning the stored content hash without the vector", async () => {
+    it("the update prefetch carries the projection, returning the stored searchable value without the vector", async () => {
       expect.assertions(1);
 
       mockQuery.mockResolvedValueOnce({
@@ -786,7 +781,6 @@ describe("Search", () => {
             Description: "Hand thrown ceramic mug",
             Category: "Mugs",
             StoreId: "123",
-            __dyna_vector_hash: "stored-content-hash",
             CreatedAt: "2023-10-01T00:00:00.000Z",
             UpdatedAt: "2023-10-02T00:00:00.000Z"
           }

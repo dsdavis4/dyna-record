@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityClass, MakeOptional, Optional } from "../types.js";
 import TableMetadata from "./TableMetadata.js";
@@ -543,7 +542,7 @@ class MetadataStorage {
       for (const attrMeta of Object.values(entityMetadata.attributes)) {
         if (reservedAliases.includes(attrMeta.alias)) {
           throw new Error(
-            `Attribute ${entityName}.${attrMeta.name} uses the table alias ${attrMeta.alias}, which is reserved for the library-managed vector search attributes`
+            `Attribute ${entityName}.${attrMeta.name} uses the table alias ${attrMeta.alias}, which is reserved for the library-managed vector attribute`
           );
         }
       }
@@ -614,22 +613,6 @@ class MetadataStorage {
         this.resolveVectorIndex(index, tableMetadata, searchableEntities);
       }
 
-      // The content hash is a registered library-managed attribute so it
-      // round-trips serialization and prefetch, enabling the
-      // unchanged-content embed skip. It is reserved (by property name and by
-      // alias), so it is omitted from create/update validation schemas
-      for (const [entityName] of searchableEntities) {
-        this.addEntityAttribute(entityName, {
-          attributeName: vectorSearchKeys.contentHash,
-          alias: vectorSearchKeys.contentHash,
-          kind: "string",
-          nullable: true,
-          type: z.string()
-        });
-      }
-
-      // Built after the content hash registration above so the hash is part
-      // of the projected union — updates read it through the prefetch
       if (indexes.length > 0) {
         this.buildReadProjection(tableClassName, tableMetadata);
       }

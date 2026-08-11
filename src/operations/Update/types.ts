@@ -84,6 +84,15 @@ export interface UpdateOperationOptions {
    * @default true
    */
   referentialIntegrityCheck?: boolean;
+  /**
+   * Embed the searchable attribute even when its value appears unchanged.
+   * By default an update whose searchable value matches the stored value
+   * skips the embedding call and the vector write. Pass `true` to embed
+   * anyway — the affordance for indexing rows that predate searchability
+   * (backfills) and for re-embedding after an embedding model change.
+   * @default false
+   */
+  forceEmbed?: boolean;
 }
 
 /**

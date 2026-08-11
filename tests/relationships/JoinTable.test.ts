@@ -194,12 +194,12 @@ describe("JoinTable", () => {
       ]);
     });
 
-    it("will strip the embedding vector and content hash from denormalized link records", async () => {
+    it("will strip the embedding vector from denormalized link records", async () => {
       expect.assertions(2);
 
       // Raw prefetched canonical rows bypass entity serialization, so rows of
-      // searchable entities carry the vector and content hash — the link
-      // records must strip both; copies carry no vector-search bookkeeping
+      // searchable entities carry the vector — the link records must strip
+      // it; the vector lives on canonical rows only
       const author = {
         PK: "Author#1",
         SK: "Author",
@@ -208,8 +208,7 @@ describe("JoinTable", () => {
         Name: "Author-1",
         CreatedAt: "2024-02-27T03:19:52.667Z",
         UpdatedAt: "2024-02-27T03:19:52.667Z",
-        __dyna_vector: [0.5, 0.5],
-        __dyna_vector_hash: "author-content-hash"
+        __dyna_vector: [0.5, 0.5]
       };
 
       const book = {
@@ -221,8 +220,7 @@ describe("JoinTable", () => {
         NumPages: 100,
         CreatedAt: "2021-10-15T08:31:15.148Z",
         UpdatedAt: "2022-10-15T08:31:15.148Z",
-        __dyna_vector: [0.25, 0.25],
-        __dyna_vector_hash: "book-content-hash"
+        __dyna_vector: [0.25, 0.25]
       };
 
       mockTransactGetItems.mockResolvedValueOnce({

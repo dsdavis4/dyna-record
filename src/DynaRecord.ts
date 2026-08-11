@@ -380,12 +380,17 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * await User.update("userId", { address: { street: "456 Oak Ave" } });
    * ```
+   *
+   * @example Force a searchable entity to re-embed even when the value is unchanged (backfills, embedding model changes)
+   * ```typescript
+   * await Product.update("productId", { description }, { forceEmbed: true });
+   * ```
    */
   public static async update<T extends DynaRecord>(
     this: EntityClass<T>,
     id: string,
     attributes: UpdateOptions<T>,
-    options?: { referentialIntegrityCheck?: boolean }
+    options?: { referentialIntegrityCheck?: boolean; forceEmbed?: boolean }
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes, options);
@@ -425,7 +430,7 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public async update<T extends this>(
     attributes: UpdateOptions<T>,
-    options?: { referentialIntegrityCheck?: boolean }
+    options?: { referentialIntegrityCheck?: boolean; forceEmbed?: boolean }
   ): Promise<EntityAttributesInstance<T>> {
     const InstanceClass = this.constructor as EntityClass<T>;
     const op = new Update<T>(InstanceClass);

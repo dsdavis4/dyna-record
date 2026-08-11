@@ -136,28 +136,6 @@ describe("VectorIndex", () => {
       );
     });
 
-    it("registers the content hash as a library-managed attribute on searchable entities", () => {
-      expect.assertions(3);
-
-      const attrs = Metadata.getEntityAttributes(Listing.name);
-
-      expect(attrs[vectorSearchKeys.contentHash]).toMatchObject({
-        name: vectorSearchKeys.contentHash,
-        alias: vectorSearchKeys.contentHash,
-        kind: "string",
-        nullable: true
-      });
-      expect(
-        Metadata.getEntityTableAttributes(Listing.name)[
-          vectorSearchKeys.contentHash
-        ]
-      ).toBeDefined();
-      // Non-searchable entities do not carry the content hash attribute
-      expect(
-        Metadata.getEntityAttributes(Store.name)[vectorSearchKeys.contentHash]
-      ).toBeUndefined();
-    });
-
     it("guardrail: the vector attribute alias never appears in any entity's attribute maps", () => {
       const tables = ["MockTable", "OtherTable", "SearchTable"];
 
@@ -180,13 +158,12 @@ describe("VectorIndex", () => {
       }
     });
 
-    it("registers the vector search aliases as reserved keys on every table", () => {
-      expect.assertions(2);
+    it("registers the vector alias as a reserved key on every table", () => {
+      expect.assertions(1);
 
       const { reservedKeys } = Metadata.getTable("MockTable");
 
       expect(reservedKeys[vectorSearchKeys.vector]).toBe(true);
-      expect(reservedKeys[vectorSearchKeys.contentHash]).toBe(true);
     });
 
     it("throws when defining a vector index on a class that is not a table class", () => {
@@ -804,39 +781,7 @@ describe("VectorIndex", () => {
       }
 
       expect(() => FreshTable.metadata()).toThrow(
-        "Attribute Colliding.sneaky uses the table alias __dyna_vector, which is reserved for the library-managed vector search attributes"
-      );
-    });
-
-    it("rejects a consumer attribute whose table alias collides with the content hash alias", async () => {
-      const {
-        default: DynaRecord,
-        Table,
-        Entity,
-        PartitionKeyAttribute,
-        SortKeyAttribute,
-        StringAttribute
-      } = await loadFresh();
-
-      @Table({ name: "fresh-table" })
-      abstract class FreshTable extends DynaRecord {
-        @PartitionKeyAttribute({ alias: "PK" })
-        public readonly pk: PartitionKey;
-
-        @SortKeyAttribute({ alias: "SK" })
-        public readonly sk: SortKey;
-      }
-
-      @Entity
-      class Colliding extends FreshTable {
-        declare readonly type: "Colliding";
-
-        @StringAttribute({ alias: vectorSearchKeys.contentHash })
-        public readonly sneaky: string;
-      }
-
-      expect(() => FreshTable.metadata()).toThrow(
-        "Attribute Colliding.sneaky uses the table alias __dyna_vector_hash, which is reserved for the library-managed vector search attributes"
+        "Attribute Colliding.sneaky uses the table alias __dyna_vector, which is reserved for the library-managed vector attribute"
       );
     });
 

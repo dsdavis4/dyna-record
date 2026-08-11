@@ -43,11 +43,7 @@ import {
 } from "../types.js";
 import { NotFoundError } from "../../errors.js";
 import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
-import {
-  computeContentHash,
-  embedSearchableValue,
-  type SearchableWriteAttributes
-} from "../../embedding/embed.js";
+import { embedSearchableValue } from "../../embedding/embed.js";
 import {
   isBelongsToRelationship,
   isHasManyRelationship
@@ -160,6 +156,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ): Promise<UpdatedAttributes<T>> {
     const referentialIntegrityCheck =
       options?.referentialIntegrityCheck ?? true;
+    const forceEmbed = options?.forceEmbed ?? false;
 
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
     const entityAttrs =
@@ -184,12 +181,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         belongsToRelMetaBeingUpdated
       );
 
-      // The prefetched entity supplies the stored content hash so an update
-      // carrying an unchanged searchable value skips the embedding call
+      // The prefetched entity supplies the stored searchable value so an
+      // update carrying an unchanged value skips the embedding call
       await this.applySearchableWrite(
         entityAttrs,
         canonicalUpdate,
-        preFetch.entityPreUpdate
+        preFetch.entityPreUpdate,
+        forceEmbed
       );
 
       const updatedEntity = {
@@ -212,9 +210,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       );
     } else {
       // Relationship-free entities have no prefetch and therefore no stored
-      // hash to compare — a payload carrying the searchable attribute embeds
+      // value to compare — a payload carrying the searchable attribute embeds
       // unconditionally rather than adding a new read
-      await this.applySearchableWrite(entityAttrs, canonicalUpdate, undefined);
+      await this.applySearchableWrite(
+        entityAttrs,
+        canonicalUpdate,
+        undefined,
+        forceEmbed
+      );
     }
 
     await this.commitTransaction();
@@ -506,24 +509,27 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * the payload contains the entity's searchable attribute.
    *
    * **What it does:**
-   * - A null or empty value removes the vector and content hash — the row
-   *   leaves the vector index. The provider is never called with empty text.
-   * - When the prefetched entity's stored content hash matches the new
-   *   value's hash, the value is unchanged — no embedding call, no vector
-   *   write.
-   * - Otherwise embeds the value and appends the vector and hash to the
-   *   canonical row's update only; the shared expression the denormalized
-   *   sinks receive stays vector-free.
+   * - A null or empty value removes the vector — the row leaves the vector
+   *   index. The provider is never called with empty text.
+   * - When the prefetched entity's stored searchable value matches the new
+   *   value, the value is unchanged — no embedding call, no vector write.
+   *   `forceEmbed` overrides the skip: the affordance for indexing existing
+   *   rows and for re-embedding after an embedding model change.
+   * - Otherwise embeds the value and appends the vector to the canonical
+   *   row's update only; the shared expression the denormalized sinks
+   *   receive stays vector-free.
    *
    * @param attributes - The parsed partial attributes being updated.
    * @param canonicalUpdate - The canonical row's queued update item.
    * @param entityPreUpdate - The prefetched entity, when the entity's relationships required a prefetch.
+   * @param forceEmbed - Embed even when the searchable value appears unchanged.
    * @private
    */
   private async applySearchableWrite(
     attributes: UpdateOptions<DynaRecord>,
     canonicalUpdate: CanonicalUpdateItem,
-    entityPreUpdate: Optional<Entity>
+    entityPreUpdate: Optional<Entity>,
+    forceEmbed: boolean
   ): Promise<void> {
     if (!this.supportsSearchableEmbedding()) return;
 
@@ -544,18 +550,18 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     if (!isString(value)) return;
 
-    const contentHash = computeContentHash(value);
-
-    // The stored hash is deliberately absent from the entity type (it is
-    // library-managed), so it is read through `in` narrowing
-    const storedHash =
+    const storedValue: unknown =
       entityPreUpdate !== undefined &&
-      vectorSearchKeys.contentHash in entityPreUpdate
-        ? entityPreUpdate[vectorSearchKeys.contentHash]
+      isKeyOfObject(entityPreUpdate, searchableMeta.name)
+        ? entityPreUpdate[searchableMeta.name]
         : undefined;
 
-    if (entityPreUpdate !== undefined && storedHash === contentHash) {
-      this.pinContentHashCondition(canonicalUpdate, contentHash, entityPreUpdate.id);
+    if (!forceEmbed && entityPreUpdate !== undefined && storedValue === value) {
+      this.pinSearchableValueCondition(
+        canonicalUpdate,
+        searchableMeta.alias,
+        entityPreUpdate.id
+      );
       return;
     }
 
@@ -563,54 +569,47 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       this.entityMetadata.tableClassName
     );
 
-    const searchableWrite = await embedSearchableValue(
+    const searchableVector = await embedSearchableValue(
       value,
       index,
       this.EntityClass.name,
       searchableMeta.name
     );
 
-    this.appendVectorClauses(canonicalUpdate, searchableWrite);
+    this.appendVectorClauses(canonicalUpdate, searchableVector);
   }
 
   /**
-   * Pins the canonical row's condition to the stored content hash the embed
-   * skip was decided on. The skip reads the hash through the prefetch; a
-   * concurrent clear committing between the prefetch and this transaction
-   * would otherwise leave the row with searchable text but no vector — a
-   * state no serial ordering of the two updates can produce, and one that
-   * silently drops the row from the vector index. The pinned condition fails
-   * this write loudly instead; a retry re-reads, finds no stored hash, and
-   * embeds.
+   * Pins the canonical row's condition to the searchable value the embed
+   * skip was decided on. The skip reads the stored value through the
+   * prefetch; a concurrent clear committing between the prefetch and this
+   * transaction would otherwise leave the row with searchable text but no
+   * vector — a state no serial ordering of the two updates can produce, and
+   * one that silently drops the row from the vector index. The pinned
+   * condition fails this write loudly instead; a retry re-reads, sees the
+   * changed value, and embeds.
+   *
+   * The update expression already SETs the searchable attribute to the very
+   * value the skip matched against, so the condition reuses that expression
+   * name and value — the pin adds no request bytes.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
-   * @param expectedHash - The stored hash the skip decision was made against.
+   * @param alias - The searchable attribute's table alias.
    * @param id - The entity id, for the condition failure message.
    * @private
    */
-  private pinContentHashCondition(
+  private pinSearchableValueCondition(
     canonicalUpdate: CanonicalUpdateItem,
-    expectedHash: string,
+    alias: string,
     id: string
   ): void {
-    const hashName = `#${vectorSearchKeys.contentHash}`;
-    const hashValue = `:${vectorSearchKeys.contentHash}`;
+    const attrName = `#${alias}`;
+    const attrValue = `:${alias}`;
 
-    // Fresh copies: the queued item's expression attribute maps are shared
-    // by reference with the expression the denormalized sinks spread (see
-    // appendVectorClauses)
-    canonicalUpdate.ExpressionAttributeNames = {
-      ...canonicalUpdate.ExpressionAttributeNames,
-      [hashName]: vectorSearchKeys.contentHash
-    };
-    canonicalUpdate.ExpressionAttributeValues = {
-      ...canonicalUpdate.ExpressionAttributeValues,
-      [hashValue]: expectedHash
-    };
     canonicalUpdate.ConditionExpression =
       canonicalUpdate.ConditionExpression === undefined
-        ? `${hashName} = ${hashValue}`
-        : `${canonicalUpdate.ConditionExpression} AND ${hashName} = ${hashValue}`;
+        ? `${attrName} = ${attrValue}`
+        : `${canonicalUpdate.ConditionExpression} AND ${attrName} = ${attrValue}`;
 
     this.transactionBuilder.overrideConditionFailedMsg(
       canonicalUpdate,
@@ -619,9 +618,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Appends the vector and content hash clauses to the canonical row's queued
-   * update — a SET of both when a searchable write is provided, a REMOVE of
-   * both when the searchable value was cleared.
+   * Appends the vector clause to the canonical row's queued update — a SET
+   * when a vector is provided, a REMOVE when the searchable value was
+   * cleared.
    *
    * The queued item's expression attribute maps are shared by reference with
    * the expression object the denormalized sinks spread, so fresh copies are
@@ -629,20 +628,18 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * or link records.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
-   * @param searchableWrite - The vector and hash to SET, or undefined to REMOVE both.
+   * @param searchableVector - The vector to SET, or undefined to REMOVE it.
    * @private
    */
   private appendVectorClauses(
     canonicalUpdate: CanonicalUpdateItem,
-    searchableWrite: Optional<SearchableWriteAttributes>
+    searchableVector: Optional<number[]>
   ): void {
     const vectorName = `#${vectorSearchKeys.vector}`;
-    const hashName = `#${vectorSearchKeys.contentHash}`;
 
     canonicalUpdate.ExpressionAttributeNames = {
       ...canonicalUpdate.ExpressionAttributeNames,
-      [vectorName]: vectorSearchKeys.vector,
-      [hashName]: vectorSearchKeys.contentHash
+      [vectorName]: vectorSearchKeys.vector
     };
 
     const expression = canonicalUpdate.UpdateExpression ?? "";
@@ -661,29 +658,26 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       removeIdx === -1 ? "" : expression.slice(removeIdx)
     ).trim();
 
-    if (searchableWrite !== undefined) {
+    if (searchableVector !== undefined) {
       const vectorValue = `:${vectorSearchKeys.vector}`;
-      const hashValue = `:${vectorSearchKeys.contentHash}`;
 
       canonicalUpdate.ExpressionAttributeValues = {
         ...canonicalUpdate.ExpressionAttributeValues,
-        [vectorValue]: searchableWrite.vector,
-        [hashValue]: searchableWrite.contentHash
+        [vectorValue]: searchableVector
       };
 
-      const vectorSets = `${vectorName} = ${vectorValue}, ${hashName} = ${hashValue}`;
+      const vectorSet = `${vectorName} = ${vectorValue}`;
       const newSetPart =
-        setPart === "" ? `SET ${vectorSets}` : `${setPart}, ${vectorSets}`;
+        setPart === "" ? `SET ${vectorSet}` : `${setPart}, ${vectorSet}`;
 
       canonicalUpdate.UpdateExpression = [newSetPart, removePart]
         .filter(part => part !== "")
         .join(" ");
     } else {
-      const vectorRemoves = `${vectorName}, ${hashName}`;
       const newRemovePart =
         removePart === ""
-          ? `REMOVE ${vectorRemoves}`
-          : `${removePart}, ${vectorRemoves}`;
+          ? `REMOVE ${vectorName}`
+          : `${removePart}, ${vectorName}`;
 
       canonicalUpdate.UpdateExpression = [setPart, newRemovePart]
         .filter(part => part !== "")

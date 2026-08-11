@@ -12809,10 +12809,6 @@ SearchParentTable.vectorIndex({
 describe("Update searchable entities (vector write path)", () => {
   const expectedTitanVector = new Array<number>(1024).fill(0.1);
 
-  // sha256 of "The very same description"
-  const storedContentHash =
-    "c0eff0965298631cf3c61f8c1445e9947a2d8facde896273ac993fdb7385187a";
-
   const listingTableItem = {
     PK: "Listing#123",
     SK: "Listing",
@@ -12822,7 +12818,6 @@ describe("Update searchable entities (vector write path)", () => {
     Category: "Mugs",
     StoreId: "456",
     __dyna_vector: [0.5, 0.5],
-    __dyna_vector_hash: storedContentHash,
     CreatedAt: "2023-10-01T00:00:00.000Z",
     UpdatedAt: "2023-10-02T00:00:00.000Z"
   };
@@ -12896,7 +12891,7 @@ describe("Update searchable entities (vector write path)", () => {
     ]);
   });
 
-  it("will not re-embed when the searchable value's content hash matches the stored hash", async () => {
+  it("will not re-embed when the searchable value is unchanged", async () => {
     expect.assertions(2);
 
     mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
@@ -12918,10 +12913,12 @@ describe("Update searchable entities (vector write path)", () => {
       }
     };
 
-    // The stored hash matches, so no provider call and no vector write occur.
-    // The canonical row's condition pins the stored hash the skip was decided
-    // on — a concurrent clear committing in the prefetch-to-commit window
-    // fails the write instead of leaving the row silently unindexed
+    // The stored value matches, so no provider call and no vector write
+    // occur. The canonical row's condition pins the searchable value the
+    // skip was decided on — a concurrent clear committing in the
+    // prefetch-to-commit window fails the write instead of leaving the row
+    // silently missing from the index. The pin reuses the SET's own
+    // expression name and value, adding no request bytes
     expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
@@ -12932,16 +12929,8 @@ describe("Update searchable entities (vector write path)", () => {
                 TableName: "search-table",
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression:
-                  "attribute_exists(PK) AND #__dyna_vector_hash = :__dyna_vector_hash",
-                UpdateExpression: expression.UpdateExpression,
-                ExpressionAttributeNames: {
-                  ...expression.ExpressionAttributeNames,
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
-                },
-                ExpressionAttributeValues: {
-                  ...expression.ExpressionAttributeValues,
-                  ":__dyna_vector_hash": storedContentHash
-                }
+                  "attribute_exists(PK) AND #Description = :Description",
+                ...expression
               }
             },
             {
@@ -12952,6 +12941,68 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Store#456", SK: "Listing#123" },
                 ConditionExpression: "attribute_exists(PK)",
                 ...expression
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will embed on an unchanged searchable value when forceEmbed is passed", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update(
+      "123",
+      { description: "The very same description" },
+      { forceEmbed: true }
+    );
+
+    // forceEmbed overrides the unchanged-value skip — the affordance for
+    // indexing rows that predate searchability and for re-embedding after
+    // an embedding model change
+    expect(mockEmbeddingProviderCalls).toEqual(["The very same description"]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "The very same description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The denormalized copy stays vector-free
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "The very same description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
               }
             }
           ]
@@ -13018,19 +13069,16 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector, #__dyna_vector_hash = :__dyna_vector_hash",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector",
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                  "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "An updated listing description",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
                   ":__dyna_vector": expectedTitanVector,
-                  ":__dyna_vector_hash":
-                    "a6f57b794a0769e37a47507cd1309ee4c684514c83581ee988da3baabce3b547"
                 }
               }
             },
@@ -13078,12 +13126,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector, #__dyna_vector_hash",
+                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector",
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                  "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z"
@@ -13113,12 +13160,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector, #__dyna_vector_hash",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector",
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                  "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Content": "",
@@ -13151,19 +13197,16 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector, #__dyna_vector_hash = :__dyna_vector_hash",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector",
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                  "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Content": "Fresh article content",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
                   ":__dyna_vector": expectedTitanVector,
-                  ":__dyna_vector_hash":
-                    "71fb3d7b167639ba1808010667eaceab2d4503ad68f8e60dda97446efc8ef284"
                 }
               }
             }
@@ -13182,7 +13225,6 @@ describe("Update searchable entities (vector write path)", () => {
       Id: "p1",
       Type: "SearchParent",
       Description: "Old description",
-      __dyna_vector_hash: "old-content-hash",
       CreatedAt: "2023-10-01T00:00:00.000Z",
       UpdatedAt: "2023-10-02T00:00:00.000Z"
     };
@@ -13218,19 +13260,16 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "SearchParent#p1", SK: "SearchParent" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector, #__dyna_vector_hash = :__dyna_vector_hash",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector",
-                  "#__dyna_vector_hash": "__dyna_vector_hash"
+                  "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "Updated parent description",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
                   ":__dyna_vector": expectedTitanVector,
-                  ":__dyna_vector_hash":
-                    "2b90d5380f90cb17aefb652416a4665681b77ee83010c75b5ddd7d947b1f9ac0"
                 }
               }
             },
