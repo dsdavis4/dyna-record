@@ -30,6 +30,7 @@ import {
   Table
 } from "../../src/decorators/index.js";
 import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
+import Metadata from "../../src/metadata/index.js";
 import { Search } from "../../src/operations/index.js";
 import { type SearchFilter } from "../../src/filter-utils/index.js";
 import {
@@ -39,6 +40,7 @@ import {
 } from "../../src/errors.js";
 import type {
   ForeignKey,
+  NullableForeignKey,
   PartitionKey,
   SortKey,
   Searchable as SearchableText,
@@ -184,6 +186,18 @@ class ScopedProduct extends ScopedFilterTable {
   @SearchFilterable()
   @ForeignKeyAttribute(() => ScopedShop, { alias: "ShopId" })
   public readonly shopId: SearchFilterableText<ForeignKey<ScopedShop>>;
+
+  // Nullable filterable foreign key: the brand composes with the optional
+  // form — the property stays optional; rows without a supplier simply never
+  // match a supplier filter
+  @SearchFilterable()
+  @ForeignKeyAttribute(() => ScopedSupplier, {
+    alias: "SupplierId",
+    nullable: true
+  })
+  public readonly supplierId?: SearchFilterableText<
+    NullableForeignKey<ScopedSupplier>
+  >;
 
   @BelongsTo(() => ScopedShop, { foreignKey: "shopId" })
   public readonly shop: ScopedShop;
@@ -679,6 +693,53 @@ describe("Search", () => {
         );
       }
       expect(mockSend).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("nullable filterable attributes", () => {
+    it("registers a nullable filterable foreign key as an inline filter", () => {
+      expect.assertions(2);
+
+      expect(scopedFilterIndex.inlineFilterAliases).toContain("SupplierId");
+      expect(
+        Metadata.getEntity("ScopedProduct").searchFilterableAttributes.map(
+          attrMeta => attrMeta.name
+        )
+      ).toContain("supplierId");
+    });
+
+    it("compiles a filter on a nullable filterable foreign key", async () => {
+      expect.assertions(1);
+
+      mockScopedEmbed.mockResolvedValueOnce(
+        new Array<number>(1024).fill(0.1)
+      );
+      mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+      await scopedFilterIndex.search("123", "products", {
+        filter: { supplierId: "supplier-9" }
+      });
+
+      expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "scoped-filter-table",
+            IndexName: "scoped-filter-index",
+            SearchVector: new Array<number>(1024).fill(0.1),
+            TopK: 10,
+            SearchConditionExpression:
+              "#ShopId = :ShopId AND #SupplierId = :SupplierId1",
+            ExpressionAttributeNames: {
+              "#ShopId": "ShopId",
+              "#SupplierId": "SupplierId"
+            },
+            ExpressionAttributeValues: {
+              ":ShopId": "123",
+              ":SupplierId1": "supplier-9"
+            }
+          }
+        ]
+      ]);
     });
   });
 
@@ -1273,6 +1334,24 @@ describe("types", () => {
 
       // @ts-expect-no-error: filterable foreign key equality
       await scopedFilterIndex.search("1", "q", { filter: { shopId: "5" } });
+
+      // @ts-expect-no-error: NULLABLE filterable foreign key — the brand
+      // composes with the optional form; the filter takes a defined value
+      await scopedFilterIndex.search("1", "q", {
+        filter: { supplierId: "s1" }
+      });
+
+      // @ts-expect-no-error: create input accepts a plain string for the
+      // nullable filterable foreign key, and accepts omitting it entirely
+      await ScopedProduct.create({
+        description: "d",
+        shopId: "1",
+        supplierId: "s1"
+      });
+      await ScopedProduct.create({ description: "d", shopId: "1" });
+
+      // @ts-expect-no-error: nullable filterables clear like any nullable
+      await ScopedProduct.update("p1", { supplierId: null });
     };
 
     expect(_test).toBeDefined();

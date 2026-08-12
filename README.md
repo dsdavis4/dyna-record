@@ -1240,7 +1240,7 @@ dyna-record supports [DynamoDB vector search](https://docs.aws.amazon.com/amazon
 
 ### Declaring searchable entities
 
-Mark exactly one attribute per entity as its searchable text with the layered `@Searchable()` decorator and the `Searchable` property brand. Attributes that searches may filter on are declared with `@SearchFilterable()` and the `SearchFilterable` brand — strings, numbers, booleans, enums, and foreign keys qualify (dates and objects do not):
+Mark exactly one attribute per entity as its searchable text with the layered `@Searchable()` decorator and the `Searchable` property brand. Attributes that searches may filter on are declared with `@SearchFilterable()` and the `SearchFilterable` brand — strings, numbers, booleans, enums, and foreign keys qualify (dates and objects do not). Nullable attributes compose: instantiate the brand with the optional form (`Filterable<NullableForeignKey<Brand>>`, `Filterable<Optional<string>>`) and the property stays optional — a row where the attribute is absent simply never matches an equality filter on it:
 
 ```typescript
 import DynaRecord, {
@@ -1253,7 +1253,8 @@ import DynaRecord, {
   HasMany,
   type Searchable as SearchableText,
   type SearchFilterable as Filterable,
-  type ForeignKey
+  type ForeignKey,
+  type NullableForeignKey
 } from "dyna-record";
 
 @Entity
@@ -1282,6 +1283,11 @@ class Product extends MyTable {
   @SearchFilterable()
   @ForeignKeyAttribute(() => Brand, { alias: "BrandId" })
   public readonly brandId: Filterable<ForeignKey<Brand>>;
+
+  // Nullable filterable: optional on the entity, filterable when present
+  @SearchFilterable()
+  @ForeignKeyAttribute(() => Supplier, { alias: "SupplierId", nullable: true })
+  public readonly supplierId?: Filterable<NullableForeignKey<Supplier>>;
 
   @ForeignKeyAttribute(() => Organization, { alias: "OrganizationId" })
   public readonly organizationId: ForeignKey<Organization>;

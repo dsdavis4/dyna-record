@@ -72,11 +72,21 @@ export type Searchable<T extends string = string> = Brand<T, "Searchable">;
  *
  * The brand never leaks into consumer ergonomics: it is assignable to its
  * underlying type on read, and create/update inputs accept plain values.
+ *
+ * Nullable attributes compose: instantiate with the optional form of the
+ * underlying type (EX: `SearchFilterable<NullableForeignKey<Brand>>` or
+ * `SearchFilterable<Optional<string>>`). The conditional distributes over
+ * the union so the property stays optional while the present value carries
+ * the brand. Filters always take a defined value — a row where the
+ * attribute is absent simply never matches an equality filter.
  */
-export type SearchFilterable<T extends string | number | boolean = string> =
-  T & {
-    readonly __searchFilterable: T;
-  };
+export type SearchFilterable<
+  T extends Optional<string | number | boolean> = string
+> = T extends undefined
+  ? undefined
+  : T & {
+      readonly __searchFilterable: T;
+    };
 
 /**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.

@@ -10,7 +10,7 @@ import type {
  * `SearchFilterable` name — the single `export { SearchFilterable }` below
  * carries both the value (decorator) and type (brand) meanings.
  */
-type SearchFilterable<T extends string | number | boolean = string> =
+type SearchFilterable<T extends Optional<string | number | boolean> = string> =
   SearchFilterableBrand<T>;
 
 /**
@@ -21,7 +21,10 @@ type SearchFilterable<T extends string | number | boolean = string> =
  * filterable mark.
  *
  * Foreign key attributes are valid filterables — filtering on a foreign key
- * is the mechanism for narrowing a search within a scope.
+ * is the mechanism for narrowing a search within a scope. Nullable
+ * attributes compose: brand the optional form of the underlying type
+ * (EX: `SearchFilterable<NullableForeignKey<Brand>>`); rows where the
+ * attribute is absent never match an equality filter on it.
  *
  * IMPORTANT! - One inline filter is one table attribute: a filterable
  * property must resolve to the same table alias across every member entity of
