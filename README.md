@@ -1352,6 +1352,7 @@ export const globalSearchIndex = MyTable.vectorIndex({
 });
 ```
 
+- **`model`** takes a pure-data descriptor: the shipped `TitanTextEmbedV2` (1024 dimensions), its smaller variants `TitanTextEmbedV2Dim512` and `TitanTextEmbedV2Dim256` (lower vector storage and write cost for an accuracy trade-off — your provider must request the matching output size, EX: `body: JSON.stringify({ inputText: text, dimensions: 512 })`), or your own `EmbeddingModelDescriptor`.
 - **`scopedBy`** takes a thunk returning one of your dyna-record entity classes — the scope parent. The parent's foreign key becomes the index `HASH`, so every search runs within exactly one of that entity's ids. Multi-tenancy is the canonical use (scope by your tenant/organization entity), but any parent whose searches should never cross instances works the same way — a workspace, a project, a store. Index membership is the scope parent's searchable relationships union the `include:` list.
 - **`include:`** adds searchable entities that carry the scoping foreign key but have no declared inverse relationship on the parent. It applies to scoped indexes only — a global index already spans every searchable entity of the table, so there is nothing to include.
 - A **global** index (no `scopedBy`) has no `HASH` and searches the whole table's searchable entities.

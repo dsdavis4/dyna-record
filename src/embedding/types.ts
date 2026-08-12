@@ -85,3 +85,30 @@ export const TitanTextEmbedV2 = {
   distanceFunction: "COSINE",
   scoreToSimilarity: (score: number): number => 1 - score
 } as const satisfies EmbeddingModelDescriptor;
+
+/**
+ * {@link TitanTextEmbedV2} at 512 output dimensions — half the vector
+ * storage and write footprint for a modest accuracy trade-off.
+ *
+ * The provider must request the matching output size from the model
+ * (Bedrock: `body: JSON.stringify({ inputText: text, dimensions: 512 })`);
+ * a mismatched vector fails the write with an `EmbeddingError`.
+ */
+export const TitanTextEmbedV2Dim512 = {
+  ...TitanTextEmbedV2,
+  dimensions: 512
+} as const satisfies EmbeddingModelDescriptor;
+
+/**
+ * {@link TitanTextEmbedV2} at 256 output dimensions — the smallest Titan V2
+ * variant, minimizing vector storage and write cost where coarse similarity
+ * is enough.
+ *
+ * The provider must request the matching output size from the model
+ * (Bedrock: `body: JSON.stringify({ inputText: text, dimensions: 256 })`);
+ * a mismatched vector fails the write with an `EmbeddingError`.
+ */
+export const TitanTextEmbedV2Dim256 = {
+  ...TitanTextEmbedV2,
+  dimensions: 256
+} as const satisfies EmbeddingModelDescriptor;

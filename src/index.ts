@@ -37,7 +37,11 @@ export type {
 } from "./metadata/schemas.js";
 export { VectorIndexMetadata, vectorSearchKeys } from "./metadata/index.js";
 export type { VectorIndexOptions } from "./metadata/index.js";
-export { TitanTextEmbedV2 } from "./embedding/types.js";
+export {
+  TitanTextEmbedV2,
+  TitanTextEmbedV2Dim512,
+  TitanTextEmbedV2Dim256
+} from "./embedding/types.js";
 export type {
   EmbeddingModelDescriptor,
   EmbeddingProvider,

@@ -11,7 +11,11 @@ import {
   globalSearchIndex
 } from "../integration/mockModels.js";
 import Metadata, { vectorSearchKeys } from "../../src/metadata/index.js";
-import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
+import {
+  TitanTextEmbedV2,
+  TitanTextEmbedV2Dim512,
+  TitanTextEmbedV2Dim256
+} from "../../src/embedding/types.js";
 import type {
   EmbeddingProvider,
   ForeignKey,
@@ -164,6 +168,71 @@ describe("VectorIndex", () => {
       const { reservedKeys } = Metadata.getTable("MockTable");
 
       expect(reservedKeys[vectorSearchKeys.vector]).toBe(true);
+    });
+
+    it("ships Titan V2 dimension variants sharing the model identity", () => {
+      expect.assertions(3);
+
+      expect(TitanTextEmbedV2).toMatchObject({
+        name: "amazon.titan-embed-text-v2:0",
+        dimensions: 1024,
+        distanceFunction: "COSINE"
+      });
+      expect(TitanTextEmbedV2Dim512).toMatchObject({
+        name: "amazon.titan-embed-text-v2:0",
+        dimensions: 512,
+        distanceFunction: "COSINE"
+      });
+      expect(TitanTextEmbedV2Dim256).toMatchObject({
+        name: "amazon.titan-embed-text-v2:0",
+        dimensions: 256,
+        distanceFunction: "COSINE"
+      });
+    });
+
+    it("emits a dimension variant's dimensions through the provisioning contract", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2Dim512: variant
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Doc extends FreshTable {
+        declare readonly type: "Doc";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+      void Doc;
+
+      FreshTable.vectorIndex({
+        name: "fresh-index",
+        model: variant,
+        provider: testProvider
+      });
+
+      const [index] = FreshTable.metadata().vectorIndexes ?? [];
+      expect(index).toMatchObject({
+        name: "fresh-index",
+        model: "amazon.titan-embed-text-v2:0",
+        dimensions: 512
+      });
     });
 
     it("throws when defining a vector index on a class that is not a table class", () => {
