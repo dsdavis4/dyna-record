@@ -711,9 +711,7 @@ describe("Search", () => {
     it("compiles a filter on a nullable filterable foreign key", async () => {
       expect.assertions(1);
 
-      mockScopedEmbed.mockResolvedValueOnce(
-        new Array<number>(1024).fill(0.1)
-      );
+      mockScopedEmbed.mockResolvedValueOnce(new Array<number>(1024).fill(0.1));
       mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
       await scopedFilterIndex.search("123", "products", {
