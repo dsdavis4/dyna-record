@@ -10,15 +10,88 @@ import {
   type GetCommandOutput,
   type TransactWriteCommandInput,
   type TransactWriteCommandOutput,
-  type TransactGetCommandInput
+  type TransactGetCommandInput,
+  SearchVectorsCommand,
+  type SearchVectorsCommandInput,
+  type SearchVectorsCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger.js";
+import { vectorSearchKeys } from "../metadata/VectorIndexMetadata.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
 
 // Initialize the DynamoDB Document Client with a specific AWS region.
 const dynamo = DynamoDBDocumentClient.from(
   new DynamoDBClient({ region: "us-west-2" })
 );
+
+/**
+ * Returns the log placeholder for a redacted vector, carrying only its
+ * dimension count
+ * @param dimensions - The vector's dimension count
+ * @returns The placeholder string
+ */
+const vectorPlaceholder = (dimensions: number): string =>
+  `[vector:${String(dimensions)}]`;
+
+/**
+ * Returns a copy of transact write params safe for logging: vector embedding
+ * values riding in Put items or Update expression values are replaced with a
+ * placeholder carrying the dimension count. Embeddings reconstruct their
+ * source text under published inversion techniques, so vector values must
+ * never reach logs — the command itself keeps the real values
+ */
+const redactVectorWrites = (
+  params: TransactWriteCommandInput
+): TransactWriteCommandInput => {
+  const vectorValueKey = `:${vectorSearchKeys.vector}`;
+
+  const hasVector = params.TransactItems?.some(
+    transactItem =>
+      Array.isArray(transactItem.Put?.Item?.[vectorSearchKeys.vector]) ||
+      Array.isArray(
+        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey]
+      )
+  );
+
+  if (hasVector !== true) return params;
+
+  return {
+    ...params,
+    TransactItems: params.TransactItems?.map(transactItem => {
+      const putVector: unknown =
+        transactItem.Put?.Item?.[vectorSearchKeys.vector];
+      if (transactItem.Put !== undefined && Array.isArray(putVector)) {
+        return {
+          ...transactItem,
+          Put: {
+            ...transactItem.Put,
+            Item: {
+              ...transactItem.Put.Item,
+              [vectorSearchKeys.vector]: vectorPlaceholder(putVector.length)
+            }
+          }
+        };
+      }
+
+      const updateVector: unknown =
+        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey];
+      if (transactItem.Update !== undefined && Array.isArray(updateVector)) {
+        return {
+          ...transactItem,
+          Update: {
+            ...transactItem.Update,
+            ExpressionAttributeValues: {
+              ...transactItem.Update.ExpressionAttributeValues,
+              [vectorValueKey]: vectorPlaceholder(updateVector.length)
+            }
+          }
+        };
+      }
+
+      return transactItem;
+    })
+  };
+};
 
 /**
  * A utility class for interacting with DynamoDB, providing static methods
@@ -106,8 +179,30 @@ class DynamoClient {
   public static async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
-    Logger.log("transactWriteItems", { params });
+    Logger.log("transactWriteItems", { params: redactVectorWrites(params) });
     return await dynamo.send(new TransactWriteCommand(params));
+  }
+
+  /**
+   * Performs a vector similarity search against a DynamoDB vector index and
+   * returns the matching results.
+   *
+   * Log output redacts the query vector: only a placeholder with the
+   * dimension count is logged, never the vector values.
+   * @param params The parameters for the SearchVectorsCommand to DynamoDB.
+   * @returns A Promise resolving to the array of search results.
+   */
+  public static async searchVectors(
+    params: SearchVectorsCommandInput
+  ): Promise<NonNullable<SearchVectorsCommandOutput["SearchResults"]>> {
+    Logger.log("searchVectors", {
+      params: {
+        ...params,
+        SearchVector: vectorPlaceholder(params.SearchVector?.length ?? 0)
+      }
+    });
+    const response = await dynamo.send(new SearchVectorsCommand(params));
+    return response.SearchResults ?? [];
   }
 }
 

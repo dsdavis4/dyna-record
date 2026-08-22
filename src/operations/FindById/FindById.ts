@@ -62,7 +62,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
     id: string,
     options: Pick<FindByIdOptions<T>, "consistentRead">
   ): Promise<Optional<T>> {
-    const { name: tableName } = this.tableMetadata;
+    const { name: tableName, readProjection } = this.tableMetadata;
 
     const res = await DynamoClient.getItem({
       TableName: tableName,
@@ -70,6 +70,12 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
         [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
         [this.sortKeyAlias]: this.EntityClass.name
       },
+      // Present only on tables with a vector index: the vector-excluding
+      // inclusion projection. Reads on tables without one are untouched
+      ...(readProjection !== undefined && {
+        ProjectionExpression: readProjection.expression,
+        ExpressionAttributeNames: readProjection.attributeNames
+      }),
       ConsistentRead: consistentReadVal(options.consistentRead)
     });
 

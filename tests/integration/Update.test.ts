@@ -1,3 +1,4 @@
+import DynaRecord from "../../index.js";
 import {
   TransactWriteCommand,
   TransactGetCommand,
@@ -5,6 +6,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import {
   type Address,
+  Article,
   type Assignment,
   Catalog,
   type CatalogItem,
@@ -15,6 +17,7 @@ import {
   Employee,
   type Festival,
   Grade,
+  Listing,
   MockTable,
   MyClassWithAllAttributeTypes,
   Order,
@@ -33,7 +36,9 @@ import {
   DeepNestedEntity,
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity,
-  Car
+  Car,
+  mockEmbeddingProvider,
+  mockEmbeddingProviderCalls
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
@@ -44,13 +49,19 @@ import {
   HasMany,
   HasOne,
   DateAttribute,
-  StringAttribute
+  PartitionKeyAttribute,
+  Searchable,
+  SortKeyAttribute,
+  StringAttribute,
+  Table
 } from "../../src/decorators/index.js";
+import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
 import {
   type NullableForeignKey,
   type PartitionKey,
   type SortKey,
-  type ForeignKey
+  type ForeignKey,
+  type Searchable as SearchableText
 } from "../../src/types.js";
 import { NotFoundError, ValidationError } from "../../src/index.js";
 import { createInstance } from "../../src/utils.js";
@@ -12744,5 +12755,733 @@ describe("Update", () => {
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       }
     });
+  });
+});
+
+@Table({
+  name: "search-parent-table",
+  defaultFields: {
+    id: { alias: "Id" },
+    type: { alias: "Type" },
+    createdAt: { alias: "CreatedAt" },
+    updatedAt: { alias: "UpdatedAt" }
+  }
+})
+abstract class SearchParentTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+// A searchable entity with "has" relationships, so its updates fan the shared
+// expression out to denormalized copies in related partitions
+@Entity
+class SearchParent extends SearchParentTable {
+  declare readonly type: "SearchParent";
+
+  @Searchable()
+  @StringAttribute({ alias: "Description" })
+  public readonly description: SearchableText;
+
+  // Independently nullable non-searchable attribute: nulling it alongside a
+  // searchable change exercises the vector SET merge into an expression that
+  // already carries a REMOVE clause
+  @StringAttribute({ alias: "Notes", nullable: true })
+  public readonly notes?: string;
+
+  @HasMany(() => SearchChild, { foreignKey: "parentId" })
+  public readonly children: SearchChild[];
+}
+
+@Entity
+class SearchChild extends SearchParentTable {
+  declare readonly type: "SearchChild";
+
+  @ForeignKeyAttribute(() => SearchParent, { alias: "ParentId" })
+  public readonly parentId: ForeignKey<SearchParent>;
+
+  @BelongsTo(() => SearchParent, { foreignKey: "parentId" })
+  public readonly parent: SearchParent;
+}
+
+SearchParentTable.vectorIndex({
+  name: "parent-search-index",
+  model: TitanTextEmbedV2,
+  provider: mockEmbeddingProvider
+});
+
+describe("Update searchable entities (vector write path)", () => {
+  const expectedTitanVector = new Array<number>(1024).fill(0.1);
+
+  const listingTableItem = {
+    PK: "Listing#123",
+    SK: "Listing",
+    Id: "123",
+    Type: "Listing",
+    Description: "The very same description",
+    Category: "Mugs",
+    StoreId: "456",
+    __dyna_vector: [0.5, 0.5],
+    CreatedAt: "2023-10-01T00:00:00.000Z",
+    UpdatedAt: "2023-10-02T00:00:00.000Z"
+  };
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  it("will not call the provider or write vector clauses when the payload does not touch the searchable attribute", async () => {
+    expect.assertions(3);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update("123", { category: "Ceramics" });
+
+    const expression = {
+      UpdateExpression: "SET #Category = :Category, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: {
+        "#Category": "Category",
+        "#UpdatedAt": "UpdatedAt"
+      },
+      ExpressionAttributeValues: {
+        ":Category": "Ceramics",
+        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+      }
+    };
+
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression: "attribute_exists(PK)",
+                ...expression
+              }
+            },
+            {
+              // Denormalized link in the Store partition gets the same
+              // vector-free expression
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" },
+                ConditionExpression: "attribute_exists(PK)",
+                ...expression
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will not re-embed when the searchable value is unchanged", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update("123", {
+      description: "The very same description"
+    });
+
+    const expression = {
+      UpdateExpression:
+        "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: {
+        "#Description": "Description",
+        "#UpdatedAt": "UpdatedAt"
+      },
+      ExpressionAttributeValues: {
+        ":Description": "The very same description",
+        ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+      }
+    };
+
+    // The stored value matches, so no provider call and no vector write
+    // occur. The canonical row's condition pins the searchable value the
+    // skip was decided on — a concurrent clear committing in the
+    // prefetch-to-commit window fails the write instead of leaving the row
+    // silently missing from the index. The pin reuses the SET's own
+    // expression name and value, adding no request bytes
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression:
+                  "attribute_exists(PK) AND #Description = :Description",
+                ...expression
+              }
+            },
+            {
+              // The denormalized copy keeps the plain expression — no pin,
+              // no vector clauses
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" },
+                ConditionExpression: "attribute_exists(PK)",
+                ...expression
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will embed on an unchanged searchable value when forceEmbed is passed", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update(
+      "123",
+      { description: "The very same description" },
+      { forceEmbed: true }
+    );
+
+    // forceEmbed overrides the unchanged-value skip — the affordance for
+    // indexing rows that predate searchability and for re-embedding after
+    // an embedding model change
+    expect(mockEmbeddingProviderCalls).toEqual(["The very same description"]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "The very same description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The denormalized copy stays vector-free
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "The very same description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("fails loudly with a retryable error when the pinned stored hash was cleared by a concurrent write", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    // The prefetch query passes through; the transaction is canceled because
+    // the canonical row's pinned hash condition no longer holds — a
+    // concurrent write cleared the searchable value in the window
+    mockSend
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: [
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" }
+          ],
+          $metadata: {}
+        });
+      });
+
+    try {
+      await Listing.update("123", {
+        description: "The very same description"
+      });
+    } catch (e: any) {
+      expect(e.constructor.name).toEqual("TransactionWriteFailedError");
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Listing with ID '123' does not exist or its searchable value was changed by a concurrent write — retry the update"
+        )
+      ]);
+    }
+  });
+
+  it("will embed a changed searchable value and append the vector write to the canonical row only", async () => {
+    expect.assertions(2);
+
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update("123", {
+      description: "An updated listing description"
+    });
+
+    expect(mockEmbeddingProviderCalls).toEqual([
+      "An updated listing description"
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Canonical row carries the vector SET clauses
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "An updated listing description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The denormalized link's expression maps stay vector-free —
+              // the canonical row received fresh map copies before the vector
+              // clauses were appended
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "An updated listing description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will remove the vector and hash from the canonical row when the searchable value is set to null", async () => {
+    expect.assertions(3);
+
+    await Article.update("123", { content: null });
+
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    // Relationship-free entity: no prefetch query, one transaction
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Article#123", SK: "Article" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Content": "Content",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will remove the vector and hash without calling the provider when the searchable value is an empty string", async () => {
+    expect.assertions(2);
+
+    await Article.update("123", { content: "" });
+
+    // Empty text never reaches the provider
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Article#123", SK: "Article" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Content": "Content",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Content": "",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will embed unconditionally for a relationship-free entity when the payload carries the searchable attribute", async () => {
+    expect.assertions(3);
+
+    await Article.update("123", { content: "Fresh article content" });
+
+    // No prefetch exists to supply a stored hash, so the value embeds even
+    // if unchanged — rather than forcing a new read
+    expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
+    expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Article#123", SK: "Article" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Content": "Content",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Content": "Fresh article content",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will keep denormalized copy updates in related partitions vector-free when embedding", async () => {
+    expect.assertions(2);
+
+    const parent = {
+      PK: "SearchParent#p1",
+      SK: "SearchParent",
+      Id: "p1",
+      Type: "SearchParent",
+      Description: "Old description",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+
+    // Denormalized child copy in the parent's partition
+    const childCopy = {
+      PK: "SearchParent#p1",
+      SK: "SearchChild#c1",
+      Id: "c1",
+      Type: "SearchChild",
+      ParentId: "p1",
+      CreatedAt: "2023-10-03T00:00:00.000Z",
+      UpdatedAt: "2023-10-04T00:00:00.000Z"
+    };
+
+    mockQuery.mockResolvedValueOnce({ Items: [parent, childCopy] });
+
+    await SearchParent.update("p1", {
+      description: "Updated parent description"
+    });
+
+    expect(mockEmbeddingProviderCalls).toEqual(["Updated parent description"]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              // Canonical row carries the vector SET clauses
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchParent#p1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The parent's denormalized copy in the child's partition gets
+              // the vector-free expression
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchChild#c1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will merge the vector SET clause into an expression that already carries a REMOVE clause", async () => {
+    expect.assertions(2);
+
+    const parent = {
+      PK: "SearchParent#p1",
+      SK: "SearchParent",
+      Id: "p1",
+      Type: "SearchParent",
+      Description: "Old description",
+      Notes: "to be removed",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+    const childCopy = {
+      PK: "SearchParent#p1",
+      SK: "SearchChild#c1",
+      Id: "c1",
+      Type: "SearchChild",
+      ParentId: "p1",
+      CreatedAt: "2023-10-03T00:00:00.000Z",
+      UpdatedAt: "2023-10-04T00:00:00.000Z"
+    };
+
+    mockQuery.mockResolvedValueOnce({ Items: [parent, childCopy] });
+
+    // Changing the searchable value while nulling another attribute in the
+    // same call: the shared expression already ends in a REMOVE clause, so
+    // the vector SET must splice in ahead of it on the canonical row only
+    await SearchParent.update("p1", {
+      description: "Updated parent description",
+      notes: null
+    });
+
+    expect(mockEmbeddingProviderCalls).toEqual(["Updated parent description"]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchParent#p1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #Notes",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#Notes": "Notes",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector": "__dyna_vector"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                  ":__dyna_vector": expectedTitanVector
+                }
+              }
+            },
+            {
+              // The copy keeps the SET + REMOVE expression with no vector
+              Update: {
+                TableName: "search-parent-table",
+                Key: { PK: "SearchChild#c1", SK: "SearchParent" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt REMOVE #Notes",
+                ExpressionAttributeNames: {
+                  "#Description": "Description",
+                  "#Notes": "Notes",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Description": "Updated parent description",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  it("will keep Put-based denormalized copies vector-free when updating a foreign key on a searchable entity", async () => {
+    expect.assertions(2);
+
+    const newStore = {
+      PK: "Store#789",
+      SK: "Store",
+      Id: "789",
+      Type: "Store",
+      Name: "New Store",
+      CreatedAt: "2024-01-01T00:00:00.000Z",
+      UpdatedAt: "2024-01-02T00:00:00.000Z"
+    };
+
+    mockTransactGetItems.mockResolvedValueOnce({
+      Responses: [{ Item: newStore }]
+    });
+    mockQuery.mockResolvedValueOnce({ Items: [listingTableItem] });
+
+    await Listing.update("123", { storeId: "789" });
+
+    expect(mockEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "search-table",
+                Key: { PK: "Listing#123", SK: "Listing" },
+                ConditionExpression: "attribute_exists(PK)",
+                UpdateExpression:
+                  "SET #StoreId = :StoreId, #UpdatedAt = :UpdatedAt",
+                ExpressionAttributeNames: {
+                  "#StoreId": "StoreId",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":StoreId": "789",
+                  ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                }
+              }
+            },
+            {
+              // Delete the old link from the previous store's partition
+              Delete: {
+                TableName: "search-table",
+                Key: { PK: "Store#456", SK: "Listing#123" }
+              }
+            },
+            {
+              // Check that the new Store exists
+              ConditionCheck: {
+                ConditionExpression: "attribute_exists(PK)",
+                Key: { PK: "Store#789", SK: "Store" },
+                TableName: "search-table"
+              }
+            },
+            {
+              // Denormalized Listing in the new Store partition: built from
+              // the serialized entity, which emits neither the unregistered
+              // vector nor the content hash — copies carry no vector-search
+              // bookkeeping
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Store#789",
+                  SK: "Listing#123",
+                  Id: "123",
+                  Type: "Listing",
+                  Description: "The very same description",
+                  Category: "Mugs",
+                  StoreId: "789",
+                  CreatedAt: "2023-10-01T00:00:00.000Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z"
+                }
+              }
+            },
+            {
+              // Denormalized new Store in the Listing partition
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_exists(PK)",
+                Item: {
+                  PK: "Listing#123",
+                  SK: "Store",
+                  Id: "789",
+                  Type: "Store",
+                  Name: "New Store",
+                  CreatedAt: "2024-01-01T00:00:00.000Z",
+                  UpdatedAt: "2024-01-02T00:00:00.000Z"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    ]);
   });
 });

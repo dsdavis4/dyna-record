@@ -26,4 +26,42 @@ export type {
   Optional
 } from "./types.js";
 export type { AttributeKind } from "./metadata/types.js";
-export type { SerializedTableMetadata } from "./metadata/schemas.js";
+export type {
+  SearchFilter,
+  SearchFilterParams,
+  SearchFilterValue
+} from "./filter-utils/index.js";
+export type {
+  SerializedTableMetadata,
+  SerializedVectorIndexMetadata
+} from "./metadata/schemas.js";
+export { VectorIndexMetadata, vectorSearchKeys } from "./metadata/index.js";
+export type { VectorIndexOptions } from "./metadata/index.js";
+export {
+  TitanTextEmbedV2,
+  TitanTextEmbedV2Dim512,
+  TitanTextEmbedV2Dim256
+} from "./embedding/types.js";
+export type {
+  EmbeddingModelDescriptor,
+  EmbeddingProvider,
+  VectorDistanceFunction
+} from "./embedding/types.js";
+export type {
+  SearchOptions,
+  SearchQuery,
+  SearchResult,
+  SearchResults,
+  HasMultipleSearchableAttributes,
+  HasSearchableRelationships,
+  IncludedEntities,
+  IndexSearchOptions,
+  InferSearchResults,
+  NarrowMembersByName,
+  ParentSearchOptions,
+  ParentSearchedEntities,
+  SearchableAttributeKeys,
+  SearchableRelationshipEntities,
+  SearchableRelationshipProperties,
+  SearchNotAvailable
+} from "./operations/index.js";

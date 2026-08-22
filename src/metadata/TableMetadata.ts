@@ -14,8 +14,30 @@ import {
   type SerializedTableMetadata,
   TableMetadataTransform
 } from "./schemas.js";
+import type VectorIndexMetadata from "./VectorIndexMetadata.js";
+import { vectorSearchKeys } from "./VectorIndexMetadata.js";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
+
+/**
+ * Projection applied to ordinary reads (`findById`, `query`, internal
+ * prefetches) on a table with a vector index, excluding the vector attribute.
+ * DynamoDB has no exclusion form, so this is an inclusion list: the union of
+ * table aliases across every entity mapped to the table, minus the vector
+ * alias. The union is what makes it safe on adjacency-list queries whose
+ * results span entity types. It saves network bytes and latency, not billed
+ * capacity — reads bill on full item size regardless of projection
+ */
+export interface ReadProjection {
+  /**
+   * The `ProjectionExpression` string of `#`-aliased attribute names
+   */
+  expression: string;
+  /**
+   * The `ExpressionAttributeNames` entries backing the expression
+   */
+  attributeNames: Record<string, string>;
+}
 
 /**
  * Default fields with default table alias. Can be overwritten through {@link TableMetadataOptions} defaultFields
@@ -68,8 +90,17 @@ class TableMetadata {
    *   - updatedAt
    *   - foreignKey
    *   - foreignEntityType
+   *   - the library-managed vector search attributes ({@link vectorSearchKeys})
    */
   public reservedKeys: Record<string, true>;
+
+  /**
+   * The vector-excluding {@link ReadProjection} applied to ordinary reads.
+   * Set at metadata initialization, and only on tables that declare a vector
+   * index — reads on tables without one are untouched. Never serialized
+   * through {@link toJSON}
+   */
+  public readProjection?: ReadProjection;
 
   constructor(options: TableMetadataOptions) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
@@ -99,6 +130,8 @@ class TableMetadata {
     this.reservedKeys = Object.fromEntries(
       defaultAttrNames.map(key => [key, true])
     );
+    // The library-managed vector attribute is reserved on every table
+    this.reservedKeys[vectorSearchKeys.vector] = true;
   }
 
   /**
@@ -165,10 +198,16 @@ class TableMetadata {
   /**
    * Serializes the table metadata to a plain object containing only serializable values.
    * This removes functions, Zod types, serializers, and other non-serializable data.
+   * Vector index metadata is emitted with the model descriptor's name only — never
+   * the provider value, client config, or credentials.
    * @param {EntityMetadataStorage} entities - Entities that belong to this table, keyed by entity class name
+   * @param {VectorIndexMetadata[]} vectorIndexes - Vector indexes defined on the table
    * @returns A plain object representation of the metadata
    */
-  public toJSON(entities: EntityMetadataStorage): SerializedTableMetadata {
+  public toJSON(
+    entities: EntityMetadataStorage,
+    vectorIndexes: VectorIndexMetadata[] = []
+  ): SerializedTableMetadata {
     return TableMetadataTransform.parse({
       name: this.name,
       delimiter: this.delimiter,
@@ -177,7 +216,8 @@ class TableMetadata {
       partitionKeyAttribute: this.partitionKeyAttribute,
       sortKeyAttribute: this.sortKeyAttribute,
       reservedKeys: this.reservedKeys,
-      entities
+      entities,
+      ...(vectorIndexes.length > 0 && { vectorIndexes })
     });
   }
 }

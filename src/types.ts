@@ -45,6 +45,50 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
 export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 
 /**
+ * A branded string type marking an attribute as the entity's searchable text
+ * for vector search. Apply the `@Searchable()` decorator over a string
+ * attribute decorator to a property of this type.
+ *
+ * The brand never leaks into consumer ergonomics: `Searchable` is assignable
+ * to `string` on read, and `create`/`update` inputs accept plain strings
+ * (the brand is stripped by the input mapped types).
+ *
+ * @typeParam T - The underlying string type. Defaults to `string`.
+ */
+export type Searchable<T extends string = string> = Brand<T, "Searchable">;
+
+/**
+ * Brand for attributes declared as inline filters on the vector indexes
+ * containing the entity. Apply the `@SearchFilterable()` decorator over the
+ * attribute's base decorator; the decorator requires this brand on the
+ * property type, which is how filter typing knows the exact declared
+ * filterable set at compile time.
+ *
+ * The brand uses its own phantom key (not the shared `Brand` utility)
+ * because filterables compose with other branded types — a foreign key
+ * filterable is both a `ForeignKey` and filterable, and two brands sharing
+ * one `__brand` key would annihilate in the intersection. The phantom key
+ * also carries the underlying type so create/update inputs recover it.
+ *
+ * The brand never leaks into consumer ergonomics: it is assignable to its
+ * underlying type on read, and create/update inputs accept plain values.
+ *
+ * Nullable attributes compose: instantiate with the optional form of the
+ * underlying type (EX: `SearchFilterable<NullableForeignKey<Brand>>` or
+ * `SearchFilterable<Optional<string>>`). The conditional distributes over
+ * the union so the property stays optional while the present value carries
+ * the brand. Filters always take a defined value — a row where the
+ * attribute is absent simply never matches an equality filter.
+ */
+export type SearchFilterable<
+  T extends Optional<string | number | boolean> = string
+> = T extends undefined
+  ? undefined
+  : T & {
+      readonly __searchFilterable: T;
+    };
+
+/**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
  */
 export type DynamoTableItem = Record<string, NativeAttributeValue>;

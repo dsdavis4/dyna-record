@@ -52,6 +52,7 @@ export const tableItemToEntity = <T extends DynaRecord>(
     if (attrName in tableAttributes) {
       const attrMeta = tableAttributes[attrName];
       const { name: entityKey, serializers } = attrMeta;
+
       if (isKeyOfEntity(entity, entityKey)) {
         const rawVal: unknown = tableItem[attrName];
         const val =

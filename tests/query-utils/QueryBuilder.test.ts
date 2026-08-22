@@ -369,6 +369,126 @@ describe("QueryBuilder", () => {
     });
   });
 
+  it("returns byte-identical output for partition and sort key conditions with a filter", () => {
+    expect.assertions(1);
+
+    const queryBuilder = new QueryBuilder({
+      entityClassName: "Scale",
+      key: { pk: "Scale#123", sk: { $beginsWith: "Scale" } },
+      options: {
+        filter: {
+          name: "Scale-A"
+        }
+      }
+    });
+
+    expect(queryBuilder.build()).toEqual({
+      TableName: "mock-table",
+      KeyConditionExpression: "#PK = :PK2 AND begins_with(#SK, :SK3)",
+      FilterExpression: "#Name = :Name1",
+      ExpressionAttributeNames: {
+        "#Name": "Name",
+        "#PK": "PK",
+        "#SK": "SK"
+      },
+      ExpressionAttributeValues: {
+        ":Name1": "Scale-A",
+        ":PK2": "Scale#123",
+        ":SK3": "Scale"
+      },
+      ConsistentRead: false
+    });
+  });
+
+  it("returns byte-identical output for $or blocks containing $beginsWith and $contains conditions", () => {
+    expect.assertions(1);
+
+    const queryBuilder = new QueryBuilder({
+      entityClassName: "Scale",
+      key: { pk: "Scale#123" },
+      options: {
+        filter: {
+          name: ["Scale-A", "Scale-B"],
+          $or: [
+            { createdAt: { $beginsWith: "2021" } },
+            { name: { $contains: "test" } },
+            { type: "Scale", updatedAt: { $beginsWith: "2022" } }
+          ]
+        }
+      }
+    });
+
+    expect(queryBuilder.build()).toEqual({
+      TableName: "mock-table",
+      KeyConditionExpression: "#PK = :PK7",
+      FilterExpression:
+        "(begins_with(#CreatedAt, :CreatedAt1) OR contains(#Name, :Name2) OR (#Type = :Type3 AND begins_with(#UpdatedAt, :UpdatedAt4))) AND (#Name IN (:Name5,:Name6))",
+      ExpressionAttributeNames: {
+        "#CreatedAt": "CreatedAt",
+        "#Name": "Name",
+        "#PK": "PK",
+        "#Type": "Type",
+        "#UpdatedAt": "UpdatedAt"
+      },
+      ExpressionAttributeValues: {
+        ":CreatedAt1": "2021",
+        ":Name2": "test",
+        ":Name5": "Scale-A",
+        ":Name6": "Scale-B",
+        ":PK7": "Scale#123",
+        ":Type3": "Scale",
+        ":UpdatedAt4": "2022"
+      },
+      ConsistentRead: false
+    });
+  });
+
+  it("returns byte-identical output for an indexName query with a filter", () => {
+    expect.assertions(1);
+
+    const queryBuilder = new QueryBuilder({
+      entityClassName: "Scale",
+      key: { roomId: "123" },
+      options: {
+        indexName: "myIndex",
+        filter: { type: "Scale" }
+      }
+    });
+
+    expect(queryBuilder.build()).toEqual({
+      TableName: "mock-table",
+      IndexName: "myIndex",
+      KeyConditionExpression: "#RoomId = :RoomId2",
+      FilterExpression: "#Type = :Type1",
+      ExpressionAttributeNames: {
+        "#RoomId": "RoomId",
+        "#Type": "Type"
+      },
+      ExpressionAttributeValues: {
+        ":RoomId2": "123",
+        ":Type1": "Scale"
+      },
+      ConsistentRead: false
+    });
+  });
+
+  it("throws the invalid filter key error when a filter key is not an attribute of the entity", () => {
+    expect.assertions(1);
+
+    const queryBuilder = new QueryBuilder({
+      entityClassName: "Scale",
+      key: { pk: "Scale#123" },
+      options: {
+        filter: { "someBadKey.city": "test" }
+      }
+    });
+
+    expect(() => queryBuilder.build()).toThrow(
+      'Invalid filter key "someBadKey.city": attribute "someBadKey" does not exist on this entity. ' +
+        "Valid attributes are: id, type, createdAt, updatedAt, name, roomId, meta, pk, sk"
+    );
+  });
+
   it("returns QueryCommandInput for a top-level $contains filter", () => {
     expect.assertions(1);
 

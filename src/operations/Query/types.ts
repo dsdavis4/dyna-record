@@ -8,7 +8,8 @@ import type {
 import type { IsAny, PartitionKey, SortKey } from "../../types.js";
 import type {
   EntityAttributesInstance,
-  EntityFilterableKeys
+  EntityFilterableKeys,
+  FunctionFields
 } from "../types.js";
 
 /**
@@ -77,10 +78,15 @@ export type EntityKeyConditions<T extends DynaRecord = DynaRecord> = {
 };
 
 /**
- * Key conditions when querying on an index. Can be any attribute on the entity but must be the keys of the given index
+ * Key conditions when querying on an index. Can be any attribute on the entity but must be the keys of the given index.
+ *
+ * Function fields are excluded: beyond being meaningless as key conditions,
+ * their presence would let plain strings satisfy this all-optional type
+ * through shared built-in method names (EX: `String.prototype.search`),
+ * silently routing entity-id queries into the index overload.
  */
 export type IndexKeyConditions<T> = {
-  [K in keyof T]?: QueryKeyConditions;
+  [K in Exclude<keyof T, FunctionFields<T>>]?: QueryKeyConditions;
 };
 
 /**

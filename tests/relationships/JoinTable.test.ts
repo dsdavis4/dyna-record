@@ -194,6 +194,103 @@ describe("JoinTable", () => {
       ]);
     });
 
+    it("will strip the embedding vector from denormalized link records", async () => {
+      expect.assertions(2);
+
+      // Raw prefetched canonical rows bypass entity serialization, so rows of
+      // searchable entities carry the vector — the link records must strip
+      // it; the vector lives on canonical rows only
+      const author = {
+        PK: "Author#1",
+        SK: "Author",
+        Id: "1",
+        Type: "Author",
+        Name: "Author-1",
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z",
+        __dyna_vector: [0.5, 0.5]
+      };
+
+      const book = {
+        PK: "Book#2",
+        SK: "Book",
+        Id: "2",
+        Type: "Book",
+        Name: "Some Name",
+        NumPages: 100,
+        CreatedAt: "2021-10-15T08:31:15.148Z",
+        UpdatedAt: "2022-10-15T08:31:15.148Z",
+        __dyna_vector: [0.25, 0.25]
+      };
+
+      mockTransactGetItems.mockResolvedValueOnce({
+        Responses: [{ Item: author }, { Item: book }]
+      });
+
+      expect(await AuthorBook.create({ authorId: "1", bookId: "2" })).toEqual(
+        undefined
+      );
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Author#1",
+                    SK: "Book#2",
+                    Id: "2",
+                    Type: "Book",
+                    Name: "Some Name",
+                    NumPages: 100,
+                    CreatedAt: "2021-10-15T08:31:15.148Z",
+                    UpdatedAt: "2022-10-15T08:31:15.148Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Author#1",
+                    SK: "Author"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "Book#2",
+                    SK: "Author#1",
+                    Id: "1",
+                    Type: "Author",
+                    Name: "Author-1",
+                    CreatedAt: "2024-02-27T03:19:52.667Z",
+                    UpdatedAt: "2024-02-27T03:19:52.667Z"
+                  },
+                  TableName: "mock-table"
+                }
+              },
+              {
+                ConditionCheck: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  Key: {
+                    PK: "Book#2",
+                    SK: "Book"
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     it("alternate table style - will create a denormalized record entry for each item in a HasAndBelongsToMany relationship", async () => {
       expect.assertions(4);
 
