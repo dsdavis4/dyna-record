@@ -37,6 +37,8 @@ import {
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity,
   Car,
+  Vendor,
+  type Discovery,
   mockEmbeddingProvider,
   mockEmbeddingProviderCalls
 } from "./mockModels.js";
@@ -49,6 +51,7 @@ import {
   HasMany,
   HasOne,
   DateAttribute,
+  IdAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
@@ -12754,6 +12757,263 @@ describe("Update", () => {
         expect(mockSend.mock.calls).toEqual([]);
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       }
+    });
+  });
+  describe("Update an entity whose HasOne child shares its id", () => {
+    // A three-entity chain covering the case where a HasOne child's own id IS
+    // its parent's id (`@IdAttribute` on the foreign key). The child denormalizes
+    // into its parent's partition under a different sort key but the SAME `Id`,
+    // so an update's prefetch of that partition sees two rows whose `id` is the
+    // id being updated. `PlanGroup` gives `GroupedPlan` an owning partition, so a
+    // prefetch that mistakes the lock for the plan is observable as a missing
+    // denormalization write rather than only as a lost related-entity update.
+    @Entity
+    class PlanGroup extends MockTable {
+      declare readonly type: "PlanGroup";
+
+      @StringAttribute({ alias: "Label" })
+      public readonly label: string;
+
+      @HasMany(() => GroupedPlan, {
+        foreignKey: "planGroupId",
+        uniDirectional: true
+      })
+      public readonly plans: GroupedPlan[];
+    }
+
+    @Entity
+    class GroupedPlan extends MockTable {
+      declare readonly type: "GroupedPlan";
+
+      @ForeignKeyAttribute(() => PlanGroup, { alias: "PlanGroupId" })
+      public readonly planGroupId: ForeignKey<PlanGroup>;
+
+      @StringAttribute({ alias: "Status" })
+      public readonly status: string;
+
+      @HasOne(() => PlanLock, { foreignKey: "groupedPlanId" })
+      public readonly lock?: PlanLock;
+    }
+
+    @Entity
+    class PlanLock extends MockTable {
+      declare readonly type: "PlanLock";
+
+      @IdAttribute
+      @ForeignKeyAttribute(() => GroupedPlan, { alias: "GroupedPlanId" })
+      public readonly groupedPlanId: ForeignKey<GroupedPlan>;
+
+      @DateAttribute({ alias: "AcquiredAt" })
+      public readonly acquiredAt: Date;
+
+      @BelongsTo(() => GroupedPlan, { foreignKey: "groupedPlanId" })
+      public readonly groupedPlan: GroupedPlan;
+    }
+
+    beforeEach(() => {
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    afterEach(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    // A HasOne child declared with `@IdAttribute` on its foreign key has its
+    // parent's id as its OWN id, so the prefetch of the parent's partition
+    // returns two rows whose `Id` is the id being updated. The row being updated
+    // must still be identified as the parent — picking the child strands the
+    // parent's foreign key and silently drops every denormalization write from
+    // the transaction, leaving the copies permanently behind the canonical row.
+    it("denormalizes to every copy while the child row is present", async () => {
+      expect.assertions(2);
+
+      const plan: MockTableEntityTableItem<GroupedPlan> = {
+        PK: "GroupedPlan#plan-1",
+        SK: "GroupedPlan",
+        Id: "plan-1",
+        Type: "GroupedPlan",
+        PlanGroupId: "group-1",
+        Status: "active",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      // Sorts AFTER the plan row ("GroupedPlan" < "PlanLock"), so a last-write-wins
+      // match on `Id` alone resolves to this row rather than the plan
+      const lockLink: MockTableEntityTableItem<PlanLock> = {
+        PK: "GroupedPlan#plan-1",
+        SK: "PlanLock",
+        Id: "plan-1",
+        Type: "PlanLock",
+        GroupedPlanId: "plan-1",
+        AcquiredAt: "2023-10-16T03:31:30.000Z",
+        CreatedAt: "2023-10-16T03:31:30.000Z",
+        UpdatedAt: "2023-10-16T03:31:30.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({ Items: [plan, lockLink] });
+
+      expect(
+        await GroupedPlan.update("plan-1", { status: "archived" })
+      ).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "GroupedPlan#plan-1", SK: "GroupedPlan" },
+                  UpdateExpression:
+                    "SET #Status = :Status, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Status": "Status",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Status": "archived",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Denormalized GroupedPlan in the PlanLock partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "PlanLock#plan-1", SK: "GroupedPlan" },
+                  UpdateExpression:
+                    "SET #Status = :Status, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Status": "Status",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Status": "archived",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Denormalized GroupedPlan in the owning PlanGroup partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "PlanGroup#group-1", SK: "GroupedPlan#plan-1" },
+                  UpdateExpression:
+                    "SET #Status = :Status, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Status": "Status",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Status": "archived",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  // The `Vendor` / `Discovery` pair predates this fix: `Discovery` declares
+  // `@IdAttribute` on its foreign key, so its id IS its parent's id and it
+  // denormalizes into the parent's partition carrying that id. No update test
+  // had ever exercised the pair, which is how the id-only match survived. This
+  // covers the related-entity half of the defect on the existing fixtures; the
+  // owning-partition half needs a parent that itself belongs to something, which
+  // `Vendor` does not — see the PlanGroup chain above.
+  describe("Update an entity whose HasOne child shares its id (existing fixtures)", () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    afterEach(() => {
+      mockSend.mockReset();
+      mockQuery.mockReset();
+      mockTransactGetItems.mockReset();
+    });
+
+    it("updates the denormalized copy in the child's partition", async () => {
+      expect.assertions(2);
+
+      const vendor: MockTableEntityTableItem<Vendor> = {
+        PK: "Vendor#v-1",
+        SK: "Vendor",
+        Id: "v-1",
+        Type: "Vendor",
+        Name: "Old Name",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      // Same `Id` as the vendor, and "Discovery" sorts BEFORE "Vendor" here — the
+      // clobber depends only on the child being seen, not on a particular order
+      const discoveryLink: MockTableEntityTableItem<Discovery> = {
+        PK: "Vendor#v-1",
+        SK: "Discovery",
+        Id: "v-1",
+        Type: "Discovery",
+        VendorId: "v-1",
+        Details: "some details",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      mockQuery.mockResolvedValueOnce({ Items: [vendor, discoveryLink] });
+
+      expect(await Vendor.update("v-1", { name: "New Name" })).toBeUndefined();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Vendor#v-1", SK: "Vendor" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "New Name",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              },
+              {
+                // Denormalized Vendor in the Discovery partition
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Discovery#v-1", SK: "Vendor" },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "New Name",
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 });
