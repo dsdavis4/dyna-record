@@ -359,6 +359,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
   /**
    * {reprocess pre-fetch data for processing
+   *
+   * The entity being updated is identified by id AND type, never by id alone.
+   * An id is only unique per entity type: a `HasOne` / `BelongsTo` child
+   * declared with `@IdAttribute` on its foreign key takes its parent's id as
+   * its own, so the parent's partition holds a denormalized child whose `id`
+   * equals the id being updated. Matching on id alone lets that child
+   * overwrite `entityPreUpdate` (it sorts after the parent whenever its type
+   * name does), which strands the parent's foreign keys and drops it from
+   * `relatedEntities` — so `buildBelongsToTransactions` and
+   * `buildUpdateRelatedEntityLinks` both build nothing and the transaction
+   * commits the canonical row alone. The denormalized copies are left behind
+   * the canonical row permanently, with no error raised.
+   *
    * @param id
    * @param entities
    * @param belongsToRelFkAndMetas
@@ -374,7 +387,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const newBelongsToEntityLookup: BelongsToEntityLookup = {};
 
     entities.forEach(entity => {
-      if (id === entity.id) {
+      if (id === entity.id && entity.type === this.EntityClass.name) {
         entityPreUpdate = entity;
       } else if (
         belongsToRelFkAndMetas.some(obj => obj.foreignKeyVal === entity.id)
