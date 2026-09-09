@@ -12,7 +12,7 @@
 
   No source changes are required for consumers; bumping to `2.0.1` is sufficient.
 
-## 2.0.0 - Unreleased
+## 2.0.0 - 2026-08-21
 
 > **Major release: DynamoDB native vector search.** The version is major for one reason: `DynaRecord` gains a static `search` method, and a subclass that already declares its own static `search` member no longer compiles against the new base-class signature — rename or align it when upgrading, per the 1.0.0 commitment that breaking changes to the public API only ship in a new major version. No other 1.0.x API or behavioral contract changes shape; consumers without their own static `search` member upgrade with no source changes. (There is deliberately no instance-level `search`: instances hydrated by `findById`/`query` are typed without relationship properties, so an instance surface could not be compile-checked — the static surface always can be, and `Parent.search(instance.id, ...)` covers the same call.)
 
