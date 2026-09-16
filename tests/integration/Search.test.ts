@@ -29,7 +29,10 @@ import {
   StringAttribute,
   Table
 } from "../../src/decorators/index.js";
-import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
+import {
+  TitanTextEmbedV2,
+  TitanTextEmbedV2Dim512
+} from "../../src/embedding/types.js";
 import Metadata from "../../src/metadata/index.js";
 import { Search } from "../../src/operations/index.js";
 import { type SearchFilter } from "../../src/filter-utils/index.js";
@@ -968,7 +971,18 @@ class DualDoc extends DualIndexTable {
   public readonly parentId: ForeignKey<DualParent>;
 }
 
-DualIndexTable.vectorIndexes({
+/**
+ * The doc index's own provider — the two same-parent indexes deliberately
+ * differ in model and provider so per-index embedding is observable
+ */
+const mockDualDocEmbed = vi.fn(
+  async (_text: string): Promise<number[]> =>
+    await Promise.resolve(
+      new Array<number>(TitanTextEmbedV2Dim512.dimensions).fill(0.2)
+    )
+);
+
+const { dualIndexOne, dualIndexTwo } = DualIndexTable.vectorIndexes({
   dualIndexOne: {
     name: "dual-index-one",
     vectorAttribute: "__dyna_vector",
@@ -980,8 +994,8 @@ DualIndexTable.vectorIndexes({
   dualIndexTwo: {
     name: "dual-index-two",
     vectorAttribute: "__dyna_vector_two",
-    model: TitanTextEmbedV2,
-    provider: mockEmbeddingProvider,
+    model: TitanTextEmbedV2Dim512,
+    provider: mockDualDocEmbed,
     scopedBy: () => DualParent,
     members: [() => DualDoc]
   }
@@ -1174,6 +1188,86 @@ describe("public search surfaces", () => {
       );
     }
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("disjoint same-parent indexes each search their own IndexName over the shared scope value", async () => {
+    expect.assertions(3);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    await dualIndexOne.search("parent-1", "spare parts");
+    await dualIndexTwo.search("parent-1", "assembly guide");
+
+    // Each index embeds through its own provider and model
+    expect(mockEmbeddingProviderCalls).toEqual(["spare parts"]);
+    expect(mockDualDocEmbed).toHaveBeenCalledWith("assembly guide");
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "dual-index-table",
+          IndexName: "dual-index-one",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#ParentId = :ParentId",
+          ExpressionAttributeNames: { "#ParentId": "ParentId" },
+          ExpressionAttributeValues: { ":ParentId": "parent-1" }
+        }
+      ],
+      [
+        {
+          TableName: "dual-index-table",
+          IndexName: "dual-index-two",
+          SearchVector: new Array<number>(512).fill(0.2),
+          TopK: 10,
+          SearchConditionExpression: "#ParentId = :ParentId",
+          ExpressionAttributeNames: { "#ParentId": "ParentId" },
+          ExpressionAttributeValues: { ":ParentId": "parent-1" }
+        }
+      ]
+    ]);
+  });
+
+  it("validates a precomputed vector against the invoked index's dimensions when same-table indexes differ", async () => {
+    expect.assertions(4);
+
+    // 1024 dimensions satisfies index one but not index two
+    const titanSizedVector = new Array<number>(1024).fill(0.25);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+    await dualIndexOne.search("parent-1", { vector: titanSizedVector });
+    expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        IndexName: "dual-index-one",
+        SearchVector: titanSizedVector
+      })
+    );
+
+    try {
+      await dualIndexTwo.search("parent-1", { vector: titanSizedVector });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Search vector has 1024 dimensions; vector index dual-index-two requires 512 dimensions"
+      );
+    }
+    // Neither index's provider is consulted for precomputed vectors
+    expect(mockDualDocEmbed).not.toHaveBeenCalled();
+  });
+
+  it("rejects an in option naming the other index's member — membership is per index", async () => {
+    expect.assertions(2);
+
+    try {
+      await dualIndexOne.search("parent-1", "spare parts", {
+        // @ts-expect-error: DualDoc belongs to the other index; this exercises the runtime backstop
+        in: "DualDoc"
+      });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toContain("DualDoc");
+    }
   });
 
   it("errors at runtime when in names a non-relationship (plain JS backstop)", async () => {
