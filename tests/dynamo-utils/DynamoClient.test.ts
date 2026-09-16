@@ -230,8 +230,7 @@ describe("DynamoClient", () => {
             Update: {
               TableName: "mock-table",
               Key: { PK: "Faq#123", SK: "Faq" },
-              UpdateExpression:
-                "SET #__dyna_vector_faq = :__dyna_vector_faq",
+              UpdateExpression: "SET #__dyna_vector_faq = :__dyna_vector_faq",
               ExpressionAttributeValues: {
                 ":__dyna_vector_faq": [0.1, 0.2, 0.3, 0.4]
               }
@@ -259,8 +258,7 @@ describe("DynamoClient", () => {
               Update: {
                 TableName: "mock-table",
                 Key: { PK: "Faq#123", SK: "Faq" },
-                UpdateExpression:
-                  "SET #__dyna_vector_faq = :__dyna_vector_faq",
+                UpdateExpression: "SET #__dyna_vector_faq = :__dyna_vector_faq",
                 ExpressionAttributeValues: {
                   ":__dyna_vector_faq": "[vector:4]"
                 }

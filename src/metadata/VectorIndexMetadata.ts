@@ -60,9 +60,7 @@ export const isVectorAttributeKey = (key: string): boolean =>
  * @param item - The raw table item to strip
  * @returns The item without vector attributes
  */
-export const stripVectorAttributes = (
-  item: DynamoTableItem
-): DynamoTableItem =>
+export const stripVectorAttributes = (item: DynamoTableItem): DynamoTableItem =>
   Object.fromEntries(
     Object.entries(item).filter(([key]) => !isVectorAttributeKey(key))
   );
@@ -125,8 +123,9 @@ export interface VectorIndexOptions {
  * The member entity union of one index declaration: the entities of its
  * explicit `members:` list.
  */
-export type VectorIndexMembers<O extends VectorIndexOptions> =
-  IncludedEntities<O["members"]>;
+export type VectorIndexMembers<O extends VectorIndexOptions> = IncludedEntities<
+  O["members"]
+>;
 
 /**
  * Whether one index declaration is scoped (`scopedBy` present), selecting the
@@ -267,7 +266,9 @@ export type ValidateVectorIndexes<
           : NonSearchableMemberError<NonSearchableMembers<T[K]>>
         : DuplicateIndexNameError<T[K]["name"]>
       : DuplicateVectorAttributeError<T[K]["vectorAttribute"]>
-    : UnknownVectorIndexOptionError<Exclude<keyof T[K], keyof VectorIndexOptions>>;
+    : UnknownVectorIndexOptionError<
+        Exclude<keyof T[K], keyof VectorIndexOptions>
+      >;
 };
 
 /**

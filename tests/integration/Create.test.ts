@@ -5618,7 +5618,9 @@ describe("Create searchable entities (vector write path)", () => {
     });
     // Article is owned by the article index, so its own provider embedded
     // this write — the store index's provider was never called
-    expect(mockArticleEmbeddingProviderCalls).toEqual(["Fresh article content"]);
+    expect(mockArticleEmbeddingProviderCalls).toEqual([
+      "Fresh article content"
+    ]);
     expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
