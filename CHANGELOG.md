@@ -1,4 +1,4 @@
-## 3.0.0 - Unreleased
+## 3.0.0 - 2026-09-16
 
 > **Major release: per-index vector attributes and explicit membership.** The version is major because previously-valid vector search declarations no longer compile or initialize: the per-call `vectorIndex()` static is removed in favor of a single `vectorIndexes({...})` declaration per table, every index must declare its own unique `vectorAttribute` and its complete `members` list, and the pre-3.0 shared-attribute model — where all of a table's indexes derived overlapping membership over one `__dyna_vector` attribute — is gone. **The DynamoDB side is not breaking**: an existing index migrated with `vectorAttribute: "__dyna_vector"` keeps its exact provisioning contract — no re-provision, no data migration (its `fingerprint` changes format once; see below). The migration is mechanical; the README's [Migrating from 2.x](README.md#migrating-from-2x) section is the complete guide. Tables without vector indexes upgrade with no source changes.
 
