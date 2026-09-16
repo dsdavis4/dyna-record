@@ -46,7 +46,7 @@ interface SearchCondition {
  * exactly one `SearchVectors` operation.
  *
  * Search is anchored on the index definition and its table — not an entity
- * class — because a global index search has no anchor entity and every search
+ * class — because an unscoped index search has no anchor entity and every search
  * returns a union of the index's member entities. Results are dispatched to
  * their entity classes by the table's `type` discriminator.
  *
@@ -175,7 +175,7 @@ class Search {
       values[`:${hashAlias}`] = scopeId;
     } else if (options?.scopeId !== undefined) {
       throw new ValidationError(
-        `Vector index ${this.#index.name} is global — it does not take a scope id`
+        `Vector index ${this.#index.name} is unscoped — it does not take a scope id`
       );
     }
 

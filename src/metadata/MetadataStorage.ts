@@ -87,6 +87,27 @@ const hasDeclaredMembers = (
   members: Optional<VectorIndexOptions["members"]>
 ): boolean => members !== undefined && members.length > 0;
 
+/**
+ * Records a declaration's claim on a table-unique value, throwing when
+ * another declaration already claimed it
+ * @param claimed - Values already claimed, keyed to the declaration that claimed each
+ * @param value - The value this declaration claims
+ * @param claimant - The declaration key claiming it
+ * @param describeCollision - Builds the error message from the prior claimant's key
+ */
+const claimUniqueValue = (
+  claimed: Map<string, string>,
+  value: string,
+  claimant: string,
+  describeCollision: (holder: string) => string
+): void => {
+  const holder = claimed.get(value);
+  if (holder !== undefined) {
+    throw new Error(describeCollision(holder));
+  }
+  claimed.set(value, claimant);
+};
+
 const FILTERABLE_ATTRIBUTE_KINDS = attributeKindsWhere(FILTERABLE_BY_KIND);
 
 /**
@@ -108,6 +129,14 @@ class MetadataStorage {
    */
   readonly #owningVectorIndexByEntity: Record<string, VectorIndexMetadata> =
     {};
+
+  /**
+   * The vector attributes of every index on a searchable entity's table
+   * other than its owner's (keyed by entity name), resolved at metadata
+   * initialization. Vector writes REMOVE these so a row never stays
+   * resident in an index that no longer owns its entity
+   */
+  readonly #siblingVectorAttributesByEntity: Record<string, string[]> = {};
 
   /**
    * Side registry of @Searchable marks (attribute names keyed by entity name).
@@ -371,9 +400,8 @@ class MetadataStorage {
    * graph when index constants are declared at module evaluation. Entity
    * thunks in the options are resolved at metadata initialization, not here;
    * everything checkable from the declarations alone (one call per table,
-   * vector attribute shape and uniqueness, name uniqueness, a global index
-   * being the table's only index, a scoped index declaring members) fails
-   * fast here at definition time.
+   * vector attribute shape and uniqueness, name uniqueness, and a non-empty
+   * members list on every index) fails fast here at definition time.
    * @param tableClassName - Name of the table class the indexes are defined on
    * @param defs - Declarations keyed by export name; see {@link VectorIndexOptions}
    * @returns The registered {@link VectorIndexMetadata} constructs, keyed as declared
@@ -411,21 +439,21 @@ class MetadataStorage {
         );
       }
 
-      const attributeHolder = seenAttributes.get(options.vectorAttribute);
-      if (attributeHolder !== undefined) {
-        throw new Error(
-          `Vector indexes ${attributeHolder} and ${key} on table ${tableClassName} both declare vectorAttribute ${options.vectorAttribute}. The vector attribute is an index's physical membership surface — give each index its own`
-        );
-      }
-      seenAttributes.set(options.vectorAttribute, key);
+      claimUniqueValue(
+        seenAttributes,
+        options.vectorAttribute,
+        key,
+        holder =>
+          `Vector indexes ${holder} and ${key} on table ${tableClassName} both declare vectorAttribute ${options.vectorAttribute}. The vector attribute is an index's physical membership surface — give each index its own`
+      );
 
-      const nameHolder = seenNames.get(options.name);
-      if (nameHolder !== undefined) {
-        throw new Error(
-          `Vector indexes ${nameHolder} and ${key} on table ${tableClassName} both declare the IndexName ${options.name}. Give each index its own name`
-        );
-      }
-      seenNames.set(options.name, key);
+      claimUniqueValue(
+        seenNames,
+        options.name,
+        key,
+        holder =>
+          `Vector indexes ${holder} and ${key} on table ${tableClassName} both declare the IndexName ${options.name}. Give each index its own name`
+      );
 
       if (!hasDeclaredMembers(options.members)) {
         throw new Error(
@@ -735,7 +763,11 @@ class MetadataStorage {
         );
       }
 
-      this.#owningVectorIndexByEntity[entityName] = owners[0];
+      const [owner] = owners;
+      this.#owningVectorIndexByEntity[entityName] = owner;
+      this.#siblingVectorAttributesByEntity[entityName] = indexes
+        .filter(index => index !== owner)
+        .map(index => index.vectorAttribute);
     }
   }
 
@@ -752,6 +784,18 @@ class MetadataStorage {
   ): Optional<VectorIndexMetadata> {
     this.init();
     return this.#owningVectorIndexByEntity[entityName];
+  }
+
+  /**
+   * Returns the vector attributes a searchable entity's row must not carry —
+   * every index on its table except its owner. Vector writes REMOVE these so
+   * an entity moved between indexes leaves no stale vector behind
+   * @param entityName - Name of the searchable entity
+   * @returns The sibling indexes' vector attributes, empty when the table has one index
+   */
+  public getSiblingVectorAttributes(entityName: string): string[] {
+    this.init();
+    return this.#siblingVectorAttributesByEntity[entityName] ?? [];
   }
 
   /**

@@ -40,7 +40,7 @@ export interface SearchOptions {
   /**
    * The scope value when searching a `scopedBy` vector index (EX: the parent
    * entity's id). Required for scoped indexes — a scoped index is queryable
-   * only per scope value. Global indexes take no scope id.
+   * only per scope value. Unscoped indexes take no scope id.
    */
   scopeId?: string;
   /**
@@ -256,13 +256,9 @@ export type NarrowMembersByName<Members extends DynaRecord, Name> = [
 
 /**
  * Options of the index-construct search surface. `in:` accepts a member
- * entity name — member entities include `include:` members, which have no
- * relationship property name on the scope parent.
- *
- * On a global index the member union is not statically enumerable (any
- * searchable entity of the table is a member), so `in:` and `filter` fall
- * back to their permissive runtime shapes — the runtime guards remain
- * authoritative.
+ * entity name — membership is declared explicitly on the index, so it
+ * includes members that have no relationship property name on the scope
+ * parent, and scoped and unscoped indexes narrow identically.
  */
 export interface IndexSearchOptions<
   Members extends DynaRecord,

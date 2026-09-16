@@ -108,7 +108,7 @@ export interface VectorIndexOptions {
    * Optional entity thunk selecting the scope parent. The foreign key
    * attribute referencing this entity becomes the index `HASH`, making the
    * index queryable only per scope value. Without `scopedBy` the index
-   * compiles to no `HASH` and its searches are global.
+   * compiles to no `HASH` and its searches span its whole membership.
    */
   scopedBy?: () => EntityClass<DynaRecord>;
   /**
@@ -168,30 +168,17 @@ type AreEqualLiterals<A, B> = string extends A
       : false;
 
 /**
- * The other declaration keys sharing one entry's `vectorAttribute` literal.
+ * The other declaration keys whose `Field` literal equals one entry's —
+ * the table-scoped uniqueness check both `vectorAttribute` and `name` use.
  */
-type KeysSharingVectorAttribute<
+type KeysSharingField<
   T extends Record<string, VectorIndexOptions>,
-  K extends keyof T
+  K extends keyof T,
+  Field extends keyof VectorIndexOptions
 > = {
   [J in Exclude<keyof T, K>]: AreEqualLiterals<
-    T[J]["vectorAttribute"],
-    T[K]["vectorAttribute"]
-  > extends true
-    ? J
-    : never;
-}[Exclude<keyof T, K>];
-
-/**
- * The other declaration keys sharing one entry's index `name` literal.
- */
-type KeysSharingIndexName<
-  T extends Record<string, VectorIndexOptions>,
-  K extends keyof T
-> = {
-  [J in Exclude<keyof T, K>]: AreEqualLiterals<
-    T[J]["name"],
-    T[K]["name"]
+    T[J][Field],
+    T[K][Field]
   > extends true
     ? J
     : never;
@@ -263,8 +250,9 @@ export interface UnknownVectorIndexOptionError<K> {
  * whose `vectorAttribute` or `name` is also declared by another entry, or
  * whose members include a non-searchable entity, resolves to a branded error
  * surface so compilation fails on the offending declaration. Widened
- * (non-literal) values pass — the metadata-initialization backstop validates
- * them at runtime.
+ * (non-literal) values pass: a duplicate attribute or name is then caught by
+ * the definition-time backstop in `addVectorIndexes`, and a non-searchable
+ * member at metadata initialization.
  */
 export type ValidateVectorIndexes<
   T extends Record<string, VectorIndexOptions>
@@ -272,8 +260,8 @@ export type ValidateVectorIndexes<
   [K in keyof T]: [Exclude<keyof T[K], keyof VectorIndexOptions>] extends [
     never
   ]
-    ? [KeysSharingVectorAttribute<T, K>] extends [never]
-      ? [KeysSharingIndexName<T, K>] extends [never]
+    ? [KeysSharingField<T, K, "vectorAttribute">] extends [never]
+      ? [KeysSharingField<T, K, "name">] extends [never]
         ? [NonSearchableMembers<T[K]>] extends [never]
           ? T[K]
           : NonSearchableMemberError<NonSearchableMembers<T[K]>>
@@ -293,7 +281,7 @@ interface ResolveSearchSchemaParams {
   memberEntities: string[];
   /**
    * Table alias of the scoping foreign key attribute (the index `HASH`).
-   * Undefined for global indexes.
+   * Undefined for unscoped indexes.
    */
   hashAlias?: string;
   /**
@@ -380,7 +368,7 @@ class VectorIndexMetadata<
   public memberEntities: string[];
   /**
    * Table alias of the scoping foreign key attribute (the index `HASH`).
-   * Undefined for global indexes. Placeholder, resolved at metadata
+   * Undefined for unscoped indexes. Placeholder, resolved at metadata
    * initialization
    */
   public hashAlias?: string;
@@ -503,11 +491,11 @@ class VectorIndexMetadata<
       });
     }
 
-    // Mirror of the scoped guard above: a scoped-shape call on a global
+    // Mirror of the scoped guard above: a scoped-shape call on an unscoped
     // index would otherwise silently embed the scope id as the query text
     if (isSearchQuery(queryOrOptions) || maybeOptions !== undefined) {
       throw new ValidationError(
-        `Vector index ${this.name} is global — it does not take a scope id: search(query, options)`
+        `Vector index ${this.name} is unscoped — it does not take a scope id: search(query, options)`
       );
     }
 

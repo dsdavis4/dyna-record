@@ -35,13 +35,6 @@ const vectorPlaceholder = (dimensions: number): string =>
   `[vector:${String(dimensions)}]`;
 
 /**
- * Returns a copy of transact write params safe for logging: vector embedding
- * values riding in Put items or Update expression values are replaced with a
- * placeholder carrying the dimension count. Embeddings reconstruct their
- * source text under published inversion techniques, so vector values must
- * never reach logs — the command itself keeps the real values
- */
-/**
  * Whether a table item key or a `:`-prefixed expression value key names a
  * library-managed vector attribute
  * @param key - The item or expression value key to test
@@ -76,6 +69,15 @@ const redactVectorEntries = (record: DynamoTableItem): DynamoTableItem =>
     )
   );
 
+/**
+ * Returns a copy of transact write params safe for logging: vector embedding
+ * values riding in Put items or Update expression values are replaced with a
+ * placeholder carrying the dimension count. Embeddings reconstruct their
+ * source text under published inversion techniques, so vector values must
+ * never reach logs — the command itself keeps the real values
+ * @param params - The transact write params about to be logged
+ * @returns The params with vector values redacted, or the same reference when none are present
+ */
 const redactVectorWrites = (
   params: TransactWriteCommandInput
 ): TransactWriteCommandInput => {

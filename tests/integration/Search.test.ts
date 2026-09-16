@@ -320,7 +320,7 @@ describe("Search", () => {
     ]);
   });
 
-  it("searches a global index with no condition expression at all", async () => {
+  it("searches an unscoped index with no condition expression at all", async () => {
     expect.assertions(1);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
@@ -339,7 +339,7 @@ describe("Search", () => {
     ]);
   });
 
-  it("compiles only the type predicate when narrowing a global index", async () => {
+  it("compiles only the type predicate when narrowing an unscoped index", async () => {
     expect.assertions(1);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
@@ -533,7 +533,7 @@ describe("Search", () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("rejects a scope id on a global index", async () => {
+  it("rejects a scope id on an unscoped index", async () => {
     expect.assertions(3);
 
     try {
@@ -541,7 +541,7 @@ describe("Search", () => {
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual(
-        "Vector index global-search-index is global — it does not take a scope id"
+        "Vector index global-search-index is unscoped — it does not take a scope id"
       );
     }
     expect(mockSend).not.toHaveBeenCalled();
@@ -1142,7 +1142,7 @@ describe("public search surfaces", () => {
     ]);
   });
 
-  it("index construct search on a global index takes the query first", async () => {
+  it("index construct search on an unscoped index takes the query first", async () => {
     expect.assertions(1);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
@@ -1299,7 +1299,7 @@ describe("public search surfaces", () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
-  it("errors when a global index construct is called with the scoped signature (plain JS backstop)", async () => {
+  it("errors when an unscoped index construct is called with the scoped signature (plain JS backstop)", async () => {
     expect.assertions(3);
 
     try {
@@ -1308,7 +1308,7 @@ describe("public search surfaces", () => {
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual(
-        "Vector index global-search-index is global — it does not take a scope id: search(query, options)"
+        "Vector index global-search-index is unscoped — it does not take a scope id: search(query, options)"
       );
     }
     expect(mockSend).not.toHaveBeenCalled();

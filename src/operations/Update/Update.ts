@@ -36,7 +36,9 @@ import type {
   Optional,
   WithRequired
 } from "../../types.js";
-import Metadata from "../../metadata/index.js";
+import Metadata, {
+  type VectorIndexMetadata
+} from "../../metadata/index.js";
 import {
   type EntityAttributesInstance,
   type EntityAttributesOnly
@@ -555,24 +557,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const value: unknown = attributes[searchableMeta.name];
 
-    // The owning index's attribute receives the vector; every other index's
-    // attribute is removed from the row so an entity moved between indexes
-    // converges back to exactly one vector on any vector-touching write
+    // The owning index's attribute receives the vector; its siblings are
+    // removed from the row so an entity moved between indexes converges back
+    // to exactly one vector on any vector-touching write
     const owningIndex = Metadata.getOwningVectorIndex(this.EntityClass.name);
     if (owningIndex === undefined) return;
-    const otherVectorAttributes = Metadata.getVectorIndexes(
-      this.entityMetadata.tableClassName
-    )
-      .map(index => index.vectorAttribute)
-      .filter(attribute => attribute !== owningIndex.vectorAttribute);
 
     if (value === null || value === "") {
-      this.appendVectorClauses(
-        canonicalUpdate,
-        owningIndex.vectorAttribute,
-        otherVectorAttributes,
-        undefined
-      );
+      this.appendVectorClauses(canonicalUpdate, owningIndex, undefined);
       return;
     }
 
@@ -600,12 +592,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       searchableMeta.name
     );
 
-    this.appendVectorClauses(
-      canonicalUpdate,
-      owningIndex.vectorAttribute,
-      otherVectorAttributes,
-      searchableVector
-    );
+    this.appendVectorClauses(canonicalUpdate, owningIndex, searchableVector);
   }
 
   /**
@@ -659,24 +646,26 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * or link records.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
-   * @param owningAttribute - The owning index's vector attribute.
-   * @param otherVectorAttributes - The table's other declared vector attributes.
+   * @param owningIndex - The vector index owning the entity being updated.
    * @param searchableVector - The vector to SET, or undefined to REMOVE the owning attribute too.
    * @private
    */
   private appendVectorClauses(
     canonicalUpdate: CanonicalUpdateItem,
-    owningAttribute: string,
-    otherVectorAttributes: string[],
+    owningIndex: VectorIndexMetadata,
     searchableVector: Optional<number[]>
   ): void {
+    const owningAttribute = owningIndex.vectorAttribute;
     const owningName = `#${owningAttribute}`;
+    const siblingAttributes = Metadata.getSiblingVectorAttributes(
+      this.EntityClass.name
+    );
 
     canonicalUpdate.ExpressionAttributeNames = {
       ...canonicalUpdate.ExpressionAttributeNames,
       [owningName]: owningAttribute,
       ...Object.fromEntries(
-        otherVectorAttributes.map(attribute => [`#${attribute}`, attribute])
+        siblingAttributes.map(attribute => [`#${attribute}`, attribute])
       )
     };
 
@@ -710,7 +699,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const removedNames = [
       ...(searchableVector === undefined ? [owningName] : []),
-      ...otherVectorAttributes.map(attribute => `#${attribute}`)
+      ...siblingAttributes.map(attribute => `#${attribute}`)
     ];
 
     if (removedNames.length > 0) {
