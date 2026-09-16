@@ -136,7 +136,8 @@ describe("vectorIndexes", () => {
             name: "invalid-index",
             vectorAttribute: "__dyna_vector",
             model: TitanTextEmbedV2,
-            provider: testProvider
+            provider: testProvider,
+            members: [() => Widget]
           }
         })
       ).toThrow(
@@ -337,7 +338,8 @@ describe("vectorIndexes", () => {
             name: "bad-index",
             vectorAttribute: "Embedding",
             model: TitanTextEmbedV2,
-            provider: testProvider
+            provider: testProvider,
+            members: []
           }
         })
       ).toThrow(
@@ -345,8 +347,8 @@ describe("vectorIndexes", () => {
       );
     });
 
-    it("throws when a global index is declared alongside another index", async () => {
-      expect.assertions(1);
+    it("allows a scoped and an unscoped index to coexist with disjoint members", async () => {
+      expect.assertions(3);
       const modules = await loadFresh();
       const {
         default: DynaRecord,
@@ -386,29 +388,39 @@ describe("vectorIndexes", () => {
         public readonly description: SearchableText;
       }
 
-      expect(() =>
-        FreshTable.vectorIndexes({
-          globalIndex: {
-            name: "global-index",
-            vectorAttribute: "__dyna_vector",
-            model: TitanTextEmbedV2,
-            provider: testProvider
-          },
-          scopedIndex: {
-            name: "scoped-index",
-            vectorAttribute: "__dyna_vector_scoped",
-            model: TitanTextEmbedV2,
-            provider: testProvider,
-            scopedBy: () => Store,
-            members: [() => Listing]
-          }
-        })
-      ).toThrow(
-        "Vector index global-index on table FreshTable is global, but the table declares other indexes. A global index spans every searchable entity of the table, so it must be the table's only vector index"
-      );
+      @Entity
+      class Faq extends FreshTable {
+        declare readonly type: "Faq";
+
+        @Searchable()
+        @StringAttribute({ alias: "Question" })
+        public readonly question: SearchableText;
+      }
+
+      const { scopedIndex, unscopedIndex } = FreshTable.vectorIndexes({
+        scopedIndex: {
+          name: "scoped-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Store,
+          members: [() => Listing]
+        },
+        unscopedIndex: {
+          name: "unscoped-index",
+          vectorAttribute: "__dyna_vector_faq",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => Faq]
+        }
+      });
+
+      expect(() => FreshTable.metadata()).not.toThrow();
+      expect(scopedIndex.memberEntities).toStrictEqual(["Listing"]);
+      expect(unscopedIndex.memberEntities).toStrictEqual(["Faq"]);
     });
 
-    it("throws when a scoped index declares no members", async () => {
+    it("throws when an index declares no members", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
       const { default: DynaRecord, Table, Entity, PartitionKeyAttribute, SortKeyAttribute, TitanTextEmbedV2 } =
@@ -430,6 +442,7 @@ describe("vectorIndexes", () => {
 
       expect(() =>
         FreshTable.vectorIndexes({
+          // @ts-expect-error: members is required on every index; this exercises the runtime backstop
           memberlessIndex: {
             name: "memberless-index",
             vectorAttribute: "__dyna_vector",
@@ -439,7 +452,7 @@ describe("vectorIndexes", () => {
           }
         })
       ).toThrow(
-        "Vector index memberless-index is scoped but declares no members. A scoped index's members list is its complete membership — list every searchable entity the index owns"
+        "Vector index memberless-index declares no members. An index's members list is its complete membership — list every searchable entity the index owns"
       );
     });
   });
@@ -811,7 +824,7 @@ describe("vectorIndexes", () => {
       );
     });
 
-    it("resolves a global index's membership to every searchable entity of the table", async () => {
+    it("resolves an unscoped index's explicit membership without requiring a scoping foreign key", async () => {
       expect.assertions(3);
       const modules = await loadFresh();
       const {
@@ -853,23 +866,21 @@ describe("vectorIndexes", () => {
         public readonly text: SearchableText;
       }
 
-      void Article;
-      void Note;
-
-      const { globalIndex } = FreshTable.vectorIndexes({
-        globalIndex: {
-          name: "global-index",
+      const { unscopedIndex } = FreshTable.vectorIndexes({
+        unscopedIndex: {
+          name: "unscoped-index",
           vectorAttribute: "__dyna_vector",
           model: TitanTextEmbedV2,
-          provider: testProvider
+          provider: testProvider,
+          members: [() => Article, () => Note]
         }
       });
 
       FreshTable.metadata();
 
-      expect(globalIndex.memberEntities).toStrictEqual(["Article", "Note"]);
-      expect(Metadata.getOwningVectorIndex("Article")).toBe(globalIndex);
-      expect(Metadata.getOwningVectorIndex("Note")).toBe(globalIndex);
+      expect(unscopedIndex.memberEntities).toStrictEqual(["Article", "Note"]);
+      expect(Metadata.getOwningVectorIndex("Article")).toBe(unscopedIndex);
+      expect(Metadata.getOwningVectorIndex("Note")).toBe(unscopedIndex);
     });
   });
 });

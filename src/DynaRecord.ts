@@ -639,17 +639,17 @@ abstract class DynaRecord implements DynaRecordBase {
    * `search` surface and provisioning definition.
    *
    * Every index declares its own `vectorAttribute` (the physical attribute
-   * its members' vectors are written under) and its own embedding config,
-   * so indexes have fully independent physical membership: each searchable
-   * entity belongs to exactly one index and is ingested, billed, and
-   * searchable only there.
+   * its members' vectors are written under), its own embedding config, and
+   * its complete membership with `members:` — there is no derived or
+   * universal membership. Indexes have fully independent physical
+   * membership: each searchable entity belongs to exactly one index and is
+   * ingested, billed, and searchable only there.
    *
-   * A **scoped** index (`scopedBy`) declares its complete membership with
-   * `members:`; the scope parent's foreign key becomes the index `HASH`, and
-   * the construct's `search` takes the scope id first with `in:` and result
-   * unions typed to that membership. A **global** index omits both — its
-   * membership is every searchable entity of the table, it must be the
-   * table's only index, and its `search` takes the query first.
+   * A **scoped** index (`scopedBy`) makes the scope parent's foreign key
+   * the index `HASH`, and its construct's `search` takes the scope id first
+   * with `in:` and result unions typed to the membership. An **unscoped**
+   * index omits `scopedBy` — it has no `HASH`, its `search` takes the query
+   * first, and every search spans its whole membership.
    *
    * Only table classes (classes decorated with `@Table`) may declare vector
    * indexes; calling this on an entity class throws, as does a second call

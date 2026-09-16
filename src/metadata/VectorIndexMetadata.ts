@@ -86,28 +86,21 @@ export interface VectorIndexOptions {
    */
   scopedBy?: () => EntityClass<DynaRecord>;
   /**
-   * Entity thunks declaring a scoped index's complete membership. Nothing is
-   * derived from the scope parent's declared relationships — the list is the
-   * membership, and every listed entity must carry a `@Searchable` attribute
-   * and the scoping foreign key. Required (non-empty) for scoped indexes;
-   * rejected on global indexes, whose membership is every searchable entity
-   * of the table.
+   * Entity thunks declaring the index's complete membership. Nothing is
+   * derived — the list is the membership, there is no universal membership,
+   * and every listed entity must carry a `@Searchable` attribute. Members of
+   * a scoped index must also carry the scoping foreign key. Required and
+   * non-empty on every index.
    */
-  members?: Array<() => EntityClass<DynaRecord>>;
+  members: Array<() => EntityClass<DynaRecord>>;
 }
 
 /**
  * The member entity union of one index declaration: the entities of its
- * explicit `members:` list. A global index (no `members:`) resolves to the
- * base {@link DynaRecord} — its membership is every searchable entity of the
- * table and is only known at runtime, so results discriminate on
- * `entity.type`.
+ * explicit `members:` list.
  */
-export type VectorIndexMembers<O extends VectorIndexOptions> = O extends {
-  members: infer M extends ReadonlyArray<() => EntityClass<DynaRecord>>;
-}
-  ? IncludedEntities<M>
-  : DynaRecord;
+export type VectorIndexMembers<O extends VectorIndexOptions> =
+  IncludedEntities<O["members"]>;
 
 /**
  * Whether one index declaration is scoped (`scopedBy` present), selecting the
@@ -169,9 +162,9 @@ interface ResolveSearchSchemaParams {
  *
  * The type parameters are instantiated by the `vectorIndexes` factory and
  * drive the `search` surface only: `Members` is the index's member entity
- * union (the explicit `members:` list; unnarrowed for global indexes) and
- * `Scoped` selects the scope-id-first search signature. Metadata-internal
- * code uses the defaults.
+ * union (the explicit `members:` list) and `Scoped` selects the
+ * scope-id-first search signature. Metadata-internal code uses the
+ * defaults.
  *
  * @template Members - Union of the index's member entity types.
  * @template Scoped - Whether the index is scoped (`scopedBy`).
@@ -219,9 +212,9 @@ class VectorIndexMetadata<
    */
   public readonly scopedBy?: () => EntityClass<DynaRecord>;
   /**
-   * Entity thunks declaring a scoped index's complete membership
+   * Entity thunks declaring the index's complete membership
    */
-  public readonly members?: ReadonlyArray<() => EntityClass<DynaRecord>>;
+  public readonly members: ReadonlyArray<() => EntityClass<DynaRecord>>;
 
   /**
    * Class names of the searchable member entities of the index. Placeholder,
@@ -291,13 +284,11 @@ class VectorIndexMetadata<
    * `similarity` and the raw `score`, ordered most-similar-first.
    *
    * The return type is inferred from `in:`: present, results narrow to that
-   * member entity; omitted, results are the index's full member union
-   * (including `include:` members), discriminated via `entity.type`. Global
-   * indexes return the base result type — their member set is only known at
-   * runtime.
+   * member entity; omitted, results are the index's full member union,
+   * discriminated via `entity.type`.
    *
    * Scoped indexes take the scope value first — they are searchable only per
-   * scope value. Global indexes take the query first and no scope id.
+   * scope value. Unscoped indexes take the query first and no scope id.
    *
    * @example Scoped index
    * ```typescript
@@ -308,9 +299,9 @@ class VectorIndexMetadata<
    * });
    * ```
    *
-   * @example Global index
+   * @example Unscoped index
    * ```typescript
-   * const results = await globalSearchIndex.search("fresh articles");
+   * const results = await supportSearchIndex.search("how do refunds work");
    * ```
    *
    * @param scopeId - The scope value to search within (scoped indexes only).

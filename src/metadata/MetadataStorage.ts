@@ -75,6 +75,18 @@ const attributeKindsWhere = (
 
 const SEARCHABLE_ATTRIBUTE_KINDS = attributeKindsWhere(SEARCHABLE_BY_KIND);
 
+/**
+ * Whether a declaration carries a non-empty members list. The options type
+ * requires members, but plain JS consumers are caught by this runtime
+ * backstop rather than a crash — the widened parameter is the boundary that
+ * keeps the check meaningful under control-flow narrowing
+ * @param members - The declared members list, if any
+ * @returns Whether at least one member is declared
+ */
+const hasDeclaredMembers = (
+  members: Optional<VectorIndexOptions["members"]>
+): boolean => members !== undefined && members.length > 0;
+
 const FILTERABLE_ATTRIBUTE_KINDS = attributeKindsWhere(FILTERABLE_BY_KIND);
 
 /**
@@ -415,18 +427,9 @@ class MetadataStorage {
       }
       seenNames.set(options.name, key);
 
-      if (options.scopedBy === undefined && entries.length > 1) {
+      if (!hasDeclaredMembers(options.members)) {
         throw new Error(
-          `Vector index ${options.name} on table ${tableClassName} is global, but the table declares other indexes. A global index spans every searchable entity of the table, so it must be the table's only vector index`
-        );
-      }
-
-      if (
-        options.scopedBy !== undefined &&
-        (options.members === undefined || options.members.length === 0)
-      ) {
-        throw new Error(
-          `Vector index ${options.name} is scoped but declares no members. A scoped index's members list is its complete membership — list every searchable entity the index owns`
+          `Vector index ${options.name} declares no members. An index's members list is its complete membership — list every searchable entity the index owns`
         );
       }
     }
@@ -441,8 +444,9 @@ class MetadataStorage {
     // parameters: Members/Scoped have no runtime representation, so no value
     // can witness them — this factory is the trust boundary that stamps each
     // entry's declaration-inferred brand onto the construct it built for
-    // that entry
-    return Object.fromEntries(registered) as VectorIndexConstructs<T>;
+    // that entry. The unknown step is required because the phantom brand
+    // shares no structure with the unbranded record
+    return Object.fromEntries(registered) as unknown as VectorIndexConstructs<T>;
   }
 
   /**
@@ -818,21 +822,11 @@ class MetadataStorage {
       );
     }
 
-    if (index.scopedBy === undefined && index.members !== undefined) {
-      throw new Error(
-        `Vector index ${index.name} is global but declares a members list. A global index's membership is every searchable entity of the table — members declares a scoped index's membership`
-      );
-    }
+    const members = this.resolveMembers(index, searchableEntities);
 
-    let members = searchableEntities;
     let hashAlias: Optional<string>;
-
     if (index.scopedBy !== undefined) {
-      ({ members, hashAlias } = this.resolveScopedMembers(
-        index.scopedBy(),
-        index,
-        searchableEntities
-      ));
+      hashAlias = this.resolveScopingHash(index.scopedBy(), index, members);
     }
 
     // One inline filter is one table attribute: a filterable property must
@@ -875,35 +869,22 @@ class MetadataStorage {
   }
 
   /**
-   * Resolves a scoped index's members — the explicit members list is the
-   * complete membership; nothing is derived from the scope parent's declared
-   * relationships — and the HASH alias (the members' scoping foreign key).
+   * Resolves an index's members — the explicit members list is the complete
+   * membership; nothing is derived and there is no universal membership.
    * Rejects a listed member that is not a registered searchable entity of
-   * the index's table, an empty resolved membership, and a member without
-   * the scoping foreign key on its canonical row
-   * @param scopeParent - The resolved scope parent entity class
+   * the index's table, and an empty resolved membership
    * @param index - The vector index being resolved
    * @param searchableEntities - The table's searchable entities, sorted by entity name
-   * @returns The index's members and the HASH alias
+   * @returns The index's members, sorted by entity name
    */
-  private resolveScopedMembers(
-    scopeParent: EntityClass<DynaRecord>,
+  private resolveMembers(
     index: VectorIndexMetadata,
     searchableEntities: Array<[string, EntityMetadata]>
-  ): {
-    members: Array<[string, EntityMetadata]>;
-    hashAlias: Optional<string>;
-  } {
-    if (!(scopeParent.name in this.#entities)) {
-      throw new Error(
-        `Vector index ${index.name} is scoped by ${scopeParent.name}, which is not a registered entity`
-      );
-    }
-
+  ): Array<[string, EntityMetadata]> {
     const searchableByName = new Map(searchableEntities);
     const memberNames = new Set<string>();
 
-    for (const entityThunk of index.members ?? []) {
+    for (const entityThunk of index.members) {
       const memberName = entityThunk().name;
       const memberMetadata = searchableByName.get(memberName);
       if (memberMetadata === undefined) {
@@ -916,13 +897,34 @@ class MetadataStorage {
 
     if (memberNames.size === 0) {
       throw new Error(
-        `Vector index ${index.name} resolved to no members. A scoped index's members list is its complete membership — list every searchable entity the index owns`
+        `Vector index ${index.name} resolved to no members. An index's members list is its complete membership — list every searchable entity the index owns`
       );
     }
 
-    const members = searchableEntities.filter(([entityName]) =>
+    return searchableEntities.filter(([entityName]) =>
       memberNames.has(entityName)
     );
+  }
+
+  /**
+   * Resolves a scoped index's HASH alias — the members' scoping foreign
+   * key. Rejects an unregistered scope parent and a member without the
+   * scoping foreign key on its canonical row
+   * @param scopeParent - The resolved scope parent entity class
+   * @param index - The vector index being resolved
+   * @param members - The index's resolved members
+   * @returns The HASH alias
+   */
+  private resolveScopingHash(
+    scopeParent: EntityClass<DynaRecord>,
+    index: VectorIndexMetadata,
+    members: Array<[string, EntityMetadata]>
+  ): Optional<string> {
+    if (!(scopeParent.name in this.#entities)) {
+      throw new Error(
+        `Vector index ${index.name} is scoped by ${scopeParent.name}, which is not a registered entity`
+      );
+    }
 
     const memberScopingFks = members.map(([entityName, entityMetadata]) => {
       const scopingFk = this.findScopingFk(entityMetadata, scopeParent);
@@ -946,7 +948,7 @@ class MetadataStorage {
       }
     }
 
-    return { members, hashAlias: memberScopingFks[0]?.alias };
+    return memberScopingFks[0]?.alias;
   }
 
   /**
