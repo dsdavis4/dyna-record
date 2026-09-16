@@ -18,9 +18,11 @@ import {
 } from "../../utils.js";
 import {
   type UpdateExpression,
+  type UpdateExpressionClauses,
   type DocumentPathOperation,
   buildBelongsToLinkKey,
   expressionBuilder,
+  renderUpdateExpression,
   extractForeignKeyFromEntity,
   flattenObjectForUpdate
 } from "../utils/index.js";
@@ -103,6 +105,11 @@ interface PreFetchData {
 interface UpdateMetadata<T extends DynaRecord> {
   updatedAttrs: UpdatedAttributes<T>;
   expression: UpdateExpression;
+  /**
+   * The fragments `expression` was rendered from, so the vector write can
+   * append clauses after the embedding resolves without re-parsing it
+   */
+  clauses: UpdateExpressionClauses;
 }
 
 /**
@@ -125,6 +132,13 @@ interface UpdateMetadata<T extends DynaRecord> {
  */
 class Update<T extends DynaRecord> extends OperationBase<T> {
   protected readonly transactionBuilder: TransactWriteBuilder;
+
+  /**
+   * The canonical row's SET/REMOVE clause fragments, kept so the vector
+   * write can append to them once the embedding resolves. Empty until
+   * {@link Update.run} builds the update expression
+   */
+  #canonicalClauses: UpdateExpressionClauses = { set: [], remove: [] };
 
   constructor(
     Entity: EntityClass<T>,
@@ -163,8 +177,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
+    const { updatedAttrs, expression, clauses } =
+      this.buildUpdateMetadata(entityAttrs);
     const canonicalUpdate = this.buildUpdateItemTransaction(id, expression);
+    this.#canonicalClauses = clauses;
     this.addStandaloneForeignKeyConditionChecks(
       entityAttrs,
       referentialIntegrityCheck
@@ -459,9 +475,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     }
 
     const tableAttrs = entityToTableItem(this.EntityClass, regularAttrs);
-    const expression = expressionBuilder(tableAttrs, allDocumentPathOps);
+    const { expression, clauses } = expressionBuilder(
+      tableAttrs,
+      allDocumentPathOps
+    );
 
-    return { updatedAttrs, expression };
+    return { updatedAttrs, expression, clauses };
   }
 
   /**
@@ -647,7 +666,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * The queued item's expression attribute maps are shared by reference with
    * the expression object the denormalized sinks spread, so fresh copies are
    * assigned first — the vector clauses must never reach denormalized copies
-   * or link records.
+   * or link records. The clause fragments are this operation's own, so
+   * appending to them cannot reach a sink either.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
    * @param owningIndex - The vector index owning the entity being updated.
@@ -673,22 +693,6 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       )
     };
 
-    const expression = canonicalUpdate.UpdateExpression ?? "";
-    // The REMOVE keyword is always followed by a #-aliased name and preceded
-    // by the start or a space — an attribute aliased "REMOVE" appears as
-    // "#REMOVE =" or ":REMOVE" and never matches
-    const removeMatch = /(?:^| )REMOVE #/.exec(expression);
-    const removeIdx =
-      removeMatch === null
-        ? -1
-        : removeMatch.index + (removeMatch[0].startsWith(" ") ? 1 : 0);
-    let setPart = (
-      removeIdx === -1 ? expression : expression.slice(0, removeIdx)
-    ).trim();
-    let removePart = (
-      removeIdx === -1 ? "" : expression.slice(removeIdx)
-    ).trim();
-
     if (searchableVector !== undefined) {
       const vectorValue = `:${owningAttribute}`;
 
@@ -697,26 +701,18 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         [vectorValue]: searchableVector
       };
 
-      const vectorSet = `${owningName} = ${vectorValue}`;
-      setPart = setPart === "" ? `SET ${vectorSet}` : `${setPart}, ${vectorSet}`;
+      this.#canonicalClauses.set.push(`${owningName} = ${vectorValue}`);
+    } else {
+      this.#canonicalClauses.remove.push(owningName);
     }
 
-    const removedNames = [
-      ...(searchableVector === undefined ? [owningName] : []),
+    this.#canonicalClauses.remove.push(
       ...siblingAttributes.map(attribute => `#${attribute}`)
-    ];
+    );
 
-    if (removedNames.length > 0) {
-      const removals = removedNames.join(", ");
-      removePart =
-        removePart === ""
-          ? `REMOVE ${removals}`
-          : `${removePart}, ${removals}`;
-    }
-
-    canonicalUpdate.UpdateExpression = [setPart, removePart]
-      .filter(part => part !== "")
-      .join(" ");
+    canonicalUpdate.UpdateExpression = renderUpdateExpression(
+      this.#canonicalClauses
+    );
   }
 
   /**

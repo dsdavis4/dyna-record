@@ -1,10 +1,43 @@
 import type { DynamoTableItem } from "../../types.js";
 import type {
-  UpdateExpression,
+  BuiltUpdateExpression,
+  UpdateExpressionClauses,
   UpdateSetExpression,
   UpdateRemoveExpression,
   DocumentPathOperation
 } from "./types.js";
+
+/**
+ * Renders SET and REMOVE clause fragments into a DynamoDB UpdateExpression,
+ * omitting an action whose fragment list is empty
+ * @param clauses - {@link UpdateExpressionClauses}
+ * @returns The assembled update expression
+ */
+export const renderUpdateExpression = (
+  clauses: UpdateExpressionClauses
+): string =>
+  [
+    clauses.set.length > 0 ? `SET ${clauses.set.join(", ")}` : "",
+    clauses.remove.length > 0 ? `REMOVE ${clauses.remove.join(", ")}` : ""
+  ]
+    .filter(part => part !== "")
+    .join(" ");
+
+/**
+ * Splits an assembled action clause back into its fragments — the inverse of
+ * the join in {@link renderUpdateExpression}
+ * @param clause - A clause including its action keyword, or ""
+ * @param action - The action keyword to strip
+ * @returns The clause's fragments
+ */
+const clauseFragments = (clause: string, action: string): string[] =>
+  clause === ""
+    ? []
+    : clause
+        .slice(action.length)
+        .split(", ")
+        .map(fragment => fragment.trim())
+        .filter(fragment => fragment !== "");
 
 /**
  * Sorted attributes by operand
@@ -38,7 +71,7 @@ interface DocPathExpressions {
 export const expressionBuilder = (
   tableAttrs: DynamoTableItem,
   documentPathOps?: DocumentPathOperation[]
-): UpdateExpression => {
+): BuiltUpdateExpression => {
   const sorted = sortAttributesByOperand(tableAttrs);
 
   const setExpression = buildUpdateSetExpression(sorted.set);
@@ -89,19 +122,22 @@ export const expressionBuilder = (
     }
   }
 
+  const clauses: UpdateExpressionClauses = {
+    set: clauseFragments(setExpression.UpdateExpression, "SET"),
+    remove: clauseFragments(removeExpression.UpdateExpression, "REMOVE")
+  };
+
   return {
-    // If the operation has only REMOVE actions, it will not have expression attribute values
-    ExpressionAttributeValues: setExpression.ExpressionAttributeValues,
-    ExpressionAttributeNames: {
-      ...setExpression.ExpressionAttributeNames,
-      ...removeExpression.ExpressionAttributeNames
+    expression: {
+      // If the operation has only REMOVE actions, it will not have expression attribute values
+      ExpressionAttributeValues: setExpression.ExpressionAttributeValues,
+      ExpressionAttributeNames: {
+        ...setExpression.ExpressionAttributeNames,
+        ...removeExpression.ExpressionAttributeNames
+      },
+      UpdateExpression: renderUpdateExpression(clauses)
     },
-    UpdateExpression: [
-      setExpression.UpdateExpression,
-      removeExpression.UpdateExpression
-    ]
-      .filter(expr => expr)
-      .join(" ")
+    clauses
   };
 };
 
