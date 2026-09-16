@@ -38,9 +38,7 @@ import type {
   Optional,
   WithRequired
 } from "../../types.js";
-import Metadata, {
-  type VectorIndexMetadata
-} from "../../metadata/index.js";
+import Metadata, { type VectorIndexMetadata } from "../../metadata/index.js";
 import {
   type EntityAttributesInstance,
   type EntityAttributesOnly
