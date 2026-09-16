@@ -5576,7 +5576,8 @@ describe("Create searchable entities (vector write path)", () => {
                   Content: "Fresh article content",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
-                  __dyna_vector: expectedTitanVector
+                  // Article's owning index writes under its own attribute
+                  __dyna_vector_articles: expectedTitanVector
                 }
               }
             }

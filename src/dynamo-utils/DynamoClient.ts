@@ -16,7 +16,8 @@ import {
   type SearchVectorsCommandOutput
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger.js";
-import { vectorSearchKeys } from "../metadata/VectorIndexMetadata.js";
+import { isVectorAttributeKey } from "../metadata/VectorIndexMetadata.js";
+import type { DynamoTableItem } from "../types.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
 
 // Initialize the DynamoDB Document Client with a specific AWS region.
@@ -40,17 +41,48 @@ const vectorPlaceholder = (dimensions: number): string =>
  * source text under published inversion techniques, so vector values must
  * never reach logs — the command itself keeps the real values
  */
+/**
+ * Whether a table item key or a `:`-prefixed expression value key names a
+ * library-managed vector attribute
+ * @param key - The item or expression value key to test
+ * @returns Whether the key addresses a vector attribute
+ */
+const isVectorValueKey = (key: string): boolean =>
+  isVectorAttributeKey(key) ||
+  (key.startsWith(":") && isVectorAttributeKey(key.slice(1)));
+
+/**
+ * Whether a record carries an array value under a vector attribute key
+ * @param record - The item or expression value map to test
+ * @returns Whether a vector value is present
+ */
+const hasVectorEntry = (record: DynamoTableItem): boolean =>
+  Object.entries(record).some(
+    ([key, value]) => isVectorValueKey(key) && Array.isArray(value)
+  );
+
+/**
+ * Returns a copy of an item or expression value map with every vector value
+ * replaced by the log placeholder
+ * @param record - The item or expression value map to redact
+ * @returns The redacted copy
+ */
+const redactVectorEntries = (record: DynamoTableItem): DynamoTableItem =>
+  Object.fromEntries(
+    Object.entries(record).map(([key, value]) =>
+      isVectorValueKey(key) && Array.isArray(value)
+        ? [key, vectorPlaceholder(value.length)]
+        : [key, value]
+    )
+  );
+
 const redactVectorWrites = (
   params: TransactWriteCommandInput
 ): TransactWriteCommandInput => {
-  const vectorValueKey = `:${vectorSearchKeys.vector}`;
-
   const hasVector = params.TransactItems?.some(
     transactItem =>
-      Array.isArray(transactItem.Put?.Item?.[vectorSearchKeys.vector]) ||
-      Array.isArray(
-        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey]
-      )
+      hasVectorEntry(transactItem.Put?.Item ?? {}) ||
+      hasVectorEntry(transactItem.Update?.ExpressionAttributeValues ?? {})
   );
 
   if (hasVector !== true) return params;
@@ -58,32 +90,30 @@ const redactVectorWrites = (
   return {
     ...params,
     TransactItems: params.TransactItems?.map(transactItem => {
-      const putVector: unknown =
-        transactItem.Put?.Item?.[vectorSearchKeys.vector];
-      if (transactItem.Put !== undefined && Array.isArray(putVector)) {
+      if (
+        transactItem.Put?.Item !== undefined &&
+        hasVectorEntry(transactItem.Put.Item)
+      ) {
         return {
           ...transactItem,
           Put: {
             ...transactItem.Put,
-            Item: {
-              ...transactItem.Put.Item,
-              [vectorSearchKeys.vector]: vectorPlaceholder(putVector.length)
-            }
+            Item: redactVectorEntries(transactItem.Put.Item)
           }
         };
       }
 
-      const updateVector: unknown =
-        transactItem.Update?.ExpressionAttributeValues?.[vectorValueKey];
-      if (transactItem.Update !== undefined && Array.isArray(updateVector)) {
+      if (
+        transactItem.Update?.ExpressionAttributeValues !== undefined &&
+        hasVectorEntry(transactItem.Update.ExpressionAttributeValues)
+      ) {
         return {
           ...transactItem,
           Update: {
             ...transactItem.Update,
-            ExpressionAttributeValues: {
-              ...transactItem.Update.ExpressionAttributeValues,
-              [vectorValueKey]: vectorPlaceholder(updateVector.length)
-            }
+            ExpressionAttributeValues: redactVectorEntries(
+              transactItem.Update.ExpressionAttributeValues
+            )
           }
         };
       }

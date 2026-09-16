@@ -18,7 +18,7 @@ import type {
   SearchableAttributeKeys
 } from "../operations/Search/types.js";
 import { ValidationError } from "../errors.js";
-import type { EntityClass, Optional } from "../types.js";
+import type { DynamoTableItem, EntityClass, Optional } from "../types.js";
 
 /**
  * Reserved prefix of library-managed vector attribute names. Every index's
@@ -43,13 +43,29 @@ export const isValidVectorAttributeName = (value: string): boolean =>
   value.startsWith(`${reservedVectorAttributePrefix}_`);
 
 /**
- * Internal transition shim for the pre-3.0 shared vector attribute. Write
- * paths that have not yet been generalized to per-index attributes still
- * read it; it is removed once they are. Not part of the public API.
+ * Whether a table item key is a library-managed vector attribute — any key
+ * under the reserved prefix, covering every per-index attribute a table may
+ * declare.
+ * @param key - The table item key to test
+ * @returns Whether the key is a vector attribute
  */
-export const vectorSearchKeys = {
-  vector: reservedVectorAttributePrefix
-} as const;
+export const isVectorAttributeKey = (key: string): boolean =>
+  key.startsWith(reservedVectorAttributePrefix);
+
+/**
+ * Returns a copy of a raw table item with every vector attribute removed.
+ * Denormalized copies and link records are built from raw canonical rows
+ * that bypass entity serialization, so vectors — which live on canonical
+ * rows only — must be stripped explicitly.
+ * @param item - The raw table item to strip
+ * @returns The item without vector attributes
+ */
+export const stripVectorAttributes = (
+  item: DynamoTableItem
+): DynamoTableItem =>
+  Object.fromEntries(
+    Object.entries(item).filter(([key]) => !isVectorAttributeKey(key))
+  );
 
 /**
  * The valid shape of a vector attribute name: exactly the reserved prefix

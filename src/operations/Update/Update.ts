@@ -42,7 +42,6 @@ import {
   type EntityAttributesOnly
 } from "../types.js";
 import { NotFoundError } from "../../errors.js";
-import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
 import { embedSearchableValue } from "../../embedding/embed.js";
 import {
   isBelongsToRelationship,
@@ -556,8 +555,24 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const value: unknown = attributes[searchableMeta.name];
 
+    // The owning index's attribute receives the vector; every other index's
+    // attribute is removed from the row so an entity moved between indexes
+    // converges back to exactly one vector on any vector-touching write
+    const owningIndex = Metadata.getOwningVectorIndex(this.EntityClass.name);
+    if (owningIndex === undefined) return;
+    const otherVectorAttributes = Metadata.getVectorIndexes(
+      this.entityMetadata.tableClassName
+    )
+      .map(index => index.vectorAttribute)
+      .filter(attribute => attribute !== owningIndex.vectorAttribute);
+
     if (value === null || value === "") {
-      this.appendVectorClauses(canonicalUpdate, undefined);
+      this.appendVectorClauses(
+        canonicalUpdate,
+        owningIndex.vectorAttribute,
+        otherVectorAttributes,
+        undefined
+      );
       return;
     }
 
@@ -578,18 +593,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       return;
     }
 
-    const [index] = Metadata.getVectorIndexes(
-      this.entityMetadata.tableClassName
-    );
-
     const searchableVector = await embedSearchableValue(
       value,
-      index,
+      owningIndex,
       this.EntityClass.name,
       searchableMeta.name
     );
 
-    this.appendVectorClauses(canonicalUpdate, searchableVector);
+    this.appendVectorClauses(
+      canonicalUpdate,
+      owningIndex.vectorAttribute,
+      otherVectorAttributes,
+      searchableVector
+    );
   }
 
   /**
@@ -631,9 +647,11 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Appends the vector clause to the canonical row's queued update — a SET
-   * when a vector is provided, a REMOVE when the searchable value was
-   * cleared.
+   * Appends the vector clauses to the canonical row's queued update — a SET
+   * of the owning index's attribute when a vector is provided, a REMOVE of
+   * it when the searchable value was cleared — and always REMOVEs the
+   * table's other declared vector attributes (names only, no values), so a
+   * row never stays resident in an index that no longer owns its entity.
    *
    * The queued item's expression attribute maps are shared by reference with
    * the expression object the denormalized sinks spread, so fresh copies are
@@ -641,18 +659,25 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * or link records.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
-   * @param searchableVector - The vector to SET, or undefined to REMOVE it.
+   * @param owningAttribute - The owning index's vector attribute.
+   * @param otherVectorAttributes - The table's other declared vector attributes.
+   * @param searchableVector - The vector to SET, or undefined to REMOVE the owning attribute too.
    * @private
    */
   private appendVectorClauses(
     canonicalUpdate: CanonicalUpdateItem,
+    owningAttribute: string,
+    otherVectorAttributes: string[],
     searchableVector: Optional<number[]>
   ): void {
-    const vectorName = `#${vectorSearchKeys.vector}`;
+    const owningName = `#${owningAttribute}`;
 
     canonicalUpdate.ExpressionAttributeNames = {
       ...canonicalUpdate.ExpressionAttributeNames,
-      [vectorName]: vectorSearchKeys.vector
+      [owningName]: owningAttribute,
+      ...Object.fromEntries(
+        otherVectorAttributes.map(attribute => [`#${attribute}`, attribute])
+      )
     };
 
     const expression = canonicalUpdate.UpdateExpression ?? "";
@@ -664,38 +689,41 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       removeMatch === null
         ? -1
         : removeMatch.index + (removeMatch[0].startsWith(" ") ? 1 : 0);
-    const setPart = (
+    let setPart = (
       removeIdx === -1 ? expression : expression.slice(0, removeIdx)
     ).trim();
-    const removePart = (
+    let removePart = (
       removeIdx === -1 ? "" : expression.slice(removeIdx)
     ).trim();
 
     if (searchableVector !== undefined) {
-      const vectorValue = `:${vectorSearchKeys.vector}`;
+      const vectorValue = `:${owningAttribute}`;
 
       canonicalUpdate.ExpressionAttributeValues = {
         ...canonicalUpdate.ExpressionAttributeValues,
         [vectorValue]: searchableVector
       };
 
-      const vectorSet = `${vectorName} = ${vectorValue}`;
-      const newSetPart =
-        setPart === "" ? `SET ${vectorSet}` : `${setPart}, ${vectorSet}`;
-
-      canonicalUpdate.UpdateExpression = [newSetPart, removePart]
-        .filter(part => part !== "")
-        .join(" ");
-    } else {
-      const newRemovePart =
-        removePart === ""
-          ? `REMOVE ${vectorName}`
-          : `${removePart}, ${vectorName}`;
-
-      canonicalUpdate.UpdateExpression = [setPart, newRemovePart]
-        .filter(part => part !== "")
-        .join(" ");
+      const vectorSet = `${owningName} = ${vectorValue}`;
+      setPart = setPart === "" ? `SET ${vectorSet}` : `${setPart}, ${vectorSet}`;
     }
+
+    const removedNames = [
+      ...(searchableVector === undefined ? [owningName] : []),
+      ...otherVectorAttributes.map(attribute => `#${attribute}`)
+    ];
+
+    if (removedNames.length > 0) {
+      const removals = removedNames.join(", ");
+      removePart =
+        removePart === ""
+          ? `REMOVE ${removals}`
+          : `${removePart}, ${removals}`;
+    }
+
+    canonicalUpdate.UpdateExpression = [setPart, removePart]
+      .filter(part => part !== "")
+      .join(" ");
   }
 
   /**

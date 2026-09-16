@@ -89,7 +89,7 @@ class TableMetadata {
    *   - updatedAt
    *   - foreignKey
    *   - foreignEntityType
-   *   - the library-managed vector search attributes ({@link vectorSearchKeys})
+   *   - the library-managed vector attributes (reserved by prefix; see `reservedVectorAttributePrefix`)
    */
   public reservedKeys: Record<string, true>;
 

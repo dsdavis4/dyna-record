@@ -13244,11 +13244,12 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #__dyna_vector_articles",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector"
+                  "#__dyna_vector": "__dyna_vector",
+                  "#__dyna_vector_articles": "__dyna_vector_articles"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "The very same description",
@@ -13339,11 +13340,12 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #__dyna_vector_articles",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector"
+                  "#__dyna_vector": "__dyna_vector",
+                  "#__dyna_vector_articles": "__dyna_vector_articles"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "An updated listing description",
@@ -13396,10 +13398,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector",
+                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector_articles, #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
@@ -13430,10 +13433,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector_articles, #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
@@ -13467,16 +13471,17 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector_articles = :__dyna_vector_articles REMOVE #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Content": "Fresh article content",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                  ":__dyna_vector": expectedTitanVector
+                  ":__dyna_vector_articles": expectedTitanVector
                 }
               }
             }
