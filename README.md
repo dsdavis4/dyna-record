@@ -28,11 +28,12 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Delete](#delete)
 - [Vector Search](#vector-search)
   - [Declaring searchable entities](#declaring-searchable-entities)
-  - [Defining a vector index](#defining-a-vector-index)
+  - [Defining vector indexes](#defining-vector-indexes)
   - [How writes embed](#how-writes-embed)
   - [Searching](#searching)
   - [Filters, scoping, and tenant isolation](#filters-scoping-and-tenant-isolation)
   - [Provisioning](#provisioning)
+  - [Migrating from 2.x](#migrating-from-2x)
   - [Permissions and networking](#permissions-and-networking)
   - [Cost model](#cost-model)
 - [Type Safety Features](#type-safety-features)
@@ -1297,7 +1298,7 @@ class Product extends MyTable {
 }
 ```
 
-`Organization`'s searchable relationships (`products`) are what its search surfaces infer from — they define the parent-level `in:` values, result unions, and its scoped index's membership.
+`Organization`'s searchable relationships (`products`) are what its parent-level search surfaces infer from — they define the parent `in:` values and result unions. Index membership is separate: it is declared explicitly on the index (see `members:` below), never derived from relationships.
 
 The brands add no friction at call sites — `create` and `update` accept plain values. An entity may declare at most one `@Searchable` attribute; a second is a compile error at the `@Entity` decorator and a runtime error at metadata initialization.
 
@@ -1312,9 +1313,9 @@ await Product.create({
 });
 ```
 
-### Defining a vector index
+### Defining vector indexes
 
-Vector indexes are declared on the table class with `vectorIndex`. The returned construct is the index's search surface and its provisioning definition. The `provider` is **required** — dyna-record ships no embedding implementation and no embedding SDK dependency; you own the client, credentials, region, retry, and timeout posture:
+A table declares its complete set of vector indexes in **one `vectorIndexes` call**, keyed by export name. Each returned construct is that index's search surface and provisioning definition. The `provider` is **required** — dyna-record ships no embedding implementation and no embedding SDK dependency; you own the client, credentials, region, retry, and timeout posture:
 
 ```typescript
 import { TitanTextEmbedV2, type EmbeddingProvider } from "dyna-record";
@@ -1335,36 +1336,44 @@ const embed: EmbeddingProvider = async text => {
   return JSON.parse(new TextDecoder().decode(res.body)).embedding;
 };
 
-// Scoped index: searches run within one scope value at a time
-export const orgSearchIndex = MyTable.vectorIndex({
-  name: "org-search-index",
-  model: TitanTextEmbedV2,
-  provider: embed,
-  scopedBy: () => Organization,
-  include: [() => Review] // members with the FK but no declared inverse relationship
-});
-
-// Global index: no scope; searches span the whole table's searchable entities
-export const globalSearchIndex = MyTable.vectorIndex({
-  name: "global-search-index",
-  model: TitanTextEmbedV2,
-  provider: embed
+export const { orgSearchIndex, helpSearchIndex } = MyTable.vectorIndexes({
+  // Scoped index: searches run within one scope value at a time
+  orgSearchIndex: {
+    name: "org-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: embed,
+    scopedBy: () => Organization,
+    members: [() => Product, () => Review]
+  },
+  // Unscoped index: no scope; every search spans its whole membership
+  helpSearchIndex: {
+    name: "help-search-index",
+    vectorAttribute: "__dyna_vector_help",
+    model: TitanTextEmbedV2,
+    provider: embed,
+    members: [() => Article]
+  }
 });
 ```
 
-- **`model`** takes a pure-data descriptor: the shipped `TitanTextEmbedV2` (1024 dimensions), its smaller variants `TitanTextEmbedV2Dim512` and `TitanTextEmbedV2Dim256` (lower vector storage and write cost for an accuracy trade-off — your provider must request the matching output size, EX: `body: JSON.stringify({ inputText: text, dimensions: 512 })`), or your own `EmbeddingModelDescriptor`.
-- **`scopedBy`** takes a thunk returning one of your dyna-record entity classes — the scope parent. The parent's foreign key becomes the index `HASH`, so every search runs within exactly one of that entity's ids. Multi-tenancy is the canonical use (scope by your tenant/organization entity), but any parent whose searches should never cross instances works the same way — a workspace, a project, a store. Index membership is the scope parent's searchable relationships union the `include:` list.
-- **`include:`** adds searchable entities that carry the scoping foreign key but have no declared inverse relationship on the parent. It applies to scoped indexes only — a global index already spans every searchable entity of the table, so there is nothing to include.
-- A **global** index (no `scopedBy`) has no `HASH` and searches the whole table's searchable entities.
+- **`vectorAttribute`** names the table attribute the index's vectors are written under — the index's **physical membership surface**: under DynamoDB's sparse-index semantics, a row is materialized into (and billed by) an index exactly when it carries that index's attribute. It is required and explicit, must be `__dyna_vector` or start with `__dyna_vector_` (the reserved prefix; consumer attributes may not use it), and must be unique per index — enforced at compile time and at metadata initialization. It must never change on a live index: renaming it is a destructive re-provision.
+- **`members`** declares the index's **complete membership** — nothing is derived from relationship declarations, and there is no automatic membership. Every listed entity must declare a `@Searchable` attribute (a non-searchable member is a compile error and an init error), and **each searchable entity belongs to exactly one index** — it is embedded by that index's model, written under that index's attribute, and ingested, billed, and searchable only there. An entity in no members list, or in two, fails at metadata initialization.
+- **`model`** takes a pure-data descriptor: the shipped `TitanTextEmbedV2` (1024 dimensions), its smaller variants `TitanTextEmbedV2Dim512` and `TitanTextEmbedV2Dim256` (lower vector storage and write cost for an accuracy trade-off — your provider must request the matching output size, EX: `body: JSON.stringify({ inputText: text, dimensions: 512 })`), or your own `EmbeddingModelDescriptor`. Model, provider, dimensions, and distance function are all **per index** — two indexes on one table may embed differently.
+- **`scopedBy`** takes a thunk returning one of your dyna-record entity classes — the scope parent. Every member must carry a foreign key to it, and that key becomes the index `HASH`, so every search runs within exactly one of that entity's ids. Multi-tenancy is the canonical use (scope by your tenant/organization entity), but any parent whose searches should never cross instances works the same way — a workspace, a project, a store.
+- An **unscoped** index (no `scopedBy`) has no `HASH`; its searches take no scope id and span its whole membership.
+
+Declaring all of a table's indexes in one call is what lets the type system enforce the table-scoped rules: a duplicate `vectorAttribute` or `name`, a missing or wrongly-prefixed attribute, a non-searchable member, or an unknown option is a compile error on the offending entry. A second `vectorIndexes` call for the same table throws immediately.
 
 ### How writes embed
 
-Creating or updating a searchable entity embeds the value synchronously through your provider and writes the vector onto the entity's canonical row inside the operation's single transaction — there is no second write, no eventual-consistency pipeline, and rows are searchable sub-second after the write acknowledges. Denormalized relationship copies never carry the vector.
+Creating or updating a searchable entity embeds the value synchronously through its **owning index's** provider and model, and writes the vector onto the entity's canonical row under that index's `vectorAttribute` — inside the operation's single transaction. There is no second write, no eventual-consistency pipeline, and rows are searchable sub-second after the write acknowledges. Denormalized relationship copies never carry vectors.
 
 - **Failure semantics:** if the provider rejects or returns the wrong dimensions, the whole write fails with `EmbeddingError` (the provider error on `cause`) — no row is ever written searchable-but-not-embedded. Error messages carry entity, attribute, model, and dimension identities only, never your text.
 - **Unchanged values skip embedding:** updates compare the incoming searchable value against the stored one (read through the pre-update fetch) and skip the provider call and the vector write when it is unchanged. Exception: entities with no relationships have no pre-update fetch to supply the stored value, so an update carrying the searchable attribute embeds unconditionally rather than forcing a new read.
 - **`forceEmbed` overrides the skip:** `update(id, { description }, { forceEmbed: true })` embeds even when the value appears unchanged. This is the affordance for indexing rows that predate searchability — loop a backfill over existing entities re-saving their own values — and for re-embedding a table after switching embedding models.
 - **Clearing:** setting a nullable searchable attribute to `null` (or `""`) removes the vector — the row leaves the index. Empty text never reaches your provider.
+- **Vector writes converge the row to one attribute:** on a table with several indexes, any write that touches the vector also removes the table's *other* vector attributes from the row (a names-only no-op when they are absent). If you move an entity between indexes, existing rows keep their old attribute — still resident and billed in the old physical index — until a vector-touching write lands; re-write moved entities with `forceEmbed` to converge them immediately (see [Migrating from 2.x](#migrating-from-2x)).
 - **Latency:** the provider call bounds write latency. Measured against Bedrock Titan V2: ~320 ms p50 / ~400 ms p90 per embed — roughly 7× the DynamoDB write it accompanies. The embed runs concurrently with the operation's existing reads where possible.
 
 ### Searching
@@ -1416,23 +1425,23 @@ results.forEach(({ entity, similarity, score }) => {
 });
 ```
 
-The third surface is the **index construct** itself — the value `vectorIndex(...)` returned. It runs the same search as the parent surfaces, but is anchored on the index rather than an entity class, which makes it the right surface in three situations:
+The third surface is the **index construct** itself — the values `vectorIndexes({...})` returned. It runs the same search as the parent surfaces, but is anchored on the index rather than an entity class, which makes it the right surface in three situations:
 
 - **It is always unambiguous.** The parent surfaces exist only while exactly one index is scoped by that class; if a parent ever scopes a second index, they error with guidance and the construct — which names its index — is the way to search.
-- **It is the only surface for global indexes**, which have no scope parent to hang a method off of.
-- **It is the only surface where `include:` members are reachable by name.** Members added through `include:` have no relationship property on the scope parent, so the parent surfaces' `in:` (relationship names) cannot name them. The construct's `in:` takes **member entity names** instead — which covers them.
+- **It is the only surface for unscoped indexes**, which have no scope parent to hang a method off of.
+- **It is the only surface where every member is reachable by name.** Members with no relationship property on the scope parent (Review above) cannot be named by the parent surfaces' `in:` (relationship names). The construct's `in:` takes **member entity names** instead — which covers the whole membership.
 
-The signature follows the index's shape: scoped constructs take the scope value first (they are searchable only within one scope value); global constructs take the query first and reject a scope id.
+The signature follows the index's shape: scoped constructs take the scope value first (they are searchable only within one scope value); unscoped constructs take the query first and reject a scope id.
 
 ```typescript
 // Scoped construct, no options: same search as Organization.search("orgId", ...)
 const all = await orgSearchIndex.search("orgId", "waterproof hiking boots");
 // all is Array<SearchResult<Product> | SearchResult<Review>> — the full
-// member union, include: members included
+// declared member union
 
 // Scoped construct with in: — note the vocabulary difference: member entity
-// names here, not relationship property names. Review is an include: member,
-// reachable by name only on this surface
+// names here, not relationship property names. Review has no relationship
+// property on Organization, so it is reachable by name only on this surface
 const reviews = await orgSearchIndex.search("orgId", "sizing runs small", {
   in: "Review"
 });
@@ -1444,16 +1453,13 @@ const filtered = await orgSearchIndex.search("orgId", "hiking boots", {
   filter: { category: "Footwear" }
 });
 
-// Global construct: query first, no scope id — searches every searchable
-// entity of the table
-const everything = await globalSearchIndex.search("hiking boots");
-// everything is SearchResults — the base result type; a global index's
-// member set is only known at runtime, so narrow via entity.type
+// Unscoped construct: query first, no scope id — searches its declared
+// membership, typed exactly like a scoped construct's
+const guides = await helpSearchIndex.search("hiking boot sizing");
+// guides is Array<SearchResult<Article>>
 
-// in: works on global indexes too. The member set is only known at runtime
-// (any searchable entity of the table), so the name is validated at runtime
-// rather than by the type system
-const articles = await globalSearchIndex.search("hiking boots", {
+// in: narrows to one member entity by name, on any construct
+const articles = await helpSearchIndex.search("hiking boot sizing", {
   in: "Article"
 });
 ```
@@ -1477,8 +1483,8 @@ The vector must come from the **same model and dimension count** the index was p
 
 Both sides of every search are inferred from your declarations — the same brand-driven inference that powers typed query filters:
 
-- **Inputs:** `in:` accepts only the parent's searchable relationship names (the index construct accepts its member entity names — including `include:` members, which have no relationship property on the parent to name). `filter` keys narrow to exactly the searched entities' `@SearchFilterable` attributes, and narrow further when `in:` is present; non-filterable attributes and unsupported operator shapes are compile errors. Scoped index constructs require the scope value first; global constructs reject one. Calling `search` on a parent with no searchable relationships is a compile error (and a runtime error in plain JS).
-- **Responses:** the return type is inferred, not declared. `in:` present → `Array<SearchResult<ThatEntity>>`; `in:` omitted → the widened union across every searched entity (`Array<SearchResult<A> | SearchResult<B>>`), where only shared attributes are accessible until you discriminate on `entity.type` — exactly like query result narrowing. Global index constructs return the base `SearchResults` type, since their member set is only known at runtime.
+- **Inputs:** `in:` accepts only the parent's searchable relationship names (the index construct accepts its declared member entity names). `filter` keys narrow to exactly the searched entities' `@SearchFilterable` attributes, and narrow further when `in:` is present; non-filterable attributes and unsupported operator shapes are compile errors. Scoped index constructs require the scope value first; unscoped constructs reject one. Calling `search` on a parent with no searchable relationships is a compile error (and a runtime error in plain JS).
+- **Responses:** the return type is inferred, not declared. `in:` present → `Array<SearchResult<ThatEntity>>`; `in:` omitted → the widened union across every searched entity (`Array<SearchResult<A> | SearchResult<B>>`), where only shared attributes are accessible until you discriminate on `entity.type` — exactly like query result narrowing. Because membership is declared explicitly, unscoped constructs are typed the same way as scoped ones.
 
 ### Filters, scoping, and tenant isolation
 
@@ -1487,7 +1493,9 @@ DynamoDB's search condition grammar is an **equality-only conjunction**: `attrib
 Two mechanisms narrow a search, and they are not interchangeable:
 
 - **`scopedBy` is the enforced isolation boundary.** The `HASH` equality is set by the library on every search of a scoped index and cannot be omitted or overridden — a tenant-scoped index physically cannot search across tenants.
-- **`filter` narrows within a boundary.** Filterable foreign keys enable sub-scope narrowing (products within a brand, within the organization scope) in the same single operation. **Never use `filter` as tenant separation on a global index** — it is a narrowing convenience, not an isolation mechanism.
+- **`filter` narrows within a boundary.** Filterable foreign keys enable sub-scope narrowing (products within a brand, within the organization scope) in the same single operation. **Never use `filter` as tenant separation on an unscoped index** — it is a narrowing convenience, not an isolation mechanism.
+
+A third boundary is the index itself. Because each searchable entity belongs to exactly one index and each index writes its own `vectorAttribute`, **membership is physically disjoint**: an index's searches can never be crowded by another index's corpus, and each corpus is ingested and billed only by its own index. Two indexes may share a scope parent — a catalog corpus and a support corpus both scoped by Organization, say — and remain fully independent: separate attributes, separate physical indexes, separately rankable, optionally separate embedding models. This matters because DynamoDB's filter grammar has no `IN`/`OR`: a shared index could not exclude a co-resident corpus from an un-narrowed search, but disjoint indexes never need to.
 
 Search filters are runtime-guarded for untrusted input: unknown keys, non-filterable attributes, unsupported operator shapes, and mistyped values are rejected before any AWS call. Still, **allowlist keys before spreading request input into `filter`** — a valid-but-unintended filterable key is indistinguishable from an intended one.
 
@@ -1507,22 +1515,45 @@ MyTable.metadata().vectorIndexes;
 //   searchSchema: { hash: "OrganizationId", inlineFilters: ["Category", "Type"] },
 //   fingerprint: "…",
 //   scopedBy: "Organization"
+// }, {
+//   name: "help-search-index",
+//   model: "amazon.titan-embed-text-v2:0",
+//   vectorAttribute: "__dyna_vector_help",
+//   dimensions: 1024,
+//   distanceFunction: "COSINE",
+//   projection: "ALL",
+//   searchSchema: { inlineFilters: ["Type"] },
+//   fingerprint: "…"
 // }]
 ```
 
 Notes on the contract:
 
 - Search-schema entries are **table aliases** (the names stored in DynamoDB), and each must also appear in the table's `AttributeDefinitions`. The entity `type` discriminator is auto-declared as an inline filter on every index; DynamoDB allows at most 18 inline filters per index (the `HASH` does not count).
+- `vectorAttribute` is per index and is part of the provisioning contract — pass it as the index's `VectorAttribute` when provisioning.
 - The provider never appears in serialized metadata — only the model descriptor's name. No credentials or client configuration can leak through `metadata()`.
-- **Index configuration is immutable in DynamoDB.** Adding or removing any `@Searchable`/`@SearchFilterable` declaration on a live index is a **destructive re-provision**: the index must be deleted and recreated, and because vectors are written at write time, the recreated index's corpus recovers only as rows are re-written. The `fingerprint` field exists for IaC to detect that a decorator change implies replacement before it happens.
+- **Index configuration is immutable in DynamoDB.** Adding or removing any `@Searchable`/`@SearchFilterable` declaration affecting a live index — or changing its `vectorAttribute`, model, dimensions, or distance function — is a **destructive re-provision**: the index must be deleted and recreated, and because vectors are written at write time, the recreated index's corpus recovers only as rows are re-written. The `fingerprint` field hashes the search schema, dimensions, distance function, and vector attribute so IaC can detect that a declaration change implies replacement before it happens.
+- **AWS creates and deletes one vector index per table at a time** (shared with GSI online indexing), and a new index backfills before it is searchable — `SearchVectors` fails during the backfill and can briefly fail after the index first reports `ACTIVE`. Provision several indexes sequentially and treat first-search failures as retryable.
 - **Adopting vector search on an existing table:** pre-existing rows have no vector and are unsearchable until their next write. dyna-record ships no backfill — re-write rows through `update` at your own pace to bring them into the index.
 - Configuration is validated when metadata initializes (lazily, at the first operation, with the failure cached and re-thrown on every subsequent operation). Calling `MyTable.metadata()` during startup fails fast at deploy time instead of on the first live request.
+
+### Migrating from 2.x
+
+3.0.0 replaces the shared `__dyna_vector` attribute with a required per-index `vectorAttribute` and makes membership explicit. The migration is mechanical, with one rule that must not be broken:
+
+1. **Wrap declarations in one `vectorIndexes` call**, keyed by export name. The per-call `vectorIndex()` API is removed.
+2. **Existing indexes must set `vectorAttribute: "__dyna_vector"`** — the attribute their deployed rows already carry. Any other value is a destructive re-provision requiring a full re-embed of the corpus. With that value kept, the serialized provisioning contract is unchanged and **no re-provision and no data migration occur**.
+3. **List every index's members explicitly.** Membership is no longer derived from the scope parent's relationships, and global indexes' automatic all-searchable-entities membership no longer exists — enumerate the corpus (the zero-owner init error lists anything you miss). A 2.x searchable entity that was silently in no index now fails fast at init.
+4. **Fingerprints have a new format** — the vector attribute joined the hash inputs — so expect a one-time fingerprint diff on upgrade with no underlying config change. Tooling must not destroy or rebuild an index on a fingerprint change alone; diff the config fields.
+5. **Audit parent `.search()` call sites before adding a second index to a parent's scope** — with two scoped indexes the parent surface errors at runtime (search through the constructs), and the compile-time surface cannot warn about index counts.
+6. **Moving an entity between indexes does not migrate its rows.** Rows whose searchable text never changes keep their vector under the old attribute (still resident and billed in the old index) and have none under the new one — re-write each moved entity with `forceEmbed` to converge it.
+7. `vectorSearchKeys` is no longer exported; `reservedVectorAttributePrefix` and `isValidVectorAttributeName` replace it.
 
 ### Permissions and networking
 
 - **`dynamodb:SearchVectors` is a new IAM action** — existing policies granting DynamoDB read access do not include it. Roles that call `search` need it in addition to the usual read/write actions dyna-record already requires.
 - **Your embedding provider needs its own permissions** — for the Bedrock example above, `bedrock:InvokeModel` on the model, with model access enabled in your account and region. dyna-record never touches these credentials; the provider function owns them.
-- **`SearchVectors` resolves to a separate endpoint** (`search-dynamodb.<region>.amazonaws.com`, not the standard DynamoDB endpoint). If your network restricts egress through a VPC endpoint, proxy, or allowlist, permit the search hostname too — otherwise writes succeed and only searches fail, with a connection error that does not indicate the cause.
+- **`SearchVectors` resolves to separate endpoints** (`<account-id>.search-ddb.<region>.amazonaws.com`, or the dual-stack `search-dynamodb.<region>.api.aws` — not the standard DynamoDB endpoint; the AWS SDKs route automatically). If your network restricts egress through a VPC endpoint, proxy, or allowlist, permit the search hostname too — otherwise writes succeed and only searches fail, with a connection error that does not indicate the cause.
 
 ### Cost model
 
@@ -1544,8 +1575,9 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Return Type Narrowing**: When a query filter specifies a `type` value, the return type is automatically narrowed to only the matching entity types instead of the full partition union.
 - **`$or` Element Narrowing**: Each element in a `$or` filter array is independently type-checked based on its own `type` field, preventing attribute mismatches.
 - **Searchable Brands**: `@Searchable()` and `@SearchFilterable()` require the `Searchable`/`SearchFilterable` property brands, so the searchable and filterable sets are known at compile time — search `in:` values, filter keys, and result unions all derive from them. A second `@Searchable` attribute on one entity is a compile error at the `@Entity` decorator.
-- **Search Return Type Narrowing**: Search results are inferred from the searched membership — the union of searched entity types by default, narrowed to a single entity type when `in:` is present, mirroring query return type narrowing.
-- **Search Surface Availability**: `search` is only callable on classes with at least one relationship to a searchable entity; scoped index constructs require the scope id first while global constructs reject one.
+- **Vector Index Declaration Validation**: `vectorIndexes` declarations are validated at the type level — a duplicate `vectorAttribute` or `IndexName`, a missing or wrongly-prefixed vector attribute, a member entity with no `@Searchable` attribute, or an unknown option is a compile error on the offending entry, with metadata initialization as the runtime backstop.
+- **Search Return Type Narrowing**: Search results are inferred from the searched membership — the union of searched entity types by default, narrowed to a single entity type when `in:` is present, mirroring query return type narrowing. Membership is declared explicitly, so scoped and unscoped constructs are typed alike.
+- **Search Surface Availability**: `search` is only callable on classes with at least one relationship to a searchable entity; scoped index constructs require the scope id first while unscoped constructs reject one.
 
 ## Best Practices
 

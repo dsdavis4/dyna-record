@@ -1,3 +1,26 @@
+## 3.0.0 - Unreleased
+
+> **Major release: per-index vector attributes and explicit membership.** The version is major because previously-valid vector search declarations no longer compile or initialize: the per-call `vectorIndex()` static is removed in favor of a single `vectorIndexes({...})` declaration per table, every index must declare its own unique `vectorAttribute` and its complete `members` list, and the pre-3.0 shared-attribute model — where all of a table's indexes derived overlapping membership over one `__dyna_vector` attribute — is gone. **The DynamoDB side is not breaking**: an existing index migrated with `vectorAttribute: "__dyna_vector"` keeps its exact provisioning contract — no re-provision, no data migration (its `fingerprint` changes format once; see below). The migration is mechanical; the README's [Migrating from 2.x](README.md#migrating-from-2x) section is the complete guide. Tables without vector indexes upgrade with no source changes.
+
+### Added
+
+- **Physically disjoint vector indexes.** Each index declares its own `vectorAttribute` — the table attribute its members' vectors are written under, and therefore (per DynamoDB's sparse-index semantics) its physical membership surface. Each searchable entity belongs to exactly **one** index: it is embedded by that index's model, written under that index's attribute, and ingested, billed, and searchable only there. Two indexes may share a scope parent and remain fully independent corpora — separately ranked, separately billed, never crowding each other's results. Zero or multiple memberships fail fast at metadata initialization.
+- **Per-index embedding config.** Model, provider, dimensions, and distance function are declared per index; the cross-index equality restriction is removed. Query embedding and precomputed-vector dimension validation follow the invoked index.
+- **Compile-time declaration validation.** The `vectorIndexes` type surface rejects a duplicate `vectorAttribute` or `IndexName`, a missing or wrongly-prefixed vector attribute (`__dyna_vector` or `__dyna_vector_*` — the reserved prefix consumer attributes may not use), a member entity with no `@Searchable` attribute, and unknown options — each as a compile error on the offending entry, with metadata initialization as the runtime backstop for plain JS.
+- **Typed unscoped indexes.** Membership is always explicit, so unscoped (formerly "global") index constructs infer their member unions, `in:` values, filter keys, and result types exactly like scoped constructs — previously they fell back to the base result type.
+- **Stale-vector convergence.** On tables with several indexes, any vector-touching write also removes the table's other vector attributes from the row (names-only; a no-op when absent), so an entity moved between indexes converges back to exactly one vector on its next embed — including the documented `forceEmbed` backfill.
+
+### Changed
+
+- **`vectorIndex()` is removed; `vectorIndexes({...})` is the sole declaration surface.** One call per table, keyed by export name, returning the typed constructs; a second call for the same table throws. Existing indexes must set `vectorAttribute: "__dyna_vector"` — any other value is a destructive re-provision.
+- **Membership is explicit everywhere.** `members:` replaces `include:` and is required on every index: nothing is derived from the scope parent's declared relationships, and the automatic all-searchable-entities membership of global indexes no longer exists (a formerly-global index enumerates its corpus; the zero-owner init error lists anything missed). A 2.x searchable entity that was silently in no index now fails fast at init, and a parent scoping two indexes still errors on the parent `.search()` surface at runtime — audit those call sites before adding a second index to a parent's scope.
+- **`fingerprint` gains the vector attribute as a hash input**, so a `vectorAttribute` change — a destructive replacement — is detectable by fingerprint diffing. Every fingerprint therefore changes format once on upgrade with no underlying config change; tooling must not destroy or rebuild an index on a fingerprint change alone.
+- **Export surface.** Removed: `vectorSearchKeys`. Added value exports: `reservedVectorAttributePrefix`, `isValidVectorAttributeName`. Added type exports: `VectorAttributeName`, `VectorIndexConstructs`, `VectorIndexMembers`, `VectorIndexScoped`, `ValidateVectorIndexes`, `DuplicateVectorAttributeError`, `DuplicateIndexNameError`, `NonSearchableMemberError`, `UnknownVectorIndexOptionError`. `VectorIndexOptions` changes shape (`vectorAttribute` and `members` required; `include` removed), and `SerializedVectorIndexMetadata.vectorAttribute` narrows to the `VectorAttributeName` template type.
+
+### Known issues
+
+- The AWS-side rejection of updates to transactionally-written items on vector-indexed tables documented in the 2.0.0 entry remains tracked there; its status is unchanged as far as this release is aware.
+
 ## 2.0.1 - 2026-09-08
 
 ### Fixed
