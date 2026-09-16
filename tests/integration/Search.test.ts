@@ -205,11 +205,15 @@ class ScopedProduct extends ScopedFilterTable {
 
 const mockScopedEmbed = vi.fn();
 
-const scopedFilterIndex = ScopedFilterTable.vectorIndex({
-  name: "scoped-filter-index",
-  model: TitanTextEmbedV2,
-  provider: async text => await mockScopedEmbed(text),
-  scopedBy: () => ScopedShop
+const { scopedFilterIndex } = ScopedFilterTable.vectorIndexes({
+  scopedFilterIndex: {
+    name: "scoped-filter-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: async (text: string) => await mockScopedEmbed(text),
+    scopedBy: () => ScopedShop,
+    members: [() => ScopedNote, () => ScopedProduct]
+  }
 });
 
 describe("Search", () => {
@@ -950,18 +954,37 @@ class DualChild extends DualIndexTable {
   public readonly parent: DualParent;
 }
 
-DualIndexTable.vectorIndex({
-  name: "dual-index-one",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider,
-  scopedBy: () => DualParent
-});
+// Second corpus so the two same-parent indexes stay disjoint under the
+// one-owner rule
+@Entity
+class DualDoc extends DualIndexTable {
+  declare readonly type: "DualDoc";
 
-DualIndexTable.vectorIndex({
-  name: "dual-index-two",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider,
-  scopedBy: () => DualParent
+  @Searchable()
+  @StringAttribute({ alias: "DocBody" })
+  public readonly docBody: SearchableText;
+
+  @ForeignKeyAttribute(() => DualParent, { alias: "ParentId" })
+  public readonly parentId: ForeignKey<DualParent>;
+}
+
+DualIndexTable.vectorIndexes({
+  dualIndexOne: {
+    name: "dual-index-one",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: mockEmbeddingProvider,
+    scopedBy: () => DualParent,
+    members: [() => DualChild]
+  },
+  dualIndexTwo: {
+    name: "dual-index-two",
+    vectorAttribute: "__dyna_vector_two",
+    model: TitanTextEmbedV2,
+    provider: mockEmbeddingProvider,
+    scopedBy: () => DualParent,
+    members: [() => DualDoc]
+  }
 });
 
 describe("public search surfaces", () => {

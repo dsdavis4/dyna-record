@@ -44,7 +44,13 @@ export type {
   VectorIndexOptions,
   VectorIndexConstructs,
   VectorIndexMembers,
-  VectorIndexScoped
+  VectorIndexScoped,
+  VectorAttributeName,
+  ValidateVectorIndexes,
+  DuplicateVectorAttributeError,
+  DuplicateIndexNameError,
+  NonSearchableMemberError,
+  UnknownVectorIndexOptionError
 } from "./metadata/index.js";
 export {
   TitanTextEmbedV2,

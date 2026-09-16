@@ -72,10 +72,14 @@ export interface EmbeddingModelDescriptor {
  * Pure data — pair it with a consumer-owned {@link EmbeddingProvider} on a
  * vector index definition:
  * ```typescript
- * const searchIndex = MyTable.vectorIndex({
- *   name: "my-search-index",
- *   model: TitanTextEmbedV2,
- *   provider: myEmbedFunction
+ * const { searchIndex } = MyTable.vectorIndexes({
+ *   searchIndex: {
+ *     name: "my-search-index",
+ *     vectorAttribute: "__dyna_vector",
+ *     model: TitanTextEmbedV2,
+ *     provider: myEmbedFunction,
+ *     members: [() => Listing]
+ *   }
  * });
  * ```
  */

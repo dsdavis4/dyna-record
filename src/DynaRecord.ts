@@ -1,6 +1,7 @@
 import Metadata, {
   tableDefaultFields,
   type TableMetadata,
+  type ValidateVectorIndexes,
   type VectorIndexConstructs,
   type VectorIndexOptions
 } from "./metadata/index.js";
@@ -686,7 +687,7 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public static vectorIndexes<
     const T extends Record<string, VectorIndexOptions>
-  >(defs: T): VectorIndexConstructs<T> {
+  >(defs: T & ValidateVectorIndexes<T>): VectorIndexConstructs<T> {
     return Metadata.addVectorIndexes(this.name, defs);
   }
 

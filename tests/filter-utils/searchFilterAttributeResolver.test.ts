@@ -89,11 +89,15 @@ class Product extends FilterSearchTable {
   public readonly shop: Shop;
 }
 
-const productSearchIndex = FilterSearchTable.vectorIndex({
-  name: "product-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockProvider,
-  scopedBy: () => Shop
+const { productSearchIndex } = FilterSearchTable.vectorIndexes({
+  productSearchIndex: {
+    name: "product-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: mockProvider,
+    scopedBy: () => Shop,
+    members: [() => Product]
+  }
 });
 
 const searchBuilderInstance = (): FilterExpressionBuilder =>

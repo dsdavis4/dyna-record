@@ -13066,10 +13066,14 @@ class SearchChild extends SearchParentTable {
   public readonly parent: SearchParent;
 }
 
-SearchParentTable.vectorIndex({
-  name: "parent-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider
+SearchParentTable.vectorIndexes({
+  parentSearchIndex: {
+    name: "parent-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: mockEmbeddingProvider,
+    members: [() => SearchParent]
+  }
 });
 
 describe("Update searchable entities (vector write path)", () => {

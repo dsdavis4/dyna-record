@@ -5367,16 +5367,21 @@ class Note extends NoteTable {
 }
 
 // Small-dimension descriptor so tests can assert exact vector values, with a
-// controllable provider for failure and truncation scenarios
-NoteTable.vectorIndex({
-  name: "note-search-index",
-  model: {
-    name: "test-embed-model",
-    dimensions: 3,
-    distanceFunction: "COSINE",
-    scoreToSimilarity: score => 1 - score
-  },
-  provider: async text => await mockNoteEmbed(text)
+// controllable provider for failure and truncation scenarios. Inline lambdas
+// under the const-generic declaration need explicit parameter types
+NoteTable.vectorIndexes({
+  noteSearchIndex: {
+    name: "note-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: {
+      name: "test-embed-model",
+      dimensions: 3,
+      distanceFunction: "COSINE",
+      scoreToSimilarity: (score: number) => 1 - score
+    },
+    provider: async (text: string) => await mockNoteEmbed(text),
+    members: [() => Note]
+  }
 });
 
 describe("Create searchable entities (vector write path)", () => {

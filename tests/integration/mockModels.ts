@@ -1006,8 +1006,9 @@ class Listing extends SearchTable {
   public readonly store: Store;
 }
 
-// FK-only scoped index member: carries the scoping foreign key but has no
-// declared inverse relationship on Store, so it joins the index via include
+// Scoped index member that carries the scoping foreign key but has no
+// declared inverse relationship on Store — membership comes from the
+// members list alone
 @Entity
 class Review extends SearchTable {
   declare readonly type: "Review";
@@ -1020,7 +1021,7 @@ class Review extends SearchTable {
   public readonly storeId: ForeignKey<Store>;
 }
 
-// Global-index-only member with a nullable searchable attribute
+// Owned by the unscoped article index; has a nullable searchable attribute
 @Entity
 class Article extends SearchTable {
   declare readonly type: "Article";
@@ -1033,19 +1034,26 @@ class Article extends SearchTable {
   public readonly content?: Searchable;
 }
 
-export const storeSearchIndex = SearchTable.vectorIndex({
-  name: "store-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider,
-  scopedBy: () => Store,
-  include: [() => Review]
-});
-
-export const globalSearchIndex = SearchTable.vectorIndex({
-  name: "global-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider
-});
+export const { storeSearchIndex, globalSearchIndex } =
+  SearchTable.vectorIndexes({
+    storeSearchIndex: {
+      name: "store-search-index",
+      vectorAttribute: "__dyna_vector",
+      model: TitanTextEmbedV2,
+      provider: mockEmbeddingProvider,
+      scopedBy: () => Store,
+      members: [() => Listing, () => Review]
+    },
+    // Unscoped index owning the Article corpus — disjoint from the
+    // store-scoped index's membership per the one-owner rule
+    globalSearchIndex: {
+      name: "global-search-index",
+      vectorAttribute: "__dyna_vector_articles",
+      model: TitanTextEmbedV2,
+      provider: mockEmbeddingProvider,
+      members: [() => Article]
+    }
+  });
 
 export {
   // MockTable exports

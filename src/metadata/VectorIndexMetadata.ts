@@ -14,7 +14,8 @@ import type {
   InferSearchResults,
   NarrowMembersByName,
   SearchQuery,
-  SearchResults
+  SearchResults,
+  SearchableAttributeKeys
 } from "../operations/Search/types.js";
 import { ValidationError } from "../errors.js";
 import type { EntityClass, Optional } from "../types.js";
@@ -42,13 +43,22 @@ export const isValidVectorAttributeName = (value: string): boolean =>
   value.startsWith(`${reservedVectorAttributePrefix}_`);
 
 /**
- * @deprecated Internal transition shim for the pre-3.0 shared vector
- * attribute. Write paths that have not yet been generalized to per-index
- * attributes still read it; it is removed once they are.
+ * Internal transition shim for the pre-3.0 shared vector attribute. Write
+ * paths that have not yet been generalized to per-index attributes still
+ * read it; it is removed once they are. Not part of the public API.
  */
 export const vectorSearchKeys = {
   vector: reservedVectorAttributePrefix
 } as const;
+
+/**
+ * The valid shape of a vector attribute name: exactly the reserved prefix
+ * (`__dyna_vector`, the pre-3.0 value that existing indexes keep) or any
+ * name starting with `__dyna_vector_`.
+ */
+export type VectorAttributeName =
+  | typeof reservedVectorAttributePrefix
+  | `${typeof reservedVectorAttributePrefix}_${string}`;
 
 /**
  * Options for defining a vector index through the static `vectorIndexes`
@@ -62,11 +72,11 @@ export interface VectorIndexOptions {
   /**
    * The table attribute the index's vectors are written under. Required and
    * explicit — the attribute is the index's physical membership surface, so
-   * it must never change implicitly. Must be `__dyna_vector` (the pre-3.0
-   * value, which existing indexes keep) or start with `__dyna_vector_`, and
-   * must be unique among the table's vector indexes.
+   * it must never change implicitly. Must satisfy
+   * {@link VectorAttributeName} and be unique among the table's vector
+   * indexes.
    */
-  vectorAttribute: string;
+  vectorAttribute: VectorAttributeName;
   /**
    * The embedding model descriptor (EX: `TitanTextEmbedV2`), carrying the
    * dimensions and distance function the index is provisioned with.
@@ -124,6 +134,136 @@ export type VectorIndexConstructs<
     VectorIndexMembers<T[K]>,
     VectorIndexScoped<T[K]>
   >;
+};
+
+/**
+ * Whether two literal types are exactly equal. Widened (non-literal) strings
+ * never compare equal — a computed value cannot be checked at compile time,
+ * so it is left to the runtime uniqueness backstop.
+ */
+type AreEqualLiterals<A, B> = string extends A
+  ? false
+  : string extends B
+    ? false
+    : [A] extends [B]
+      ? [B] extends [A]
+        ? true
+        : false
+      : false;
+
+/**
+ * The other declaration keys sharing one entry's `vectorAttribute` literal.
+ */
+type KeysSharingVectorAttribute<
+  T extends Record<string, VectorIndexOptions>,
+  K extends keyof T
+> = {
+  [J in Exclude<keyof T, K>]: AreEqualLiterals<
+    T[J]["vectorAttribute"],
+    T[K]["vectorAttribute"]
+  > extends true
+    ? J
+    : never;
+}[Exclude<keyof T, K>];
+
+/**
+ * The other declaration keys sharing one entry's index `name` literal.
+ */
+type KeysSharingIndexName<
+  T extends Record<string, VectorIndexOptions>,
+  K extends keyof T
+> = {
+  [J in Exclude<keyof T, K>]: AreEqualLiterals<
+    T[J]["name"],
+    T[K]["name"]
+  > extends true
+    ? J
+    : never;
+}[Exclude<keyof T, K>];
+
+/**
+ * Resolves `true` when an entity declares a `Searchable`-branded attribute.
+ */
+type HasSearchableAttribute<E extends DynaRecord> = [
+  SearchableAttributeKeys<E>
+] extends [never]
+  ? false
+  : true;
+
+/**
+ * The members of one declaration whose entities declare no `Searchable`
+ * attribute (distributive over the member union).
+ */
+type NonSearchableMembers<O extends VectorIndexOptions> =
+  VectorIndexMembers<O> extends infer E
+    ? E extends DynaRecord
+      ? HasSearchableAttribute<E> extends true
+        ? never
+        : E
+      : never
+    : never;
+
+/**
+ * The error surface presented when two index declarations share a
+ * `vectorAttribute`. The attribute is an index's physical membership
+ * surface, so each index must have its own.
+ */
+export interface DuplicateVectorAttributeError<A> {
+  __vectorIndexError: "another index on this table declares the same vectorAttribute";
+  vectorAttribute: A;
+}
+
+/**
+ * The error surface presented when two index declarations share an
+ * IndexName.
+ */
+export interface DuplicateIndexNameError<N> {
+  __vectorIndexError: "another index on this table declares the same IndexName";
+  indexName: N;
+}
+
+/**
+ * The error surface presented when a members entry names an entity with no
+ * `@Searchable` attribute.
+ */
+export interface NonSearchableMemberError<E> {
+  __vectorIndexError: "every members entry must be an entity with a @Searchable attribute";
+  nonSearchableMembers: E;
+}
+
+/**
+ * The error surface presented when a declaration carries options
+ * {@link VectorIndexOptions} does not define. Restores excess-property
+ * rejection, which the factory's generic inference position would otherwise
+ * bypass.
+ */
+export interface UnknownVectorIndexOptionError<K> {
+  __vectorIndexError: "unknown option — see VectorIndexOptions for the valid declaration shape";
+  unknownOptions: K;
+}
+
+/**
+ * Compile-time validation of a table's vector index declarations: an entry
+ * whose `vectorAttribute` or `name` is also declared by another entry, or
+ * whose members include a non-searchable entity, resolves to a branded error
+ * surface so compilation fails on the offending declaration. Widened
+ * (non-literal) values pass — the metadata-initialization backstop validates
+ * them at runtime.
+ */
+export type ValidateVectorIndexes<
+  T extends Record<string, VectorIndexOptions>
+> = {
+  [K in keyof T]: [Exclude<keyof T[K], keyof VectorIndexOptions>] extends [
+    never
+  ]
+    ? [KeysSharingVectorAttribute<T, K>] extends [never]
+      ? [KeysSharingIndexName<T, K>] extends [never]
+        ? [NonSearchableMembers<T[K]>] extends [never]
+          ? T[K]
+          : NonSearchableMemberError<NonSearchableMembers<T[K]>>
+        : DuplicateIndexNameError<T[K]["name"]>
+      : DuplicateVectorAttributeError<T[K]["vectorAttribute"]>
+    : UnknownVectorIndexOptionError<Exclude<keyof T[K], keyof VectorIndexOptions>>;
 };
 
 /**
@@ -194,9 +334,10 @@ class VectorIndexMetadata<
   public readonly name: string;
   /**
    * The table attribute the index's vectors are written under — the index's
-   * physical membership surface
+   * physical membership surface. The narrow type is truthful: registration
+   * validates the reserved-prefix rule before any construct is built
    */
-  public readonly vectorAttribute: string;
+  public readonly vectorAttribute: VectorAttributeName;
   /**
    * The embedding model descriptor the index is provisioned with
    */

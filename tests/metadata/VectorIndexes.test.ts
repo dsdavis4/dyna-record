@@ -1,9 +1,20 @@
 import { createHash } from "node:crypto";
+import DynaRecordBase, {
+  Table,
+  Entity,
+  PartitionKeyAttribute,
+  SortKeyAttribute,
+  StringAttribute,
+  ForeignKeyAttribute,
+  Searchable,
+  TitanTextEmbedV2 as TitanModel
+} from "../../index.js";
 import type {
   ForeignKey,
   PartitionKey,
   Searchable as SearchableText,
-  SortKey
+  SortKey,
+  VectorIndexMetadata
 } from "../../src/index.js";
 
 /**
@@ -106,6 +117,167 @@ const buildDisjointFixture = (modules: FreshModules) => {
 };
 
 describe("vectorIndexes", () => {
+  describe("compile-time validation", () => {
+    it("rejects invalid declarations and infers construct types at the type level", () => {
+      // Never executed — the closure exists so the declarations below are
+      // type-checked without registering metadata
+      const _typeChecks = async (): Promise<void> => {
+        @Table({ name: "type-table" })
+        abstract class TypeTable extends DynaRecordBase {
+          @PartitionKeyAttribute({ alias: "PK" })
+          public readonly pk: PartitionKey;
+
+          @SortKeyAttribute({ alias: "SK" })
+          public readonly sk: SortKey;
+        }
+
+        @Entity
+        class TStore extends TypeTable {
+          declare readonly type: "TStore";
+        }
+
+        @Entity
+        class TListing extends TypeTable {
+          declare readonly type: "TListing";
+
+          @ForeignKeyAttribute(() => TStore, { alias: "StoreId" })
+          public readonly storeId: ForeignKey<TStore>;
+
+          @Searchable()
+          @StringAttribute({ alias: "Description" })
+          public readonly description: SearchableText;
+        }
+
+        @Entity
+        class TFaq extends TypeTable {
+          declare readonly type: "TFaq";
+
+          @Searchable()
+          @StringAttribute({ alias: "Question" })
+          public readonly question: SearchableText;
+        }
+
+        @Entity
+        class TPlain extends TypeTable {
+          declare readonly type: "TPlain";
+
+          @StringAttribute({ alias: "Body" })
+          public readonly body: string;
+        }
+        void TPlain;
+
+        const base = {
+          model: TitanModel,
+          provider: testProvider
+        };
+
+        // Valid: distinct attributes and names; scoped and unscoped coexist
+        const { scopedIdx, unscopedIdx } = TypeTable.vectorIndexes({
+          scopedIdx: {
+            ...base,
+            name: "scoped-idx",
+            vectorAttribute: "__dyna_vector",
+            scopedBy: () => TStore,
+            members: [() => TListing]
+          },
+          unscopedIdx: {
+            ...base,
+            name: "unscoped-idx",
+            vectorAttribute: "__dyna_vector_faq",
+            members: [() => TFaq]
+          }
+        });
+
+        // Positive inference: the constructs carry their member unions and
+        // scopedness
+        const _scopedTyped: VectorIndexMetadata<TListing, true> = scopedIdx;
+        const _unscopedTyped: VectorIndexMetadata<TFaq, false> = unscopedIdx;
+        void _scopedTyped;
+        void _unscopedTyped;
+
+        // @ts-expect-error: a scoped index search takes the scope id first
+        await scopedIdx.search("just a query");
+
+        // @ts-expect-error: an unscoped index search takes no scope id
+        await unscopedIdx.search("scope-id", "query");
+
+        TypeTable.vectorIndexes({
+          // @ts-expect-error: vectorAttribute duplicated by dupB
+          dupA: {
+            ...base,
+            name: "dup-a",
+            vectorAttribute: "__dyna_vector",
+            members: [() => TListing]
+          },
+          // @ts-expect-error: vectorAttribute duplicated by dupA
+          dupB: {
+            ...base,
+            name: "dup-b",
+            vectorAttribute: "__dyna_vector",
+            members: [() => TFaq]
+          }
+        });
+
+        TypeTable.vectorIndexes({
+          // @ts-expect-error: IndexName duplicated by sameNameB
+          sameNameA: {
+            ...base,
+            name: "same-name",
+            vectorAttribute: "__dyna_vector_a",
+            members: [() => TListing]
+          },
+          // @ts-expect-error: IndexName duplicated by sameNameA
+          sameNameB: {
+            ...base,
+            name: "same-name",
+            vectorAttribute: "__dyna_vector_b",
+            members: [() => TFaq]
+          }
+        });
+
+        TypeTable.vectorIndexes({
+          // @ts-expect-error: vectorAttribute is required
+          missingAttribute: {
+            ...base,
+            name: "missing-attribute",
+            members: [() => TListing]
+          }
+        });
+
+        TypeTable.vectorIndexes({
+          badPrefix: {
+            ...base,
+            name: "bad-prefix",
+            // @ts-expect-error: vector attributes must use the reserved prefix
+            vectorAttribute: "Embedding",
+            members: [() => TListing]
+          }
+        });
+
+        TypeTable.vectorIndexes({
+          // @ts-expect-error: TPlain declares no @Searchable attribute
+          nonSearchableMember: {
+            ...base,
+            name: "non-searchable-member",
+            vectorAttribute: "__dyna_vector_plain",
+            members: [() => TListing, () => TPlain]
+          }
+        });
+
+        TypeTable.vectorIndexes({
+          // @ts-expect-error: members is required on every index
+          missingMembers: {
+            ...base,
+            name: "missing-members",
+            vectorAttribute: "__dyna_vector_x"
+          }
+        });
+      };
+
+      expect(_typeChecks).toBeDefined();
+    });
+  });
+
   describe("definition time", () => {
     it("registers a table's indexes in one call and returns constructs keyed as declared", async () => {
       expect.assertions(4);
@@ -123,7 +295,7 @@ describe("vectorIndexes", () => {
       expect.assertions(1);
       const modules = await loadFresh();
       const { Entity, TitanTextEmbedV2 } = modules;
-      const { FreshTable } = buildDisjointFixture(modules);
+      const { FreshTable, Listing } = buildDisjointFixture(modules);
 
       @Entity
       class Widget extends FreshTable {
@@ -137,7 +309,7 @@ describe("vectorIndexes", () => {
             vectorAttribute: "__dyna_vector",
             model: TitanTextEmbedV2,
             provider: testProvider,
-            members: [() => Widget]
+            members: [() => Listing]
           }
         })
       ).toThrow(
@@ -170,8 +342,12 @@ describe("vectorIndexes", () => {
     it("throws when the call declares no indexes", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
-      const { default: DynaRecord, Table, PartitionKeyAttribute, SortKeyAttribute } =
-        modules;
+      const {
+        default: DynaRecord,
+        Table,
+        PartitionKeyAttribute,
+        SortKeyAttribute
+      } = modules;
 
       @Table({ name: "fresh-table" })
       abstract class FreshTable extends DynaRecord {
@@ -230,6 +406,7 @@ describe("vectorIndexes", () => {
 
       expect(() =>
         FreshTable.vectorIndexes({
+          // @ts-expect-error: duplicate vectorAttribute; this exercises the runtime backstop
           indexA: {
             name: "index-a",
             vectorAttribute: "__dyna_vector",
@@ -238,6 +415,7 @@ describe("vectorIndexes", () => {
             scopedBy: () => Store,
             members: [() => Listing]
           },
+          // @ts-expect-error: duplicate vectorAttribute; this exercises the runtime backstop
           indexB: {
             name: "index-b",
             vectorAttribute: "__dyna_vector",
@@ -295,6 +473,7 @@ describe("vectorIndexes", () => {
 
       expect(() =>
         FreshTable.vectorIndexes({
+          // @ts-expect-error: duplicate IndexName; this exercises the runtime backstop
           indexA: {
             name: "same-index-name",
             vectorAttribute: "__dyna_vector_a",
@@ -303,6 +482,7 @@ describe("vectorIndexes", () => {
             scopedBy: () => Store,
             members: [() => Listing]
           },
+          // @ts-expect-error: duplicate IndexName; this exercises the runtime backstop
           indexB: {
             name: "same-index-name",
             vectorAttribute: "__dyna_vector_b",
@@ -320,8 +500,13 @@ describe("vectorIndexes", () => {
     it("throws when a vectorAttribute does not use the reserved prefix", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
-      const { default: DynaRecord, Table, PartitionKeyAttribute, SortKeyAttribute, TitanTextEmbedV2 } =
-        modules;
+      const {
+        default: DynaRecord,
+        Table,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        TitanTextEmbedV2
+      } = modules;
 
       @Table({ name: "fresh-table" })
       abstract class FreshTable extends DynaRecord {
@@ -336,6 +521,7 @@ describe("vectorIndexes", () => {
         FreshTable.vectorIndexes({
           badIndex: {
             name: "bad-index",
+            // @ts-expect-error: vector attributes must use the reserved prefix; this exercises the runtime backstop
             vectorAttribute: "Embedding",
             model: TitanTextEmbedV2,
             provider: testProvider,
@@ -423,8 +609,14 @@ describe("vectorIndexes", () => {
     it("throws when an index declares no members", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
-      const { default: DynaRecord, Table, Entity, PartitionKeyAttribute, SortKeyAttribute, TitanTextEmbedV2 } =
-        modules;
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        TitanTextEmbedV2
+      } = modules;
 
       @Table({ name: "fresh-table" })
       abstract class FreshTable extends DynaRecord {
@@ -470,7 +662,9 @@ describe("vectorIndexes", () => {
       expect(listingIndex.memberEntities).toStrictEqual(["Listing"]);
       expect(supportIndex.memberEntities).toStrictEqual(["SupportArticle"]);
       expect(Metadata.getOwningVectorIndex("Listing")).toBe(listingIndex);
-      expect(Metadata.getOwningVectorIndex("SupportArticle")).toBe(supportIndex);
+      expect(Metadata.getOwningVectorIndex("SupportArticle")).toBe(
+        supportIndex
+      );
     });
 
     it("allows indexes on one table to declare different embedding configs", async () => {
@@ -693,15 +887,13 @@ describe("vectorIndexes", () => {
       }
 
       FreshTable.vectorIndexes({
+        // @ts-expect-error: PlainNote has no @Searchable attribute; this exercises the runtime backstop
         listingIndex: {
           name: "listing-index",
           vectorAttribute: "__dyna_vector",
           model: TitanTextEmbedV2,
           provider: testProvider,
           scopedBy: () => Store,
-          // PlainNote has no @Searchable attribute — this exercises the
-          // runtime backstop (the compile-time rejection is asserted in the
-          // vectorIndexes type tests)
           members: [() => Listing, () => PlainNote]
         }
       });
