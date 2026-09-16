@@ -188,9 +188,11 @@ export type SearchableRelationshipEntities<T extends DynaRecord> =
  * The entities a parent search returns: the target of the `in:` relationship
  * when one is named, otherwise the parent's full searchable adjacency.
  *
- * Note: `include:` members of a scoped index have no relationship on the
- * scope parent — they appear in index-level search unions, not parent-level
- * unions. Search through the index construct to receive them typed.
+ * Note: an index member with no declared relationship on the scope parent
+ * has no relationship property name to appear under here — it is returned by
+ * the search and discriminated via `entity.type`, but typed unions at this
+ * surface cover the parent's relationships only. Search through the index
+ * construct to receive the full member union typed.
  */
 export type ParentSearchedEntities<
   T extends DynaRecord,
@@ -227,7 +229,8 @@ export interface ParentSearchOptions<
 }
 
 /**
- * The entities named by a vector index's `include:` thunks.
+ * The entities named by a list of entity thunks — a vector index's
+ * `members:` declaration.
  */
 export type IncludedEntities<
   Inc extends ReadonlyArray<() => new () => DynaRecord>

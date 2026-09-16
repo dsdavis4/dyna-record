@@ -1383,10 +1383,12 @@ Three surfaces, each compiling to exactly one `SearchVectors` operation. Results
 The **parent surface** (`Parent.search(scopeId, query, options)`) is available when exactly one index is scoped by the class. Starting from the simplest call and adding one option at a time:
 
 ```typescript
-// No options: searches the organization's whole scoped index — Products,
-// and Reviews via the include list — returning the 10 most similar (the
-// default topK). Results are typed by the searchable relationships
-// (Product); an include-member result is discriminated via entity.type
+// No options: searches the organization's whole scoped index — its declared
+// members Product and Review — returning the 10 most similar (the default
+// topK). The parent surface types results from the parent's searchable
+// relationships (Product), so a member with no relationship on the parent
+// (Review) arrives discriminated via entity.type; search through the index
+// construct to receive the full member union typed
 const results = await Organization.search("orgId", "waterproof hiking boots");
 // results is Array<SearchResult<Product>>
 
@@ -1468,7 +1470,7 @@ Every surface also accepts a **precomputed vector** in place of query text: `{ v
 
 ```typescript
 // Vector in place of text, on any surface — the provider is never called
-await globalSearchIndex.search({ vector: myVector });
+await helpSearchIndex.search({ vector: myVector });
 
 // One provider call, reused across searches
 const vector = await embed("waterproof hiking boots");
@@ -1546,7 +1548,7 @@ Notes on the contract:
 3. **List every index's members explicitly.** Membership is no longer derived from the scope parent's relationships, and global indexes' automatic all-searchable-entities membership no longer exists — enumerate the corpus (the zero-owner init error lists anything you miss). A 2.x searchable entity that was silently in no index now fails fast at init.
 4. **Fingerprints have a new format** — the vector attribute joined the hash inputs — so expect a one-time fingerprint diff on upgrade with no underlying config change. Tooling must not destroy or rebuild an index on a fingerprint change alone; diff the config fields.
 5. **Audit parent `.search()` call sites before adding a second index to a parent's scope** — with two scoped indexes the parent surface errors at runtime (search through the constructs), and the compile-time surface cannot warn about index counts.
-6. **Moving an entity between indexes does not migrate its rows.** Rows whose searchable text never changes keep their vector under the old attribute (still resident and billed in the old index) and have none under the new one — re-write each moved entity with `forceEmbed` to converge it.
+6. **Moving an entity between indexes does not migrate its rows.** Rows whose searchable text never changes keep their vector under the old attribute (still resident and billed in the old index) and have none under the new one — re-write each moved entity with `forceEmbed` to converge it. Two limits on that convergence: it only happens on writes that actually embed or clear (an unchanged-value update writes no vector clauses), and it only removes attributes of indexes the table *still declares* — so drain an index's corpus before deleting its declaration, or clear the orphaned attribute with a one-off pass afterward.
 7. `vectorSearchKeys` is no longer exported; `reservedVectorAttributePrefix` and `isValidVectorAttributeName` replace it.
 
 ### Permissions and networking

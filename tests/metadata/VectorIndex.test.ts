@@ -92,6 +92,41 @@ describe("VectorIndex", () => {
       ]);
     });
 
+    it("serializes a migrated 2.0.1-shape index identically except its fingerprint", () => {
+      expect.assertions(2);
+
+      // The exact entry dyna-record 2.0.1 emitted for store-search-index,
+      // pinned here so a future change to the serialized provisioning
+      // contract cannot pass by updating an expectation alongside it. R15
+      // promises a mechanically-migrated index re-provisions nothing: every
+      // field must match, and only the fingerprint may differ (its preimage
+      // gained the vector attribute in 3.0.0)
+      const pinned201Entry = {
+        name: "store-search-index",
+        model: "amazon.titan-embed-text-v2:0",
+        vectorAttribute: "__dyna_vector",
+        dimensions: 1024,
+        distanceFunction: "COSINE",
+        projection: "ALL",
+        searchSchema: {
+          hash: "StoreId",
+          inlineFilters: ["Category", "Type"]
+        },
+        fingerprint: fingerprintOf(
+          "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE"
+        ),
+        scopedBy: "Store"
+      };
+
+      const [current] = SearchTable.metadata().vectorIndexes ?? [];
+
+      expect({ ...current, fingerprint: null }).toStrictEqual({
+        ...pinned201Entry,
+        fingerprint: null
+      });
+      expect(current.fingerprint).not.toBe(pinned201Entry.fingerprint);
+    });
+
     it("serializes the model as the descriptor name and never emits provider or credential material", () => {
       expect.assertions(3);
 

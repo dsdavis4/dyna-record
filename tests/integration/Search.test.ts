@@ -5,18 +5,17 @@ import {
   SearchVectorsCommand
 } from "@aws-sdk/lib-dynamodb";
 import {
+  Article,
   Listing,
   Review,
   Store,
   mockEmbeddingProvider,
   mockEmbeddingProviderCalls,
+  mockArticleEmbeddingProviderCalls,
   globalSearchIndex,
   storeSearchIndex
 } from "./mockModels.js";
-import {
-  type SearchResult,
-  type SearchResults
-} from "../../src/operations/index.js";
+import { type SearchResult } from "../../src/operations/index.js";
 import {
   BelongsTo,
   Entity,
@@ -219,12 +218,16 @@ const { scopedFilterIndex } = ScopedFilterTable.vectorIndexes({
   }
 });
 
+// The article index declares its own provider, so its query embeds differ
+const expectedArticleVector = new Array<number>(1024).fill(0.7);
+
 describe("Search", () => {
   const expectedTitanVector = new Array<number>(1024).fill(0.1);
 
   afterEach(() => {
     vi.clearAllMocks();
     mockEmbeddingProviderCalls.length = 0;
+    mockArticleEmbeddingProviderCalls.length = 0;
   });
 
   it("searches a scoped index with query text: embeds through the provider and compiles the HASH-only condition", async () => {
@@ -332,7 +335,7 @@ describe("Search", () => {
         {
           TableName: "search-table",
           IndexName: "global-search-index",
-          SearchVector: expectedTitanVector,
+          SearchVector: expectedArticleVector,
           TopK: 10
         }
       ]
@@ -353,7 +356,7 @@ describe("Search", () => {
         {
           TableName: "search-table",
           IndexName: "global-search-index",
-          SearchVector: expectedTitanVector,
+          SearchVector: expectedArticleVector,
           TopK: 10,
           SearchConditionExpression: "#Type = :Type",
           ExpressionAttributeNames: { "#Type": "Type" },
@@ -364,8 +367,11 @@ describe("Search", () => {
   });
 
   it("hydrates results into typed entity instances with similarity and the raw score, preserving response order", async () => {
-    expect.assertions(7);
+    expect.assertions(9);
 
+    // Vector indexes are provisioned with projection ALL and SearchVectors
+    // takes no ProjectionExpression, so real responses carry the vector
+    // attribute — hydration must drop it rather than surface it on the entity
     const listingItem = {
       PK: "Listing#456",
       SK: "Listing",
@@ -375,7 +381,8 @@ describe("Search", () => {
       Category: "Mugs",
       StoreId: "123",
       CreatedAt: "2023-10-01T00:00:00.000Z",
-      UpdatedAt: "2023-10-02T00:00:00.000Z"
+      UpdatedAt: "2023-10-02T00:00:00.000Z",
+      __dyna_vector: [0.1, 0.2, 0.3]
     };
 
     const reviewItem = {
@@ -386,7 +393,8 @@ describe("Search", () => {
       Body: "Beautiful glaze, sturdy handle",
       StoreId: "123",
       CreatedAt: "2023-10-03T00:00:00.000Z",
-      UpdatedAt: "2023-10-04T00:00:00.000Z"
+      UpdatedAt: "2023-10-04T00:00:00.000Z",
+      __dyna_vector: [0.4, 0.5, 0.6]
     };
 
     mockSearchVectors.mockResolvedValueOnce({
@@ -423,6 +431,12 @@ describe("Search", () => {
       storeId: "123",
       createdAt: new Date("2023-10-03T00:00:00.000Z"),
       updatedAt: new Date("2023-10-04T00:00:00.000Z")
+    });
+    // No vector attribute survives onto a hydrated entity, under any name
+    res.forEach(({ entity }) => {
+      expect(
+        Object.keys(entity).filter(key => key.startsWith("__dyna_vector"))
+      ).toEqual([]);
     });
     // COSINE: similarity = 1 - score; the raw score stays accessible
     expect(res.map(r => r.similarity)).toEqual([0.8, 0.5]);
@@ -1154,7 +1168,7 @@ describe("public search surfaces", () => {
         {
           TableName: "search-table",
           IndexName: "global-search-index",
-          SearchVector: expectedTitanVector,
+          SearchVector: expectedArticleVector,
           TopK: 5
         }
       ]
@@ -1384,18 +1398,31 @@ describe("types", () => {
       const reviews = await storeSearchIndex.search("1", "q", {
         in: "Review"
       });
-      // @ts-expect-no-error: include members narrow like any other member
+      // @ts-expect-no-error: a member with no relationship on the parent narrows like any other
       const _reviewExact: Array<SearchResult<Review>> = reviews;
       // @ts-expect-error: narrowed away from Listing
       const _reviewNoListing: Array<SearchResult<Listing>> = reviews;
 
-      // Global-construct results are the unnarrowed base type — the member
-      // set is only known at runtime
+      // An unscoped index declares its members explicitly, so its results are
+      // typed exactly like a scoped index's — not the widened base type
       const everything = await globalSearchIndex.search("q");
-      // @ts-expect-no-error: the base result type
-      const _globalBase: SearchResults = everything;
-      // @ts-expect-error: never silently narrowed to a specific entity
-      const _globalNotNarrowed: Array<SearchResult<Listing>> = everything;
+      // @ts-expect-no-error: typed to the declared membership
+      const _unscopedExact: Array<SearchResult<Article>> = everything;
+      // @ts-expect-error: Listing belongs to the other index, not this one
+      const _unscopedNotListing: Array<SearchResult<Listing>> = everything;
+
+      // in: narrows an unscoped index by member entity name
+      const articlesOnly = await globalSearchIndex.search("q", {
+        in: "Article"
+      });
+      // @ts-expect-no-error: narrowed to the named member
+      const _articlesExact: Array<SearchResult<Article>> = articlesOnly;
+      // @ts-expect-error: Listing is not a member of the unscoped index
+      await globalSearchIndex.search("q", { in: "Listing" });
+
+      // filter keys narrow to the unscoped index's own members
+      // @ts-expect-error: category is a Listing filterable, not an Article one
+      await globalSearchIndex.search("q", { filter: { category: "Mugs" } });
     };
 
     expect(_test).toBeDefined();

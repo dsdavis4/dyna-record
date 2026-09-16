@@ -959,6 +959,28 @@ export const mockEmbeddingProvider = (text: string): Promise<number[]> => {
   );
 };
 
+/**
+ * The text values passed to {@link mockArticleEmbeddingProvider}, recorded
+ * separately from {@link mockEmbeddingProviderCalls} so tests can assert
+ * which index's provider embedded a write
+ */
+export const mockArticleEmbeddingProviderCalls: string[] = [];
+
+/**
+ * The article index's own provider. Same dimensions as
+ * {@link mockEmbeddingProvider} but a distinguishable fill value, so a write
+ * routed through the wrong index's provider is visible in the written vector
+ * as well as in the call log
+ */
+export const mockArticleEmbeddingProvider = (
+  text: string
+): Promise<number[]> => {
+  mockArticleEmbeddingProviderCalls.push(text);
+  return Promise.resolve(
+    new Array<number>(TitanTextEmbedV2.dimensions).fill(0.7)
+  );
+};
+
 @Table({
   name: "search-table",
   defaultFields: {
@@ -1050,7 +1072,7 @@ export const { storeSearchIndex, globalSearchIndex } =
       name: "global-search-index",
       vectorAttribute: "__dyna_vector_articles",
       model: TitanTextEmbedV2,
-      provider: mockEmbeddingProvider,
+      provider: mockArticleEmbeddingProvider,
       members: [() => Article]
     }
   });

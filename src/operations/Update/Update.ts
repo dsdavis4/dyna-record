@@ -636,9 +636,13 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   /**
    * Appends the vector clauses to the canonical row's queued update — a SET
    * of the owning index's attribute when a vector is provided, a REMOVE of
-   * it when the searchable value was cleared — and always REMOVEs the
-   * table's other declared vector attributes (names only, no values), so a
-   * row never stays resident in an index that no longer owns its entity.
+   * it when the searchable value was cleared — and REMOVEs the table's
+   * other declared vector attributes (names only, no values), so a row does
+   * not stay resident in an index that no longer owns its entity.
+   *
+   * Convergence is bounded by when this runs: the caller returns before this
+   * point on the unchanged-value skip, and a retired index's attribute is no
+   * longer a declared sibling, so neither case is cleaned up here.
    *
    * The queued item's expression attribute maps are shared by reference with
    * the expression object the denormalized sinks spread, so fresh copies are
