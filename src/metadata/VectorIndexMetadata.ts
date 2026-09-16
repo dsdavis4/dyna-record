@@ -9,6 +9,7 @@ import type {
 // module evaluation
 import { Search, isSearchQuery } from "../operations/Search/index.js";
 import type {
+  IncludedEntities,
   IndexSearchOptions,
   InferSearchResults,
   NarrowMembersByName,
@@ -19,19 +20,38 @@ import { ValidationError } from "../errors.js";
 import type { EntityClass, Optional } from "../types.js";
 
 /**
- * Table alias of the library-managed vector attribute. The alias is reserved
- * by dyna-record and may not be used as the alias of a consumer-defined
- * attribute (enforced at metadata initialization). The vector is
+ * Reserved prefix of library-managed vector attribute names. Every index's
+ * `vectorAttribute` must be exactly this prefix or start with
+ * `__dyna_vector_`, and no consumer-defined attribute name or table alias may
+ * start with it (enforced at metadata initialization). Vectors are
  * intentionally never registered in any entity's attribute metadata, so
- * serialization and copy paths drop it automatically — it lives on canonical
- * rows only.
+ * serialization and copy paths drop them automatically — they live on
+ * canonical rows only.
+ */
+export const reservedVectorAttributePrefix = "__dyna_vector";
+
+/**
+ * Whether a `vectorAttribute` value satisfies the reserved-prefix rule: the
+ * bare legacy value `__dyna_vector` or any name starting with
+ * `__dyna_vector_`.
+ * @param value - The candidate vector attribute name
+ * @returns Whether the value is a valid vector attribute name
+ */
+export const isValidVectorAttributeName = (value: string): boolean =>
+  value === reservedVectorAttributePrefix ||
+  value.startsWith(`${reservedVectorAttributePrefix}_`);
+
+/**
+ * @deprecated Internal transition shim for the pre-3.0 shared vector
+ * attribute. Write paths that have not yet been generalized to per-index
+ * attributes still read it; it is removed once they are.
  */
 export const vectorSearchKeys = {
-  vector: "__dyna_vector"
+  vector: reservedVectorAttributePrefix
 } as const;
 
 /**
- * Options for defining a vector index through the static `vectorIndex`
+ * Options for defining a vector index through the static `vectorIndexes`
  * factory on a table class.
  */
 export interface VectorIndexOptions {
@@ -39,6 +59,14 @@ export interface VectorIndexOptions {
    * The DynamoDB IndexName of the vector index.
    */
   name: string;
+  /**
+   * The table attribute the index's vectors are written under. Required and
+   * explicit — the attribute is the index's physical membership surface, so
+   * it must never change implicitly. Must be `__dyna_vector` (the pre-3.0
+   * value, which existing indexes keep) or start with `__dyna_vector_`, and
+   * must be unique among the table's vector indexes.
+   */
+  vectorAttribute: string;
   /**
    * The embedding model descriptor (EX: `TitanTextEmbedV2`), carrying the
    * dimensions and distance function the index is provisioned with.
@@ -58,12 +86,52 @@ export interface VectorIndexOptions {
    */
   scopedBy?: () => EntityClass<DynaRecord>;
   /**
-   * Optional entity thunks adding FK-only members to a scoped index —
-   * searchable entities that carry the scoping foreign key but have no
-   * declared inverse relationship on the scope parent.
+   * Entity thunks declaring a scoped index's complete membership. Nothing is
+   * derived from the scope parent's declared relationships — the list is the
+   * membership, and every listed entity must carry a `@Searchable` attribute
+   * and the scoping foreign key. Required (non-empty) for scoped indexes;
+   * rejected on global indexes, whose membership is every searchable entity
+   * of the table.
    */
-  include?: Array<() => EntityClass<DynaRecord>>;
+  members?: Array<() => EntityClass<DynaRecord>>;
 }
+
+/**
+ * The member entity union of one index declaration: the entities of its
+ * explicit `members:` list. A global index (no `members:`) resolves to the
+ * base {@link DynaRecord} — its membership is every searchable entity of the
+ * table and is only known at runtime, so results discriminate on
+ * `entity.type`.
+ */
+export type VectorIndexMembers<O extends VectorIndexOptions> = O extends {
+  members: infer M extends ReadonlyArray<() => EntityClass<DynaRecord>>;
+}
+  ? IncludedEntities<M>
+  : DynaRecord;
+
+/**
+ * Whether one index declaration is scoped (`scopedBy` present), selecting the
+ * scope-id-first `search` signature on its construct.
+ */
+export type VectorIndexScoped<O extends VectorIndexOptions> = O extends {
+  scopedBy: () => EntityClass<DynaRecord>;
+}
+  ? true
+  : false;
+
+/**
+ * The typed index constructs returned by the static `vectorIndexes` factory,
+ * keyed as declared: each entry is a {@link VectorIndexMetadata} whose member
+ * union and scopedness are inferred from its own declaration.
+ */
+export type VectorIndexConstructs<
+  T extends Record<string, VectorIndexOptions>
+> = {
+  [K in keyof T]: VectorIndexMetadata<
+    VectorIndexMembers<T[K]>,
+    VectorIndexScoped<T[K]>
+  >;
+};
 
 /**
  * Parameters resolving an index's search schema at metadata initialization.
@@ -88,22 +156,22 @@ interface ResolveSearchSchemaParams {
 
 /**
  * Represents the metadata for a vector index defined on a table class through
- * the static `vectorIndex` factory, and carries the index-anchored `search`
- * surface. Holds the consumer-supplied configuration (name, model descriptor,
- * provider, scope and membership thunks) plus the search schema resolved at
- * metadata initialization (members, `HASH` alias, inline filter aliases, and
- * the search-schema fingerprint).
+ * the static `vectorIndexes` factory, and carries the index-anchored `search`
+ * surface. Holds the consumer-supplied configuration (name, vector attribute,
+ * model descriptor, provider, scope and membership thunks) plus the search
+ * schema resolved at metadata initialization (members, `HASH` alias, inline
+ * filter aliases, and the search-schema fingerprint).
  *
- * Entity thunks (`scopedBy`, `include`) are never resolved at definition
+ * Entity thunks (`scopedBy`, `members`) are never resolved at definition
  * time — resolution happens during metadata initialization so index constants
  * can be declared at module evaluation without freezing metadata against a
  * partial entity graph.
  *
- * The type parameters are instantiated by the `vectorIndex` factory's
- * overloads and drive the `search` surface only: `Members` is the index's
- * member entity union (scope parent's searchable adjacency union the
- * `include:` list; unnarrowed for global indexes) and `Scoped` selects the
- * scope-id-first search signature. Metadata-internal code uses the defaults.
+ * The type parameters are instantiated by the `vectorIndexes` factory and
+ * drive the `search` surface only: `Members` is the index's member entity
+ * union (the explicit `members:` list; unnarrowed for global indexes) and
+ * `Scoped` selects the scope-id-first search signature. Metadata-internal
+ * code uses the defaults.
  *
  * @template Members - Union of the index's member entity types.
  * @template Scoped - Whether the index is scoped (`scopedBy`).
@@ -132,6 +200,11 @@ class VectorIndexMetadata<
    */
   public readonly name: string;
   /**
+   * The table attribute the index's vectors are written under — the index's
+   * physical membership surface
+   */
+  public readonly vectorAttribute: string;
+  /**
    * The embedding model descriptor the index is provisioned with
    */
   public readonly model: EmbeddingModelDescriptor;
@@ -146,9 +219,9 @@ class VectorIndexMetadata<
    */
   public readonly scopedBy?: () => EntityClass<DynaRecord>;
   /**
-   * Entity thunks adding FK-only members to a scoped index
+   * Entity thunks declaring a scoped index's complete membership
    */
-  public readonly include?: ReadonlyArray<() => EntityClass<DynaRecord>>;
+  public readonly members?: ReadonlyArray<() => EntityClass<DynaRecord>>;
 
   /**
    * Class names of the searchable member entities of the index. Placeholder,
@@ -169,19 +242,21 @@ class VectorIndexMetadata<
   public inlineFilterAliases: string[];
   /**
    * Stable fingerprint of the search-schema configuration (`HASH` alias,
-   * sorted inline filter aliases, dimensions, distance function) so IaC can
-   * detect that a decorator change implies a destructive index replacement.
-   * Placeholder, resolved at metadata initialization
+   * sorted inline filter aliases, dimensions, distance function, vector
+   * attribute) so IaC can detect that a declaration change implies a
+   * destructive index replacement. Placeholder, resolved at metadata
+   * initialization
    */
   public fingerprint: string;
 
   constructor(tableClassName: string, options: VectorIndexOptions) {
     this.tableClassName = tableClassName;
     this.name = options.name;
+    this.vectorAttribute = options.vectorAttribute;
     this.model = options.model;
     this.provider = options.provider;
     this.scopedBy = options.scopedBy;
-    this.include = options.include;
+    this.members = options.members;
     // Placeholders, these are set later
     this.memberEntities = [];
     this.inlineFilterAliases = [];
@@ -203,7 +278,8 @@ class VectorIndexMetadata<
           `hash=${params.hashAlias ?? ""}`,
           `filters=${params.inlineFilterAliases.join(",")}`,
           `dimensions=${String(this.model.dimensions)}`,
-          `distance=${this.model.distanceFunction}`
+          `distance=${this.model.distanceFunction}`,
+          `vectorAttribute=${this.vectorAttribute}`
         ].join(";")
       )
       .digest("hex");

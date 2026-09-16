@@ -5,7 +5,9 @@ import EntityMetadata from "./EntityMetadata.js";
 import AttributeMetadata from "./AttributeMetadata.js";
 import JoinTableMetadata from "./JoinTableMetadata.js";
 import VectorIndexMetadata, {
-  vectorSearchKeys,
+  isValidVectorAttributeName,
+  reservedVectorAttributePrefix,
+  type VectorIndexConstructs,
   type VectorIndexOptions
 } from "./VectorIndexMetadata.js";
 import { createRelationshipInstance } from "./relationship-metadata/utils.js";
@@ -85,6 +87,15 @@ class MetadataStorage {
   readonly #entities: EntityMetadataStorage = {};
   readonly #joinTables: JoinTableMetadataStorage = {};
   readonly #vectorIndexes: Record<string, VectorIndexMetadata[]> = {};
+
+  /**
+   * The owning vector index of each searchable entity (keyed by entity
+   * name), resolved at metadata initialization. The owner is the one index
+   * whose membership contains the entity — write paths embed with its model
+   * and write vectors under its attribute
+   */
+  readonly #owningVectorIndexByEntity: Record<string, VectorIndexMetadata> =
+    {};
 
   /**
    * Side registry of @Searchable marks (attribute names keyed by entity name).
@@ -342,27 +353,96 @@ class MetadataStorage {
   }
 
   /**
-   * Adds a vector index to metadata storage. Mutates the store directly and
-   * intentionally never touches a metadata accessor — accessors trigger
-   * init(), which would freeze metadata against a partial entity graph when
-   * index constants are declared at module evaluation. Entity thunks in the
-   * options are resolved at metadata initialization, not here.
-   * @param tableClassName - Name of the table class the index is defined on
-   * @param options - {@link VectorIndexOptions}
-   * @returns The registered {@link VectorIndexMetadata}
+   * Registers a table's complete vector index declarations. Mutates the store
+   * directly and intentionally never touches a metadata accessor — accessors
+   * trigger init(), which would freeze metadata against a partial entity
+   * graph when index constants are declared at module evaluation. Entity
+   * thunks in the options are resolved at metadata initialization, not here;
+   * everything checkable from the declarations alone (one call per table,
+   * vector attribute shape and uniqueness, name uniqueness, a global index
+   * being the table's only index, a scoped index declaring members) fails
+   * fast here at definition time.
+   * @param tableClassName - Name of the table class the indexes are defined on
+   * @param defs - Declarations keyed by export name; see {@link VectorIndexOptions}
+   * @returns The registered {@link VectorIndexMetadata} constructs, keyed as declared
    */
-  public addVectorIndex(
+  public addVectorIndexes<const T extends Record<string, VectorIndexOptions>>(
     tableClassName: string,
-    options: VectorIndexOptions
-  ): VectorIndexMetadata {
+    defs: T
+  ): VectorIndexConstructs<T> {
     if (!(tableClassName in this.#tables)) {
       throw new Error(
-        `vectorIndex can only be defined on a table class decorated with @Table. ${tableClassName} is not a registered table`
+        `vectorIndexes can only be defined on a table class decorated with @Table. ${tableClassName} is not a registered table`
       );
     }
-    const meta = new VectorIndexMetadata(tableClassName, options);
-    (this.#vectorIndexes[tableClassName] ??= []).push(meta);
-    return meta;
+
+    if (tableClassName in this.#vectorIndexes) {
+      throw new Error(
+        `vectorIndexes was already called for table ${tableClassName}. A table declares all of its vector indexes in one vectorIndexes call — merge the declarations into that call`
+      );
+    }
+
+    const entries = Object.entries(defs);
+
+    if (entries.length === 0) {
+      throw new Error(
+        `vectorIndexes on table ${tableClassName} declares no indexes. Declare at least one index, or remove the call`
+      );
+    }
+
+    const seenAttributes = new Map<string, string>();
+    const seenNames = new Map<string, string>();
+    for (const [key, options] of entries) {
+      if (!isValidVectorAttributeName(options.vectorAttribute)) {
+        throw new Error(
+          `Vector index ${options.name} declares vectorAttribute ${options.vectorAttribute}. A vector attribute must be ${reservedVectorAttributePrefix} or start with ${reservedVectorAttributePrefix}_`
+        );
+      }
+
+      const attributeHolder = seenAttributes.get(options.vectorAttribute);
+      if (attributeHolder !== undefined) {
+        throw new Error(
+          `Vector indexes ${attributeHolder} and ${key} on table ${tableClassName} both declare vectorAttribute ${options.vectorAttribute}. The vector attribute is an index's physical membership surface — give each index its own`
+        );
+      }
+      seenAttributes.set(options.vectorAttribute, key);
+
+      const nameHolder = seenNames.get(options.name);
+      if (nameHolder !== undefined) {
+        throw new Error(
+          `Vector indexes ${nameHolder} and ${key} on table ${tableClassName} both declare the IndexName ${options.name}. Give each index its own name`
+        );
+      }
+      seenNames.set(options.name, key);
+
+      if (options.scopedBy === undefined && entries.length > 1) {
+        throw new Error(
+          `Vector index ${options.name} on table ${tableClassName} is global, but the table declares other indexes. A global index spans every searchable entity of the table, so it must be the table's only vector index`
+        );
+      }
+
+      if (
+        options.scopedBy !== undefined &&
+        (options.members === undefined || options.members.length === 0)
+      ) {
+        throw new Error(
+          `Vector index ${options.name} is scoped but declares no members. A scoped index's members list is its complete membership — list every searchable entity the index owns`
+        );
+      }
+    }
+
+    const registered = entries.map(([key, options]) => {
+      const meta = new VectorIndexMetadata(tableClassName, options);
+      (this.#vectorIndexes[tableClassName] ??= []).push(meta);
+      return [key, meta] as const;
+    });
+
+    // The one unavoidable assertion for the construct's phantom type
+    // parameters: Members/Scoped have no runtime representation, so no value
+    // can witness them — this factory is the trust boundary that stamps each
+    // entry's declaration-inferred brand onto the construct it built for
+    // that entry
+    return Object.fromEntries(registered) as VectorIndexConstructs<T>;
   }
 
   /**
@@ -539,18 +619,19 @@ class MetadataStorage {
   }
 
   /**
-   * Rejects consumer attributes whose table alias collides with a
-   * library-managed vector search alias. Alias-level check — reservedKeys
-   * matches property names only, so alias collisions need their own check
+   * Rejects consumer attributes whose property name or table alias uses the
+   * reserved vector attribute prefix. Prefix-level check covering every
+   * per-index vector attribute a table may declare, now or later
    */
   private validateVectorSearchAliases(): void {
-    const reservedAliases: string[] = Object.values(vectorSearchKeys);
-
     for (const [entityName, entityMetadata] of Object.entries(this.#entities)) {
       for (const attrMeta of Object.values(entityMetadata.attributes)) {
-        if (reservedAliases.includes(attrMeta.alias)) {
+        const collision = [attrMeta.name, attrMeta.alias].find(value =>
+          value.startsWith(reservedVectorAttributePrefix)
+        );
+        if (collision !== undefined) {
           throw new Error(
-            `Attribute ${entityName}.${attrMeta.name} uses the table alias ${attrMeta.alias}, which is reserved for the library-managed vector attribute`
+            `Attribute ${entityName}.${attrMeta.name} uses ${collision}, which starts with ${reservedVectorAttributePrefix} — that prefix is reserved for library-managed vector attributes`
           );
         }
       }
@@ -559,12 +640,11 @@ class MetadataStorage {
 
   /**
    * Resolves and validates the vector indexes of every table: per-table index
-   * quota, provider presence, scoped membership, inline filter consistency
-   * and quota. Registers the library-managed content hash attribute on
-   * searchable entities so it round-trips serialization and prefetch (the
-   * vector attribute is intentionally never registered — serialization and
-   * copy paths drop unregistered attributes, which keeps the vector off
-   * denormalized records automatically)
+   * quota, provider presence, explicit membership, one owning index per
+   * searchable entity, inline filter consistency and quota. Vector
+   * attributes are intentionally never registered in entity attribute
+   * metadata — serialization and copy paths drop unregistered attributes,
+   * which keeps vectors off denormalized records automatically
    */
   private resolveVectorIndexes(): void {
     for (const [tableClassName, tableMetadata] of Object.entries(
@@ -595,36 +675,79 @@ class MetadataStorage {
             .map(([entityName]) => entityName)
             .join(
               ", "
-            )}) but no vector index with an embedding provider. Define one with ${tableClassName}.vectorIndex({ name, model, provider })`
+            )}) but no vector index with an embedding provider. Define one with ${tableClassName}.vectorIndexes({ myIndex: { name, vectorAttribute, model, provider } })`
         );
-      }
-
-      // Writes embed through one index and store the result on the shared
-      // vector attribute, so every index on the table must produce vectors
-      // identically — validated here so the write path's index pick is
-      // correct by construction
-      const [firstIndex] = indexes;
-      for (const index of indexes) {
-        if (
-          index.provider !== firstIndex.provider ||
-          index.model.name !== firstIndex.model.name ||
-          index.model.dimensions !== firstIndex.model.dimensions ||
-          index.model.distanceFunction !== firstIndex.model.distanceFunction
-        ) {
-          throw new Error(
-            `Vector indexes ${firstIndex.name} and ${index.name} on table ${tableClassName} declare different embedding configurations. All vector indexes on a table share the ${vectorSearchKeys.vector} attribute, so they must use the same provider, model, dimensions, and distance function`
-          );
-        }
       }
 
       for (const index of indexes) {
         this.resolveVectorIndex(index, tableMetadata, searchableEntities);
       }
 
+      this.resolveOwningIndexes(tableClassName, indexes, searchableEntities);
+
       if (indexes.length > 0) {
         this.buildReadProjection(tableClassName, tableMetadata);
       }
     }
+  }
+
+  /**
+   * Assigns each searchable entity of a table its owning vector index —
+   * the one index whose resolved membership contains it. An entity owned by
+   * no index would silently never be embedded or searchable, and an entity
+   * owned by more than one would need multiple embeds and vectors per row;
+   * both fail here
+   * @param tableClassName - Name of the table class
+   * @param indexes - The table's resolved vector indexes
+   * @param searchableEntities - The table's searchable entities, sorted by entity name
+   */
+  private resolveOwningIndexes(
+    tableClassName: string,
+    indexes: VectorIndexMetadata[],
+    searchableEntities: Array<[string, EntityMetadata]>
+  ): void {
+    for (const [entityName] of searchableEntities) {
+      const owners = indexes.filter(index =>
+        index.memberEntities.includes(entityName)
+      );
+
+      if (owners.length === 0) {
+        throw new Error(
+          `Entity ${entityName} is searchable but is not a member of any vector index on table ${tableClassName} (${indexes
+            .map(index => index.name)
+            .join(
+              ", "
+            )}). Add () => ${entityName} to the members list of the index that should own it`
+        );
+      }
+
+      if (owners.length > 1) {
+        throw new Error(
+          `Entity ${entityName} is a member of multiple vector indexes (${owners
+            .map(index => index.name)
+            .join(
+              ", "
+            )}) on table ${tableClassName}. Multi-index membership is not currently supported — each searchable entity belongs to exactly one index; remove it from all but one members list`
+        );
+      }
+
+      this.#owningVectorIndexByEntity[entityName] = owners[0];
+    }
+  }
+
+  /**
+   * Returns the vector index that owns a searchable entity — the index whose
+   * membership contains it, whose model embeds it, and whose vector
+   * attribute its vectors are written under
+   * @param entityName - Name of the searchable entity
+   * @returns The owning {@link VectorIndexMetadata}, or undefined for
+   * non-searchable entities
+   */
+  public getOwningVectorIndex(
+    entityName: string
+  ): Optional<VectorIndexMetadata> {
+    this.init();
+    return this.#owningVectorIndexByEntity[entityName];
   }
 
   /**
@@ -657,7 +780,12 @@ class MetadataStorage {
       }
     }
 
-    aliases.delete(vectorSearchKeys.vector);
+    // Vector attributes are never registered as entity attributes, so the
+    // inclusion list excludes them by construction; deleting defensively
+    // covers any alias that slipped in through table defaults
+    for (const index of this.#vectorIndexes[tableClassName] ?? []) {
+      aliases.delete(index.vectorAttribute);
+    }
 
     const sortedAliases = [...aliases].sort((a, b) => a.localeCompare(b));
 
@@ -670,11 +798,11 @@ class MetadataStorage {
   }
 
   /**
-   * Resolves and validates a single vector index: provider presence, scoped
-   * membership (the scope parent's declared adjacency union the include
-   * list), the scoping foreign key on every member's canonical row, inline
-   * filter alias consistency, and the 18 inline filter quota counting the
-   * auto-declared entity type filter (the HASH does not count)
+   * Resolves and validates a single vector index: provider presence,
+   * explicit scoped membership (the declared members list is the complete
+   * membership), the scoping foreign key on every member's canonical row,
+   * inline filter alias consistency, and the 18 inline filter quota counting
+   * the auto-declared entity type filter (the HASH does not count)
    * @param index - The vector index to resolve
    * @param tableMetadata - Metadata of the table the index is defined on
    * @param searchableEntities - The table's searchable entities, sorted by entity name
@@ -686,13 +814,13 @@ class MetadataStorage {
   ): void {
     if (searchableEntities.length > 0 && index.provider === undefined) {
       throw new Error(
-        `Vector index ${index.name} has no embedding provider configured. Set provider (an embed function) on ${index.tableClassName}.vectorIndex`
+        `Vector index ${index.name} has no embedding provider configured. Set provider (an embed function) on the index's entry in ${index.tableClassName}.vectorIndexes`
       );
     }
 
-    if (index.scopedBy === undefined && index.include !== undefined) {
+    if (index.scopedBy === undefined && index.members !== undefined) {
       throw new Error(
-        `Vector index ${index.name} is global but declares an include list. include adds members to a scoped index — a global index already spans every searchable entity of the table`
+        `Vector index ${index.name} is global but declares a members list. A global index's membership is every searchable entity of the table — members declares a scoped index's membership`
       );
     }
 
@@ -747,11 +875,12 @@ class MetadataStorage {
   }
 
   /**
-   * Resolves a scoped index's members — the scope parent's declared adjacency
-   * union the include list — and the HASH alias (the members' scoping foreign
-   * key). Rejects a searchable entity carrying the scoping foreign key that is
-   * neither declared nor included, and a member without the scoping foreign
-   * key on its canonical row
+   * Resolves a scoped index's members — the explicit members list is the
+   * complete membership; nothing is derived from the scope parent's declared
+   * relationships — and the HASH alias (the members' scoping foreign key).
+   * Rejects a listed member that is not a registered searchable entity of
+   * the index's table, an empty resolved membership, and a member without
+   * the scoping foreign key on its canonical row
    * @param scopeParent - The resolved scope parent entity class
    * @param index - The vector index being resolved
    * @param searchableEntities - The table's searchable entities, sorted by entity name
@@ -770,22 +899,25 @@ class MetadataStorage {
         `Vector index ${index.name} is scoped by ${scopeParent.name}, which is not a registered entity`
       );
     }
-    const parentMetadata = this.#entities[scopeParent.name];
 
-    const memberNames = new Set([
-      ...parentMetadata.hasRelationships.map(rel => rel.target.name),
-      ...(index.include ?? []).map(entityThunk => entityThunk().name)
-    ]);
+    const searchableByName = new Map(searchableEntities);
+    const memberNames = new Set<string>();
 
-    for (const [entityName, entityMetadata] of searchableEntities) {
-      if (
-        !memberNames.has(entityName) &&
-        this.findScopingFk(entityMetadata, scopeParent) !== undefined
-      ) {
+    for (const entityThunk of index.members ?? []) {
+      const memberName = entityThunk().name;
+      const memberMetadata = searchableByName.get(memberName);
+      if (memberMetadata === undefined) {
         throw new Error(
-          `Entity ${entityName} is searchable and has a foreign key to ${scopeParent.name} but is not a member of vector index ${index.name}. Declare a relationship from ${scopeParent.name} to ${entityName} or add () => ${entityName} to the index's include list`
+          `Entity ${memberName} is listed in the members of vector index ${index.name} but is not a searchable entity of table ${index.tableClassName}. Members must be entities of the index's table that declare a @Searchable attribute`
         );
       }
+      memberNames.add(memberName);
+    }
+
+    if (memberNames.size === 0) {
+      throw new Error(
+        `Vector index ${index.name} resolved to no members. A scoped index's members list is its complete membership — list every searchable entity the index owns`
+      );
     }
 
     const members = searchableEntities.filter(([entityName]) =>

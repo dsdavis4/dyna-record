@@ -35,8 +35,17 @@ export type {
   SerializedTableMetadata,
   SerializedVectorIndexMetadata
 } from "./metadata/schemas.js";
-export { VectorIndexMetadata, vectorSearchKeys } from "./metadata/index.js";
-export type { VectorIndexOptions } from "./metadata/index.js";
+export {
+  VectorIndexMetadata,
+  reservedVectorAttributePrefix,
+  isValidVectorAttributeName
+} from "./metadata/index.js";
+export type {
+  VectorIndexOptions,
+  VectorIndexConstructs,
+  VectorIndexMembers,
+  VectorIndexScoped
+} from "./metadata/index.js";
 export {
   TitanTextEmbedV2,
   TitanTextEmbedV2Dim512,

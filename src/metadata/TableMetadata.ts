@@ -15,7 +15,6 @@ import {
   TableMetadataTransform
 } from "./schemas.js";
 import type VectorIndexMetadata from "./VectorIndexMetadata.js";
-import { vectorSearchKeys } from "./VectorIndexMetadata.js";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
@@ -126,12 +125,13 @@ class TableMetadata {
     };
 
     const defaultAttrNames = Object.keys(this.defaultAttributes);
-    // Set the default keys as reserved keys, the user defined primary and sort key are set later
+    // Set the default keys as reserved keys, the user defined primary and sort key are set later.
+    // Vector attribute names are reserved by prefix at metadata
+    // initialization (see MetadataStorage.validateVectorSearchAliases), not
+    // here — per-index attributes are unknown at table construction
     this.reservedKeys = Object.fromEntries(
       defaultAttrNames.map(key => [key, true])
     );
-    // The library-managed vector attribute is reserved on every table
-    this.reservedKeys[vectorSearchKeys.vector] = true;
   }
 
   /**

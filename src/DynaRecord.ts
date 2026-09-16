@@ -1,7 +1,7 @@
 import Metadata, {
   tableDefaultFields,
   type TableMetadata,
-  type VectorIndexMetadata,
+  type VectorIndexConstructs,
   type VectorIndexOptions
 } from "./metadata/index.js";
 import { DateAttribute, StringAttribute } from "./decorators/index.js";
@@ -30,12 +30,10 @@ import {
   type InferQueryResults,
   type SKScopedFilterParams,
   type HasSearchableRelationships,
-  type IncludedEntities,
   type InferSearchResults,
   type ParentSearchOptions,
   type ParentSearchedEntities,
   type ParentSearchRuntimeOptions,
-  type SearchableRelationshipEntities,
   type SearchableRelationshipProperties,
   type SearchNotAvailable,
   type SearchQuery,
@@ -636,89 +634,60 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Defines a **scoped** vector index on a table class and returns the typed
-   * index construct — the index's `search` surface and provisioning
-   * definition.
+   * Declares a table's complete set of vector indexes in one call, keyed by
+   * export name, and returns the typed index constructs — each index's
+   * `search` surface and provisioning definition.
    *
-   * The scope parent's foreign key becomes the index `HASH`, so searches run
-   * within exactly one scope value at a time. Members are the scope parent's
-   * searchable relationships union the `include:` list, and the construct's
-   * `search` takes the scope id first with `in:` and result unions typed to
-   * that membership.
+   * Every index declares its own `vectorAttribute` (the physical attribute
+   * its members' vectors are written under) and its own embedding config,
+   * so indexes have fully independent physical membership: each searchable
+   * entity belongs to exactly one index and is ingested, billed, and
+   * searchable only there.
    *
-   * Only table classes (classes decorated with `@Table`) may define vector
-   * indexes; calling this on an entity class throws. Defining an index never
-   * triggers metadata initialization and never resolves the entity thunks —
-   * index constants can be declared at module evaluation, and membership is
-   * resolved and validated when metadata initializes (first operation or an
-   * explicit `metadata()` call).
+   * A **scoped** index (`scopedBy`) declares its complete membership with
+   * `members:`; the scope parent's foreign key becomes the index `HASH`, and
+   * the construct's `search` takes the scope id first with `in:` and result
+   * unions typed to that membership. A **global** index omits both — its
+   * membership is every searchable entity of the table, it must be the
+   * table's only index, and its `search` takes the query first.
    *
-   * @param options - {@link VectorIndexOptions} with `scopedBy` (and optionally `include`)
-   * @returns The registered {@link VectorIndexMetadata} construct
+   * Only table classes (classes decorated with `@Table`) may declare vector
+   * indexes; calling this on an entity class throws, as does a second call
+   * for the same table. Declaring indexes never triggers metadata
+   * initialization and never resolves the entity thunks — index constants
+   * can be declared at module evaluation, and membership is resolved and
+   * validated when metadata initializes (first operation or an explicit
+   * `metadata()` call).
    *
-   * @example
-   * ```typescript
-   * const orgSearchIndex = MyTable.vectorIndex({
-   *   name: "org-search-index",
-   *   model: TitanTextEmbedV2,
-   *   provider: myEmbedFunction,
-   *   scopedBy: () => Organization,
-   *   include: [() => Review] // FK-only members without a declared inverse
-   * });
-   * ```
-   */
-  public static vectorIndex<
-    Scope extends DynaRecord,
-    Inc extends ReadonlyArray<() => EntityClass<DynaRecord>> = []
-  >(
-    options: VectorIndexOptions & {
-      scopedBy: () => EntityClass<Scope>;
-      include?: Inc;
-    }
-  ): VectorIndexMetadata<
-    SearchableRelationshipEntities<Scope> | IncludedEntities<Inc>,
-    true
-  >;
-
-  /**
-   * Defines a **global** vector index on a table class and returns the typed
-   * index construct — the index's `search` surface and provisioning
-   * definition.
-   *
-   * A global index has no `HASH`: its members are every searchable entity of
-   * the table, and the construct's `search` takes the query first with no
-   * scope id. `include:` is rejected — there is nothing to add to a
-   * membership that already spans the table. Because entity classes are only
-   * discovered at metadata initialization, the member union is not statically
-   * enumerable: `in:` remains available as a plain entity-name string
-   * (validated against the resolved membership at runtime) and results type
-   * as the base entity union — discriminate on `entity.type` to narrow.
-   *
-   * Only table classes (classes decorated with `@Table`) may define vector
-   * indexes; calling this on an entity class throws. Defining an index never
-   * triggers metadata initialization and never resolves the entity thunks —
-   * index constants can be declared at module evaluation, and membership is
-   * resolved and validated when metadata initializes (first operation or an
-   * explicit `metadata()` call).
-   *
-   * @param options - {@link VectorIndexOptions} without `scopedBy`
-   * @returns The registered {@link VectorIndexMetadata} construct
+   * @param defs - Index declarations keyed by export name; see {@link VectorIndexOptions}
+   * @returns The registered {@link VectorIndexMetadata} constructs, keyed as declared
    *
    * @example
    * ```typescript
-   * const globalSearchIndex = MyTable.vectorIndex({
-   *   name: "global-search-index",
-   *   model: TitanTextEmbedV2,
-   *   provider: myEmbedFunction
+   * const { listingSearchIndex, supportSearchIndex } = MyTable.vectorIndexes({
+   *   listingSearchIndex: {
+   *     name: "listing-search-index",
+   *     vectorAttribute: "__dyna_vector",
+   *     model: TitanTextEmbedV2,
+   *     provider: myEmbedFunction,
+   *     scopedBy: () => Store,
+   *     members: [() => Listing, () => Review]
+   *   },
+   *   supportSearchIndex: {
+   *     name: "support-search-index",
+   *     vectorAttribute: "__dyna_vector_support",
+   *     model: TitanTextEmbedV2,
+   *     provider: myEmbedFunction,
+   *     scopedBy: () => Store,
+   *     members: [() => SupportArticle]
+   *   }
    * });
    * ```
    */
-  public static vectorIndex(
-    options: VectorIndexOptions & { scopedBy?: undefined; include?: undefined }
-  ): VectorIndexMetadata<DynaRecord, false>;
-
-  public static vectorIndex(options: VectorIndexOptions): VectorIndexMetadata {
-    return Metadata.addVectorIndex(this.name, options);
+  public static vectorIndexes<
+    const T extends Record<string, VectorIndexOptions>
+  >(defs: T): VectorIndexConstructs<T> {
+    return Metadata.addVectorIndexes(this.name, defs);
   }
 
   /**
