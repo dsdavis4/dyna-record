@@ -363,43 +363,71 @@ class VectorIndexMetadata<
   public readonly members: ReadonlyArray<() => EntityClass<DynaRecord>>;
 
   /**
-   * Class names of the searchable member entities of the index. Placeholder,
-   * resolved at metadata initialization
+   * Resolved search-schema state. Private with public getters because the
+   * constructs this class produces are handed to consumers by
+   * `vectorIndexes()` — these are the library's own resolved values, and an
+   * accidental (or deliberate) assignment to one of them would repoint a live
+   * index. `hashAlias` in particular is the enforced scope boundary.
    */
-  public memberEntities: string[];
+  #memberEntities: readonly string[] = Object.freeze([]);
+  #hashAlias?: string;
+  #inlineFilterAliases: readonly string[] = Object.freeze([]);
+  #fingerprint = "";
+
+  /**
+   * Class names of the searchable member entities of the index. Empty until
+   * metadata initialization resolves it. Read-only: the returned array is
+   * frozen
+   */
+  public get memberEntities(): readonly string[] {
+    return this.#memberEntities;
+  }
+
   /**
    * Table alias of the scoping foreign key attribute (the index `HASH`).
-   * Undefined for unscoped indexes. Placeholder, resolved at metadata
-   * initialization
+   * Undefined for unscoped indexes, and until metadata initialization
+   * resolves it. Read-only
    */
-  public hashAlias?: string;
+  public get hashAlias(): Optional<string> {
+    return this.#hashAlias;
+  }
+
   /**
    * Sorted table aliases of the index's inline filters, including the
-   * auto-declared entity type filter. Placeholder, resolved at metadata
-   * initialization
+   * auto-declared entity type filter. Empty until metadata initialization
+   * resolves it. Read-only: the returned array is frozen
    */
-  public inlineFilterAliases: string[];
+  public get inlineFilterAliases(): readonly string[] {
+    return this.#inlineFilterAliases;
+  }
+
   /**
    * Stable fingerprint of the search-schema configuration (`HASH` alias,
    * sorted inline filter aliases, dimensions, distance function, vector
    * attribute) so IaC can detect that a declaration change implies a
-   * destructive index replacement. Placeholder, resolved at metadata
-   * initialization
+   * destructive index replacement. Empty until metadata initialization
+   * resolves it. Read-only
    */
-  public fingerprint: string;
+  public get fingerprint(): string {
+    return this.#fingerprint;
+  }
 
   constructor(tableClassName: string, options: VectorIndexOptions) {
     this.tableClassName = tableClassName;
     this.name = options.name;
     this.vectorAttribute = options.vectorAttribute;
-    this.model = options.model;
+    // Copied and frozen, like `members`: the descriptor is the consumer's own
+    // object and may be shared across indexes, so the library holds its own
+    // immutable copy rather than freezing (or trusting) theirs. `dimensions`
+    // gates vector validation, so a later edit would loosen it silently
+    this.model = Object.freeze({ ...options.model });
     this.provider = options.provider;
     this.scopedBy = options.scopedBy;
-    this.members = options.members;
-    // Placeholders, these are set later
-    this.memberEntities = [];
-    this.inlineFilterAliases = [];
-    this.fingerprint = "";
+    // Copied, not aliased: membership is validated at registration, and the
+    // caller keeps a reference to the array they passed. Without the copy,
+    // mutating that array afterwards would silently rewrite the index's
+    // membership behind the validation that already approved it
+    this.members = Object.freeze([...options.members]);
   }
 
   /**
@@ -408,10 +436,10 @@ class VectorIndexMetadata<
    * @param params - {@link ResolveSearchSchemaParams}
    */
   public resolveSearchSchema(params: ResolveSearchSchemaParams): void {
-    this.memberEntities = params.memberEntities;
-    this.hashAlias = params.hashAlias;
-    this.inlineFilterAliases = params.inlineFilterAliases;
-    this.fingerprint = createHash("sha256")
+    this.#memberEntities = Object.freeze([...params.memberEntities]);
+    this.#hashAlias = params.hashAlias;
+    this.#inlineFilterAliases = Object.freeze([...params.inlineFilterAliases]);
+    this.#fingerprint = createHash("sha256")
       .update(
         [
           `hash=${params.hashAlias ?? ""}`,
@@ -422,6 +450,12 @@ class VectorIndexMetadata<
         ].join(";")
       )
       .digest("hex");
+
+    // Resolution happens once, at metadata initialization. Freezing here
+    // makes the declaration-time fields runtime-immutable too, so the whole
+    // construct is final for the lifetime of the process. Private fields are
+    // unaffected by freeze, which is why this can run after they are set
+    Object.freeze(this);
   }
 
   /**

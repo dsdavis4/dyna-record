@@ -20,7 +20,7 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
  *   public myField: boolean;
  *
  *   @BooleanAttribute({ alias: 'MyNullableField', nullable: true })
- *   public myField?: boolean; // Set to Optional
+ *   public myNullableField?: boolean; // Set to Optional
  * }
  * ```
  *

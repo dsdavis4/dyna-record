@@ -606,6 +606,58 @@ describe("vectorIndexes", () => {
       expect(unscopedIndex.memberEntities).toStrictEqual(["Faq"]);
     });
 
+    it("throws on unknown options, so a plain-JS caller is not silently ignored", async () => {
+      expect.assertions(1);
+      const modules = await loadFresh();
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = modules;
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+      }
+
+      // Embedding settings belong on the model descriptor. Set on the index
+      // they are meaningless — before this backstop the caller silently got
+      // the model's COSINE/1024 instead of what they asked for
+      expect(() =>
+        FreshTable.vectorIndexes({
+          freshIndex: {
+            name: "fresh-index",
+            vectorAttribute: "__dyna_vector",
+            model: TitanTextEmbedV2,
+            provider: testProvider,
+            members: [() => Note],
+            distanceFunction: "EUCLIDEAN",
+            dimensions: 512
+          }
+        } as never)
+      ).toThrow(
+        "Vector index fresh-index declares unknown options (distanceFunction, dimensions). Valid options are name, vectorAttribute, model, provider, scopedBy, members — embedding settings such as dimensions and distance function belong on the model descriptor"
+      );
+    });
+
     it("throws when an index declares no members", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
@@ -963,6 +1015,104 @@ describe("vectorIndexes", () => {
       );
     });
 
+    it("throws when an attribute's property NAME uses the reserved prefix", async () => {
+      expect.assertions(1);
+      const modules = await loadFresh();
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        ForeignKeyAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = modules;
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Store extends FreshTable {
+        declare readonly type: "Store";
+      }
+
+      @Entity
+      class Listing extends FreshTable {
+        declare readonly type: "Listing";
+
+        @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
+        public readonly storeId: ForeignKey<Store>;
+
+        @Searchable()
+        @StringAttribute({ alias: "Description" })
+        public readonly description: SearchableText;
+
+        // The alias is innocuous; the property name is what collides
+        @StringAttribute({ alias: "Fine" })
+        public readonly __dyna_vector_sneaky: string;
+      }
+
+      FreshTable.vectorIndexes({
+        listingIndex: {
+          name: "listing-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Store,
+          members: [() => Listing]
+        }
+      });
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "Attribute Listing.__dyna_vector_sneaky uses __dyna_vector_sneaky, which starts with __dyna_vector — that prefix is reserved for library-managed vector attributes"
+      );
+    });
+
+    it("reserves the prefix on tables that declare no vector indexes at all", async () => {
+      expect.assertions(1);
+      const modules = await loadFresh();
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute
+      } = modules;
+
+      // No vectorIndexes call, no searchable attribute — the prefix is still
+      // reserved, so adopting vector search later can never collide
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Plain extends FreshTable {
+        declare readonly type: "Plain";
+
+        @StringAttribute({ alias: "__dyna_vector_future" })
+        public readonly squatter: string;
+      }
+      void Plain;
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "Attribute Plain.squatter uses __dyna_vector_future, which starts with __dyna_vector — that prefix is reserved for library-managed vector attributes"
+      );
+    });
+
     it("still throws when a member has no foreign key referencing the scope parent", async () => {
       expect.assertions(1);
       const modules = await loadFresh();
@@ -1014,6 +1164,134 @@ describe("vectorIndexes", () => {
       expect(() => FreshTable.metadata()).toThrow(
         "Entity Tag is a member of vector index support-index but has no foreign key attribute referencing Store on its own record (HasAndBelongsToMany relationships store foreign keys on the join table). Add a @ForeignKeyAttribute referencing Store to Tag"
       );
+    });
+
+    it("copies the declared members array so later caller mutation cannot rewrite membership", async () => {
+      expect.assertions(3);
+      const modules = await loadFresh();
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = modules;
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+      }
+
+      // The caller keeps a reference to the array they passed
+      const declaredMembers = [() => Note];
+
+      const { freshIndex } = FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: declaredMembers
+        }
+      });
+
+      // Emptying it afterwards must not reach the index: membership was
+      // validated at registration, and the construct holds its own copy
+      declaredMembers.length = 0;
+
+      expect(freshIndex.members).toHaveLength(1);
+      expect(declaredMembers).toHaveLength(0);
+
+      // Initialization still resolves the real membership
+      FreshTable.metadata();
+      expect(freshIndex.memberEntities).toEqual(["Note"]);
+    });
+
+    it("resolves a hierarchy: the scope parent is a member through its own parent pointer", async () => {
+      expect.assertions(3);
+      const modules = await loadFresh();
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        ForeignKeyAttribute,
+        Searchable,
+        TitanTextEmbedV2
+      } = modules;
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      // A tree. The foreign key is a genuine parent pointer to another row of
+      // the same type — not a duplicate of the row's own id — so the scope
+      // parent legitimately appears in its own index's membership
+      @Entity
+      class Folder extends FreshTable {
+        declare readonly type: "Folder";
+
+        @Searchable()
+        @StringAttribute({ alias: "FolderName" })
+        public readonly folderName: SearchableText;
+
+        @ForeignKeyAttribute(() => Folder, { alias: "ParentId" })
+        public readonly parentId: ForeignKey<Folder>;
+      }
+
+      @Entity
+      class Document extends FreshTable {
+        declare readonly type: "Document";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+
+        @ForeignKeyAttribute(() => Folder, { alias: "ParentId" })
+        public readonly parentId: ForeignKey<Folder>;
+      }
+
+      const { treeIndex } = FreshTable.vectorIndexes({
+        treeIndex: {
+          name: "tree-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Folder,
+          members: [() => Folder, () => Document]
+        }
+      });
+
+      FreshTable.metadata();
+
+      // Both members resolve, and the HASH is the shared parent pointer — so
+      // one search returns the sub-folders and documents of a given folder
+      expect(treeIndex.memberEntities).toEqual(["Document", "Folder"]);
+      expect(treeIndex.hashAlias).toBe("ParentId");
+      expect(treeIndex.inlineFilterAliases).toEqual(["type"]);
     });
 
     it("resolves an unscoped index's explicit membership without requiring a scoping foreign key", async () => {

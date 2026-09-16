@@ -13,7 +13,7 @@ import type { HasMultipleSearchableAttributes } from "../operations/Search/types
  * @template C The constructor of the class being decorated. The class must extend `DynaRecord`
  * and declare `readonly type` as a string literal (e.g., `declare readonly type: "Order"`).
  * @param target The constructor function of the class being decorated.
- * @param context The context in which the decorator is applied, provided by the TypeScript runtime.
+ * @param _context The context in which the decorator is applied, provided by the TypeScript runtime.
  * @returns {void} The decorator does not return a value.
  * @throws Error if the decorated class does not extend a class decorated with {@link Table} anywhere in its class hierarchy.
  *

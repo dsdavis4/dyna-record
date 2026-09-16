@@ -53,6 +53,20 @@ const hasDeclaredMembers = (
 ): boolean => members !== undefined && members.length > 0;
 
 /**
+ * Every option {@link VectorIndexOptions} defines. An unknown key is a
+ * compile error for a typed caller; this set is the runtime backstop that
+ * gives a plain-JS caller the same answer instead of silently ignoring it.
+ */
+const KNOWN_INDEX_OPTIONS = new Set<string>([
+  "name",
+  "vectorAttribute",
+  "model",
+  "provider",
+  "scopedBy",
+  "members"
+]);
+
+/**
  * Records a declaration's claim on a table-unique value, throwing when
  * another declaration already claimed it
  * @param claimed - Values already claimed, keyed to the declaration that claimed each
@@ -165,6 +179,18 @@ class VectorIndexRegistry {
       if (!hasDeclaredMembers(options.members)) {
         throw new Error(
           `Vector index ${options.name} declares no members. An index's members list is its complete membership — list every searchable entity the index owns`
+        );
+      }
+
+      // An unknown key is silently meaningless otherwise: a caller who sets
+      // `distanceFunction` on the index rather than the model would get the
+      // model's value with no indication their option was dropped
+      const unknownOptions = Object.keys(options).filter(
+        option => !KNOWN_INDEX_OPTIONS.has(option)
+      );
+      if (unknownOptions.length > 0) {
+        throw new Error(
+          `Vector index ${options.name} declares unknown options (${unknownOptions.join(", ")}). Valid options are ${[...KNOWN_INDEX_OPTIONS].join(", ")} — embedding settings such as dimensions and distance function belong on the model descriptor`
         );
       }
     }
@@ -472,7 +498,8 @@ class VectorIndexRegistry {
    * Resolves an index's members — the explicit members list is the complete
    * membership; nothing is derived and there is no universal membership.
    * Rejects a listed member that is not a registered searchable entity of
-   * the index's table, and an empty resolved membership
+   * the index's table. An empty membership is rejected earlier, at
+   * registration, so it cannot reach here
    * @param index - The vector index being resolved
    * @param searchableEntities - The table's searchable entities, sorted by entity name
    * @returns The index's members, sorted by entity name
@@ -495,12 +522,8 @@ class VectorIndexRegistry {
       memberNames.add(memberName);
     }
 
-    if (memberNames.size === 0) {
-      throw new Error(
-        `Vector index ${index.name} resolved to no members. An index's members list is its complete membership — list every searchable entity the index owns`
-      );
-    }
-
+    // No empty-membership check is needed here: registration rejects an index
+    // declaring no members, so the loop above always adds at least one name
     return searchableEntities.filter(([entityName]) =>
       memberNames.has(entityName)
     );

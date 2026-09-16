@@ -30,10 +30,10 @@ import {
 } from "../../src/decorators/index.js";
 import {
   TitanTextEmbedV2,
-  TitanTextEmbedV2Dim512
+  TitanTextEmbedV2Dim512,
+  type EmbeddingModelDescriptor
 } from "../../src/embedding/types.js";
 import Metadata from "../../src/metadata/index.js";
-import { Search } from "../../src/operations/index.js";
 import { type SearchFilter } from "../../src/filter-utils/index.js";
 import {
   EmbeddingError,
@@ -235,9 +235,7 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    const res = await new Search(storeSearchIndex).run("hand thrown mugs", {
-      scopeId: "123"
-    });
+    const res = await storeSearchIndex.search("123", "hand thrown mugs");
 
     expect(res).toEqual([]);
     expect(mockEmbeddingProviderCalls).toEqual(["hand thrown mugs"]);
@@ -262,8 +260,7 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await new Search(storeSearchIndex).run("hand thrown mugs", {
-      scopeId: "123",
+    await storeSearchIndex.search("123", "hand thrown mugs", {
       in: "Listing"
     });
 
@@ -293,8 +290,7 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await new Search(storeSearchIndex).run("hand thrown mugs", {
-      scopeId: "123",
+    await storeSearchIndex.search("123", "hand thrown mugs", {
       in: "Listing",
       filter: { category: "Mugs" }
     });
@@ -328,7 +324,7 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await new Search(globalSearchIndex).run("fresh articles");
+    await globalSearchIndex.search("fresh articles");
 
     expect(mockedSearchVectorsCommand.mock.calls).toEqual([
       [
@@ -347,7 +343,7 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await new Search(globalSearchIndex).run("fresh articles", {
+    await globalSearchIndex.search("fresh articles", {
       in: "Article"
     });
 
@@ -404,9 +400,7 @@ describe("Search", () => {
       ]
     });
 
-    const res = await new Search(storeSearchIndex).run("mug", {
-      scopeId: "123"
-    });
+    const res = await storeSearchIndex.search("123", "mug");
 
     expect(res).toHaveLength(2);
     expect(res[0].entity).toBeInstanceOf(Listing);
@@ -449,7 +443,7 @@ describe("Search", () => {
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
     const vector = new Array<number>(1024).fill(0.25);
-    await new Search(globalSearchIndex).run({ vector });
+    await globalSearchIndex.search({ vector });
 
     expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "SearchVectorsCommand" }]]);
@@ -462,7 +456,7 @@ describe("Search", () => {
     expect.assertions(3);
 
     try {
-      await new Search(globalSearchIndex).run({ vector: [0.1, 0.2] });
+      await globalSearchIndex.search({ vector: [0.1, 0.2] });
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual(
@@ -476,7 +470,7 @@ describe("Search", () => {
     expect.assertions(3);
 
     try {
-      await new Search(globalSearchIndex).run("");
+      await globalSearchIndex.search("");
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual("Search query text cannot be empty");
@@ -491,7 +485,7 @@ describe("Search", () => {
     mockScopedEmbed.mockRejectedValueOnce(providerError);
 
     try {
-      await new Search(scopedFilterIndex).run("products", { scopeId: "123" });
+      await scopedFilterIndex.search("123", "products");
     } catch (e: any) {
       expect(e).toBeInstanceOf(EmbeddingError);
       expect(e.message).toEqual(
@@ -507,20 +501,20 @@ describe("Search", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await new Search(globalSearchIndex).run("articles", { topK: 100 });
+    await globalSearchIndex.search("articles", { topK: 100 });
 
     expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
       expect.objectContaining({ TopK: 100 })
     );
   });
 
-  it.each([0, -1, 101, 1.5])(
+  it.each([0, -1, 101, 1.5, NaN, Infinity, -Infinity])(
     "rejects invalid topK %p before any AWS call",
     async invalidTopK => {
       expect.assertions(3);
 
       try {
-        await new Search(globalSearchIndex).run("articles", {
+        await globalSearchIndex.search("articles", {
           topK: invalidTopK
         });
       } catch (e: any) {
@@ -533,11 +527,69 @@ describe("Search", () => {
     }
   );
 
-  it("requires a scope id when searching a scoped index", async () => {
+  it.each([1, 100])(
+    "accepts topK %p — the inclusive bounds of the valid range",
+    async validTopK => {
+      expect.assertions(1);
+
+      mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+      await globalSearchIndex.search("articles", { topK: validTopK });
+
+      expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "search-table",
+            IndexName: "global-search-index",
+            SearchVector: expectedArticleVector,
+            TopK: validTopK
+          }
+        ]
+      ]);
+    }
+  );
+
+  it("rejects an empty precomputed vector before any AWS call", async () => {
     expect.assertions(3);
 
     try {
-      await new Search(storeSearchIndex).run("mugs");
+      await globalSearchIndex.search({ vector: [] });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Search vector has 0 dimensions; vector index global-search-index requires 1024 dimensions"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("accepts a precomputed vector of exactly the index's dimensions", async () => {
+    expect.assertions(2);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+    const exact = new Array<number>(1024).fill(0.5);
+
+    await globalSearchIndex.search({ vector: exact });
+
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "global-search-index",
+          SearchVector: exact,
+          TopK: 10
+        }
+      ]
+    ]);
+    expect(mockArticleEmbeddingProviderCalls).toEqual([]);
+  });
+
+  it("requires a non-empty scope id when searching a scoped index", async () => {
+    expect.assertions(3);
+
+    try {
+      // An empty scope id satisfies the signature but not the search
+      await storeSearchIndex.search("", "mugs");
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual(
@@ -551,11 +603,106 @@ describe("Search", () => {
     expect.assertions(3);
 
     try {
-      await new Search(globalSearchIndex).run("articles", { scopeId: "123" });
+      // @ts-expect-error: unscoped options carry no scopeId (plain JS backstop)
+      await globalSearchIndex.search("articles", { scopeId: "123" });
     } catch (e: any) {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toEqual(
         "Vector index global-search-index is unscoped — it does not take a scope id"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("keeps the positional scope value when options smuggle a scopeId (plain JS backstop)", async () => {
+    expect.assertions(1);
+
+    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
+
+    await storeSearchIndex.search("tenant-a", "mugs", {
+      // @ts-expect-error: options carry no scopeId, but an untyped caller can
+      // still pass one — this pins that doing so cannot redirect the search
+      scopeId: "tenant-b"
+    });
+
+    // The scoped HASH is the enforced isolation boundary: it is set from the
+    // positional scope value and cannot be overridden through the options
+    // object. Asserting the whole command, rather than matching parts of it,
+    // is what proves "tenant-b" reaches no field at all
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "store-search-index",
+          SearchVector: expectedTitanVector,
+          TopK: 10,
+          SearchConditionExpression: "#StoreId = :StoreId",
+          ExpressionAttributeNames: { "#StoreId": "StoreId" },
+          ExpressionAttributeValues: { ":StoreId": "tenant-a" }
+        }
+      ]
+    ]);
+  });
+
+  it("cannot reach the other same-parent index's member through in: (negative leakage)", async () => {
+    expect.assertions(6);
+
+    // Positive direction is covered above; this asserts the boundary holds in
+    // BOTH directions, so neither same-parent index can name the other's
+    // member and quietly search the wrong corpus
+    try {
+      // @ts-expect-error: DualDoc belongs to dual-index-two
+      await dualIndexOne.search("parent-1", "q", { in: "DualDoc" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        'Invalid search option in: "DualDoc" is not a member of vector index dual-index-one. Members are: DualChild'
+      );
+    }
+
+    try {
+      // @ts-expect-error: DualChild belongs to dual-index-one
+      await dualIndexTwo.search("parent-1", "q", { in: "DualChild" });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        'Invalid search option in: "DualChild" is not a member of vector index dual-index-two. Members are: DualDoc'
+      );
+    }
+
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([]);
+  });
+
+  it("rejects a non-string scope id on a scoped index (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      // The untyped path most likely to carry a tenant id straight from a
+      // request body: it must fail closed rather than coerce
+      // @ts-expect-error: the scope id is a string
+      await storeSearchIndex.search(123, "mugs");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Vector index store-search-index is scoped — search takes the scope id first: search(scopeId, query, options)"
+      );
+    }
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects a third argument to an unscoped index (plain JS backstop)", async () => {
+    expect.assertions(3);
+
+    try {
+      // The guard's second disjunct: an options object in the third position
+      // means the caller used the scoped shape on an unscoped index
+      // @ts-expect-error: an unscoped search takes no third argument
+      await globalSearchIndex.search("articles", { topK: 5 }, { topK: 5 });
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(ValidationError);
+      expect(e.message).toEqual(
+        "Vector index global-search-index is unscoped — it does not take a scope id: search(query, options)"
       );
     }
     expect(mockSend).not.toHaveBeenCalled();
@@ -566,8 +713,8 @@ describe("Search", () => {
 
     try {
       // Article is searchable but not a member of the store-scoped index
-      await new Search(storeSearchIndex).run("mugs", {
-        scopeId: "123",
+      await storeSearchIndex.search("123", "mugs", {
+        // @ts-expect-error: compile-time rejection too; this is the JS backstop
         in: "Article"
       });
     } catch (e: any) {
@@ -584,8 +731,7 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: {
             $or: [{ category: "Mugs" }]
           } as unknown as SearchFilter
@@ -603,8 +749,7 @@ describe("Search", () => {
       expect.assertions(2);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: {
             category: { $beginsWith: "Mu" }
           } as unknown as SearchFilter
@@ -619,8 +764,7 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: {
             category: ["Mugs", "Bowls"]
           } as unknown as SearchFilter
@@ -638,8 +782,8 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
+          // @ts-expect-error: compile-time rejection too; this is the JS backstop
           filter: { unknownAttr: "value" }
         });
       } catch (e: any) {
@@ -655,8 +799,7 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: { constructor: "x" } as unknown as SearchFilter
         });
       } catch (e: any) {
@@ -672,8 +815,7 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: { category: null } as unknown as SearchFilter
         });
       } catch (e: any) {
@@ -689,8 +831,7 @@ describe("Search", () => {
       expect.assertions(2);
 
       try {
-        await new Search(storeSearchIndex).run("mugs", {
-          scopeId: "123",
+        await storeSearchIndex.search("123", "mugs", {
           filter: { type: "Listing" } as unknown as SearchFilter
         });
       } catch (e: any) {
@@ -703,8 +844,7 @@ describe("Search", () => {
       expect.assertions(3);
 
       try {
-        await new Search(scopedFilterIndex).run("products", {
-          scopeId: "123",
+        await scopedFilterIndex.search("123", "products", {
           filter: { shopId: "456" }
         });
       } catch (e: any) {
@@ -770,9 +910,7 @@ describe("Search", () => {
     );
     mockSearchVectors.mockRejectedValueOnce(awsError);
 
-    await expect(new Search(globalSearchIndex).run("articles")).rejects.toBe(
-      awsError
-    );
+    await expect(globalSearchIndex.search("articles")).rejects.toBe(awsError);
   });
 
   describe("malformed SearchVectors responses are rejected with clear errors", () => {
@@ -784,7 +922,7 @@ describe("Search", () => {
       });
 
       try {
-        await new Search(globalSearchIndex).run("articles");
+        await globalSearchIndex.search("articles");
       } catch (e: any) {
         expect(e).toBeInstanceOf(Error);
         expect(e.message).toEqual(
@@ -812,7 +950,7 @@ describe("Search", () => {
       });
 
       try {
-        await new Search(globalSearchIndex).run("articles");
+        await globalSearchIndex.search("articles");
       } catch (e: any) {
         expect(e).toBeInstanceOf(Error);
         expect(e.message).toEqual(
@@ -996,6 +1134,18 @@ const mockDualDocEmbed = vi.fn(
     )
 );
 
+/**
+ * The doc index's model: same dimensions as the Titan 512 variant, but a
+ * different distance function AND a different score conversion, so a search
+ * through this index cannot silently borrow the other index's model
+ */
+const DualDocModel = {
+  name: "dual-doc-euclidean-512",
+  dimensions: TitanTextEmbedV2Dim512.dimensions,
+  distanceFunction: "EUCLIDEAN",
+  scoreToSimilarity: (score: number) => 1 / (1 + score)
+} as const satisfies EmbeddingModelDescriptor;
+
 const { dualIndexOne, dualIndexTwo } = DualIndexTable.vectorIndexes({
   dualIndexOne: {
     name: "dual-index-one",
@@ -1008,7 +1158,7 @@ const { dualIndexOne, dualIndexTwo } = DualIndexTable.vectorIndexes({
   dualIndexTwo: {
     name: "dual-index-two",
     vectorAttribute: "__dyna_vector_two",
-    model: TitanTextEmbedV2Dim512,
+    model: DualDocModel,
     provider: mockDualDocEmbed,
     scopedBy: () => DualParent,
     members: [() => DualDoc]
@@ -1023,12 +1173,12 @@ describe("public search surfaces", () => {
     mockEmbeddingProviderCalls.length = 0;
   });
 
-  it("static parent search compiles the scoped search through the parent's index", async () => {
+  it("a scoped index compiles the scope value into the search condition", async () => {
     expect.assertions(3);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    const results = await Store.search("123", "hand thrown mugs");
+    const results = await storeSearchIndex.search("123", "hand thrown mugs");
 
     expect(results).toEqual([]);
     expect(mockEmbeddingProviderCalls).toEqual(["hand thrown mugs"]);
@@ -1047,13 +1197,13 @@ describe("public search surfaces", () => {
     ]);
   });
 
-  it("static parent search maps the in relationship property to its entity type and merges filters", async () => {
+  it("merges the scope value, the in type predicate, and filters into one condition", async () => {
     expect.assertions(1);
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await Store.search("123", "mugs", {
-      in: "listings",
+    await storeSearchIndex.search("123", "mugs", {
+      in: "Listing",
       filter: { category: "Mugs" },
       topK: 25
     });
@@ -1087,7 +1237,7 @@ describe("public search surfaces", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await Store.search("123", "mugs", { filter: {} });
+    await storeSearchIndex.search("123", "mugs", { filter: {} });
 
     expect(mockedSearchVectorsCommand.mock.calls).toEqual([
       [
@@ -1109,7 +1259,9 @@ describe("public search surfaces", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
 
-    await Store.search("123", "mugs", { filter: { category: undefined } });
+    await storeSearchIndex.search("123", "mugs", {
+      filter: { category: undefined }
+    });
 
     expect(mockedSearchVectorsCommand.mock.calls).toEqual([
       [
@@ -1175,35 +1327,6 @@ describe("public search surfaces", () => {
     ]);
   });
 
-  it("errors when searching a parent with no vector index scoped by it", async () => {
-    expect.assertions(3);
-
-    try {
-      // @ts-expect-error: search is unavailable on parents without searchable relationships (AE6)
-      await Listing.search("123", "anything");
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(ValidationError);
-      expect(e.message).toEqual(
-        "Listing has no vector index scoped by it — search is unavailable. Define one with scopedBy: () => Listing"
-      );
-    }
-    expect(mockSend).not.toHaveBeenCalled();
-  });
-
-  it("errors with guidance when the parent scopes more than one vector index", async () => {
-    expect.assertions(3);
-
-    try {
-      await DualParent.search("123", "anything");
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(ValidationError);
-      expect(e.message).toEqual(
-        "DualParent scopes more than one vector index (dual-index-one, dual-index-two) — the parent search surface is ambiguous. Search through the index construct instead: myIndex.search(...)"
-      );
-    }
-    expect(mockSend).not.toHaveBeenCalled();
-  });
-
   it("disjoint same-parent indexes each search their own IndexName over the shared scope value", async () => {
     expect.assertions(3);
 
@@ -1215,7 +1338,7 @@ describe("public search surfaces", () => {
 
     // Each index embeds through its own provider and model
     expect(mockEmbeddingProviderCalls).toEqual(["spare parts"]);
-    expect(mockDualDocEmbed).toHaveBeenCalledWith("assembly guide");
+    expect(mockDualDocEmbed.mock.calls).toEqual([["assembly guide"]]);
 
     expect(mockedSearchVectorsCommand.mock.calls).toEqual([
       [
@@ -1251,12 +1374,19 @@ describe("public search surfaces", () => {
 
     mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
     await dualIndexOne.search("parent-1", { vector: titanSizedVector });
-    expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        IndexName: "dual-index-one",
-        SearchVector: titanSizedVector
-      })
-    );
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "dual-index-table",
+          IndexName: "dual-index-one",
+          SearchVector: titanSizedVector,
+          TopK: 10,
+          SearchConditionExpression: "#ParentId = :ParentId",
+          ExpressionAttributeNames: { "#ParentId": "ParentId" },
+          ExpressionAttributeValues: { ":ParentId": "parent-1" }
+        }
+      ]
+    ]);
 
     try {
       await dualIndexTwo.search("parent-1", { vector: titanSizedVector });
@@ -1268,6 +1398,63 @@ describe("public search surfaces", () => {
     }
     // Neither index's provider is consulted for precomputed vectors
     expect(mockDualDocEmbed).not.toHaveBeenCalled();
+  });
+
+  it("converts score to similarity with the INVOKED index's model, not a sibling index's", async () => {
+    expect.assertions(4);
+
+    // dualIndexOne is COSINE (1 - score); dualIndexTwo is EUCLIDEAN
+    // (1 / (1 + score)). The same raw score must convert differently.
+    const docItem = {
+      PK: "DualDoc#1",
+      SK: "DualDoc",
+      Id: "1",
+      Type: "DualDoc",
+      DocBody: "assembly guide",
+      ParentId: "parent-1",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-01T00:00:00.000Z"
+    };
+    const childItem = {
+      PK: "DualChild#1",
+      SK: "DualChild",
+      Id: "1",
+      Type: "DualChild",
+      Description: "spare parts",
+      ParentId: "parent-1",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-01T00:00:00.000Z"
+    };
+
+    mockSearchVectors.mockResolvedValueOnce({
+      SearchResults: [{ Item: docItem, Score: 0.25 }]
+    });
+    const docs = await dualIndexTwo.search("parent-1", "assembly guide");
+    // EUCLIDEAN conversion: 1 / (1 + 0.25) = 0.8
+    expect(docs[0].similarity).toBe(0.8);
+    expect(docs[0].score).toBe(0.25);
+
+    mockSearchVectors.mockResolvedValueOnce({
+      SearchResults: [{ Item: childItem, Score: 0.25 }]
+    });
+    const children = await dualIndexOne.search("parent-1", "spare parts");
+    // COSINE conversion of the SAME raw score: 1 - 0.25 = 0.75
+    expect(children[0].similarity).toBe(0.75);
+    expect(children[0].score).toBe(0.25);
+  });
+
+  it("emits each index's own distance function through the provisioning contract", () => {
+    expect.assertions(4);
+
+    const indexes = DualIndexTable.metadata().vectorIndexes ?? [];
+    const one = indexes.find(i => i.name === "dual-index-one");
+    const two = indexes.find(i => i.name === "dual-index-two");
+
+    expect(one?.distanceFunction).toBe("COSINE");
+    expect(one?.dimensions).toBe(1024);
+    // A non-COSINE distance function reaches the contract unchanged
+    expect(two?.distanceFunction).toBe("EUCLIDEAN");
+    expect(two?.dimensions).toBe(512);
   });
 
   it("rejects an in option naming the other index's member — membership is per index", async () => {
@@ -1282,20 +1469,6 @@ describe("public search surfaces", () => {
       expect(e).toBeInstanceOf(ValidationError);
       expect(e.message).toContain("DualDoc");
     }
-  });
-
-  it("errors at runtime when in names a non-relationship (plain JS backstop)", async () => {
-    expect.assertions(3);
-
-    try {
-      await Store.search("123", "mugs", { in: "unknown" as "listings" });
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(ValidationError);
-      expect(e.message).toEqual(
-        'Invalid search option in: "unknown" is not a relationship of Store'
-      );
-    }
-    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it("errors when a scoped index construct is called with the global signature (plain JS backstop)", async () => {
@@ -1327,67 +1500,44 @@ describe("public search surfaces", () => {
     }
     expect(mockSend).not.toHaveBeenCalled();
   });
-
-  it("errors at runtime when in is a prototype-chain key rather than an own relationship (plain JS backstop)", async () => {
-    expect.assertions(3);
-
-    try {
-      await Store.search("123", "mugs", { in: "constructor" as "listings" });
-    } catch (e: any) {
-      expect(e).toBeInstanceOf(ValidationError);
-      expect(e.message).toEqual(
-        'Invalid search option in: "constructor" is not a relationship of Store'
-      );
-    }
-    expect(mockSend).not.toHaveBeenCalled();
-  });
 });
 
 describe("types", () => {
-  it("in accepts only searchable relationship property names on the parent surfaces", () => {
+  it("in accepts only the index's own member entity names", () => {
     const _test = async (): Promise<void> => {
-      // @ts-expect-no-error: searchable relationship name
-      await Store.search("1", "q", { in: "listings" });
+      // @ts-expect-no-error: a declared member of this index
+      await storeSearchIndex.search("1", "q", { in: "Listing" });
 
-      // @ts-expect-error: suppliers targets a non-searchable entity
-      await ScopedShop.search("1", "q", { in: "suppliers" });
+      // @ts-expect-error: ScopedSupplier is not searchable, so never a member
+      await scopedFilterIndex.search("1", "q", { in: "ScopedSupplier" });
 
-      // @ts-expect-error: unknown relationship name
-      await Store.search("1", "q", { in: "unknown" });
+      // @ts-expect-error: unknown entity name
+      await storeSearchIndex.search("1", "q", { in: "unknown" });
 
       // @ts-expect-error: the array form is reserved for future widening
-      await Store.search("1", "q", { in: ["listings"] });
+      await storeSearchIndex.search("1", "q", { in: ["Listing"] });
     };
 
     expect(_test).toBeDefined();
   });
 
-  it("search is unavailable on parents without searchable relationships", () => {
+  it("search is reached through the index construct, never an entity class", () => {
     const _test = async (): Promise<void> => {
-      // @ts-expect-error: Listing has no searchable relationships (AE6)
+      // @ts-expect-error: entities carry no search surface — search the index
       await Listing.search("1", "q");
+
+      // @ts-expect-error: nor do scope parents
+      await Store.search("1", "q");
     };
 
     expect(_test).toBeDefined();
   });
 
-  it("result unions infer from the searched relationships and index members", () => {
+  it("result unions infer from the index's declared members", () => {
     const _test = async (): Promise<void> => {
-      // Parent search results are exactly the searchable adjacency (Listing).
-      // Include members (Review) are absent from parent-level unions — they
-      // have no relationship property on the parent to infer from
-      const results = await Store.search("1", "q");
-      // @ts-expect-no-error: exactly the searchable adjacency
-      const _parentExact: Array<SearchResult<Listing>> = results;
-      // @ts-expect-error: Review is not part of the parent-level union
-      const _parentNoReview: Array<SearchResult<Review>> = results;
-
-      const narrowed = await Store.search("1", "q", { in: "listings" });
-      // @ts-expect-no-error: narrowed to the relationship's target entity
-      const _narrowedExact: Array<SearchResult<Listing>> = narrowed;
-
-      // Index-construct results are the full member union — including the
-      // include: member Review (AE4)
+      // Un-narrowed results are the index's declared membership, exactly —
+      // including Review, which carries the scoping foreign key but has no
+      // relationship on Store (AE4)
       const indexResults = await storeSearchIndex.search("1", "q");
       // @ts-expect-no-error: exact member union
       const _indexExact: Array<SearchResult<Listing> | SearchResult<Review>> =
@@ -1428,11 +1578,11 @@ describe("types", () => {
     expect(_test).toBeDefined();
   });
 
-  it("result unions widen across the parent's searchable relationships and narrow by in", () => {
+  it("result unions widen across a multi-member index and narrow by in", () => {
     const _test = async (): Promise<void> => {
-      // No in: the union spans every searchable relationship target
-      const widened = await ScopedShop.search("1", "q");
-      // @ts-expect-no-error: exactly the union of both searchable targets
+      // No in: the union spans every declared member
+      const widened = await scopedFilterIndex.search("1", "q");
+      // @ts-expect-no-error: exactly the union of both members
       const _exact: Array<
         SearchResult<ScopedProduct> | SearchResult<ScopedNote>
       > = widened;
@@ -1441,14 +1591,18 @@ describe("types", () => {
       // @ts-expect-error: NOT assignable to just ScopedNote — the union is wider
       const _notJustNotes: Array<SearchResult<ScopedNote>> = widened;
 
-      // in: narrows the union to the one relationship's target
-      const products = await ScopedShop.search("1", "q", { in: "products" });
+      // in: narrows the union to the one named member
+      const products = await scopedFilterIndex.search("1", "q", {
+        in: "ScopedProduct"
+      });
       // @ts-expect-no-error: narrowed to ScopedProduct
       const _productsExact: Array<SearchResult<ScopedProduct>> = products;
       // @ts-expect-error: ScopedNote narrowed away
       const _productsNoNotes: Array<SearchResult<ScopedNote>> = products;
 
-      const notes = await ScopedShop.search("1", "q", { in: "notes" });
+      const notes = await scopedFilterIndex.search("1", "q", {
+        in: "ScopedNote"
+      });
       // @ts-expect-no-error: narrowed to ScopedNote
       const _notesExact: Array<SearchResult<ScopedNote>> = notes;
       // @ts-expect-error: ScopedProduct narrowed away
@@ -1461,18 +1615,20 @@ describe("types", () => {
   it("filter keys narrow to the searched entities' filterable attributes", () => {
     const _test = async (): Promise<void> => {
       // @ts-expect-no-error: category is @SearchFilterable on Listing
-      await Store.search("1", "q", { filter: { category: "Mugs" } });
+      await storeSearchIndex.search("1", "q", { filter: { category: "Mugs" } });
 
       // @ts-expect-error: description is searchable, not filterable
-      await Store.search("1", "q", { filter: { description: "x" } });
+      await storeSearchIndex.search("1", "q", { filter: { description: "x" } });
 
-      await Store.search("1", "q", {
+      await storeSearchIndex.search("1", "q", {
         // @ts-expect-error: operator objects are not searchable filters
         filter: { category: { $beginsWith: "M" } }
       });
 
-      // @ts-expect-error: $or is not supported in search filters
-      await Store.search("1", "q", { filter: { $or: [{ category: "M" }] } });
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $or is not supported in search filters
+        filter: { $or: [{ category: "M" }] }
+      });
 
       // @ts-expect-no-error: filterable foreign key equality
       await scopedFilterIndex.search("1", "q", { filter: { shopId: "5" } });
@@ -1494,6 +1650,53 @@ describe("types", () => {
 
       // @ts-expect-no-error: nullable filterables clear like any nullable
       await ScopedProduct.update("p1", { supplierId: null });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("search options reject unknown keys and wrong option shapes", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: the complete valid option set
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { category: "Mugs" },
+        topK: 25
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: topK is a number
+        topK: "25"
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: unknown option keys are rejected
+        limit: 25
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: filter is an object of equality conditions
+        filter: "category = Mugs"
+      });
+
+      // A union-typed in: is accepted, and a consumer reaches this without
+      // any cast — a conditional simply infers the union. The runtime value is
+      // still one member name, so the result union widens to cover both
+      const chosen = Math.random() > 0.5 ? "Listing" : "Review";
+      const eitherMember = await storeSearchIndex.search("1", "q", {
+        in: chosen
+      });
+      // @ts-expect-no-error: widened to both, exactly as an omitted in: would be
+      const _either: Array<SearchResult<Listing> | SearchResult<Review>> =
+        eitherMember;
+      // @ts-expect-error: NOT narrowed to one — which member is unknown statically
+      const _notNarrowed: Array<SearchResult<Listing>> = eitherMember;
+
+      // @ts-expect-error: the query is required
+      await storeSearchIndex.search("1");
+
+      // @ts-expect-error: a number is not a valid query input
+      await storeSearchIndex.search("1", 42);
     };
 
     expect(_test).toBeDefined();

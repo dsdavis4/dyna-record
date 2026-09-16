@@ -36,10 +36,14 @@ export type {
   SerializedVectorIndexMetadata
 } from "./metadata/schemas.js";
 export {
-  VectorIndexMetadata,
   reservedVectorAttributePrefix,
   isValidVectorAttributeName
 } from "./metadata/index.js";
+// Type-only: an index construct is produced by `Table.vectorIndexes({...})`,
+// which registers and resolves it. Exporting the class as a value would let a
+// consumer construct an unregistered, unresolved index that fails confusingly
+// on first use, and nothing needs it as a value
+export type { VectorIndexMetadata } from "./metadata/index.js";
 export type {
   VectorIndexOptions,
   VectorIndexConstructs,
@@ -68,15 +72,9 @@ export type {
   SearchResult,
   SearchResults,
   HasMultipleSearchableAttributes,
-  HasSearchableRelationships,
   IncludedEntities,
   IndexSearchOptions,
   InferSearchResults,
   NarrowMembersByName,
-  ParentSearchOptions,
-  ParentSearchedEntities,
-  SearchableAttributeKeys,
-  SearchableRelationshipEntities,
-  SearchableRelationshipProperties,
-  SearchNotAvailable
+  SearchableAttributeKeys
 } from "./operations/index.js";

@@ -10,12 +10,25 @@ import {
   globalSearchIndex
 } from "../integration/mockModels.js";
 import Metadata, {
-  reservedVectorAttributePrefix
+  reservedVectorAttributePrefix,
+  isValidVectorAttributeName
 } from "../../src/metadata/index.js";
+import {
+  isVectorAttributeKey,
+  stripVectorAttributes
+} from "../../src/metadata/VectorIndexMetadata.js";
+// Statically imported for the compile-time tests below. They are used only
+// inside closures that are never invoked, so no decorator ever executes.
+import {
+  Entity,
+  Searchable,
+  StringAttribute
+} from "../../src/decorators/index.js";
 import {
   TitanTextEmbedV2,
   TitanTextEmbedV2Dim512,
-  TitanTextEmbedV2Dim256
+  TitanTextEmbedV2Dim256,
+  type EmbeddingModelDescriptor
 } from "../../src/embedding/types.js";
 import type {
   EmbeddingProvider,
@@ -160,10 +173,14 @@ describe("VectorIndex", () => {
     });
 
     it("returns the typed index constructs from the factory", () => {
-      expect.assertions(5);
+      expect.assertions(6);
 
       expect(storeSearchIndex.name).toBe("store-search-index");
-      expect(storeSearchIndex.model).toBe(TitanTextEmbedV2);
+      // The construct holds a frozen COPY of the descriptor, not the caller's
+      // object: `dimensions` gates vector validation, so a later edit to a
+      // shared descriptor must not reach a live index
+      expect(storeSearchIndex.model).toStrictEqual(TitanTextEmbedV2);
+      expect(storeSearchIndex.model).not.toBe(TitanTextEmbedV2);
       expect(storeSearchIndex.provider).toBe(mockEmbeddingProvider);
       expect(Metadata.getVectorIndexes("SearchTable")[0]).toBe(
         storeSearchIndex
@@ -261,6 +278,133 @@ describe("VectorIndex", () => {
       });
     });
 
+    it("emits every AWS distance function and dimension variant through the contract", async () => {
+      expect.assertions(1);
+
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2Dim256: small
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Doc extends FreshTable {
+        declare readonly type: "Doc";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "NoteBody" })
+        public readonly noteBody: SearchableText;
+      }
+
+      @Entity
+      class Memo extends FreshTable {
+        declare readonly type: "Memo";
+
+        @Searchable()
+        @StringAttribute({ alias: "MemoBody" })
+        public readonly memoBody: SearchableText;
+      }
+
+      FreshTable.vectorIndexes({
+        dotIndex: {
+          name: "dot-index",
+          vectorAttribute: "__dyna_vector",
+          model: {
+            name: "dot-model",
+            dimensions: 4096, // the AWS per-vector dimension ceiling
+            distanceFunction: "DOT_PRODUCT",
+            scoreToSimilarity: (score: number) => score
+          },
+          provider: testProvider,
+          members: [() => Doc]
+        },
+        euclideanIndex: {
+          name: "euclidean-index",
+          vectorAttribute: "__dyna_vector_euclidean",
+          model: {
+            name: "euclidean-model",
+            dimensions: 1, // the smallest vector AWS accepts
+            distanceFunction: "EUCLIDEAN",
+            scoreToSimilarity: (score: number) => 1 / (1 + score)
+          },
+          provider: testProvider,
+          members: [() => Note]
+        },
+        smallIndex: {
+          name: "small-index",
+          vectorAttribute: "__dyna_vector_small",
+          model: small,
+          provider: testProvider,
+          members: [() => Memo]
+        }
+      });
+
+      // Asserting the whole contract, not just the distance fields: the
+      // fingerprint preimage carries the distance function and dimensions, so
+      // a full assertion also proves a non-COSINE index fingerprints correctly
+      expect(FreshTable.metadata().vectorIndexes).toStrictEqual([
+        {
+          name: "dot-index",
+          model: "dot-model",
+          vectorAttribute: "__dyna_vector",
+          dimensions: 4096,
+          distanceFunction: "DOT_PRODUCT",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=4096;distance=DOT_PRODUCT;vectorAttribute=__dyna_vector"
+          )
+        },
+        {
+          name: "euclidean-index",
+          model: "euclidean-model",
+          vectorAttribute: "__dyna_vector_euclidean",
+          dimensions: 1,
+          distanceFunction: "EUCLIDEAN",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=1;distance=EUCLIDEAN;vectorAttribute=__dyna_vector_euclidean"
+          )
+        },
+        {
+          name: "small-index",
+          model: "amazon.titan-embed-text-v2:0",
+          vectorAttribute: "__dyna_vector_small",
+          dimensions: 256,
+          distanceFunction: "COSINE",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=256;distance=COSINE;vectorAttribute=__dyna_vector_small"
+          )
+        }
+      ]);
+    });
+
     it("throws when declaring vector indexes on a class that is not a table class", () => {
       expect.assertions(1);
 
@@ -277,6 +421,118 @@ describe("VectorIndex", () => {
       ).toThrow(
         "vectorIndexes can only be defined on a table class decorated with @Table. Listing is not a registered table"
       );
+    });
+  });
+
+  describe("isValidVectorAttributeName", () => {
+    // The runtime twin of the VectorAttributeName template literal type. Both
+    // encode one rule — exactly the reserved prefix, or the prefix plus a "_"
+    // separator — so the same cases are asserted on both sides.
+    it.each([
+      ["__dyna_vector", true], // the bare reserved prefix
+      ["__dyna_vector_support", true], // prefix plus a suffix
+      ["__dyna_vector_", true], // boundary: empty suffix after the separator
+      ["__dyna_vectorx", false], // boundary: prefix without the separator
+      ["__dyna_vecto", false], // boundary: one char short of the prefix
+      ["_dyna_vector", false], // boundary: one leading underscore short
+      ["__DYNA_VECTOR", false], // the rule is case sensitive
+      ["embedding", false], // not under the prefix at all
+      ["", false], // empty
+      ["x__dyna_vector", false] // prefix present but not at the start
+    ])("%p is %p", (value, expected) => {
+      expect.assertions(1);
+      expect(isValidVectorAttributeName(value)).toBe(expected);
+    });
+
+    it("exposes the reserved prefix that the rule is built from", () => {
+      expect.assertions(2);
+      expect(reservedVectorAttributePrefix).toBe("__dyna_vector");
+      expect(isValidVectorAttributeName(reservedVectorAttributePrefix)).toBe(
+        true
+      );
+    });
+  });
+
+  describe("vector attribute key helpers", () => {
+    // These back the guarantee that vectors never reach a denormalized copy
+    // or a link record: both are built from raw canonical rows that bypass
+    // entity serialization, so the strip is what keeps them vector-free.
+    describe("isVectorAttributeKey", () => {
+      it.each([
+        ["__dyna_vector", true],
+        ["__dyna_vector_support", true],
+        ["__dyna_vector_", true],
+        ["__dyna_vectorx", true], // prefix match is broader than the NAME rule
+        ["Description", false],
+        ["_dyna_vector", false],
+        ["", false],
+        ["x__dyna_vector", false] // must be a prefix, not a substring
+      ])("%p is %p", (key, expected) => {
+        expect.assertions(1);
+        expect(isVectorAttributeKey(key)).toBe(expected);
+      });
+
+      it("matches more keys than isValidVectorAttributeName accepts", () => {
+        expect.assertions(2);
+        // A retired index's attribute must still be recognized for stripping
+        // even if it could no longer be declared
+        expect(isVectorAttributeKey("__dyna_vectorx")).toBe(true);
+        expect(isValidVectorAttributeName("__dyna_vectorx")).toBe(false);
+      });
+    });
+
+    describe("stripVectorAttributes", () => {
+      it("removes every vector attribute and keeps everything else", () => {
+        expect.assertions(1);
+
+        expect(
+          stripVectorAttributes({
+            PK: "Listing#1",
+            SK: "Listing",
+            Description: "mug",
+            __dyna_vector: [0.1, 0.2],
+            __dyna_vector_support: [0.3],
+            __dyna_vector_archive: [0.4]
+          })
+        ).toEqual({
+          PK: "Listing#1",
+          SK: "Listing",
+          Description: "mug"
+        });
+      });
+
+      it("returns an equal item when there is nothing to strip", () => {
+        expect.assertions(1);
+
+        expect(
+          stripVectorAttributes({ PK: "Listing#1", Description: "mug" })
+        ).toEqual({ PK: "Listing#1", Description: "mug" });
+      });
+
+      it("handles an empty item", () => {
+        expect.assertions(1);
+        expect(stripVectorAttributes({})).toEqual({});
+      });
+
+      it("strips an item that is nothing but vectors down to empty", () => {
+        expect.assertions(1);
+        expect(
+          stripVectorAttributes({
+            __dyna_vector: [0.1],
+            __dyna_vector_b: [0.2]
+          })
+        ).toEqual({});
+      });
+
+      it("does not mutate the item it strips", () => {
+        expect.assertions(2);
+
+        const item = { PK: "Listing#1", __dyna_vector: [0.1] };
+        const stripped = stripVectorAttributes(item);
+
+        expect(item).toEqual({ PK: "Listing#1", __dyna_vector: [0.1] });
+        expect(stripped).not.toBe(item);
+      });
     });
   });
 
@@ -1365,6 +1621,123 @@ describe("VectorIndex", () => {
       expect(Metadata.getEntity("Note").searchableAttribute).toBeDefined();
     });
 
+    it("an index declared after initialization is registered but never resolved, and its search fails closed", async () => {
+      expect.assertions(4);
+
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        ForeignKeyAttribute,
+        Searchable,
+        TitanTextEmbedV2,
+        Metadata
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Shop extends FreshTable {
+        declare readonly type: "Shop";
+
+        @StringAttribute({ alias: "Name" })
+        public readonly name: string;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @ForeignKeyAttribute(() => Shop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<Shop>;
+      }
+
+      FreshTable.vectorIndexes({
+        first: {
+          name: "first-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Shop,
+          members: [() => Note]
+        }
+      });
+
+      // Triggers metadata initialization, which resolves `first`
+      FreshTable.metadata();
+      expect(Metadata.getVectorIndexes("FreshTable")[0].hashAlias).toBe(
+        "ShopId"
+      );
+
+      // A second table whose indexes are declared only AFTER that first
+      // access. Registration still succeeds — it never touches metadata — but
+      // resolution has already run, so the index keeps its placeholders.
+      @Table({ name: "late-table" })
+      abstract class LateTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class LateShop extends LateTable {
+        declare readonly type: "LateShop";
+
+        @StringAttribute({ alias: "Name" })
+        public readonly name: string;
+      }
+
+      @Entity
+      class LateNote extends LateTable {
+        declare readonly type: "LateNote";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @ForeignKeyAttribute(() => LateShop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<LateShop>;
+      }
+
+      const { late } = LateTable.vectorIndexes({
+        late: {
+          name: "late-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => LateShop,
+          members: [() => LateNote]
+        }
+      });
+
+      // Unresolved: the scoped HASH was never computed
+      expect(late.hashAlias).toBeUndefined();
+      expect(late.memberEntities).toEqual([]);
+
+      // The consequence that matters: an unresolved scoped index has no HASH,
+      // so the search layer treats it as unscoped and refuses the scope id
+      // rather than silently searching without tenant isolation
+      await expect(late.search("shop-1", "anything")).rejects.toThrow(
+        "is unscoped"
+      );
+    });
+
     it("an entity module loaded after initialization is registered but never reconciled or validated", async () => {
       const {
         default: DynaRecord,
@@ -1489,6 +1862,137 @@ describe("VectorIndex", () => {
             scopedBy: () => "Store",
             members: [() => Review]
           }
+        });
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("rejects an entity declaring more than one @Searchable attribute", () => {
+      // The compile-time twin of the metadata-initialization error asserted in
+      // "rejects multiple @Searchable attributes on one entity". Declared
+      // inside a closure that is never invoked, so no decorator ever runs and
+      // no entity is registered.
+      const _define = (): void => {
+        // @ts-expect-error: entities may declare at most one @Searchable
+        @Entity
+        class TwoSearchable extends SearchTable {
+          declare readonly type: "TwoSearchable";
+
+          @Searchable()
+          @StringAttribute({ alias: "First" })
+          public readonly first: SearchableText;
+
+          @Searchable()
+          @StringAttribute({ alias: "Second" })
+          public readonly second: SearchableText;
+        }
+        void TwoSearchable;
+
+        // @ts-expect-no-error: exactly one is the rule, not zero-or-one
+        @Entity
+        class OneSearchable extends SearchTable {
+          declare readonly type: "OneSearchable";
+
+          @Searchable()
+          @StringAttribute({ alias: "Only" })
+          public readonly only: SearchableText;
+        }
+        void OneSearchable;
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("model descriptors require every field, with the declared shapes", () => {
+      const _define = (): void => {
+        // @ts-expect-error: dimensions is required
+        const _noDimensions: EmbeddingModelDescriptor = {
+          name: "m",
+          distanceFunction: "COSINE",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        const _badDistance: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          // @ts-expect-error: distanceFunction must be one AWS supports
+          distanceFunction: "MANHATTAN",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        const _badConversion: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "COSINE",
+          // @ts-expect-error: scoreToSimilarity maps a number to a number
+          scoreToSimilarity: (score: number) => `${String(score)}`
+        };
+
+        const _badDimensions: EmbeddingModelDescriptor = {
+          name: "m",
+          // @ts-expect-error: dimensions is a number
+          dimensions: "8",
+          distanceFunction: "COSINE",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        // @ts-expect-no-error: every AWS distance function is accepted
+        const _dotProduct: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "DOT_PRODUCT",
+          scoreToSimilarity: (score: number) => score
+        };
+
+        // @ts-expect-no-error
+        const _euclidean: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "EUCLIDEAN",
+          scoreToSimilarity: (score: number) => 1 / (1 + score)
+        };
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("vectorAttribute accepts exactly the reserved prefix forms", () => {
+      const base = {
+        model: TitanTextEmbedV2,
+        provider: mockEmbeddingProvider,
+        members: [() => Review]
+      };
+
+      const _define = (): void => {
+        // @ts-expect-no-error: the bare reserved prefix
+        void SearchTable.vectorIndexes({
+          a: { ...base, name: "a", vectorAttribute: "__dyna_vector" }
+        });
+
+        // @ts-expect-no-error: prefix followed by a suffix
+        void SearchTable.vectorIndexes({
+          b: { ...base, name: "b", vectorAttribute: "__dyna_vector_support" }
+        });
+
+        // @ts-expect-no-error: boundary — an empty suffix after the separator
+        void SearchTable.vectorIndexes({
+          c: { ...base, name: "c", vectorAttribute: "__dyna_vector_" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: boundary — prefix without the "_" separator
+          d: { ...base, name: "d", vectorAttribute: "__dyna_vectorx" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: not under the reserved prefix at all
+          e: { ...base, name: "e", vectorAttribute: "embedding" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: a computed string is not a valid literal
+          f: { ...base, name: "f", vectorAttribute: String("__dyna_vector") }
         });
       };
 

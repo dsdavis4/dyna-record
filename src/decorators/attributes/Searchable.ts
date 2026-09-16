@@ -38,10 +38,19 @@ type Searchable<T extends string = string> = SearchableBrand<T>;
  *   @Searchable()
  *   @StringAttribute({ alias: "Description" })
  *   public readonly description: Searchable;
+ * }
+ * ```
+ *
+ * The nullable variant — the property stays optional, and a row without a
+ * value carries no vector and is absent from the index until one is written:
+ * ```typescript
+ * @Entity
+ * class Article extends MyTable {
+ *   declare readonly type: "Article";
  *
  *   @Searchable()
  *   @StringAttribute({ alias: "Summary", nullable: true })
- *   public readonly summary?: Searchable; // nullable variant
+ *   public readonly summary?: Searchable;
  * }
  * ```
  */
