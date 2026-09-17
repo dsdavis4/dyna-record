@@ -1367,59 +1367,106 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
+      // One entity per index, so the 5-index cap is the only rule this
+      // declaration can break — the one-owner rule now rejects a shared
+      // member at compile time, and a fixture violating two rules at once
+      // would pass or fail on whichever happens to fire first
       @Entity
-      class Doc extends FreshTable {
-        declare readonly type: "Doc";
+      class DocOne extends FreshTable {
+        declare readonly type: "DocOne";
 
         @Searchable()
         @StringAttribute({ alias: "Body" })
         public readonly body: SearchableText;
       }
 
-      // The 5-index cap fires before per-index membership resolution, so the
-      // shared member never reaches the one-owner check
+      @Entity
+      class DocTwo extends FreshTable {
+        declare readonly type: "DocTwo";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocThree extends FreshTable {
+        declare readonly type: "DocThree";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocFour extends FreshTable {
+        declare readonly type: "DocFour";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocFive extends FreshTable {
+        declare readonly type: "DocFive";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocSix extends FreshTable {
+        declare readonly type: "DocSix";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
       FreshTable.vectorIndexes({
         indexOne: {
           name: "fresh-index-1",
           vectorAttribute: "__dyna_vector_1",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocOne]
         },
         indexTwo: {
           name: "fresh-index-2",
           vectorAttribute: "__dyna_vector_2",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocTwo]
         },
         indexThree: {
           name: "fresh-index-3",
           vectorAttribute: "__dyna_vector_3",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocThree]
         },
         indexFour: {
           name: "fresh-index-4",
           vectorAttribute: "__dyna_vector_4",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocFour]
         },
         indexFive: {
           name: "fresh-index-5",
           vectorAttribute: "__dyna_vector_5",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocFive]
         },
         indexSix: {
           name: "fresh-index-6",
           vectorAttribute: "__dyna_vector_6",
           model: TitanTextEmbedV2,
           provider: testProvider,
-          members: [() => Doc]
+          members: [() => DocSix]
         }
       });
 

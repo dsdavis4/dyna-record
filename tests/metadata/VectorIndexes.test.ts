@@ -276,6 +276,236 @@ describe("vectorIndexes", () => {
 
       expect(_typeChecks).toBeDefined();
     });
+
+    describe("the one-owner rule", () => {
+      it("rejects an entity claimed by two indexes, on both declarations", () => {
+        const _typeChecks = (): void => {
+          @Table({ name: "one-owner-table" })
+          abstract class OwnerTable extends DynaRecordBase {
+            @PartitionKeyAttribute({ alias: "PK" })
+            public readonly pk: PartitionKey;
+
+            @SortKeyAttribute({ alias: "SK" })
+            public readonly sk: SortKey;
+          }
+
+          @Entity
+          class OStore extends OwnerTable {
+            declare readonly type: "OStore";
+          }
+
+          @Entity
+          class OListing extends OwnerTable {
+            declare readonly type: "OListing";
+
+            @ForeignKeyAttribute(() => OStore, { alias: "StoreId" })
+            public readonly storeId: ForeignKey<OStore>;
+
+            @Searchable()
+            @StringAttribute({ alias: "Description" })
+            public readonly description: SearchableText;
+          }
+
+          @Entity
+          class OFaq extends OwnerTable {
+            declare readonly type: "OFaq";
+
+            @Searchable()
+            @StringAttribute({ alias: "Question" })
+            public readonly question: SearchableText;
+          }
+
+          const base = { model: TitanModel, provider: testProvider };
+
+          // An entity carries exactly one index's vector attribute, so two
+          // indexes claiming it disagree about which vector its row holds.
+          // Both declarations are at fault, so both are flagged
+          OwnerTable.vectorIndexes({
+            // @ts-expect-error: OListing is also claimed by indexB
+            indexA: {
+              ...base,
+              name: "index-a",
+              vectorAttribute: "__dyna_vector_a",
+              members: [() => OListing]
+            },
+            // @ts-expect-error: OListing is also claimed by indexA
+            indexB: {
+              ...base,
+              name: "index-b",
+              vectorAttribute: "__dyna_vector_b",
+              members: [() => OListing]
+            }
+          });
+
+          // The overlap need not be the whole membership — one shared entity
+          // among several is enough, and the innocent third index is clean
+          OwnerTable.vectorIndexes({
+            // @ts-expect-error: OFaq is also claimed by partialB
+            partialA: {
+              ...base,
+              name: "partial-a",
+              vectorAttribute: "__dyna_vector_pa",
+              members: [() => OListing, () => OFaq]
+            },
+            // @ts-expect-error: OFaq is also claimed by partialA
+            partialB: {
+              ...base,
+              name: "partial-b",
+              vectorAttribute: "__dyna_vector_pb",
+              members: [() => OFaq]
+            }
+          });
+
+          // Three indexes, the overlap between the outer two: the middle one
+          // must NOT be flagged
+          OwnerTable.vectorIndexes({
+            // @ts-expect-error: OListing is also claimed by thirdC
+            thirdA: {
+              ...base,
+              name: "third-a",
+              vectorAttribute: "__dyna_vector_ta",
+              members: [() => OListing]
+            },
+            // @ts-expect-no-error: claims only OFaq, which nothing else claims
+            thirdB: {
+              ...base,
+              name: "third-b",
+              vectorAttribute: "__dyna_vector_tb",
+              members: [() => OFaq]
+            },
+            // @ts-expect-error: OListing is also claimed by thirdA
+            thirdC: {
+              ...base,
+              name: "third-c",
+              vectorAttribute: "__dyna_vector_tc",
+              members: [() => OListing]
+            }
+          });
+
+          // Repeating an entity within ONE index's own members is not a
+          // one-owner violation — the entity still has exactly one owner
+          OwnerTable.vectorIndexes({
+            // @ts-expect-no-error: a single owner, listed twice
+            repeatedWithinOne: {
+              ...base,
+              name: "repeated-within-one",
+              vectorAttribute: "__dyna_vector_r",
+              members: [() => OListing, () => OListing]
+            }
+          });
+
+          // Disjoint membership compiles, scoped and unscoped alike
+          const { cleanA, cleanB } = OwnerTable.vectorIndexes({
+            // @ts-expect-no-error: disjoint
+            cleanA: {
+              ...base,
+              name: "clean-a",
+              vectorAttribute: "__dyna_vector_ca",
+              scopedBy: () => OStore,
+              members: [() => OListing]
+            },
+            // @ts-expect-no-error: disjoint
+            cleanB: {
+              ...base,
+              name: "clean-b",
+              vectorAttribute: "__dyna_vector_cb",
+              members: [() => OFaq]
+            }
+          });
+
+          // ...and a clean declaration still infers its construct types,
+          // proving the new check did not collapse the valid branch to an
+          // error surface
+          const _cleanATyped: VectorIndexMetadata<OListing, true> = cleanA;
+          const _cleanBTyped: VectorIndexMetadata<OFaq, false> = cleanB;
+          void _cleanATyped;
+          void _cleanBTyped;
+        };
+
+        expect(_typeChecks).toBeDefined();
+      });
+
+      it("cannot be confused by an entity with no identity, because @Entity forbids one", () => {
+        const _typeChecks = (): void => {
+          @Table({ name: "anonymous-table" })
+          abstract class AnonTable extends DynaRecordBase {
+            @PartitionKeyAttribute({ alias: "PK" })
+            public readonly pk: PartitionKey;
+
+            @SortKeyAttribute({ alias: "SK" })
+            public readonly sk: SortKey;
+          }
+
+          // The one-owner check compares each member's `type` literal, which
+          // is an entity's only identity in a structural type system: two
+          // entities with the same attribute shape and no discriminator are
+          // genuinely the SAME type to the compiler, and reporting them as
+          // colliding would block a correct declaration.
+          //
+          // That case cannot arise, because @Entity itself refuses a class
+          // whose `type` widened to string. This is the assertion that makes
+          // the one-owner check safe
+          // @ts-expect-error: Entity must declare: declare readonly type: "ClassName"
+          @Entity
+          class Anonymous extends AnonTable {
+            @Searchable()
+            @StringAttribute({ alias: "Body" })
+            public readonly body: SearchableText;
+          }
+          void Anonymous;
+        };
+
+        expect(_typeChecks).toBeDefined();
+      });
+
+      it("defers to the runtime backstop for members that carry no identity", () => {
+        const _typeChecks = (): void => {
+          @Table({ name: "undecorated-table" })
+          abstract class UndecoratedTable extends DynaRecordBase {
+            @PartitionKeyAttribute({ alias: "PK" })
+            public readonly pk: PartitionKey;
+
+            @SortKeyAttribute({ alias: "SK" })
+            public readonly sk: SortKey;
+          }
+
+          // `members` accepts any entity class, so a class that skipped the
+          // @Entity decorator can still reach the check. Two such classes are
+          // indistinguishable to the compiler — the check must stay silent
+          // rather than report them as colliding. Metadata initialization
+          // compares resolved class names and needs no compile-time identity,
+          // so nothing is lost: it still throws
+          class UndecoratedOne extends UndecoratedTable {
+            public readonly body: SearchableText;
+          }
+
+          class UndecoratedTwo extends UndecoratedTable {
+            public readonly body: SearchableText;
+          }
+
+          const base = { model: TitanModel, provider: testProvider };
+
+          UndecoratedTable.vectorIndexes({
+            // @ts-expect-no-error: no identity to compare — left to runtime
+            undecoratedA: {
+              ...base,
+              name: "undecorated-a",
+              vectorAttribute: "__dyna_vector_u1",
+              members: [() => UndecoratedOne]
+            },
+            // @ts-expect-no-error: no identity to compare — left to runtime
+            undecoratedB: {
+              ...base,
+              name: "undecorated-b",
+              vectorAttribute: "__dyna_vector_u2",
+              members: [() => UndecoratedTwo]
+            }
+          });
+        };
+
+        expect(_typeChecks).toBeDefined();
+      });
+    });
   });
 
   describe("definition time", () => {
@@ -862,7 +1092,12 @@ describe("vectorIndexes", () => {
         public readonly description: SearchableText;
       }
 
+      // Both layers catch this. The directives below ARE the compile-time
+      // assertion — TypeScript reports an unused one as an error — and the
+      // throw asserted at the end of the test is the runtime backstop, which
+      // is what a plain-JS caller reaches
       FreshTable.vectorIndexes({
+        // @ts-expect-error: Listing is also claimed by indexB
         indexA: {
           name: "index-a",
           vectorAttribute: "__dyna_vector_a",
@@ -871,6 +1106,7 @@ describe("vectorIndexes", () => {
           scopedBy: () => Store,
           members: [() => Listing]
         },
+        // @ts-expect-error: Listing is also claimed by indexA
         indexB: {
           name: "index-b",
           vectorAttribute: "__dyna_vector_b",

@@ -54,6 +54,7 @@ export type {
   DuplicateVectorAttributeError,
   DuplicateIndexNameError,
   NonSearchableMemberError,
+  MemberOfMultipleIndexesError,
   UnknownVectorIndexOptionError
 } from "./metadata/index.js";
 export {

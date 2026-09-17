@@ -234,6 +234,69 @@ export interface NonSearchableMemberError<E> {
 }
 
 /**
+ * The entity type discriminators of one declaration's members.
+ *
+ * An entity's identity in the type system is its `type` literal — the
+ * documented `declare readonly type: "ClassName"`. TypeScript is structural,
+ * so two entities with the same attribute shape are genuinely the same type
+ * to the compiler unless something distinguishes them, and the discriminator
+ * is what does. Comparing it is therefore both exact and cheap: entity
+ * instance types reference each other through relationships, so a structural
+ * comparison would recurse through the entity graph to reach the same answer.
+ *
+ * A member whose discriminator widened to `string` declared none, and has no
+ * identity to compare — it is dropped here rather than matched against every
+ * other anonymous entity. See {@link MembersClaimedByAnotherIndex}.
+ */
+type MemberDiscriminators<O extends VectorIndexOptions> =
+  VectorIndexMembers<O> extends infer E
+    ? E extends DynaRecord
+      ? string extends E["type"]
+        ? never
+        : E["type"]
+      : never
+    : never;
+
+/**
+ * The member discriminators of every declaration key other than `K`.
+ */
+type DiscriminatorsOfOtherKeys<
+  T extends Record<string, VectorIndexOptions>,
+  K extends keyof T
+> = {
+  [J in Exclude<keyof T, K>]: MemberDiscriminators<T[J]>;
+}[Exclude<keyof T, K>];
+
+/**
+ * The members of one declaration that another index on the same table also
+ * claims — the one-owner rule, checked at the declaration site.
+ *
+ * An entity carries exactly one index's vector attribute, so membership is
+ * physical: two indexes claiming the same entity disagree about which vector
+ * that entity's row holds, and which model embedded it.
+ *
+ * Members with no `type` discriminator are excluded, so an entity that omits
+ * it is never reported as colliding with an unrelated anonymous entity. Those
+ * entities fall through to the metadata-initialization backstop, which
+ * compares resolved class names and needs no compile-time identity.
+ */
+type MembersClaimedByAnotherIndex<
+  T extends Record<string, VectorIndexOptions>,
+  K extends keyof T
+> = Extract<MemberDiscriminators<T[K]>, DiscriminatorsOfOtherKeys<T, K>>;
+
+/**
+ * The error surface presented when two index declarations claim the same
+ * entity. Each searchable entity belongs to exactly one index: it is embedded
+ * by that index's model, written under that index's vector attribute, and
+ * ingested, billed, and searchable only there.
+ */
+export interface MemberOfMultipleIndexesError<E> {
+  __vectorIndexError: "an entity may be a member of only one vector index on the table";
+  claimedByAnotherIndex: E;
+}
+
+/**
  * The error surface presented when a declaration carries options
  * {@link VectorIndexOptions} does not define. Restores excess-property
  * rejection, which the factory's generic inference position would otherwise
@@ -246,12 +309,13 @@ export interface UnknownVectorIndexOptionError<K> {
 
 /**
  * Compile-time validation of a table's vector index declarations: an entry
- * whose `vectorAttribute` or `name` is also declared by another entry, or
- * whose members include a non-searchable entity, resolves to a branded error
- * surface so compilation fails on the offending declaration. Widened
- * (non-literal) values pass: a duplicate attribute or name is then caught by
- * the definition-time backstop in `addVectorIndexes`, and a non-searchable
- * member at metadata initialization.
+ * whose `vectorAttribute` or `name` is also declared by another entry, whose
+ * members include a non-searchable entity, or whose members include an entity
+ * another entry also claims, resolves to a branded error surface so
+ * compilation fails on the offending declaration. Widened (non-literal)
+ * values pass: a duplicate attribute or name is then caught by the
+ * definition-time backstop in `addVectorIndexes`, and a non-searchable or
+ * doubly-claimed member at metadata initialization.
  */
 export type ValidateVectorIndexes<
   T extends Record<string, VectorIndexOptions>
@@ -262,7 +326,9 @@ export type ValidateVectorIndexes<
     ? [KeysSharingField<T, K, "vectorAttribute">] extends [never]
       ? [KeysSharingField<T, K, "name">] extends [never]
         ? [NonSearchableMembers<T[K]>] extends [never]
-          ? T[K]
+          ? [MembersClaimedByAnotherIndex<T, K>] extends [never]
+            ? T[K]
+            : MemberOfMultipleIndexesError<MembersClaimedByAnotherIndex<T, K>>
           : NonSearchableMemberError<NonSearchableMembers<T[K]>>
         : DuplicateIndexNameError<T[K]["name"]>
       : DuplicateVectorAttributeError<T[K]["vectorAttribute"]>
