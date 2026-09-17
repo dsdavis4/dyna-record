@@ -1657,6 +1657,116 @@ describe("types", () => {
     expect(_test).toBeDefined();
   });
 
+  it("filter values narrow to the attribute's declared type", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: category is a plain string filterable
+      await storeSearchIndex.search("1", "q", { filter: { category: "Mugs" } });
+
+      // @ts-expect-error: category is declared string, not number
+      await storeSearchIndex.search("1", "q", { filter: { category: 42 } });
+
+      // @ts-expect-no-error: rating is declared number
+      await storeSearchIndex.search("1", "q", { filter: { rating: 5 } });
+
+      // @ts-expect-error: rating is declared number, not string
+      await storeSearchIndex.search("1", "q", { filter: { rating: "5" } });
+
+      // @ts-expect-no-error: a foreign key filterable takes a plain string —
+      // the library's own brand never reaches the caller
+      await scopedFilterIndex.search("1", "q", { filter: { shopId: "5" } });
+
+      // @ts-expect-error: a foreign key filterable is still a string
+      await scopedFilterIndex.search("1", "q", { filter: { shopId: 5 } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("an enum filterable accepts only its declared members", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: "gold" is declared on Listing.tier
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { tier: "gold" }
+      });
+
+      // @ts-expect-error: "platinum" is not a declared member of either tier
+      await storeSearchIndex.search("1", "q", { filter: { tier: "platinum" } });
+
+      const widened: string = "gold";
+      // @ts-expect-error: a widened string cannot satisfy an enum filterable
+      await storeSearchIndex.search("1", "q", { filter: { tier: widened } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("a shared filter key unions its members' declared types, and `in:` narrows it", () => {
+    const _test = async (): Promise<void> => {
+      // Listing.tier is "gold" | "silver"; Review.tier is "bronze" | "copper".
+      // One table attribute, two declared types.
+
+      // @ts-expect-no-error: with no `in:`, either member's values are in range
+      await storeSearchIndex.search("1", "q", { filter: { tier: "gold" } });
+      // @ts-expect-no-error: the other member's values too
+      await storeSearchIndex.search("1", "q", { filter: { tier: "bronze" } });
+
+      // @ts-expect-no-error: `in:` narrows the union to the named member
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { tier: "silver" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        // @ts-expect-error: "bronze" belongs to Review, not Listing
+        filter: { tier: "bronze" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        // @ts-expect-error: "gold" belongs to Listing, not Review
+        filter: { tier: "gold" }
+      });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("filter keys follow `in:` narrowing to the named member's declarations", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: category is declared on Listing only, and with no
+      // `in:` a key present on one member is in range for the whole index
+      await storeSearchIndex.search("1", "q", { filter: { category: "Mugs" } });
+
+      // @ts-expect-no-error: narrowing to the member that declares it
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { category: "Mugs" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        // @ts-expect-error: category is not declared on Review
+        filter: { category: "Mugs" }
+      });
+
+      // @ts-expect-no-error: rating is declared on Review only
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        filter: { rating: 4 }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        // @ts-expect-error: rating is not declared on Listing
+        filter: { rating: 4 }
+      });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
   it("search options reject unknown keys and wrong option shapes", () => {
     const _test = async (): Promise<void> => {
       // @ts-expect-no-error: the complete valid option set
