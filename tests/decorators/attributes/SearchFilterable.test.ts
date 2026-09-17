@@ -16,15 +16,17 @@ import {
   Store
 } from "../../integration/mockModels.js";
 import Metadata from "../../../src/metadata/index.js";
-import { ZodString } from "zod";
+import { ZodString, ZodType } from "zod";
 import { type ForeignKey } from "../../../src/index.js";
 
 describe("SearchFilterable", () => {
   it("marks the layered-over attribute as an inline filter attribute", () => {
-    expect.assertions(2);
+    expect.assertions(3);
 
     const entityMetadata = Metadata.getEntity(Listing.name);
 
+    // Exact array equality on purpose: a filterable added to Listing should
+    // fail here and be accounted for, rather than slip in unnoticed
     expect(entityMetadata.searchFilterableAttributes).toEqual([
       {
         name: "category",
@@ -32,11 +34,22 @@ describe("SearchFilterable", () => {
         nullable: false,
         kind: "string",
         type: expect.any(ZodString)
+      },
+      {
+        name: "tier",
+        alias: "Tier",
+        nullable: true,
+        kind: "enum",
+        enumValues: ["gold", "silver"],
+        type: expect.any(ZodType)
       }
     ]);
     // The mark resolves to the exact metadata registered by the base decorator
     expect(entityMetadata.searchFilterableAttributes[0]).toBe(
       entityMetadata.attributes.category
+    );
+    expect(entityMetadata.searchFilterableAttributes[1]).toBe(
+      entityMetadata.attributes.tier
     );
   });
 

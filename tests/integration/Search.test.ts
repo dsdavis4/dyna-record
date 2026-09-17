@@ -789,7 +789,7 @@ describe("Search", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(FilterError);
         expect(e.message).toEqual(
-          'Invalid search filter key "unknownAttr": attribute "unknownAttr" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category'
+          'Invalid search filter key "unknownAttr": attribute "unknownAttr" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
         );
       }
       expect(mockSend).not.toHaveBeenCalled();
@@ -805,7 +805,7 @@ describe("Search", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(FilterError);
         expect(e.message).toEqual(
-          'Invalid search filter key "constructor": attribute "constructor" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category'
+          'Invalid search filter key "constructor": attribute "constructor" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
         );
       }
       expect(mockSend).not.toHaveBeenCalled();
@@ -970,15 +970,17 @@ describe("Search", () => {
       "#Id": "Id",
       "#Name": "Name",
       "#PK": "PK",
+      "#Rating": "Rating",
       "#SK": "SK",
       "#StoreId": "StoreId",
+      "#Tier": "Tier",
       "#Title": "Title",
       "#Type": "Type",
       "#UpdatedAt": "UpdatedAt"
     };
 
     const expectedProjectionExpression =
-      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #SK, #StoreId, #Title, #Type, #UpdatedAt";
+      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #Rating, #SK, #StoreId, #Tier, #Title, #Type, #UpdatedAt";
 
     it("findById on a vector-indexed table projects every alias except the vector", async () => {
       expect.assertions(1);

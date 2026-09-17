@@ -85,10 +85,10 @@ describe("VectorIndex", () => {
           projection: "ALL",
           searchSchema: {
             hash: "StoreId",
-            inlineFilters: ["Category", "Type"]
+            inlineFilters: ["Category", "Rating", "Tier", "Type"]
           },
           fingerprint: fingerprintOf(
-            "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE;vectorAttribute=__dyna_vector"
+            "hash=StoreId;filters=Category,Rating,Tier,Type;dimensions=1024;distance=COSINE;vectorAttribute=__dyna_vector"
           ),
           scopedBy: "Store"
         },
@@ -127,7 +127,7 @@ describe("VectorIndex", () => {
         projection: "ALL",
         searchSchema: {
           hash: "StoreId",
-          inlineFilters: ["Category", "Type"]
+          inlineFilters: ["Category", "Rating", "Tier", "Type"]
         },
         fingerprint: fingerprintOf(
           "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE"

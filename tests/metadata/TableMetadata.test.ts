@@ -4162,6 +4162,13 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "string"
               },
+              tier: {
+                name: "tier",
+                alias: "Tier",
+                nullable: true,
+                kind: "enum",
+                values: ["gold", "silver"]
+              },
               storeId: {
                 name: "storeId",
                 alias: "StoreId",
@@ -4206,6 +4213,13 @@ describe("TableMetadata", () => {
                 alias: "Category",
                 nullable: false,
                 kind: "string"
+              },
+              Tier: {
+                name: "tier",
+                alias: "Tier",
+                nullable: true,
+                kind: "enum",
+                values: ["gold", "silver"]
               },
               StoreId: {
                 name: "storeId",
@@ -4257,6 +4271,19 @@ describe("TableMetadata", () => {
                 nullable: false,
                 kind: "string"
               },
+              rating: {
+                name: "rating",
+                alias: "Rating",
+                nullable: true,
+                kind: "number"
+              },
+              tier: {
+                name: "tier",
+                alias: "Tier",
+                nullable: true,
+                kind: "enum",
+                values: ["bronze", "copper"]
+              },
               storeId: {
                 name: "storeId",
                 alias: "StoreId",
@@ -4295,6 +4322,19 @@ describe("TableMetadata", () => {
                 alias: "Body",
                 nullable: false,
                 kind: "string"
+              },
+              Rating: {
+                name: "rating",
+                alias: "Rating",
+                nullable: true,
+                kind: "number"
+              },
+              Tier: {
+                name: "tier",
+                alias: "Tier",
+                nullable: true,
+                kind: "enum",
+                values: ["bronze", "copper"]
               },
               StoreId: {
                 name: "storeId",
@@ -4397,10 +4437,10 @@ describe("TableMetadata", () => {
             projection: "ALL",
             searchSchema: {
               hash: "StoreId",
-              inlineFilters: ["Category", "Type"]
+              inlineFilters: ["Category", "Rating", "Tier", "Type"]
             },
             fingerprint:
-              "e4cc5ceae6df803be5a0ef47540b05acfc4c6bd0d474a445399ccda4165cdf8c",
+              "a5b42c10ef362827007ee56859629c8d9203372c2cf616e74be6ba4922c896da",
             scopedBy: "Store"
           },
           {
