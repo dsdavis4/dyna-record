@@ -20,7 +20,7 @@ import type { AttributeDecoratorContext, AttributeOptions } from "../types.js";
  *   public myField: number;
  *
  *   @NumberAttribute({ alias: 'MyNullableField', nullable: true })
- *   public myField?: number; // Set to Optional
+ *   public myNullableField?: number; // Set to Optional
  * }
  * ```
  *

@@ -37,7 +37,8 @@ type SearchFilterable<T extends Optional<string | number | boolean> = string> =
  * @returns A class field decorator function that registers the filterable mark
  * with the ORM's metadata system, reconciled at metadata initialization.
  *
- * Usage example:
+ * Usage example — the decorated property must carry the brand; applying the
+ * decorator to an unbranded property is a compile error:
  * ```typescript
  * @Entity
  * class Listing extends MyTable {
@@ -45,11 +46,18 @@ type SearchFilterable<T extends Optional<string | number | boolean> = string> =
  *
  *   @SearchFilterable()
  *   @StringAttribute({ alias: "Category" })
- *   public readonly category: string;
+ *   public readonly category: SearchFilterable;
  *
+ *   // A foreign key filterable — how a search narrows within its scope
  *   @SearchFilterable()
  *   @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
- *   public readonly storeId: ForeignKey<Store>;
+ *   public readonly storeId: SearchFilterable<ForeignKey<Store>>;
+ *
+ *   // Nullable: the property stays optional, and a row without a value
+ *   // never matches an equality filter on it
+ *   @SearchFilterable()
+ *   @ForeignKeyAttribute(() => Brand, { alias: "BrandId", nullable: true })
+ *   public readonly brandId?: SearchFilterable<NullableForeignKey<Brand>>;
  * }
  * ```
  */

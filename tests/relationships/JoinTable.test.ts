@@ -208,7 +208,10 @@ describe("JoinTable", () => {
         Name: "Author-1",
         CreatedAt: "2024-02-27T03:19:52.667Z",
         UpdatedAt: "2024-02-27T03:19:52.667Z",
-        __dyna_vector: [0.5, 0.5]
+        // Two per-index attributes: stripping is by reserved prefix, not by
+        // one literal name
+        __dyna_vector: [0.5, 0.5],
+        __dyna_vector_articles: [0.6, 0.6]
       };
 
       const book = {
@@ -220,7 +223,8 @@ describe("JoinTable", () => {
         NumPages: 100,
         CreatedAt: "2021-10-15T08:31:15.148Z",
         UpdatedAt: "2022-10-15T08:31:15.148Z",
-        __dyna_vector: [0.25, 0.25]
+        __dyna_vector: [0.25, 0.25],
+        __dyna_vector_help: [0.35, 0.35]
       };
 
       mockTransactGetItems.mockResolvedValueOnce({

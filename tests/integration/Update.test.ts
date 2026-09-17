@@ -40,7 +40,8 @@ import {
   Vendor,
   type Discovery,
   mockEmbeddingProvider,
-  mockEmbeddingProviderCalls
+  mockEmbeddingProviderCalls,
+  mockArticleEmbeddingProviderCalls
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
@@ -13066,14 +13067,20 @@ class SearchChild extends SearchParentTable {
   public readonly parent: SearchParent;
 }
 
-SearchParentTable.vectorIndex({
-  name: "parent-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider
+SearchParentTable.vectorIndexes({
+  parentSearchIndex: {
+    name: "parent-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: mockEmbeddingProvider,
+    members: [() => SearchParent]
+  }
 });
 
 describe("Update searchable entities (vector write path)", () => {
   const expectedTitanVector = new Array<number>(1024).fill(0.1);
+  // The article index's provider fills a distinguishable value
+  const expectedArticleVector = new Array<number>(1024).fill(0.7);
 
   const listingTableItem = {
     PK: "Listing#123",
@@ -13180,8 +13187,12 @@ describe("Update searchable entities (vector write path)", () => {
     };
 
     // The stored value matches, so no provider call and no vector write
-    // occur. The canonical row's condition pins the searchable value the
-    // skip was decided on — a concurrent clear committing in the
+    // occur. Note what the expression does NOT carry: Listing's table
+    // declares a second index, and the skip returns before the vector
+    // clauses are built, so the sibling REMOVE is absent too — convergence
+    // rides on writes that actually embed or clear (documented in the
+    // migration notes). The canonical row's condition pins the searchable
+    // value the skip was decided on — a concurrent clear committing in the
     // prefetch-to-commit window fails the write instead of leaving the row
     // silently missing from the index. The pin reuses the SET's own
     // expression name and value, adding no request bytes
@@ -13240,11 +13251,12 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #__dyna_vector_articles",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector"
+                  "#__dyna_vector": "__dyna_vector",
+                  "#__dyna_vector_articles": "__dyna_vector_articles"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "The very same description",
@@ -13335,11 +13347,12 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Listing#123", SK: "Listing" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Description = :Description, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector REMOVE #__dyna_vector_articles",
                 ExpressionAttributeNames: {
                   "#Description": "Description",
                   "#UpdatedAt": "UpdatedAt",
-                  "#__dyna_vector": "__dyna_vector"
+                  "#__dyna_vector": "__dyna_vector",
+                  "#__dyna_vector_articles": "__dyna_vector_articles"
                 },
                 ExpressionAttributeValues: {
                   ":Description": "An updated listing description",
@@ -13392,10 +13405,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector",
+                  "SET #UpdatedAt = :UpdatedAt REMOVE #Content, #__dyna_vector_articles, #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
@@ -13426,10 +13440,11 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt REMOVE #__dyna_vector_articles, #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
@@ -13445,13 +13460,18 @@ describe("Update searchable entities (vector write path)", () => {
   });
 
   it("will embed unconditionally for a relationship-free entity when the payload carries the searchable attribute", async () => {
-    expect.assertions(3);
+    expect.assertions(4);
 
     await Article.update("123", { content: "Fresh article content" });
 
     // No prefetch exists to supply a stored hash, so the value embeds even
     // if unchanged — rather than forcing a new read
-    expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
+    // Article is owned by the article index, so its own provider embedded
+    // this write — the store index's provider was never called
+    expect(mockArticleEmbeddingProviderCalls).toEqual([
+      "Fresh article content"
+    ]);
+    expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
@@ -13463,16 +13483,17 @@ describe("Update searchable entities (vector write path)", () => {
                 Key: { PK: "Article#123", SK: "Article" },
                 ConditionExpression: "attribute_exists(PK)",
                 UpdateExpression:
-                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector = :__dyna_vector",
+                  "SET #Content = :Content, #UpdatedAt = :UpdatedAt, #__dyna_vector_articles = :__dyna_vector_articles REMOVE #__dyna_vector",
                 ExpressionAttributeNames: {
                   "#Content": "Content",
                   "#UpdatedAt": "UpdatedAt",
+                  "#__dyna_vector_articles": "__dyna_vector_articles",
                   "#__dyna_vector": "__dyna_vector"
                 },
                 ExpressionAttributeValues: {
                   ":Content": "Fresh article content",
                   ":UpdatedAt": "2023-10-16T03:31:35.918Z",
-                  ":__dyna_vector": expectedTitanVector
+                  ":__dyna_vector_articles": expectedArticleVector
                 }
               }
             }

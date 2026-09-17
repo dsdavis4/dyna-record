@@ -1,7 +1,8 @@
 import Metadata, {
   tableDefaultFields,
   type TableMetadata,
-  type VectorIndexMetadata,
+  type ValidateVectorIndexes,
+  type VectorIndexConstructs,
   type VectorIndexOptions
 } from "./metadata/index.js";
 import { DateAttribute, StringAttribute } from "./decorators/index.js";
@@ -17,7 +18,6 @@ import {
   Update,
   type UpdateOptions,
   Delete,
-  Search,
   type EntityAttributesOnly,
   type EntityAttributesInstance,
   type IncludedAssociations,
@@ -28,20 +28,8 @@ import {
   type TypedFilterParams,
   type TypedSortKeyCondition,
   type InferQueryResults,
-  type SKScopedFilterParams,
-  type HasSearchableRelationships,
-  type IncludedEntities,
-  type InferSearchResults,
-  type ParentSearchOptions,
-  type ParentSearchedEntities,
-  type ParentSearchRuntimeOptions,
-  type SearchableRelationshipEntities,
-  type SearchableRelationshipProperties,
-  type SearchNotAvailable,
-  type SearchQuery,
-  type SearchResults
+  type SKScopedFilterParams
 } from "./operations/index.js";
-import { ValidationError } from "./errors.js";
 import { mergePartialObjectAttributes } from "./operations/utils/index.js";
 import type { DynamoTableItem, EntityClass, Optional } from "./types.js";
 import { createInstance, tableItemToEntity } from "./utils.js";
@@ -474,128 +462,6 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Vector-searches the entities related to one parent entity, through the
-   * vector index scoped by this class. Compiles to exactly one
-   * `SearchVectors` operation; results carry complete typed entity instances
-   * with `similarity` and the raw `score`, ordered most-similar-first.
-   *
-   * The return type is inferred from `in:`: present, results narrow to that
-   * relationship's target entity; omitted, results are the union of every
-   * searchable relationship target, discriminated via `entity.type`.
-   *
-   * Available only on classes with at least one relationship to a searchable
-   * entity (compile error otherwise, runtime error in plain JS), and only
-   * when exactly one vector index is scoped by this class — with more than
-   * one the parent surface is ambiguous; search through the index construct
-   * instead.
-   *
-   * `include:` members of the scoped index have no relationship on this
-   * class, so they are absent from the parent-level result union — search
-   * through the index construct to receive them typed.
-   *
-   * @param scopeId - The id of the parent entity to search within.
-   * @param query - The query text to embed, or `{ vector }` with a precomputed vector.
-   * @param options - {@link ParentSearchOptions}
-   * @returns A promise resolving to the typed search results.
-   *
-   * @example Search across a store's searchable entities
-   * ```typescript
-   * const results = await Store.search("storeId", "hand thrown ceramic mugs");
-   * ```
-   *
-   * @example Narrowed to one relationship, with filters
-   * ```typescript
-   * const results = await Store.search("storeId", "mugs", {
-   *   in: "listings",
-   *   filter: { category: "Mugs" },
-   *   topK: 25
-   * });
-   * ```
-   */
-  public static async search<
-    T extends DynaRecord,
-    const In extends SearchableRelationshipProperties<T> = never
-  >(
-    this: EntityClass<T> &
-      (HasSearchableRelationships<T> extends false
-        ? SearchNotAvailable
-        : unknown),
-    scopeId: string,
-    query: SearchQuery,
-    options?: ParentSearchOptions<T, In>
-  ): Promise<InferSearchResults<ParentSearchedEntities<T, In>>>;
-
-  public static async search(
-    this: EntityClass<DynaRecord>,
-    scopeId: string,
-    query: SearchQuery,
-    options?: ParentSearchRuntimeOptions
-  ): Promise<SearchResults> {
-    return await DynaRecord.runParentSearch(this, scopeId, query, options);
-  }
-
-  /**
-   * Resolves and executes a parent-anchored search: finds the one vector
-   * index scoped by the parent class, maps the `in:` relationship property
-   * to its target entity, and runs the search scoped to the parent's id
-   * @param ParentClass - The scope parent entity class
-   * @param scopeId - The parent entity id to search within
-   * @param query - The search query input
-   * @param options - The parent search options
-   * @returns The search results
-   */
-  private static async runParentSearch(
-    ParentClass: EntityClass<DynaRecord>,
-    scopeId: string,
-    query: SearchQuery,
-    options?: ParentSearchRuntimeOptions
-  ): Promise<SearchResults> {
-    const entityMetadata = Metadata.getEntity(ParentClass.name);
-    const indexes = Metadata.getVectorIndexes(entityMetadata.tableClassName);
-
-    const scopedIndexes = indexes.filter(
-      index => index.scopedBy?.() === ParentClass
-    );
-
-    if (scopedIndexes.length === 0) {
-      throw new ValidationError(
-        `${ParentClass.name} has no vector index scoped by it — search is unavailable. Define one with scopedBy: () => ${ParentClass.name}`
-      );
-    }
-
-    if (scopedIndexes.length > 1) {
-      throw new ValidationError(
-        `${ParentClass.name} scopes more than one vector index (${scopedIndexes
-          .map(index => index.name)
-          .join(
-            ", "
-          )}) — the parent search surface is ambiguous. Search through the index construct instead: myIndex.search(...)`
-      );
-    }
-
-    const [index] = scopedIndexes;
-
-    // The public `in:` names a relationship property of the parent; the
-    // search runtime narrows by the target's entity name
-    let entityName: Optional<string>;
-    if (options?.in !== undefined) {
-      if (!Object.hasOwn(entityMetadata.relationships, options.in)) {
-        throw new ValidationError(
-          `Invalid search option in: "${options.in}" is not a relationship of ${ParentClass.name}`
-        );
-      }
-      entityName = entityMetadata.relationships[options.in].target.name;
-    }
-
-    return await new Search(index).run(query, {
-      scopeId,
-      in: entityName,
-      filter: options?.filter,
-      topK: options?.topK
-    });
-  }
-
-  /**
    * Constructs the partition key value
    * @param {string} id - Entity Id
    * @returns Constructed partition key value
@@ -636,89 +502,60 @@ abstract class DynaRecord implements DynaRecordBase {
   }
 
   /**
-   * Defines a **scoped** vector index on a table class and returns the typed
-   * index construct — the index's `search` surface and provisioning
-   * definition.
+   * Declares a table's complete set of vector indexes in one call, keyed by
+   * export name, and returns the typed index constructs — each index's
+   * `search` surface and provisioning definition.
    *
-   * The scope parent's foreign key becomes the index `HASH`, so searches run
-   * within exactly one scope value at a time. Members are the scope parent's
-   * searchable relationships union the `include:` list, and the construct's
-   * `search` takes the scope id first with `in:` and result unions typed to
-   * that membership.
+   * Every index declares its own `vectorAttribute` (the physical attribute
+   * its members' vectors are written under), its own embedding config, and
+   * its complete membership with `members:` — there is no derived or
+   * universal membership. Indexes have fully independent physical
+   * membership: each searchable entity belongs to exactly one index and is
+   * ingested, billed, and searchable only there.
    *
-   * Only table classes (classes decorated with `@Table`) may define vector
-   * indexes; calling this on an entity class throws. Defining an index never
-   * triggers metadata initialization and never resolves the entity thunks —
-   * index constants can be declared at module evaluation, and membership is
-   * resolved and validated when metadata initializes (first operation or an
-   * explicit `metadata()` call).
+   * A **scoped** index (`scopedBy`) makes the scope parent's foreign key
+   * the index `HASH`, and its construct's `search` takes the scope id first
+   * with `in:` and result unions typed to the membership. An **unscoped**
+   * index omits `scopedBy` — it has no `HASH`, its `search` takes the query
+   * first, and every search spans its whole membership.
    *
-   * @param options - {@link VectorIndexOptions} with `scopedBy` (and optionally `include`)
-   * @returns The registered {@link VectorIndexMetadata} construct
+   * Only table classes (classes decorated with `@Table`) may declare vector
+   * indexes; calling this on an entity class throws, as does a second call
+   * for the same table. Declaring indexes never triggers metadata
+   * initialization and never resolves the entity thunks — index constants
+   * can be declared at module evaluation, and membership is resolved and
+   * validated when metadata initializes (first operation or an explicit
+   * `metadata()` call).
    *
-   * @example
-   * ```typescript
-   * const orgSearchIndex = MyTable.vectorIndex({
-   *   name: "org-search-index",
-   *   model: TitanTextEmbedV2,
-   *   provider: myEmbedFunction,
-   *   scopedBy: () => Organization,
-   *   include: [() => Review] // FK-only members without a declared inverse
-   * });
-   * ```
-   */
-  public static vectorIndex<
-    Scope extends DynaRecord,
-    Inc extends ReadonlyArray<() => EntityClass<DynaRecord>> = []
-  >(
-    options: VectorIndexOptions & {
-      scopedBy: () => EntityClass<Scope>;
-      include?: Inc;
-    }
-  ): VectorIndexMetadata<
-    SearchableRelationshipEntities<Scope> | IncludedEntities<Inc>,
-    true
-  >;
-
-  /**
-   * Defines a **global** vector index on a table class and returns the typed
-   * index construct — the index's `search` surface and provisioning
-   * definition.
-   *
-   * A global index has no `HASH`: its members are every searchable entity of
-   * the table, and the construct's `search` takes the query first with no
-   * scope id. `include:` is rejected — there is nothing to add to a
-   * membership that already spans the table. Because entity classes are only
-   * discovered at metadata initialization, the member union is not statically
-   * enumerable: `in:` remains available as a plain entity-name string
-   * (validated against the resolved membership at runtime) and results type
-   * as the base entity union — discriminate on `entity.type` to narrow.
-   *
-   * Only table classes (classes decorated with `@Table`) may define vector
-   * indexes; calling this on an entity class throws. Defining an index never
-   * triggers metadata initialization and never resolves the entity thunks —
-   * index constants can be declared at module evaluation, and membership is
-   * resolved and validated when metadata initializes (first operation or an
-   * explicit `metadata()` call).
-   *
-   * @param options - {@link VectorIndexOptions} without `scopedBy`
-   * @returns The registered {@link VectorIndexMetadata} construct
+   * @param defs - Index declarations keyed by export name; see {@link VectorIndexOptions}
+   * @returns The registered {@link VectorIndexMetadata} constructs, keyed as declared
    *
    * @example
    * ```typescript
-   * const globalSearchIndex = MyTable.vectorIndex({
-   *   name: "global-search-index",
-   *   model: TitanTextEmbedV2,
-   *   provider: myEmbedFunction
+   * const { listingSearchIndex, supportSearchIndex } = MyTable.vectorIndexes({
+   *   listingSearchIndex: {
+   *     name: "listing-search-index",
+   *     vectorAttribute: "__dyna_vector",
+   *     model: TitanTextEmbedV2,
+   *     provider: myEmbedFunction,
+   *     scopedBy: () => Store,
+   *     members: [() => Listing, () => Review]
+   *   },
+   *   supportSearchIndex: {
+   *     name: "support-search-index",
+   *     vectorAttribute: "__dyna_vector_support",
+   *     model: TitanTextEmbedV2,
+   *     provider: myEmbedFunction,
+   *     scopedBy: () => Store,
+   *     members: [() => SupportArticle]
+   *   }
    * });
    * ```
    */
-  public static vectorIndex(
-    options: VectorIndexOptions & { scopedBy?: undefined; include?: undefined }
-  ): VectorIndexMetadata<DynaRecord, false>;
-
-  public static vectorIndex(options: VectorIndexOptions): VectorIndexMetadata {
-    return Metadata.addVectorIndex(this.name, options);
+  public static vectorIndexes<
+    const T extends Record<string, VectorIndexOptions>
+  >(defs: T & ValidateVectorIndexes<T>): VectorIndexConstructs<T> {
+    return Metadata.addVectorIndexes(this.name, defs);
   }
 
   /**

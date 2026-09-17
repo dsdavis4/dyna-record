@@ -208,6 +208,79 @@ describe("DynamoClient", () => {
   });
 
   describe("transactWriteItems", () => {
+    it("redacts vectors under any per-index attribute name — redaction matches the reserved prefix, not one literal", async () => {
+      expect.assertions(2);
+
+      const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {});
+      mockSend.mockResolvedValueOnce({});
+
+      const params = {
+        TransactItems: [
+          {
+            Put: {
+              TableName: "mock-table",
+              Item: {
+                PK: "Article#123",
+                SK: "Article",
+                __dyna_vector_articles: [0.1, 0.2]
+              }
+            }
+          },
+          {
+            Update: {
+              TableName: "mock-table",
+              Key: { PK: "Faq#123", SK: "Faq" },
+              UpdateExpression: "SET #__dyna_vector_faq = :__dyna_vector_faq",
+              ExpressionAttributeValues: {
+                ":__dyna_vector_faq": [0.1, 0.2, 0.3, 0.4]
+              }
+            }
+          }
+        ]
+      };
+
+      await DynamoClient.transactWriteItems(params);
+
+      expect(logSpy.mock.calls).toEqual([
+        [
+          "transactWriteItems",
+          {
+            params: {
+              TransactItems: [
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    Item: {
+                      PK: "Article#123",
+                      SK: "Article",
+                      __dyna_vector_articles: "[vector:2]"
+                    }
+                  }
+                },
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Faq#123", SK: "Faq" },
+                    UpdateExpression:
+                      "SET #__dyna_vector_faq = :__dyna_vector_faq",
+                    ExpressionAttributeValues: {
+                      ":__dyna_vector_faq": "[vector:4]"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      ]);
+      // Redaction never mutates the real params the command sends
+      expect(params.TransactItems[0].Put?.Item?.__dyna_vector_articles).toEqual(
+        [0.1, 0.2]
+      );
+
+      logSpy.mockRestore();
+    });
+
     it("redacts embedding vectors in Put items from log output, logging a placeholder with the dimension count instead", async () => {
       expect.assertions(3);
 
@@ -239,30 +312,35 @@ describe("DynamoClient", () => {
 
       await DynamoClient.transactWriteItems(params);
 
-      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", {
-        params: {
-          TransactItems: [
-            {
-              Put: {
-                TableName: "mock-table",
-                Item: {
-                  PK: "Listing#123",
-                  SK: "Listing",
-                  Description: "A listing",
-                  __dyna_vector: "[vector:3]"
+      expect(logSpy.mock.calls).toEqual([
+        [
+          "transactWriteItems",
+          {
+            params: {
+              TransactItems: [
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    Item: {
+                      PK: "Listing#123",
+                      SK: "Listing",
+                      Description: "A listing",
+                      __dyna_vector: "[vector:3]"
+                    }
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Store#456", SK: "Store" },
+                    ConditionExpression: "attribute_exists(PK)"
+                  }
                 }
-              }
-            },
-            {
-              ConditionCheck: {
-                TableName: "mock-table",
-                Key: { PK: "Store#456", SK: "Store" },
-                ConditionExpression: "attribute_exists(PK)"
-              }
+              ]
             }
-          ]
-        }
-      });
+          }
+        ]
+      ]);
       // The float array must never reach the logger in any argument
       const loggedText = JSON.stringify(logSpy.mock.calls);
       expect(loggedText).not.toContain("0.111");
@@ -296,20 +374,35 @@ describe("DynamoClient", () => {
         ]
       });
 
-      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", {
-        params: {
-          TransactItems: [
-            {
-              Update: expect.objectContaining({
-                ExpressionAttributeValues: {
-                  ":Description": "A listing",
-                  ":__dyna_vector": "[vector:2]"
+      expect(logSpy.mock.calls).toEqual([
+        [
+          "transactWriteItems",
+          {
+            params: {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Listing#123", SK: "Listing" },
+                    UpdateExpression:
+                      "SET #Description = :Description, #__dyna_vector = :__dyna_vector",
+                    ExpressionAttributeNames: {
+                      "#Description": "Description",
+                      "#__dyna_vector": "__dyna_vector"
+                    },
+                    // Only the vector is replaced; every other field is
+                    // logged verbatim
+                    ExpressionAttributeValues: {
+                      ":Description": "A listing",
+                      ":__dyna_vector": "[vector:2]"
+                    }
+                  }
                 }
-              })
+              ]
             }
-          ]
-        }
-      });
+          }
+        ]
+      ]);
       expect(JSON.stringify(logSpy.mock.calls)).not.toContain("0.111");
     });
 
@@ -373,7 +466,7 @@ describe("DynamoClient", () => {
 
       await DynamoClient.transactWriteItems(params);
 
-      expect(logSpy).toHaveBeenCalledWith("transactWriteItems", { params });
+      expect(logSpy.mock.calls).toEqual([["transactWriteItems", { params }]]);
     });
   });
 });

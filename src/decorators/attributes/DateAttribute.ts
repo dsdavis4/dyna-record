@@ -23,7 +23,7 @@ import { dateSerializer } from "./serializers.js";
  *   public myField: Date;
  *
  *   @DateAttribute({ alias: 'MyNullableField', nullable: true })
- *   public myField?: Date; // Set to Optional
+ *   public myNullableField?: Date; // Set to Optional
  * }
  * ```
  *

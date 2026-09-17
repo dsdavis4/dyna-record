@@ -4400,19 +4400,19 @@ describe("TableMetadata", () => {
               inlineFilters: ["Category", "Type"]
             },
             fingerprint:
-              "7cdc15caa2c93c6ad26aab49ada053811b853968f87240d6459b2db24be43a54",
+              "e4cc5ceae6df803be5a0ef47540b05acfc4c6bd0d474a445399ccda4165cdf8c",
             scopedBy: "Store"
           },
           {
             name: "global-search-index",
             model: "amazon.titan-embed-text-v2:0",
-            vectorAttribute: "__dyna_vector",
+            vectorAttribute: "__dyna_vector_articles",
             dimensions: 1024,
             distanceFunction: "COSINE",
             projection: "ALL",
-            searchSchema: { inlineFilters: ["Category", "Type"] },
+            searchSchema: { inlineFilters: ["Type"] },
             fingerprint:
-              "b967a86113af5acd9a09ac0fccd82357a7ef2afc38418c62ebd8653d733359a0"
+              "b6384a09c7b543e61e7e29fe933a517e48a7079d49b6d1097a56c0a7fd43fd01"
           }
         ]
       });

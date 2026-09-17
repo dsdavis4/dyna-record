@@ -18,9 +18,11 @@ import {
 } from "../../utils.js";
 import {
   type UpdateExpression,
+  type UpdateExpressionClauses,
   type DocumentPathOperation,
   buildBelongsToLinkKey,
   expressionBuilder,
+  renderUpdateExpression,
   extractForeignKeyFromEntity,
   flattenObjectForUpdate
 } from "../utils/index.js";
@@ -36,13 +38,12 @@ import type {
   Optional,
   WithRequired
 } from "../../types.js";
-import Metadata from "../../metadata/index.js";
+import Metadata, { type VectorIndexMetadata } from "../../metadata/index.js";
 import {
   type EntityAttributesInstance,
   type EntityAttributesOnly
 } from "../types.js";
 import { NotFoundError } from "../../errors.js";
-import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
 import { embedSearchableValue } from "../../embedding/embed.js";
 import {
   isBelongsToRelationship,
@@ -102,6 +103,11 @@ interface PreFetchData {
 interface UpdateMetadata<T extends DynaRecord> {
   updatedAttrs: UpdatedAttributes<T>;
   expression: UpdateExpression;
+  /**
+   * The fragments `expression` was rendered from, so the vector write can
+   * append clauses after the embedding resolves without re-parsing it
+   */
+  clauses: UpdateExpressionClauses;
 }
 
 /**
@@ -124,6 +130,13 @@ interface UpdateMetadata<T extends DynaRecord> {
  */
 class Update<T extends DynaRecord> extends OperationBase<T> {
   protected readonly transactionBuilder: TransactWriteBuilder;
+
+  /**
+   * The canonical row's SET/REMOVE clause fragments, kept so the vector
+   * write can append to them once the embedding resolves. Empty until
+   * {@link Update.run} builds the update expression
+   */
+  #canonicalClauses: UpdateExpressionClauses = { set: [], remove: [] };
 
   constructor(
     Entity: EntityClass<T>,
@@ -162,8 +175,10 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
 
-    const { updatedAttrs, expression } = this.buildUpdateMetadata(entityAttrs);
+    const { updatedAttrs, expression, clauses } =
+      this.buildUpdateMetadata(entityAttrs);
     const canonicalUpdate = this.buildUpdateItemTransaction(id, expression);
+    this.#canonicalClauses = clauses;
     this.addStandaloneForeignKeyConditionChecks(
       entityAttrs,
       referentialIntegrityCheck
@@ -458,9 +473,12 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     }
 
     const tableAttrs = entityToTableItem(this.EntityClass, regularAttrs);
-    const expression = expressionBuilder(tableAttrs, allDocumentPathOps);
+    const { expression, clauses } = expressionBuilder(
+      tableAttrs,
+      allDocumentPathOps
+    );
 
-    return { updatedAttrs, expression };
+    return { updatedAttrs, expression, clauses };
   }
 
   /**
@@ -556,8 +574,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     const value: unknown = attributes[searchableMeta.name];
 
+    // The owning index's attribute receives the vector; its siblings are
+    // removed from the row so an entity moved between indexes converges back
+    // to exactly one vector on any vector-touching write
+    const owningIndex = Metadata.getOwningVectorIndex(this.EntityClass.name);
+    if (owningIndex === undefined) return;
+
     if (value === null || value === "") {
-      this.appendVectorClauses(canonicalUpdate, undefined);
+      this.appendVectorClauses(canonicalUpdate, owningIndex, undefined);
       return;
     }
 
@@ -578,18 +602,14 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       return;
     }
 
-    const [index] = Metadata.getVectorIndexes(
-      this.entityMetadata.tableClassName
-    );
-
     const searchableVector = await embedSearchableValue(
       value,
-      index,
+      owningIndex,
       this.EntityClass.name,
       searchableMeta.name
     );
 
-    this.appendVectorClauses(canonicalUpdate, searchableVector);
+    this.appendVectorClauses(canonicalUpdate, owningIndex, searchableVector);
   }
 
   /**
@@ -631,71 +651,66 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
-   * Appends the vector clause to the canonical row's queued update — a SET
-   * when a vector is provided, a REMOVE when the searchable value was
-   * cleared.
+   * Appends the vector clauses to the canonical row's queued update — a SET
+   * of the owning index's attribute when a vector is provided, a REMOVE of
+   * it when the searchable value was cleared — and REMOVEs the table's
+   * other declared vector attributes (names only, no values), so a row does
+   * not stay resident in an index that no longer owns its entity.
+   *
+   * Convergence is bounded by when this runs: the caller returns before this
+   * point on the unchanged-value skip, and a retired index's attribute is no
+   * longer a declared sibling, so neither case is cleaned up here.
    *
    * The queued item's expression attribute maps are shared by reference with
    * the expression object the denormalized sinks spread, so fresh copies are
    * assigned first — the vector clauses must never reach denormalized copies
-   * or link records.
+   * or link records. The clause fragments are this operation's own, so
+   * appending to them cannot reach a sink either.
    *
    * @param canonicalUpdate - The canonical row's queued update item.
-   * @param searchableVector - The vector to SET, or undefined to REMOVE it.
+   * @param owningIndex - The vector index owning the entity being updated.
+   * @param searchableVector - The vector to SET, or undefined to REMOVE the owning attribute too.
    * @private
    */
   private appendVectorClauses(
     canonicalUpdate: CanonicalUpdateItem,
+    owningIndex: VectorIndexMetadata,
     searchableVector: Optional<number[]>
   ): void {
-    const vectorName = `#${vectorSearchKeys.vector}`;
+    const owningAttribute = owningIndex.vectorAttribute;
+    const owningName = `#${owningAttribute}`;
+    const siblingAttributes = Metadata.getSiblingVectorAttributes(
+      this.EntityClass.name
+    );
 
     canonicalUpdate.ExpressionAttributeNames = {
       ...canonicalUpdate.ExpressionAttributeNames,
-      [vectorName]: vectorSearchKeys.vector
+      [owningName]: owningAttribute,
+      ...Object.fromEntries(
+        siblingAttributes.map(attribute => [`#${attribute}`, attribute])
+      )
     };
 
-    const expression = canonicalUpdate.UpdateExpression ?? "";
-    // The REMOVE keyword is always followed by a #-aliased name and preceded
-    // by the start or a space — an attribute aliased "REMOVE" appears as
-    // "#REMOVE =" or ":REMOVE" and never matches
-    const removeMatch = /(?:^| )REMOVE #/.exec(expression);
-    const removeIdx =
-      removeMatch === null
-        ? -1
-        : removeMatch.index + (removeMatch[0].startsWith(" ") ? 1 : 0);
-    const setPart = (
-      removeIdx === -1 ? expression : expression.slice(0, removeIdx)
-    ).trim();
-    const removePart = (
-      removeIdx === -1 ? "" : expression.slice(removeIdx)
-    ).trim();
-
     if (searchableVector !== undefined) {
-      const vectorValue = `:${vectorSearchKeys.vector}`;
+      const vectorValue = `:${owningAttribute}`;
 
       canonicalUpdate.ExpressionAttributeValues = {
         ...canonicalUpdate.ExpressionAttributeValues,
         [vectorValue]: searchableVector
       };
 
-      const vectorSet = `${vectorName} = ${vectorValue}`;
-      const newSetPart =
-        setPart === "" ? `SET ${vectorSet}` : `${setPart}, ${vectorSet}`;
-
-      canonicalUpdate.UpdateExpression = [newSetPart, removePart]
-        .filter(part => part !== "")
-        .join(" ");
+      this.#canonicalClauses.set.push(`${owningName} = ${vectorValue}`);
     } else {
-      const newRemovePart =
-        removePart === ""
-          ? `REMOVE ${vectorName}`
-          : `${removePart}, ${vectorName}`;
-
-      canonicalUpdate.UpdateExpression = [setPart, newRemovePart]
-        .filter(part => part !== "")
-        .join(" ");
+      this.#canonicalClauses.remove.push(owningName);
     }
+
+    this.#canonicalClauses.remove.push(
+      ...siblingAttributes.map(attribute => `#${attribute}`)
+    );
+
+    canonicalUpdate.UpdateExpression = renderUpdateExpression(
+      this.#canonicalClauses
+    );
   }
 
   /**

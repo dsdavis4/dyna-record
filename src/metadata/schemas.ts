@@ -3,7 +3,7 @@ import type { EntityClass } from "../types.js";
 import type DynaRecord from "../DynaRecord.js";
 import type { ObjectSchema } from "../decorators/attributes/types.js";
 import type { EmbeddingModelDescriptor } from "../embedding/types.js";
-import { vectorSearchKeys } from "./VectorIndexMetadata.js";
+import type { VectorAttributeName } from "./VectorIndexMetadata.js";
 
 /**
  * Common serialized fields shared by every attribute kind.
@@ -152,6 +152,10 @@ const EntityMetadataTransform = z
 const VectorIndexMetadataTransform = z
   .object({
     name: z.string(),
+    // The reserved-prefix rule is enforced once, at registration — this
+    // carries the validated narrow type into the serialized contract
+    // without a redundant second runtime check
+    vectorAttribute: z.custom<VectorAttributeName>(),
     model: z.custom<EmbeddingModelDescriptor>(),
     scopedBy: z.custom<() => EntityClass<DynaRecord>>().optional(),
     hashAlias: z.string().optional(),
@@ -161,7 +165,7 @@ const VectorIndexMetadataTransform = z
   .transform(index => ({
     name: index.name,
     model: index.model.name,
-    vectorAttribute: vectorSearchKeys.vector,
+    vectorAttribute: index.vectorAttribute,
     dimensions: index.model.dimensions,
     distanceFunction: index.model.distanceFunction,
     projection: "ALL" as const,

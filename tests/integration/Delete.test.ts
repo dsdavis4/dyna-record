@@ -1700,10 +1700,14 @@ class DeletableListing extends SearchDeleteTable {
   public readonly store: DeletableStore;
 }
 
-SearchDeleteTable.vectorIndex({
-  name: "deletable-search-index",
-  model: TitanTextEmbedV2,
-  provider: mockEmbeddingProvider
+SearchDeleteTable.vectorIndexes({
+  deletableSearchIndex: {
+    name: "deletable-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: TitanTextEmbedV2,
+    provider: mockEmbeddingProvider,
+    members: [() => DeletableListing]
+  }
 });
 
 describe("Delete searchable entities (vector write path)", () => {

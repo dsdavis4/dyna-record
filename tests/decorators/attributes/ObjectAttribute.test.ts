@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { Entity, ObjectAttribute } from "../../../src/decorators/index.js";
+// Internal: the serializers are not part of the public surface, so they are
+// reached by path rather than through the barrel the entry point re-exports
 import {
-  Entity,
-  ObjectAttribute,
   objectToTableItem,
   tableItemToObject
-} from "../../../src/decorators/index.js";
+} from "../../../src/decorators/attributes/serializers.js";
 import type {
   ObjectSchema,
   InferObjectSchema

@@ -32,7 +32,9 @@ import {
   ArrayOfUnionsEntity,
   Vehicle,
   Car,
-  mockEmbeddingProviderCalls
+  Review,
+  mockEmbeddingProviderCalls,
+  mockArticleEmbeddingProviderCalls
 } from "./mockModels.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { generateId } from "../../src/id.js";
@@ -5367,20 +5369,27 @@ class Note extends NoteTable {
 }
 
 // Small-dimension descriptor so tests can assert exact vector values, with a
-// controllable provider for failure and truncation scenarios
-NoteTable.vectorIndex({
-  name: "note-search-index",
-  model: {
-    name: "test-embed-model",
-    dimensions: 3,
-    distanceFunction: "COSINE",
-    scoreToSimilarity: score => 1 - score
-  },
-  provider: async text => await mockNoteEmbed(text)
+// controllable provider for failure and truncation scenarios. Inline lambdas
+// under the const-generic declaration need explicit parameter types
+NoteTable.vectorIndexes({
+  noteSearchIndex: {
+    name: "note-search-index",
+    vectorAttribute: "__dyna_vector",
+    model: {
+      name: "test-embed-model",
+      dimensions: 3,
+      distanceFunction: "COSINE",
+      scoreToSimilarity: (score: number) => 1 - score
+    },
+    provider: async (text: string) => await mockNoteEmbed(text),
+    members: [() => Note]
+  }
 });
 
 describe("Create searchable entities (vector write path)", () => {
   const expectedTitanVector = new Array<number>(1024).fill(0.1);
+  // The article index's provider fills a distinguishable value
+  const expectedArticleVector = new Array<number>(1024).fill(0.7);
 
   beforeAll(() => {
     vi.useFakeTimers();
@@ -5417,7 +5426,10 @@ describe("Create searchable entities (vector write path)", () => {
       Name: "Mock Store",
       CreatedAt: "2024-01-01T00:00:00.000Z",
       UpdatedAt: "2024-01-02T00:00:00.000Z",
-      __dyna_vector: [0.5, 0.5]
+      // Two per-index attributes: stripping is by reserved prefix, not by
+      // one literal name
+      __dyna_vector: [0.5, 0.5],
+      __dyna_vector_articles: [0.6, 0.6]
     };
 
     mockTransactGetItems.mockResolvedValueOnce({
@@ -5532,8 +5544,60 @@ describe("Create searchable entities (vector write path)", () => {
     ]);
   });
 
+  it("will embed a member that belongs to the index only through its members list", async () => {
+    expect.assertions(3);
+
+    mockedGenerateId.mockReturnValueOnce("uuid1");
+
+    // Review carries the scoping foreign key but has no declared
+    // relationship on Store — it is a member of the store index purely
+    // because the index lists it, the case that replaced the pre-3.0
+    // include: option
+    await Review.create({
+      body: "Beautiful glaze, sturdy handle",
+      storeId: "123"
+    });
+
+    expect(mockEmbeddingProviderCalls).toEqual([
+      "Beautiful glaze, sturdy handle"
+    ]);
+    expect(mockArticleEmbeddingProviderCalls).toEqual([]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Put: {
+                TableName: "search-table",
+                ConditionExpression: "attribute_not_exists(PK)",
+                Item: {
+                  PK: "Review#uuid1",
+                  SK: "Review",
+                  Id: "uuid1",
+                  Type: "Review",
+                  Body: "Beautiful glaze, sturdy handle",
+                  StoreId: "123",
+                  CreatedAt: "2023-10-16T03:31:35.918Z",
+                  UpdatedAt: "2023-10-16T03:31:35.918Z",
+                  __dyna_vector: expectedTitanVector
+                }
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "search-table",
+                Key: { PK: "Store#123", SK: "Store" },
+                ConditionExpression: "attribute_exists(PK)"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
   it("will embed for a relationship-free searchable entity", async () => {
-    expect.assertions(4);
+    expect.assertions(5);
 
     mockedGenerateId.mockReturnValueOnce("uuid1");
 
@@ -5552,7 +5616,12 @@ describe("Create searchable entities (vector write path)", () => {
       createdAt: new Date("2023-10-16T03:31:35.918Z"),
       updatedAt: new Date("2023-10-16T03:31:35.918Z")
     });
-    expect(mockEmbeddingProviderCalls).toEqual(["Fresh article content"]);
+    // Article is owned by the article index, so its own provider embedded
+    // this write — the store index's provider was never called
+    expect(mockArticleEmbeddingProviderCalls).toEqual([
+      "Fresh article content"
+    ]);
+    expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
     expect(mockTransactWriteCommand.mock.calls).toEqual([
       [
@@ -5571,7 +5640,8 @@ describe("Create searchable entities (vector write path)", () => {
                   Content: "Fresh article content",
                   CreatedAt: "2023-10-16T03:31:35.918Z",
                   UpdatedAt: "2023-10-16T03:31:35.918Z",
-                  __dyna_vector: expectedTitanVector
+                  // Article's owning index writes under its own attribute
+                  __dyna_vector_articles: expectedArticleVector
                 }
               }
             }

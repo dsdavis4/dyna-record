@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { createHash } from "node:crypto";
 import {
   MockTable,
@@ -10,11 +9,26 @@ import {
   storeSearchIndex,
   globalSearchIndex
 } from "../integration/mockModels.js";
-import Metadata, { vectorSearchKeys } from "../../src/metadata/index.js";
+import Metadata, {
+  reservedVectorAttributePrefix,
+  isValidVectorAttributeName
+} from "../../src/metadata/index.js";
+import {
+  isVectorAttributeKey,
+  stripVectorAttributes
+} from "../../src/metadata/VectorIndexMetadata.js";
+// Statically imported for the compile-time tests below. They are used only
+// inside closures that are never invoked, so no decorator ever executes.
+import {
+  Entity,
+  Searchable,
+  StringAttribute
+} from "../../src/decorators/index.js";
 import {
   TitanTextEmbedV2,
   TitanTextEmbedV2Dim512,
-  TitanTextEmbedV2Dim256
+  TitanTextEmbedV2Dim256,
+  type EmbeddingModelDescriptor
 } from "../../src/embedding/types.js";
 import type {
   EmbeddingProvider,
@@ -24,6 +38,10 @@ import type {
   SearchFilterable as FilterableText,
   SortKey
 } from "../../src/index.js";
+// Imported as a plain named import on purpose: the entry point exports it
+// with `export type`, so the name resolves for type positions while any
+// value use of it is a compile error. The assertion is in the types block
+import { VectorIndexMetadata as PublicVectorIndexMetadata } from "../../index.js";
 
 /**
  * Loads a fresh module registry so each validation scenario gets its own
@@ -70,25 +88,60 @@ describe("VectorIndex", () => {
             inlineFilters: ["Category", "Type"]
           },
           fingerprint: fingerprintOf(
-            "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE"
+            "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE;vectorAttribute=__dyna_vector"
           ),
           scopedBy: "Store"
         },
         {
           name: "global-search-index",
           model: "amazon.titan-embed-text-v2:0",
-          vectorAttribute: "__dyna_vector",
+          vectorAttribute: "__dyna_vector_articles",
           dimensions: 1024,
           distanceFunction: "COSINE",
           projection: "ALL",
           searchSchema: {
-            inlineFilters: ["Category", "Type"]
+            inlineFilters: ["Type"]
           },
           fingerprint: fingerprintOf(
-            "hash=;filters=Category,Type;dimensions=1024;distance=COSINE"
+            "hash=;filters=Type;dimensions=1024;distance=COSINE;vectorAttribute=__dyna_vector_articles"
           )
         }
       ]);
+    });
+
+    it("serializes a migrated 2.0.1-shape index identically except its fingerprint", () => {
+      expect.assertions(2);
+
+      // The exact entry dyna-record 2.0.1 emitted for store-search-index,
+      // pinned here so a future change to the serialized provisioning
+      // contract cannot pass by updating an expectation alongside it. R15
+      // promises a mechanically-migrated index re-provisions nothing: every
+      // field must match, and only the fingerprint may differ (its preimage
+      // gained the vector attribute in 3.0.0)
+      const pinned201Entry = {
+        name: "store-search-index",
+        model: "amazon.titan-embed-text-v2:0",
+        vectorAttribute: "__dyna_vector",
+        dimensions: 1024,
+        distanceFunction: "COSINE",
+        projection: "ALL",
+        searchSchema: {
+          hash: "StoreId",
+          inlineFilters: ["Category", "Type"]
+        },
+        fingerprint: fingerprintOf(
+          "hash=StoreId;filters=Category,Type;dimensions=1024;distance=COSINE"
+        ),
+        scopedBy: "Store"
+      };
+
+      const [current] = SearchTable.metadata().vectorIndexes ?? [];
+
+      expect({ ...current, fingerprint: null }).toStrictEqual({
+        ...pinned201Entry,
+        fingerprint: null
+      });
+      expect(current.fingerprint).not.toBe(pinned201Entry.fingerprint);
     });
 
     it("serializes the model as the descriptor name and never emits provider or credential material", () => {
@@ -109,28 +162,29 @@ describe("VectorIndex", () => {
   });
 
   describe("index registration", () => {
-    it("resolves scoped index membership from the scope parent's declared adjacency union the include list", () => {
-      expect.assertions(3);
+    it("resolves each index's membership from its explicit members list", () => {
+      expect.assertions(4);
 
-      const [scopedIndex, globalIndex] =
+      const [scopedIndex, articleIndex] =
         Metadata.getVectorIndexes("SearchTable");
 
-      // Listing via Store's HasMany, Review via include
       expect(scopedIndex.memberEntities).toEqual(["Listing", "Review"]);
       expect(scopedIndex.hashAlias).toBe("StoreId");
-      // Global indexes include every searchable entity of the table
-      expect(globalIndex.memberEntities).toEqual([
-        "Article",
-        "Listing",
-        "Review"
-      ]);
+      // The unscoped index owns only its declared corpus — membership is
+      // never derived from the table's searchable entities
+      expect(articleIndex.memberEntities).toEqual(["Article"]);
+      expect(articleIndex.hashAlias).toBeUndefined();
     });
 
-    it("returns the typed index construct from the factory", () => {
-      expect.assertions(5);
+    it("returns the typed index constructs from the factory", () => {
+      expect.assertions(6);
 
       expect(storeSearchIndex.name).toBe("store-search-index");
-      expect(storeSearchIndex.model).toBe(TitanTextEmbedV2);
+      // The construct holds a frozen COPY of the descriptor, not the caller's
+      // object: `dimensions` gates vector validation, so a later edit to a
+      // shared descriptor must not reach a live index
+      expect(storeSearchIndex.model).toStrictEqual(TitanTextEmbedV2);
+      expect(storeSearchIndex.model).not.toBe(TitanTextEmbedV2);
       expect(storeSearchIndex.provider).toBe(mockEmbeddingProvider);
       expect(Metadata.getVectorIndexes("SearchTable")[0]).toBe(
         storeSearchIndex
@@ -140,34 +194,23 @@ describe("VectorIndex", () => {
       );
     });
 
-    it("guardrail: the vector attribute alias never appears in any entity's attribute maps", () => {
+    it("guardrail: no entity attribute name or alias uses the reserved vector prefix", () => {
       const tables = ["MockTable", "OtherTable", "SearchTable"];
 
       for (const table of tables) {
         for (const entityMeta of Object.values(
           Metadata.getEntitiesForTable(table)
         )) {
-          expect(
-            entityMeta.attributes[vectorSearchKeys.vector]
-          ).toBeUndefined();
-          expect(
-            entityMeta.tableAttributes[vectorSearchKeys.vector]
-          ).toBeUndefined();
-          expect(
-            Object.values(entityMeta.attributes).some(
-              attr => attr.alias === vectorSearchKeys.vector
-            )
-          ).toBe(false);
+          for (const attrMeta of Object.values(entityMeta.attributes)) {
+            expect(
+              attrMeta.name.startsWith(reservedVectorAttributePrefix)
+            ).toBe(false);
+            expect(
+              attrMeta.alias.startsWith(reservedVectorAttributePrefix)
+            ).toBe(false);
+          }
         }
       }
-    });
-
-    it("registers the vector alias as a reserved key on every table", () => {
-      expect.assertions(1);
-
-      const { reservedKeys } = Metadata.getTable("MockTable");
-
-      expect(reservedKeys[vectorSearchKeys.vector]).toBe(true);
     });
 
     it("ships Titan V2 dimension variants sharing the model identity", () => {
@@ -221,10 +264,14 @@ describe("VectorIndex", () => {
       }
       void Doc;
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: variant,
-        provider: testProvider
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: variant,
+          provider: testProvider,
+          members: [() => Doc]
+        }
       });
 
       const [index] = FreshTable.metadata().vectorIndexes ?? [];
@@ -235,18 +282,261 @@ describe("VectorIndex", () => {
       });
     });
 
-    it("throws when defining a vector index on a class that is not a table class", () => {
+    it("emits every AWS distance function and dimension variant through the contract", async () => {
+      expect.assertions(1);
+
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        Searchable,
+        TitanTextEmbedV2Dim256: small
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Doc extends FreshTable {
+        declare readonly type: "Doc";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "NoteBody" })
+        public readonly noteBody: SearchableText;
+      }
+
+      @Entity
+      class Memo extends FreshTable {
+        declare readonly type: "Memo";
+
+        @Searchable()
+        @StringAttribute({ alias: "MemoBody" })
+        public readonly memoBody: SearchableText;
+      }
+
+      FreshTable.vectorIndexes({
+        dotIndex: {
+          name: "dot-index",
+          vectorAttribute: "__dyna_vector",
+          model: {
+            name: "dot-model",
+            dimensions: 4096, // the AWS per-vector dimension ceiling
+            distanceFunction: "DOT_PRODUCT",
+            scoreToSimilarity: (score: number) => score
+          },
+          provider: testProvider,
+          members: [() => Doc]
+        },
+        euclideanIndex: {
+          name: "euclidean-index",
+          vectorAttribute: "__dyna_vector_euclidean",
+          model: {
+            name: "euclidean-model",
+            dimensions: 1, // the smallest vector AWS accepts
+            distanceFunction: "EUCLIDEAN",
+            scoreToSimilarity: (score: number) => 1 / (1 + score)
+          },
+          provider: testProvider,
+          members: [() => Note]
+        },
+        smallIndex: {
+          name: "small-index",
+          vectorAttribute: "__dyna_vector_small",
+          model: small,
+          provider: testProvider,
+          members: [() => Memo]
+        }
+      });
+
+      // Asserting the whole contract, not just the distance fields: the
+      // fingerprint preimage carries the distance function and dimensions, so
+      // a full assertion also proves a non-COSINE index fingerprints correctly
+      expect(FreshTable.metadata().vectorIndexes).toStrictEqual([
+        {
+          name: "dot-index",
+          model: "dot-model",
+          vectorAttribute: "__dyna_vector",
+          dimensions: 4096,
+          distanceFunction: "DOT_PRODUCT",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=4096;distance=DOT_PRODUCT;vectorAttribute=__dyna_vector"
+          )
+        },
+        {
+          name: "euclidean-index",
+          model: "euclidean-model",
+          vectorAttribute: "__dyna_vector_euclidean",
+          dimensions: 1,
+          distanceFunction: "EUCLIDEAN",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=1;distance=EUCLIDEAN;vectorAttribute=__dyna_vector_euclidean"
+          )
+        },
+        {
+          name: "small-index",
+          model: "amazon.titan-embed-text-v2:0",
+          vectorAttribute: "__dyna_vector_small",
+          dimensions: 256,
+          distanceFunction: "COSINE",
+          projection: "ALL",
+          searchSchema: { inlineFilters: ["type"] },
+          fingerprint: fingerprintOf(
+            "hash=;filters=type;dimensions=256;distance=COSINE;vectorAttribute=__dyna_vector_small"
+          )
+        }
+      ]);
+    });
+
+    it("throws when declaring vector indexes on a class that is not a table class", () => {
       expect.assertions(1);
 
       expect(() =>
-        Listing.vectorIndex({
-          name: "invalid-index",
-          model: TitanTextEmbedV2,
-          provider: mockEmbeddingProvider
+        Listing.vectorIndexes({
+          invalidIndex: {
+            name: "invalid-index",
+            vectorAttribute: "__dyna_vector",
+            model: TitanTextEmbedV2,
+            provider: mockEmbeddingProvider,
+            members: [() => Listing]
+          }
         })
       ).toThrow(
-        "vectorIndex can only be defined on a table class decorated with @Table. Listing is not a registered table"
+        "vectorIndexes can only be defined on a table class decorated with @Table. Listing is not a registered table"
       );
+    });
+  });
+
+  describe("isValidVectorAttributeName", () => {
+    // The runtime twin of the VectorAttributeName template literal type. Both
+    // encode one rule — exactly the reserved prefix, or the prefix plus a "_"
+    // separator — so the same cases are asserted on both sides.
+    it.each([
+      ["__dyna_vector", true], // the bare reserved prefix
+      ["__dyna_vector_support", true], // prefix plus a suffix
+      ["__dyna_vector_", true], // boundary: empty suffix after the separator
+      ["__dyna_vectorx", false], // boundary: prefix without the separator
+      ["__dyna_vecto", false], // boundary: one char short of the prefix
+      ["_dyna_vector", false], // boundary: one leading underscore short
+      ["__DYNA_VECTOR", false], // the rule is case sensitive
+      ["embedding", false], // not under the prefix at all
+      ["", false], // empty
+      ["x__dyna_vector", false] // prefix present but not at the start
+    ])("%p is %p", (value, expected) => {
+      expect.assertions(1);
+      expect(isValidVectorAttributeName(value)).toBe(expected);
+    });
+
+    it("exposes the reserved prefix that the rule is built from", () => {
+      expect.assertions(2);
+      expect(reservedVectorAttributePrefix).toBe("__dyna_vector");
+      expect(isValidVectorAttributeName(reservedVectorAttributePrefix)).toBe(
+        true
+      );
+    });
+  });
+
+  describe("vector attribute key helpers", () => {
+    // These back the guarantee that vectors never reach a denormalized copy
+    // or a link record: both are built from raw canonical rows that bypass
+    // entity serialization, so the strip is what keeps them vector-free.
+    describe("isVectorAttributeKey", () => {
+      it.each([
+        ["__dyna_vector", true],
+        ["__dyna_vector_support", true],
+        ["__dyna_vector_", true],
+        ["__dyna_vectorx", true], // prefix match is broader than the NAME rule
+        ["Description", false],
+        ["_dyna_vector", false],
+        ["", false],
+        ["x__dyna_vector", false] // must be a prefix, not a substring
+      ])("%p is %p", (key, expected) => {
+        expect.assertions(1);
+        expect(isVectorAttributeKey(key)).toBe(expected);
+      });
+
+      it("matches more keys than isValidVectorAttributeName accepts", () => {
+        expect.assertions(2);
+        // A retired index's attribute must still be recognized for stripping
+        // even if it could no longer be declared
+        expect(isVectorAttributeKey("__dyna_vectorx")).toBe(true);
+        expect(isValidVectorAttributeName("__dyna_vectorx")).toBe(false);
+      });
+    });
+
+    describe("stripVectorAttributes", () => {
+      it("removes every vector attribute and keeps everything else", () => {
+        expect.assertions(1);
+
+        expect(
+          stripVectorAttributes({
+            PK: "Listing#1",
+            SK: "Listing",
+            Description: "mug",
+            __dyna_vector: [0.1, 0.2],
+            __dyna_vector_support: [0.3],
+            __dyna_vector_archive: [0.4]
+          })
+        ).toEqual({
+          PK: "Listing#1",
+          SK: "Listing",
+          Description: "mug"
+        });
+      });
+
+      it("returns an equal item when there is nothing to strip", () => {
+        expect.assertions(1);
+
+        expect(
+          stripVectorAttributes({ PK: "Listing#1", Description: "mug" })
+        ).toEqual({ PK: "Listing#1", Description: "mug" });
+      });
+
+      it("handles an empty item", () => {
+        expect.assertions(1);
+        expect(stripVectorAttributes({})).toEqual({});
+      });
+
+      it("strips an item that is nothing but vectors down to empty", () => {
+        expect.assertions(1);
+        expect(
+          stripVectorAttributes({
+            __dyna_vector: [0.1],
+            __dyna_vector_b: [0.2]
+          })
+        ).toEqual({});
+      });
+
+      it("does not mutate the item it strips", () => {
+        expect.assertions(2);
+
+        const item = { PK: "Listing#1", __dyna_vector: [0.1] };
+        const stripped = stripVectorAttributes(item);
+
+        expect(item).toEqual({ PK: "Listing#1", __dyna_vector: [0.1] });
+        expect(stripped).not.toBe(item);
+      });
     });
   });
 
@@ -272,12 +562,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       // @ts-expect-error: the compile-time assist rejects a second @Searchable attribute; these tests exercise the runtime backstop
       @Entity
       class DoubleSearchable extends FreshTable {
@@ -291,6 +575,16 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "B" })
         public readonly b: SearchableText;
       }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DoubleSearchable]
+        }
+      });
 
       expect(() => FreshTable.metadata()).toThrow(
         "Entity DoubleSearchable declares @Searchable on multiple attributes (a, b). Only one searchable attribute is allowed per entity"
@@ -319,12 +613,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       // @ts-expect-error: the compile-time assist rejects a second @Searchable attribute; these tests exercise the runtime backstop
       @Entity
       class DoubleSearchable extends FreshTable {
@@ -338,6 +626,16 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "B" })
         public readonly b: SearchableText;
       }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DoubleSearchable]
+        }
+      });
 
       const first = captureError(() => FreshTable.metadata());
       const second = captureError(() => FreshTable.metadata());
@@ -369,12 +667,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       @Entity
       class NumberSearchable extends FreshTable {
         declare readonly type: "NumberSearchable";
@@ -384,6 +676,17 @@ describe("VectorIndex", () => {
         @NumberAttribute({ alias: "Count" })
         public readonly count: number;
       }
+
+      FreshTable.vectorIndexes({
+        // @ts-expect-error: NumberSearchable carries no Searchable brand; this exercises the runtime backstop
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => NumberSearchable]
+        }
+      });
 
       expect(() => FreshTable.metadata()).toThrow(
         "@Searchable on NumberSearchable.count must be layered over a string or enum attribute decorator (EX: @StringAttribute, @EnumAttribute)"
@@ -410,12 +713,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       @Entity
       class MissingBase extends FreshTable {
         declare readonly type: "MissingBase";
@@ -423,6 +720,16 @@ describe("VectorIndex", () => {
         @Searchable()
         public readonly text: SearchableText;
       }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => MissingBase]
+        }
+      });
 
       expect(() => FreshTable.metadata()).toThrow(
         "@Searchable on MissingBase.text must be layered over a string or enum attribute decorator (EX: @StringAttribute, @EnumAttribute)"
@@ -451,12 +758,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       @Entity
       class EnumSearchable extends FreshTable {
         declare readonly type: "EnumSearchable";
@@ -465,6 +766,16 @@ describe("VectorIndex", () => {
         @EnumAttribute({ alias: "Status", values: ["draft", "published"] })
         public readonly status: SearchableText<"draft" | "published">;
       }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => EnumSearchable]
+        }
+      });
 
       expect(() => FreshTable.metadata()).not.toThrow();
       expect(
@@ -495,12 +806,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       @Entity
       class DateFilterable extends FreshTable {
         declare readonly type: "DateFilterable";
@@ -515,12 +820,22 @@ describe("VectorIndex", () => {
         public readonly publishedOn: Date;
       }
 
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DateFilterable]
+        }
+      });
+
       expect(() => FreshTable.metadata()).toThrow(
         "@SearchFilterable on DateFilterable.publishedOn must be layered over a string, number, boolean, enum, or foreign key attribute decorator (EX: @StringAttribute)"
       );
     });
 
-    it("rejects a searchable entity carrying the scoping foreign key that is neither declared nor included, naming the fix", async () => {
+    it("resolves searchSchema for a scoped index declared through members", async () => {
       const {
         default: DynaRecord,
         Table,
@@ -543,139 +858,42 @@ describe("VectorIndex", () => {
       }
 
       @Entity
-      class Vendor extends FreshTable {
-        declare readonly type: "Vendor";
+      class Shop extends FreshTable {
+        declare readonly type: "Shop";
 
         @StringAttribute({ alias: "Name" })
         public readonly name: string;
       }
 
       @Entity
-      class AuditNote extends FreshTable {
-        declare readonly type: "AuditNote";
+      class ShopNote extends FreshTable {
+        declare readonly type: "ShopNote";
 
         @Searchable()
         @StringAttribute({ alias: "Note" })
         public readonly note: SearchableText;
 
-        @ForeignKeyAttribute(() => Vendor, { alias: "VendorId" })
-        public readonly vendorId: ForeignKey<Vendor>;
+        @ForeignKeyAttribute(() => Shop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<Shop>;
       }
 
-      FreshTable.vectorIndex({
-        name: "vendor-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        scopedBy: () => Vendor
-      });
-
-      expect(() => FreshTable.metadata()).toThrow(
-        "Entity AuditNote is searchable and has a foreign key to Vendor but is not a member of vector index vendor-index. Declare a relationship from Vendor to AuditNote or add () => AuditNote to the index's include list"
-      );
-    });
-
-    it("accepts an FK-only searchable entity added through the include list", async () => {
-      const {
-        default: DynaRecord,
-        Table,
-        Entity,
-        PartitionKeyAttribute,
-        SortKeyAttribute,
-        StringAttribute,
-        ForeignKeyAttribute,
-        Searchable,
-        TitanTextEmbedV2
-      } = await loadFresh();
-
-      @Table({ name: "fresh-table" })
-      abstract class FreshTable extends DynaRecord {
-        @PartitionKeyAttribute({ alias: "PK" })
-        public readonly pk: PartitionKey;
-
-        @SortKeyAttribute({ alias: "SK" })
-        public readonly sk: SortKey;
-      }
-
-      @Entity
-      class Vendor extends FreshTable {
-        declare readonly type: "Vendor";
-
-        @StringAttribute({ alias: "Name" })
-        public readonly name: string;
-      }
-
-      @Entity
-      class AuditNote extends FreshTable {
-        declare readonly type: "AuditNote";
-
-        @Searchable()
-        @StringAttribute({ alias: "Note" })
-        public readonly note: SearchableText;
-
-        @ForeignKeyAttribute(() => Vendor, { alias: "VendorId" })
-        public readonly vendorId: ForeignKey<Vendor>;
-      }
-
-      FreshTable.vectorIndex({
-        name: "vendor-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        scopedBy: () => Vendor,
-        include: [() => AuditNote]
+      FreshTable.vectorIndexes({
+        shopIndex: {
+          name: "shop-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Shop,
+          members: [() => ShopNote]
+        }
       });
 
       const metadata = FreshTable.metadata();
 
       expect(metadata.vectorIndexes?.[0].searchSchema).toStrictEqual({
-        hash: "VendorId",
+        hash: "ShopId",
         inlineFilters: ["type"]
       });
-    });
-
-    it("rejects an include list on a global index, naming the rule", async () => {
-      const {
-        default: DynaRecord,
-        Table,
-        Entity,
-        PartitionKeyAttribute,
-        SortKeyAttribute,
-        StringAttribute,
-        Searchable,
-        TitanTextEmbedV2
-      } = await loadFresh();
-
-      @Table({ name: "fresh-table" })
-      abstract class FreshTable extends DynaRecord {
-        @PartitionKeyAttribute({ alias: "PK" })
-        public readonly pk: PartitionKey;
-
-        @SortKeyAttribute({ alias: "SK" })
-        public readonly sk: SortKey;
-      }
-
-      @Entity
-      class Note extends FreshTable {
-        declare readonly type: "Note";
-
-        @Searchable()
-        @StringAttribute({ alias: "Body" })
-        public readonly body: SearchableText;
-      }
-
-      // @ts-expect-error: include is scoped-only — a global index already spans every searchable entity
-      FreshTable.vectorIndex({
-        name: "global-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        include: [() => Note]
-      });
-
-      const error = captureError(() => FreshTable.metadata());
-
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toEqual(
-        "Vector index global-index is global but declares an include list. include adds members to a scoped index — a global index already spans every searchable entity of the table"
-      );
     });
 
     it("rejects a declared member without the scoping foreign key on its canonical row (HasAndBelongsToMany), naming the fix", async () => {
@@ -702,15 +920,15 @@ describe("VectorIndex", () => {
       }
 
       @Entity
-      class Vendor extends FreshTable {
-        declare readonly type: "Vendor";
+      class Shop extends FreshTable {
+        declare readonly type: "Shop";
 
         @StringAttribute({ alias: "Name" })
         public readonly name: string;
 
         @HasAndBelongsToMany(() => Tag, {
-          targetKey: "vendors",
-          through: () => ({ joinTable: VendorTag, foreignKey: "vendorId" })
+          targetKey: "shops",
+          through: () => ({ joinTable: ShopTag, foreignKey: "shopId" })
         })
         public readonly tags: Tag[];
       }
@@ -723,27 +941,31 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "Label" })
         public readonly label: SearchableText;
 
-        @HasAndBelongsToMany(() => Vendor, {
+        @HasAndBelongsToMany(() => Shop, {
           targetKey: "tags",
-          through: () => ({ joinTable: VendorTag, foreignKey: "tagId" })
+          through: () => ({ joinTable: ShopTag, foreignKey: "tagId" })
         })
-        public readonly vendors: Vendor[];
+        public readonly shops: Shop[];
       }
 
-      class VendorTag extends JoinTable<Vendor, Tag> {
-        public readonly vendorId: ForeignKey;
+      class ShopTag extends JoinTable<Shop, Tag> {
+        public readonly shopId: ForeignKey;
         public readonly tagId: ForeignKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "vendor-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        scopedBy: () => Vendor
+      FreshTable.vectorIndexes({
+        shopIndex: {
+          name: "shop-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Shop,
+          members: [() => Tag]
+        }
       });
 
       expect(() => FreshTable.metadata()).toThrow(
-        "Entity Tag is a member of vector index vendor-index but has no foreign key attribute referencing Vendor on its own record (HasAndBelongsToMany relationships store foreign keys on the join table). Add a @ForeignKeyAttribute referencing Vendor to Tag"
+        "Entity Tag is a member of vector index shop-index but has no foreign key attribute referencing Shop on its own record (HasAndBelongsToMany relationships store foreign keys on the join table). Add a @ForeignKeyAttribute referencing Shop to Tag"
       );
     });
 
@@ -775,9 +997,10 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "Text" })
         public readonly text: SearchableText;
       }
+      void Note;
 
       expect(() => FreshTable.metadata()).toThrow(
-        "Table FreshTable has searchable entities (Note) but no vector index with an embedding provider. Define one with FreshTable.vectorIndex({ name, model, provider })"
+        "Table FreshTable has searchable entities (Note) but no vector index with an embedding provider. Define one with FreshTable.vectorIndexes({ myIndex: { name, vectorAttribute, model, provider } })"
       );
     });
 
@@ -802,12 +1025,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: undefined as unknown as EmbeddingProvider
-      });
-
       @Entity
       class Note extends FreshTable {
         declare readonly type: "Note";
@@ -817,40 +1034,18 @@ describe("VectorIndex", () => {
         public readonly text: SearchableText;
       }
 
-      expect(() => FreshTable.metadata()).toThrow(
-        "Vector index fresh-index has no embedding provider configured. Set provider (an embed function) on FreshTable.vectorIndex"
-      );
-    });
-
-    it("rejects a consumer attribute whose table alias collides with the vector alias", async () => {
-      const {
-        default: DynaRecord,
-        Table,
-        Entity,
-        PartitionKeyAttribute,
-        SortKeyAttribute,
-        StringAttribute
-      } = await loadFresh();
-
-      @Table({ name: "fresh-table" })
-      abstract class FreshTable extends DynaRecord {
-        @PartitionKeyAttribute({ alias: "PK" })
-        public readonly pk: PartitionKey;
-
-        @SortKeyAttribute({ alias: "SK" })
-        public readonly sk: SortKey;
-      }
-
-      @Entity
-      class Colliding extends FreshTable {
-        declare readonly type: "Colliding";
-
-        @StringAttribute({ alias: vectorSearchKeys.vector })
-        public readonly sneaky: string;
-      }
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: undefined as unknown as EmbeddingProvider,
+          members: [() => Note]
+        }
+      });
 
       expect(() => FreshTable.metadata()).toThrow(
-        "Attribute Colliding.sneaky uses the table alias __dyna_vector, which is reserved for the library-managed vector attribute"
+        "Vector index fresh-index has no embedding provider configured. Set provider (an embed function) on the index's entry in FreshTable.vectorIndexes"
       );
     });
 
@@ -875,12 +1070,6 @@ describe("VectorIndex", () => {
         @SortKeyAttribute({ alias: "SK" })
         public readonly sk: SortKey;
       }
-
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
 
       @Entity
       class EntityOne extends FreshTable {
@@ -908,6 +1097,16 @@ describe("VectorIndex", () => {
         public readonly status: FilterableText;
       }
 
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => EntityOne, () => EntityTwo]
+        }
+      });
+
       expect(() => FreshTable.metadata()).toThrow(
         "@SearchFilterable property status resolves to different table aliases (Status, State) across members of vector index fresh-index. One inline filter is one table attribute; align the alias across entities"
       );
@@ -934,12 +1133,6 @@ describe("VectorIndex", () => {
         @SortKeyAttribute({ alias: "SK" })
         public readonly sk: SortKey;
       }
-
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
 
       @Entity
       class WideFilterEntity extends FreshTable {
@@ -1018,6 +1211,16 @@ describe("VectorIndex", () => {
         public readonly f17: FilterableText;
       }
 
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => WideFilterEntity]
+        }
+      });
+
       const metadata = FreshTable.metadata();
 
       expect(
@@ -1046,12 +1249,6 @@ describe("VectorIndex", () => {
         @SortKeyAttribute({ alias: "SK" })
         public readonly sk: SortKey;
       }
-
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
 
       @Entity
       class WideFilterEntity extends FreshTable {
@@ -1134,6 +1331,16 @@ describe("VectorIndex", () => {
         public readonly f18: FilterableText;
       }
 
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => WideFilterEntity]
+        }
+      });
+
       expect(() => FreshTable.metadata()).toThrow(
         "Vector index fresh-index declares 19 inline filters counting the entity type filter the library adds automatically. DynamoDB supports at most 18 inline filters per index"
       );
@@ -1143,8 +1350,11 @@ describe("VectorIndex", () => {
       const {
         default: DynaRecord,
         Table,
+        Entity,
         PartitionKeyAttribute,
         SortKeyAttribute,
+        StringAttribute,
+        Searchable,
         TitanTextEmbedV2
       } = await loadFresh();
 
@@ -1157,13 +1367,108 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      for (let i = 1; i <= 6; i++) {
-        FreshTable.vectorIndex({
-          name: `fresh-index-${i}`,
-          model: TitanTextEmbedV2,
-          provider: testProvider
-        });
+      // One entity per index, so the 5-index cap is the only rule this
+      // declaration can break — the one-owner rule now rejects a shared
+      // member at compile time, and a fixture violating two rules at once
+      // would pass or fail on whichever happens to fire first
+      @Entity
+      class DocOne extends FreshTable {
+        declare readonly type: "DocOne";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
       }
+
+      @Entity
+      class DocTwo extends FreshTable {
+        declare readonly type: "DocTwo";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocThree extends FreshTable {
+        declare readonly type: "DocThree";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocFour extends FreshTable {
+        declare readonly type: "DocFour";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocFive extends FreshTable {
+        declare readonly type: "DocFive";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      @Entity
+      class DocSix extends FreshTable {
+        declare readonly type: "DocSix";
+
+        @Searchable()
+        @StringAttribute({ alias: "Body" })
+        public readonly body: SearchableText;
+      }
+
+      FreshTable.vectorIndexes({
+        indexOne: {
+          name: "fresh-index-1",
+          vectorAttribute: "__dyna_vector_1",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocOne]
+        },
+        indexTwo: {
+          name: "fresh-index-2",
+          vectorAttribute: "__dyna_vector_2",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocTwo]
+        },
+        indexThree: {
+          name: "fresh-index-3",
+          vectorAttribute: "__dyna_vector_3",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocThree]
+        },
+        indexFour: {
+          name: "fresh-index-4",
+          vectorAttribute: "__dyna_vector_4",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocFour]
+        },
+        indexFive: {
+          name: "fresh-index-5",
+          vectorAttribute: "__dyna_vector_5",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocFive]
+        },
+        indexSix: {
+          name: "fresh-index-6",
+          vectorAttribute: "__dyna_vector_6",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => DocSix]
+        }
+      });
 
       expect(() => FreshTable.metadata()).toThrow(
         "Table FreshTable defines 6 vector indexes. DynamoDB supports at most 5 vector indexes per table"
@@ -1237,11 +1542,15 @@ describe("VectorIndex", () => {
         public readonly shop: Shop;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        scopedBy: () => Shop
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Shop,
+          members: [() => Product, () => Coupon]
+        }
       });
 
       expect(() => FreshTable.metadata()).toThrow(
@@ -1286,75 +1595,25 @@ describe("VectorIndex", () => {
       }
       void Doc;
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider,
-        scopedBy: () => UndecoratedParent
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => UndecoratedParent,
+          members: [() => Doc]
+        }
       });
 
       expect(() => FreshTable.metadata()).toThrow(
         "Vector index fresh-index is scoped by UndecoratedParent, which is not a registered entity"
       );
     });
-
-    it("rejects a table whose vector indexes declare different embedding configurations", async () => {
-      const {
-        default: DynaRecord,
-        Table,
-        Entity,
-        PartitionKeyAttribute,
-        SortKeyAttribute,
-        StringAttribute,
-        Searchable,
-        TitanTextEmbedV2
-      } = await loadFresh();
-
-      @Table({ name: "fresh-table" })
-      abstract class FreshTable extends DynaRecord {
-        @PartitionKeyAttribute({ alias: "PK" })
-        public readonly pk: PartitionKey;
-
-        @SortKeyAttribute({ alias: "SK" })
-        public readonly sk: SortKey;
-      }
-
-      @Entity
-      class Doc extends FreshTable {
-        declare readonly type: "Doc";
-
-        @Searchable()
-        @StringAttribute({ alias: "Body" })
-        public readonly body: SearchableText;
-      }
-
-      FreshTable.vectorIndex({
-        name: "fresh-index-one",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
-      // Same table, different model — writes embed once onto the shared
-      // vector attribute, so the configurations must agree
-      FreshTable.vectorIndex({
-        name: "fresh-index-two",
-        model: {
-          name: "other-model",
-          dimensions: 256,
-          distanceFunction: "EUCLIDEAN",
-          scoreToSimilarity: score => score
-        },
-        provider: testProvider
-      });
-
-      expect(() => FreshTable.metadata()).toThrow(
-        "Vector indexes fresh-index-one and fresh-index-two on table FreshTable declare different embedding configurations. All vector indexes on a table share the __dyna_vector attribute, so they must use the same provider, model, dimensions, and distance function"
-      );
-    });
   });
 
   describe("initialization timing", () => {
-    it("defining an index at module evaluation does not trigger metadata initialization", async () => {
+    it("declaring indexes at module evaluation does not trigger metadata initialization", async () => {
       const {
         default: DynaRecord,
         Table,
@@ -1377,12 +1636,16 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      // Index defined before any entity module is evaluated — must neither
-      // trigger initialization nor resolve membership eagerly
-      const index = FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
+      // Indexes declared before the entity module is evaluated — must
+      // neither trigger initialization nor resolve the member thunks eagerly
+      const { freshIndex } = FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => Note]
+        }
       });
 
       @Entity
@@ -1398,15 +1661,132 @@ describe("VectorIndex", () => {
         public readonly status: FilterableText;
       }
 
-      // If defining the index had initialized metadata, Note would have been
-      // frozen out of reconciliation and membership
+      // If declaring the indexes had initialized metadata, Note would have
+      // been frozen out of reconciliation and membership
       expect(
         FreshTable.metadata().vectorIndexes?.[0].searchSchema
       ).toStrictEqual({
         inlineFilters: ["Status", "type"]
       });
-      expect(index.memberEntities).toEqual(["Note"]);
+      expect(freshIndex.memberEntities).toEqual(["Note"]);
       expect(Metadata.getEntity("Note").searchableAttribute).toBeDefined();
+    });
+
+    it("an index declared after initialization is registered but never resolved, and its search fails closed", async () => {
+      expect.assertions(4);
+
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        ForeignKeyAttribute,
+        Searchable,
+        TitanTextEmbedV2,
+        Metadata
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class Shop extends FreshTable {
+        declare readonly type: "Shop";
+
+        @StringAttribute({ alias: "Name" })
+        public readonly name: string;
+      }
+
+      @Entity
+      class Note extends FreshTable {
+        declare readonly type: "Note";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @ForeignKeyAttribute(() => Shop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<Shop>;
+      }
+
+      FreshTable.vectorIndexes({
+        first: {
+          name: "first-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => Shop,
+          members: [() => Note]
+        }
+      });
+
+      // Triggers metadata initialization, which resolves `first`
+      FreshTable.metadata();
+      expect(Metadata.getVectorIndexes("FreshTable")[0].hashAlias).toBe(
+        "ShopId"
+      );
+
+      // A second table whose indexes are declared only AFTER that first
+      // access. Registration still succeeds — it never touches metadata — but
+      // resolution has already run, so the index keeps its placeholders.
+      @Table({ name: "late-table" })
+      abstract class LateTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class LateShop extends LateTable {
+        declare readonly type: "LateShop";
+
+        @StringAttribute({ alias: "Name" })
+        public readonly name: string;
+      }
+
+      @Entity
+      class LateNote extends LateTable {
+        declare readonly type: "LateNote";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @ForeignKeyAttribute(() => LateShop, { alias: "ShopId" })
+        public readonly shopId: ForeignKey<LateShop>;
+      }
+
+      const { late } = LateTable.vectorIndexes({
+        late: {
+          name: "late-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          scopedBy: () => LateShop,
+          members: [() => LateNote]
+        }
+      });
+
+      // Unresolved: the scoped HASH was never computed
+      expect(late.hashAlias).toBeUndefined();
+      expect(late.memberEntities).toEqual([]);
+
+      // The consequence that matters: an unresolved scoped index has no HASH,
+      // so the search layer treats it as unscoped and refuses the scope id
+      // rather than silently searching without tenant isolation
+      await expect(late.search("shop-1", "anything")).rejects.toThrow(
+        "is unscoped"
+      );
     });
 
     it("an entity module loaded after initialization is registered but never reconciled or validated", async () => {
@@ -1431,12 +1811,6 @@ describe("VectorIndex", () => {
         public readonly sk: SortKey;
       }
 
-      FreshTable.vectorIndex({
-        name: "fresh-index",
-        model: TitanTextEmbedV2,
-        provider: testProvider
-      });
-
       @Entity
       class Note extends FreshTable {
         declare readonly type: "Note";
@@ -1445,6 +1819,16 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "Text" })
         public readonly text: SearchableText;
       }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => Note]
+        }
+      });
 
       // Triggers metadata initialization
       FreshTable.metadata();
@@ -1469,6 +1853,7 @@ describe("VectorIndex", () => {
         @StringAttribute({ alias: "B" })
         public readonly b: SearchableText;
       }
+      void LateEntity;
 
       expect(() => FreshTable.metadata()).not.toThrow();
       expect(Metadata.getEntity("LateEntity")).toBeDefined();
@@ -1484,12 +1869,16 @@ describe("VectorIndex", () => {
   describe("types", () => {
     it("rejects unknown options", () => {
       const _define = (): void => {
-        void SearchTable.vectorIndex({
-          name: "typed-index",
-          model: TitanTextEmbedV2,
-          provider: mockEmbeddingProvider,
+        void SearchTable.vectorIndexes({
           // @ts-expect-error: unknown options are rejected
-          unknownOption: true
+          typedIndex: {
+            name: "typed-index",
+            vectorAttribute: "__dyna_vector_typed",
+            model: TitanTextEmbedV2,
+            provider: mockEmbeddingProvider,
+            members: [() => Review],
+            unknownOption: true
+          }
         });
       };
 
@@ -1498,10 +1887,14 @@ describe("VectorIndex", () => {
 
     it("requires a provider", () => {
       const _define = (): void => {
-        // @ts-expect-error: provider is required configuration
-        void SearchTable.vectorIndex({
-          name: "typed-index",
-          model: TitanTextEmbedV2
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: provider is required configuration
+          typedIndex: {
+            name: "typed-index",
+            vectorAttribute: "__dyna_vector_typed",
+            model: TitanTextEmbedV2,
+            members: [() => Review]
+          }
         });
       };
 
@@ -1510,12 +1903,147 @@ describe("VectorIndex", () => {
 
     it("scopedBy must be a thunk returning an entity class", () => {
       const _define = (): void => {
-        // @ts-expect-error: scopedBy must be a thunk returning an entity class
-        void SearchTable.vectorIndex({
-          name: "typed-index",
-          model: TitanTextEmbedV2,
-          provider: mockEmbeddingProvider,
-          scopedBy: () => "Store"
+        void SearchTable.vectorIndexes({
+          typedIndex: {
+            name: "typed-index",
+            vectorAttribute: "__dyna_vector_typed",
+            model: TitanTextEmbedV2,
+            provider: mockEmbeddingProvider,
+            // @ts-expect-error: scopedBy must be a thunk returning an entity class
+            scopedBy: () => "Store",
+            members: [() => Review]
+          }
+        });
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("rejects an entity declaring more than one @Searchable attribute", () => {
+      // The compile-time twin of the metadata-initialization error asserted in
+      // "rejects multiple @Searchable attributes on one entity". Declared
+      // inside a closure that is never invoked, so no decorator ever runs and
+      // no entity is registered.
+      const _define = (): void => {
+        // @ts-expect-error: entities may declare at most one @Searchable
+        @Entity
+        class TwoSearchable extends SearchTable {
+          declare readonly type: "TwoSearchable";
+
+          @Searchable()
+          @StringAttribute({ alias: "First" })
+          public readonly first: SearchableText;
+
+          @Searchable()
+          @StringAttribute({ alias: "Second" })
+          public readonly second: SearchableText;
+        }
+        void TwoSearchable;
+
+        // @ts-expect-no-error: exactly one is the rule, not zero-or-one
+        @Entity
+        class OneSearchable extends SearchTable {
+          declare readonly type: "OneSearchable";
+
+          @Searchable()
+          @StringAttribute({ alias: "Only" })
+          public readonly only: SearchableText;
+        }
+        void OneSearchable;
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("model descriptors require every field, with the declared shapes", () => {
+      const _define = (): void => {
+        // @ts-expect-error: dimensions is required
+        const _noDimensions: EmbeddingModelDescriptor = {
+          name: "m",
+          distanceFunction: "COSINE",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        const _badDistance: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          // @ts-expect-error: distanceFunction must be one AWS supports
+          distanceFunction: "MANHATTAN",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        const _badConversion: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "COSINE",
+          // @ts-expect-error: scoreToSimilarity maps a number to a number
+          scoreToSimilarity: (score: number) => `${String(score)}`
+        };
+
+        const _badDimensions: EmbeddingModelDescriptor = {
+          name: "m",
+          // @ts-expect-error: dimensions is a number
+          dimensions: "8",
+          distanceFunction: "COSINE",
+          scoreToSimilarity: (score: number) => 1 - score
+        };
+
+        // @ts-expect-no-error: every AWS distance function is accepted
+        const _dotProduct: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "DOT_PRODUCT",
+          scoreToSimilarity: (score: number) => score
+        };
+
+        // @ts-expect-no-error
+        const _euclidean: EmbeddingModelDescriptor = {
+          name: "m",
+          dimensions: 8,
+          distanceFunction: "EUCLIDEAN",
+          scoreToSimilarity: (score: number) => 1 / (1 + score)
+        };
+      };
+
+      expect(_define).toBeDefined();
+    });
+
+    it("vectorAttribute accepts exactly the reserved prefix forms", () => {
+      const base = {
+        model: TitanTextEmbedV2,
+        provider: mockEmbeddingProvider,
+        members: [() => Review]
+      };
+
+      const _define = (): void => {
+        // @ts-expect-no-error: the bare reserved prefix
+        void SearchTable.vectorIndexes({
+          a: { ...base, name: "a", vectorAttribute: "__dyna_vector" }
+        });
+
+        // @ts-expect-no-error: prefix followed by a suffix
+        void SearchTable.vectorIndexes({
+          b: { ...base, name: "b", vectorAttribute: "__dyna_vector_support" }
+        });
+
+        // @ts-expect-no-error: boundary — an empty suffix after the separator
+        void SearchTable.vectorIndexes({
+          c: { ...base, name: "c", vectorAttribute: "__dyna_vector_" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: boundary — prefix without the "_" separator
+          d: { ...base, name: "d", vectorAttribute: "__dyna_vectorx" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: not under the reserved prefix at all
+          e: { ...base, name: "e", vectorAttribute: "embedding" }
+        });
+
+        void SearchTable.vectorIndexes({
+          // @ts-expect-error: a computed string is not a valid literal
+          f: { ...base, name: "f", vectorAttribute: String("__dyna_vector") }
         });
       };
 
@@ -1524,17 +2052,103 @@ describe("VectorIndex", () => {
 
     it("accepts a full valid configuration", () => {
       const _define = (): void => {
-        // @ts-expect-no-error: valid configuration with scope and include thunks
-        void SearchTable.vectorIndex({
-          name: "typed-index",
-          model: TitanTextEmbedV2,
-          provider: mockEmbeddingProvider,
-          scopedBy: () => Store,
-          include: [() => Review]
+        // @ts-expect-no-error: valid configuration with scope and member thunks
+        void SearchTable.vectorIndexes({
+          typedIndex: {
+            name: "typed-index",
+            vectorAttribute: "__dyna_vector_typed",
+            model: TitanTextEmbedV2,
+            provider: mockEmbeddingProvider,
+            scopedBy: () => Store,
+            members: [() => Review]
+          }
         });
       };
 
       expect(_define).toBeDefined();
+    });
+
+    it("VectorIndexMetadata is exported as a type, never as a constructor", () => {
+      const _test = (
+        index: import("../../index.js").VectorIndexMetadata
+      ): string => {
+        // @ts-expect-no-error: a consumer typing a helper around a construct
+        // reads every documented field
+        const read = `${index.name}:${index.vectorAttribute}:${String(
+          index.hashAlias
+        )}:${index.memberEntities.join(",")}:${index.fingerprint}`;
+
+        // @ts-expect-error: type-only — a construct is produced by
+        // Table.vectorIndexes(), which registers and resolves it. A
+        // hand-constructed index would be unregistered and unresolved, and
+        // would fail confusingly on its first search
+        void new PublicVectorIndexMetadata();
+
+        return read;
+      };
+
+      expect(_test).toBeDefined();
+    });
+
+    it("the declaration types are nameable from the entry point", () => {
+      const _test = (): void => {
+        // The names a consumer writes when typing their own wrapper around
+        // the declaration surface, rather than inlining the literal
+        const attribute: import("../../index.js").VectorAttributeName =
+          "__dyna_vector_support";
+        // @ts-expect-error: must use the reserved prefix
+        const _badAttribute: import("../../index.js").VectorAttributeName =
+          "embedding";
+
+        const model: import("../../index.js").EmbeddingModelDescriptor =
+          TitanTextEmbedV2;
+        const provider: import("../../index.js").EmbeddingProvider = async () =>
+          await Promise.resolve([0.1]);
+
+        // @ts-expect-no-error: the option shape a declaration is built from
+        const _options: import("../../index.js").VectorIndexOptions = {
+          name: "support-index",
+          vectorAttribute: attribute,
+          model,
+          provider,
+          members: []
+        };
+      };
+
+      expect(_test).toBeDefined();
+    });
+  });
+
+  describe("the index construct's public surface", () => {
+    it("exposes the resolved declaration as frozen, read-only fields", () => {
+      expect.assertions(4);
+
+      // The construct a consumer holds IS the registry's resolved index, so
+      // a consumer reading its metadata cannot reach in and repoint the
+      // search it compiles
+      expect(Object.isFrozen(storeSearchIndex)).toBe(true);
+      expect(storeSearchIndex.name).toBe("store-search-index");
+      expect(storeSearchIndex.hashAlias).toBe("StoreId");
+      expect(storeSearchIndex.memberEntities).toStrictEqual([
+        "Listing",
+        "Review"
+      ]);
+    });
+
+    it("rejects writes to the resolved fields at compile time", () => {
+      const _test = (): void => {
+        // @ts-expect-error: getters with no setters — resolution is the
+        // registry's job, not a caller's
+        storeSearchIndex.hashAlias = "TenantId";
+        // @ts-expect-error: read-only
+        storeSearchIndex.memberEntities = [];
+        // @ts-expect-error: read-only
+        storeSearchIndex.fingerprint = "";
+        // @ts-expect-error: the members array itself is readonly
+        storeSearchIndex.memberEntities.push("Article");
+      };
+
+      expect(_test).toBeDefined();
     });
   });
 });

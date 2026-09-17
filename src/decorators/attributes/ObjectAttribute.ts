@@ -282,7 +282,7 @@ function fieldDefToZod(fieldDef: FieldDef): ZodType {
  * the rationale.
  *
  * Object attributes support filtering in queries using dot-path notation for nested fields
- * and the {@link ContainsFilter | $contains} operator for List membership checks.
+ * and the `$contains` operator for List membership checks.
  *
  * ```typescript
  * await MyEntity.query("123", {

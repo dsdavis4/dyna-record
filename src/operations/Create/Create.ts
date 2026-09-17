@@ -21,7 +21,10 @@ import {
 import { isBelongsToRelationship } from "../../metadata/utils.js";
 import type { BelongsToOrOwnedByRelationship } from "../../metadata/index.js";
 import Metadata from "../../metadata/index.js";
-import { vectorSearchKeys } from "../../metadata/VectorIndexMetadata.js";
+import {
+  reservedVectorAttributePrefix,
+  stripVectorAttributes
+} from "../../metadata/VectorIndexMetadata.js";
 import { embedSearchableValue } from "../../embedding/embed.js";
 import type { Optional } from "../../types.js";
 
@@ -88,8 +91,8 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     // a searchable write adds no serial round trip. The rejection absorber
     // covers the concurrent window — if the prefetch throws first, the embed
     // rejection would otherwise be unhandled; the await below still rethrows
-    const searchableWritePromise = this.startSearchableEmbed(entityAttrs);
-    void searchableWritePromise?.catch(() => undefined);
+    const searchableWrite = this.startSearchableEmbed(entityAttrs);
+    void searchableWrite?.vectorPromise.catch(() => undefined);
 
     this.buildPutItemTransaction(tableItem, entityData.id);
     this.buildBelongsToTransactions(
@@ -113,12 +116,13 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
       );
     }
 
-    // Patch the vector onto the canonical Put item only. The belongs-to link
-    // records above spread copies of tableItem before this patch, so
-    // denormalized copies never carry the vector
-    const searchableVector = await searchableWritePromise;
-    if (searchableVector !== undefined) {
-      tableItem[vectorSearchKeys.vector] = searchableVector;
+    // Patch the vector onto the canonical Put item only, under the owning
+    // index's attribute. The belongs-to link records above spread copies of
+    // tableItem before this patch, so denormalized copies never carry the
+    // vector
+    if (searchableWrite !== undefined) {
+      tableItem[searchableWrite.vectorAttribute] =
+        await searchableWrite.vectorPromise;
     }
 
     await this.#transactionBuilder.executeTransaction();
@@ -128,33 +132,40 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
   /**
    * Starts embedding the entity's searchable attribute value when one is
-   * present in the payload. Returns undefined for entities with no searchable
-   * attribute and for null or empty values — a row without the vector
-   * attribute is not indexed, so there is nothing to embed (and the provider
-   * is never called with empty text).
+   * present in the payload, through the entity's owning vector index — its
+   * model produces the vector and its attribute receives it. Returns
+   * undefined for entities with no searchable attribute and for null or
+   * empty values — a row without the vector attribute is not indexed, so
+   * there is nothing to embed (and the provider is never called with empty
+   * text).
    * @param entityAttrs - The parsed entity attributes being created.
-   * @returns A promise of the truncated vector, or undefined when no embedding applies.
+   * @returns The owning index's vector attribute and the pending vector, or undefined when no embedding applies.
    * @private
    */
   private startSearchableEmbed(
     entityAttrs: EntityDefinedAttributes<DynaRecord>
-  ): Optional<Promise<number[]>> {
+  ): Optional<{ vectorAttribute: string; vectorPromise: Promise<number[]> }> {
     const searchableMeta = this.entityMetadata.searchableAttribute;
     if (searchableMeta === undefined) return undefined;
 
     const value = entityAttrs[searchableMeta.name as keyof typeof entityAttrs];
     if (!isString(value) || value === "") return undefined;
 
-    const [index] = Metadata.getVectorIndexes(
-      this.entityMetadata.tableClassName
-    );
+    // Metadata initialization guarantees every searchable entity has
+    // exactly one owning index. With no index the embed below rejects with
+    // EmbeddingError before the patch runs, so the fallback name is never
+    // written
+    const index = Metadata.getOwningVectorIndex(this.EntityClass.name);
 
-    return embedSearchableValue(
-      value,
-      index,
-      this.EntityClass.name,
-      searchableMeta.name
-    );
+    return {
+      vectorAttribute: index?.vectorAttribute ?? reservedVectorAttributePrefix,
+      vectorPromise: embedSearchableValue(
+        value,
+        index,
+        this.EntityClass.name,
+        searchableMeta.name
+      )
+    };
   }
 
   /**
@@ -421,11 +432,10 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
         [this.sortKeyAlias]: relationshipType
       };
 
-      // These items are raw fetched records that bypass entity serialization,
-      // so a searchable parent's vector must be stripped here — the vector
-      // lives on canonical rows only
-      const { [vectorSearchKeys.vector]: _parentVector, ...denormalizedItem } =
-        tableItem;
+      // These items are raw fetched records that bypass entity
+      // serialization, so a searchable parent's vector must be stripped
+      // here — vectors live on canonical rows only
+      const denormalizedItem = stripVectorAttributes(tableItem);
 
       this.#transactionBuilder.addPut(
         {

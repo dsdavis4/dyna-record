@@ -29,6 +29,33 @@ export interface UpdateRemoveExpression {
 export type UpdateExpression = UpdateSetExpression | UpdateRemoveExpression;
 
 /**
+ * The SET and REMOVE clause fragments an update expression was assembled
+ * from, each without its action keyword (EX: `["#Name = :Name"]`,
+ * `["#Notes"]`).
+ *
+ * Kept alongside the joined `UpdateExpression` so a caller that must append
+ * clauses after the expression is built — the vector write, whose value only
+ * arrives once the embedding resolves — can add fragments and re-render,
+ * rather than parsing the assembled string back apart.
+ */
+export interface UpdateExpressionClauses {
+  set: string[];
+  remove: string[];
+}
+
+/**
+ * An assembled update expression plus the clause fragments it was built
+ * from. See {@link UpdateExpressionClauses} for why the fragments survive
+ * assembly.
+ */
+export interface BuiltUpdateExpression {
+  /** Exactly the fields DynamoDB's Update accepts */
+  expression: UpdateExpression;
+  /** The fragments the expression was rendered from */
+  clauses: UpdateExpressionClauses;
+}
+
+/**
  * Represents a single document path operation for partial ObjectAttribute updates.
  * Used to build DynamoDB document path expressions like `SET #addr.#street = :addr_street`
  * or `REMOVE #addr.#zip`.

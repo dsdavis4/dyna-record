@@ -14,7 +14,7 @@ export type ForeignEntityAttribute<T extends DynaRecord> = {
 }[keyof EntityAttributesOnly<T>];
 
 /**
- * Represents the properties of an attribute that are configurable via the {@link Attribute} decorator.
+ * Represents the properties of an attribute that are configurable via the attribute decorators (EX: {@link StringAttribute}, {@link NumberAttribute}).
  */
 export interface AttributeOptions {
   /**

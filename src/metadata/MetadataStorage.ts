@@ -1,13 +1,15 @@
 import type DynaRecord from "../DynaRecord.js";
-import type { EntityClass, MakeOptional, Optional } from "../types.js";
+import type { MakeOptional, Optional } from "../types.js";
 import TableMetadata from "./TableMetadata.js";
 import EntityMetadata from "./EntityMetadata.js";
 import AttributeMetadata from "./AttributeMetadata.js";
 import JoinTableMetadata from "./JoinTableMetadata.js";
-import VectorIndexMetadata, {
-  vectorSearchKeys,
-  type VectorIndexOptions
+import type VectorIndexMetadata from "./VectorIndexMetadata.js";
+import type {
+  VectorIndexConstructs,
+  VectorIndexOptions
 } from "./VectorIndexMetadata.js";
+import VectorIndexRegistry from "./VectorIndexRegistry.js";
 import { createRelationshipInstance } from "./relationship-metadata/utils.js";
 import type { RelationshipMetadata } from "./relationship-metadata/index.js";
 import type {
@@ -15,22 +17,11 @@ import type {
   AttributeMetadataStorage,
   DefaultFields,
   EntityMetadataStorage,
-  ForeignKeyAttributeMetadata,
   JoinTableMetadataStorage,
   TableMetadataOptions,
   TableMetadataStorage,
   AttributeMetadataOptions
 } from "./types.js";
-
-// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
-const MAX_VECTOR_INDEXES_PER_TABLE = 5;
-
-/**
- * DynamoDB allows at most 18 inline filters per vector index. dyna-record's
- * count includes the entity type filter the library declares automatically on
- * every index (the HASH element does not count against this quota)
- */
-const MAX_INLINE_FILTERS_PER_INDEX = 18;
 
 /**
  * Whether each attribute kind's values are embeddable text for @Searchable.
@@ -84,7 +75,13 @@ class MetadataStorage {
   readonly #tables: TableMetadataStorage = {};
   readonly #entities: EntityMetadataStorage = {};
   readonly #joinTables: JoinTableMetadataStorage = {};
-  readonly #vectorIndexes: Record<string, VectorIndexMetadata[]> = {};
+  /**
+   * Owns every vector index concern — declarations, membership, ownership,
+   * and their validation. Composed rather than inlined: the registry needs
+   * the entity and table graphs only while resolving, so it receives them
+   * at initialization instead of holding a reference back to this store
+   */
+  readonly #vectorIndexes = new VectorIndexRegistry();
 
   /**
    * Side registry of @Searchable marks (attribute names keyed by entity name).
@@ -342,40 +339,6 @@ class MetadataStorage {
   }
 
   /**
-   * Adds a vector index to metadata storage. Mutates the store directly and
-   * intentionally never touches a metadata accessor — accessors trigger
-   * init(), which would freeze metadata against a partial entity graph when
-   * index constants are declared at module evaluation. Entity thunks in the
-   * options are resolved at metadata initialization, not here.
-   * @param tableClassName - Name of the table class the index is defined on
-   * @param options - {@link VectorIndexOptions}
-   * @returns The registered {@link VectorIndexMetadata}
-   */
-  public addVectorIndex(
-    tableClassName: string,
-    options: VectorIndexOptions
-  ): VectorIndexMetadata {
-    if (!(tableClassName in this.#tables)) {
-      throw new Error(
-        `vectorIndex can only be defined on a table class decorated with @Table. ${tableClassName} is not a registered table`
-      );
-    }
-    const meta = new VectorIndexMetadata(tableClassName, options);
-    (this.#vectorIndexes[tableClassName] ??= []).push(meta);
-    return meta;
-  }
-
-  /**
-   * Returns the vector indexes defined on a table
-   * @param {string} tableClassName - Name of the table class
-   * @returns Array of {@link VectorIndexMetadata}
-   */
-  public getVectorIndexes(tableClassName: string): VectorIndexMetadata[] {
-    this.init();
-    return this.#vectorIndexes[tableClassName] ?? [];
-  }
-
-  /**
    * Adds the partition key attribute to Table metadata storage
    * @param entityClass
    * @param options
@@ -405,6 +368,63 @@ class MetadataStorage {
     if (tableMetadata !== undefined) {
       tableMetadata.addSortKeyAttribute(options);
     }
+  }
+
+  /**
+   * Registers a table's complete vector index declarations. Intentionally
+   * never triggers initialization — index constants are declared at module
+   * evaluation, while the entity graph is still filling in
+   * @param tableClassName - Name of the table class the indexes are defined on
+   * @param defs - Declarations keyed by export name; see {@link VectorIndexOptions}
+   * @returns The registered vector index constructs, keyed as declared
+   */
+  public addVectorIndexes<const T extends Record<string, VectorIndexOptions>>(
+    tableClassName: string,
+    defs: T
+  ): VectorIndexConstructs<T> {
+    if (!(tableClassName in this.#tables)) {
+      throw new Error(
+        `vectorIndexes can only be defined on a table class decorated with @Table. ${tableClassName} is not a registered table`
+      );
+    }
+
+    return this.#vectorIndexes.register(tableClassName, defs);
+  }
+
+  /**
+   * Returns the vector indexes defined on a table
+   * @param tableClassName - Name of the table class
+   * @returns Array of vector index metadata
+   */
+  public getVectorIndexes(tableClassName: string): VectorIndexMetadata[] {
+    this.init();
+    return this.#vectorIndexes.indexesFor(tableClassName);
+  }
+
+  /**
+   * Returns the vector index that owns a searchable entity — the index whose
+   * membership contains it, whose model embeds it, and whose vector
+   * attribute its vectors are written under
+   * @param entityName - Name of the searchable entity
+   * @returns The owning vector index, or undefined for non-searchable entities
+   */
+  public getOwningVectorIndex(
+    entityName: string
+  ): Optional<VectorIndexMetadata> {
+    this.init();
+    return this.#vectorIndexes.owningIndexFor(entityName);
+  }
+
+  /**
+   * Returns the vector attributes a searchable entity's row must not carry —
+   * every index on its table except its owner. Vector writes REMOVE these so
+   * an entity moved between indexes leaves no stale vector behind
+   * @param entityName - Name of the searchable entity
+   * @returns The sibling indexes' vector attributes, empty when the table has one index
+   */
+  public getSiblingVectorAttributes(entityName: string): string[] {
+    this.init();
+    return this.#vectorIndexes.siblingAttributesFor(entityName);
   }
 
   /**
@@ -446,8 +466,10 @@ class MetadataStorage {
   private initVectorSearch(): void {
     this.reconcileSearchableMarks();
     this.reconcileFilterableMarks();
-    this.validateVectorSearchAliases();
-    this.resolveVectorIndexes();
+    this.#vectorIndexes.resolve({
+      entities: this.#entities,
+      tables: this.#tables
+    });
   }
 
   /**
@@ -535,301 +557,6 @@ class MetadataStorage {
     return (
       attributeName in entityMetadata.attributes &&
       allowedKinds.includes(entityMetadata.attributes[attributeName].kind)
-    );
-  }
-
-  /**
-   * Rejects consumer attributes whose table alias collides with a
-   * library-managed vector search alias. Alias-level check — reservedKeys
-   * matches property names only, so alias collisions need their own check
-   */
-  private validateVectorSearchAliases(): void {
-    const reservedAliases: string[] = Object.values(vectorSearchKeys);
-
-    for (const [entityName, entityMetadata] of Object.entries(this.#entities)) {
-      for (const attrMeta of Object.values(entityMetadata.attributes)) {
-        if (reservedAliases.includes(attrMeta.alias)) {
-          throw new Error(
-            `Attribute ${entityName}.${attrMeta.name} uses the table alias ${attrMeta.alias}, which is reserved for the library-managed vector attribute`
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * Resolves and validates the vector indexes of every table: per-table index
-   * quota, provider presence, scoped membership, inline filter consistency
-   * and quota. Registers the library-managed content hash attribute on
-   * searchable entities so it round-trips serialization and prefetch (the
-   * vector attribute is intentionally never registered — serialization and
-   * copy paths drop unregistered attributes, which keeps the vector off
-   * denormalized records automatically)
-   */
-  private resolveVectorIndexes(): void {
-    for (const [tableClassName, tableMetadata] of Object.entries(
-      this.#tables
-    )) {
-      const indexes = this.#vectorIndexes[tableClassName] ?? [];
-      const searchableEntities = Object.entries(this.#entities)
-        .filter(
-          ([, entityMeta]) =>
-            entityMeta.tableClassName === tableClassName &&
-            entityMeta.searchableAttribute !== undefined
-        )
-        .sort(([a], [b]) => a.localeCompare(b));
-
-      if (indexes.length > MAX_VECTOR_INDEXES_PER_TABLE) {
-        throw new Error(
-          `Table ${tableClassName} defines ${String(
-            indexes.length
-          )} vector indexes. DynamoDB supports at most ${String(
-            MAX_VECTOR_INDEXES_PER_TABLE
-          )} vector indexes per table`
-        );
-      }
-
-      if (searchableEntities.length > 0 && indexes.length === 0) {
-        throw new Error(
-          `Table ${tableClassName} has searchable entities (${searchableEntities
-            .map(([entityName]) => entityName)
-            .join(
-              ", "
-            )}) but no vector index with an embedding provider. Define one with ${tableClassName}.vectorIndex({ name, model, provider })`
-        );
-      }
-
-      // Writes embed through one index and store the result on the shared
-      // vector attribute, so every index on the table must produce vectors
-      // identically — validated here so the write path's index pick is
-      // correct by construction
-      const [firstIndex] = indexes;
-      for (const index of indexes) {
-        if (
-          index.provider !== firstIndex.provider ||
-          index.model.name !== firstIndex.model.name ||
-          index.model.dimensions !== firstIndex.model.dimensions ||
-          index.model.distanceFunction !== firstIndex.model.distanceFunction
-        ) {
-          throw new Error(
-            `Vector indexes ${firstIndex.name} and ${index.name} on table ${tableClassName} declare different embedding configurations. All vector indexes on a table share the ${vectorSearchKeys.vector} attribute, so they must use the same provider, model, dimensions, and distance function`
-          );
-        }
-      }
-
-      for (const index of indexes) {
-        this.resolveVectorIndex(index, tableMetadata, searchableEntities);
-      }
-
-      if (indexes.length > 0) {
-        this.buildReadProjection(tableClassName, tableMetadata);
-      }
-    }
-  }
-
-  /**
-   * Builds the vector-excluding read projection for a table with a vector
-   * index. DynamoDB has no exclusion form, so the projection is an inclusion
-   * list: the union of table aliases across every entity mapped to the table
-   * (plus the table's key and default attributes), minus the vector alias.
-   * The union is what makes it safe on adjacency-list queries whose results
-   * span entity types
-   * @param tableClassName - Name of the table class
-   * @param tableMetadata - The table's metadata
-   */
-  private buildReadProjection(
-    tableClassName: string,
-    tableMetadata: TableMetadata
-  ): void {
-    const aliases = new Set<string>([
-      tableMetadata.partitionKeyAttribute.alias,
-      tableMetadata.sortKeyAttribute.alias,
-      ...Object.values(tableMetadata.defaultAttributes).map(
-        attrMeta => attrMeta.alias
-      )
-    ]);
-
-    for (const entityMetadata of Object.values(this.#entities)) {
-      if (entityMetadata.tableClassName !== tableClassName) continue;
-
-      for (const attrMeta of Object.values(entityMetadata.attributes)) {
-        aliases.add(attrMeta.alias);
-      }
-    }
-
-    aliases.delete(vectorSearchKeys.vector);
-
-    const sortedAliases = [...aliases].sort((a, b) => a.localeCompare(b));
-
-    tableMetadata.readProjection = {
-      expression: sortedAliases.map(alias => `#${alias}`).join(", "),
-      attributeNames: Object.fromEntries(
-        sortedAliases.map(alias => [`#${alias}`, alias])
-      )
-    };
-  }
-
-  /**
-   * Resolves and validates a single vector index: provider presence, scoped
-   * membership (the scope parent's declared adjacency union the include
-   * list), the scoping foreign key on every member's canonical row, inline
-   * filter alias consistency, and the 18 inline filter quota counting the
-   * auto-declared entity type filter (the HASH does not count)
-   * @param index - The vector index to resolve
-   * @param tableMetadata - Metadata of the table the index is defined on
-   * @param searchableEntities - The table's searchable entities, sorted by entity name
-   */
-  private resolveVectorIndex(
-    index: VectorIndexMetadata,
-    tableMetadata: TableMetadata,
-    searchableEntities: Array<[string, EntityMetadata]>
-  ): void {
-    if (searchableEntities.length > 0 && index.provider === undefined) {
-      throw new Error(
-        `Vector index ${index.name} has no embedding provider configured. Set provider (an embed function) on ${index.tableClassName}.vectorIndex`
-      );
-    }
-
-    if (index.scopedBy === undefined && index.include !== undefined) {
-      throw new Error(
-        `Vector index ${index.name} is global but declares an include list. include adds members to a scoped index — a global index already spans every searchable entity of the table`
-      );
-    }
-
-    let members = searchableEntities;
-    let hashAlias: Optional<string>;
-
-    if (index.scopedBy !== undefined) {
-      ({ members, hashAlias } = this.resolveScopedMembers(
-        index.scopedBy(),
-        index,
-        searchableEntities
-      ));
-    }
-
-    // One inline filter is one table attribute: a filterable property must
-    // resolve to the same table alias across every member entity
-    const filterAliasByProperty = new Map<string, string>();
-    for (const [, entityMetadata] of members) {
-      for (const attrMeta of entityMetadata.searchFilterableAttributes) {
-        const existingAlias = filterAliasByProperty.get(attrMeta.name);
-        if (existingAlias !== undefined && existingAlias !== attrMeta.alias) {
-          throw new Error(
-            `@SearchFilterable property ${attrMeta.name} resolves to different table aliases (${existingAlias}, ${attrMeta.alias}) across members of vector index ${index.name}. One inline filter is one table attribute; align the alias across entities`
-          );
-        }
-        filterAliasByProperty.set(attrMeta.name, attrMeta.alias);
-      }
-    }
-
-    // The entity type discriminator is auto-declared as an inline filter on
-    // every index and counts against the quota; the HASH does not count
-    const typeAlias = tableMetadata.defaultAttributes.type.alias;
-    const inlineFilterAliases = [
-      ...new Set([typeAlias, ...filterAliasByProperty.values()])
-    ].sort();
-
-    if (inlineFilterAliases.length > MAX_INLINE_FILTERS_PER_INDEX) {
-      throw new Error(
-        `Vector index ${index.name} declares ${String(
-          inlineFilterAliases.length
-        )} inline filters counting the entity type filter the library adds automatically. DynamoDB supports at most ${String(
-          MAX_INLINE_FILTERS_PER_INDEX
-        )} inline filters per index`
-      );
-    }
-
-    index.resolveSearchSchema({
-      memberEntities: members.map(([entityName]) => entityName),
-      hashAlias,
-      inlineFilterAliases
-    });
-  }
-
-  /**
-   * Resolves a scoped index's members — the scope parent's declared adjacency
-   * union the include list — and the HASH alias (the members' scoping foreign
-   * key). Rejects a searchable entity carrying the scoping foreign key that is
-   * neither declared nor included, and a member without the scoping foreign
-   * key on its canonical row
-   * @param scopeParent - The resolved scope parent entity class
-   * @param index - The vector index being resolved
-   * @param searchableEntities - The table's searchable entities, sorted by entity name
-   * @returns The index's members and the HASH alias
-   */
-  private resolveScopedMembers(
-    scopeParent: EntityClass<DynaRecord>,
-    index: VectorIndexMetadata,
-    searchableEntities: Array<[string, EntityMetadata]>
-  ): {
-    members: Array<[string, EntityMetadata]>;
-    hashAlias: Optional<string>;
-  } {
-    if (!(scopeParent.name in this.#entities)) {
-      throw new Error(
-        `Vector index ${index.name} is scoped by ${scopeParent.name}, which is not a registered entity`
-      );
-    }
-    const parentMetadata = this.#entities[scopeParent.name];
-
-    const memberNames = new Set([
-      ...parentMetadata.hasRelationships.map(rel => rel.target.name),
-      ...(index.include ?? []).map(entityThunk => entityThunk().name)
-    ]);
-
-    for (const [entityName, entityMetadata] of searchableEntities) {
-      if (
-        !memberNames.has(entityName) &&
-        this.findScopingFk(entityMetadata, scopeParent) !== undefined
-      ) {
-        throw new Error(
-          `Entity ${entityName} is searchable and has a foreign key to ${scopeParent.name} but is not a member of vector index ${index.name}. Declare a relationship from ${scopeParent.name} to ${entityName} or add () => ${entityName} to the index's include list`
-        );
-      }
-    }
-
-    const members = searchableEntities.filter(([entityName]) =>
-      memberNames.has(entityName)
-    );
-
-    const memberScopingFks = members.map(([entityName, entityMetadata]) => {
-      const scopingFk = this.findScopingFk(entityMetadata, scopeParent);
-      if (scopingFk === undefined) {
-        throw new Error(
-          `Entity ${entityName} is a member of vector index ${index.name} but has no foreign key attribute referencing ${scopeParent.name} on its own record (HasAndBelongsToMany relationships store foreign keys on the join table). Add a @ForeignKeyAttribute referencing ${scopeParent.name} to ${entityName}`
-        );
-      }
-      return scopingFk;
-    });
-
-    // The scoped search compiles one HASH equality on one table attribute:
-    // the scope foreign key must resolve to the same alias across every
-    // member (mirrors the @SearchFilterable alias-consistency check)
-    const [firstScopingFk] = memberScopingFks;
-    for (const scopingFk of memberScopingFks) {
-      if (scopingFk.alias !== firstScopingFk.alias) {
-        throw new Error(
-          `The foreign key referencing ${scopeParent.name} resolves to different table aliases (${firstScopingFk.alias}, ${scopingFk.alias}) across members of vector index ${index.name}. The scoped HASH is one table attribute; align the alias across entities`
-        );
-      }
-    }
-
-    return { members, hashAlias: memberScopingFks[0]?.alias };
-  }
-
-  /**
-   * Returns the entity's foreign key attribute referencing the scope parent,
-   * if one exists on its canonical record
-   * @param entityMetadata - Metadata of the entity to inspect
-   * @param scopeParent - The scope parent entity class
-   * @returns The scoping foreign key attribute metadata, if present
-   */
-  private findScopingFk(
-    entityMetadata: EntityMetadata,
-    scopeParent: EntityClass<DynaRecord>
-  ): Optional<ForeignKeyAttributeMetadata> {
-    return entityMetadata.foreignKeyAttributes.find(
-      attrMeta => attrMeta.foreignKeyTarget === scopeParent
     );
   }
 

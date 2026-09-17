@@ -12,7 +12,10 @@ export { Searchable } from "./Searchable.js";
 export { SearchFilterable } from "./SearchFilterable.js";
 export { default as ObjectAttribute } from "./ObjectAttribute.js";
 export type { ObjectAttributeOptions } from "./ObjectAttribute.js";
-export * from "./serializers.js";
+// `./serializers.js` is deliberately NOT re-exported. It backs
+// @ObjectAttribute and @DateAttribute internally, and this barrel is
+// re-exported wholesale by the package entry point — so anything added here
+// becomes public API. Import it by path from inside the library
 export type {
   ObjectSchema,
   NonUnionObjectSchema,
