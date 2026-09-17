@@ -38,6 +38,10 @@ import type {
   SearchFilterable as FilterableText,
   SortKey
 } from "../../src/index.js";
+// Imported as a plain named import on purpose: the entry point exports it
+// with `export type`, so the name resolves for type positions while any
+// value use of it is a compile error. The assertion is in the types block
+import { VectorIndexMetadata as PublicVectorIndexMetadata } from "../../index.js";
 
 /**
  * Loads a fresh module registry so each validation scenario gets its own
@@ -2015,6 +2019,89 @@ describe("VectorIndex", () => {
       };
 
       expect(_define).toBeDefined();
+    });
+
+    it("VectorIndexMetadata is exported as a type, never as a constructor", () => {
+      const _test = (
+        index: import("../../index.js").VectorIndexMetadata
+      ): string => {
+        // @ts-expect-no-error: a consumer typing a helper around a construct
+        // reads every documented field
+        const read = `${index.name}:${index.vectorAttribute}:${String(
+          index.hashAlias
+        )}:${index.memberEntities.join(",")}:${index.fingerprint}`;
+
+        // @ts-expect-error: type-only — a construct is produced by
+        // Table.vectorIndexes(), which registers and resolves it. A
+        // hand-constructed index would be unregistered and unresolved, and
+        // would fail confusingly on its first search
+        void new PublicVectorIndexMetadata();
+
+        return read;
+      };
+
+      expect(_test).toBeDefined();
+    });
+
+    it("the declaration types are nameable from the entry point", () => {
+      const _test = (): void => {
+        // The names a consumer writes when typing their own wrapper around
+        // the declaration surface, rather than inlining the literal
+        const attribute: import("../../index.js").VectorAttributeName =
+          "__dyna_vector_support";
+        // @ts-expect-error: must use the reserved prefix
+        const _badAttribute: import("../../index.js").VectorAttributeName =
+          "embedding";
+
+        const model: import("../../index.js").EmbeddingModelDescriptor =
+          TitanTextEmbedV2;
+        const provider: import("../../index.js").EmbeddingProvider = async () =>
+          await Promise.resolve([0.1]);
+
+        // @ts-expect-no-error: the option shape a declaration is built from
+        const _options: import("../../index.js").VectorIndexOptions = {
+          name: "support-index",
+          vectorAttribute: attribute,
+          model,
+          provider,
+          members: []
+        };
+      };
+
+      expect(_test).toBeDefined();
+    });
+  });
+
+  describe("the index construct's public surface", () => {
+    it("exposes the resolved declaration as frozen, read-only fields", () => {
+      expect.assertions(4);
+
+      // The construct a consumer holds IS the registry's resolved index, so
+      // a consumer reading its metadata cannot reach in and repoint the
+      // search it compiles
+      expect(Object.isFrozen(storeSearchIndex)).toBe(true);
+      expect(storeSearchIndex.name).toBe("store-search-index");
+      expect(storeSearchIndex.hashAlias).toBe("StoreId");
+      expect(storeSearchIndex.memberEntities).toStrictEqual([
+        "Listing",
+        "Review"
+      ]);
+    });
+
+    it("rejects writes to the resolved fields at compile time", () => {
+      const _test = (): void => {
+        // @ts-expect-error: getters with no setters — resolution is the
+        // registry's job, not a caller's
+        storeSearchIndex.hashAlias = "TenantId";
+        // @ts-expect-error: read-only
+        storeSearchIndex.memberEntities = [];
+        // @ts-expect-error: read-only
+        storeSearchIndex.fingerprint = "";
+        // @ts-expect-error: the members array itself is readonly
+        storeSearchIndex.memberEntities.push("Article");
+      };
+
+      expect(_test).toBeDefined();
     });
   });
 });

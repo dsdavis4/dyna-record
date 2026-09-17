@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AttributeMetadata } from "./index.js";
-import { dateSerializer } from "../decorators/index.js";
+import { dateSerializer } from "../decorators/attributes/serializers.js";
 import type {
   AttributeKind,
   TableMetadataOptions,

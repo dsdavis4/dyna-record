@@ -1740,4 +1740,174 @@ describe("types", () => {
 
     expect(_test).toBeDefined();
   });
+
+  it("a result exposes the hydrated entity plus both similarity measures", () => {
+    const _test = async (): Promise<void> => {
+      const [result] = await storeSearchIndex.search("1", "q", {
+        in: "Listing"
+      });
+
+      // @ts-expect-no-error: the documented result shape
+      const _similarity: number = result.similarity;
+      const _score: number = result.score;
+
+      // @ts-expect-error: similarity is a number, not a string
+      const _similarityString: string = result.similarity;
+
+      // @ts-expect-error: there is no rank, distance, or cursor on a result
+      const _rank = result.rank;
+
+      // @ts-expect-error: there is no pagination token — search has none
+      const _cursor = result.nextToken;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("a result's entity carries attributes only — never relationships, vectors, or methods", () => {
+    const _test = async (): Promise<void> => {
+      const [result] = await storeSearchIndex.search("1", "q", {
+        in: "Listing"
+      });
+
+      // @ts-expect-no-error: declared attributes, including the keys and
+      // the table's default fields, are all present
+      const _description: string = result.entity.description;
+      const _category: string = result.entity.category;
+      const _storeId: string = result.entity.storeId;
+      const _id: string = result.entity.id;
+      const _type: "Listing" = result.entity.type;
+      const _createdAt: Date = result.entity.createdAt;
+
+      // @ts-expect-error: relationships are not projected onto a search result
+      const _store = result.entity.store;
+
+      // @ts-expect-error: the vector attribute is never projected or typed
+      const _vector = result.entity.__dyna_vector;
+
+      // ...and because relationships are stripped, the projected entity is
+      // deliberately NOT assignable to the full entity class
+      // @ts-expect-error: a hydrated result is attributes plus instance methods
+      const _whole: Listing = result.entity;
+
+      // @ts-expect-no-error: instance methods survive — a result is a real
+      // instance, so it can be updated or deleted without a re-read
+      const _update: typeof result.entity.update = result.entity.update;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("results are an ordinary array of results, awaited from a promise", () => {
+    const _test = async (): Promise<void> => {
+      const pending = storeSearchIndex.search("1", "q");
+
+      // @ts-expect-error: the results must be awaited before use
+      const _notAwaited: number = pending.length;
+
+      const results = await pending;
+      // @ts-expect-no-error: an array, ordered most-similar-first
+      const _count: number = results.length;
+      const _first: SearchResult<Listing> | SearchResult<Review> | undefined =
+        results[0];
+      for (const _each of results) {
+        // @ts-expect-no-error: every element is a result
+        const _s: number = _each.similarity;
+      }
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("the entity-anchored parent search surface is gone from the public types", () => {
+    const _test = async (): Promise<void> => {
+      // Removed in 3.0.0: the parent typed its results from the parent's
+      // declared RELATIONSHIPS while the runtime searched the index's
+      // MEMBERS, so the two disagreed whenever a member was reachable only
+      // by foreign key. Search is now reached through the index alone
+      // @ts-expect-error: removed in 3.0.0
+      const _a: import("../../index.js").ParentSearchOptions<never, never> =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _b: import("../../index.js").ParentSearchedEntities<never, never> =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _c: import("../../index.js").ParentSearchRuntimeOptions =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _d: import("../../index.js").SearchableRelationshipProperties<never> =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _e: import("../../index.js").SearchableRelationshipEntities<never> =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _f: import("../../index.js").HasSearchableRelationships<never> =
+        undefined as never;
+      // @ts-expect-error: removed in 3.0.0
+      const _g: import("../../index.js").SearchNotAvailable =
+        undefined as never;
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("SearchResult and SearchResults are nameable from the entry point", () => {
+    const _test = (): void => {
+      // A consumer typing their own wrapper around search reaches both names
+      // @ts-expect-no-error: exported for exactly this use
+      const _one: import("../../index.js").SearchResult<Listing> =
+        undefined as never;
+      const _many: import("../../index.js").SearchResults<Listing> =
+        undefined as never;
+
+      // @ts-expect-no-error: both default their entity parameter
+      const _anyOne: import("../../index.js").SearchResult = undefined as never;
+      const _anyMany: import("../../index.js").SearchResults =
+        undefined as never;
+    };
+
+    expect(_test).toBeDefined();
+  });
+});
+
+describe("the parent search surface no longer exists at runtime", () => {
+  it("entity classes carry no search method, scope parents included", () => {
+    expect.assertions(4);
+
+    // The compile-time half is asserted in the types block above. At runtime
+    // the static must be genuinely absent, not merely untyped — a plain-JS
+    // caller reaching for it gets an ordinary "not a function", never a
+    // half-working search typed from the wrong source of truth
+    expect("search" in Store).toBe(false);
+    expect("search" in Listing).toBe(false);
+    expect(
+      (Store as unknown as Record<string, unknown>).search
+    ).toBeUndefined();
+    expect(
+      (Listing as unknown as Record<string, unknown>).search
+    ).toBeUndefined();
+  });
+
+  it("a parent may now scope any number of indexes", () => {
+    expect.assertions(3);
+
+    // The "parent scopes more than one vector index" rule existed only to
+    // keep the parent's single search surface unambiguous. With that surface
+    // gone the rule is retired: two indexes may share a scope parent, because
+    // each search names its own index at the call
+    const scopedByDualParent = DualIndexTable.metadata().vectorIndexes?.filter(
+      index => index.scopedBy === "DualParent"
+    );
+
+    expect(scopedByDualParent).toHaveLength(2);
+    // ...and they stay physically disjoint: different IndexNames over
+    // different vector attributes
+    expect(scopedByDualParent?.map(index => index.name)).toStrictEqual([
+      "dual-index-one",
+      "dual-index-two"
+    ]);
+    expect(
+      scopedByDualParent?.map(index => index.vectorAttribute)
+    ).toStrictEqual(["__dyna_vector", "__dyna_vector_two"]);
+  });
 });
