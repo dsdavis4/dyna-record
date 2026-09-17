@@ -45,6 +45,46 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
 export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
 
 /**
+ * Resolves an attribute's declared type to the value a caller may pass for it,
+ * by stripping the brands dyna-record imposes on its own behalf.
+ *
+ * A consumer never asked for {@link ForeignKey} or {@link Searchable} — the
+ * library added them to track a relationship or an embedded field — so
+ * requiring a caller to satisfy them would be the library's leak to clean up.
+ * A consumer's own {@link Brand}, by contrast, exists precisely so that a
+ * plain value fails, and is therefore passed through untouched. The rule in
+ * one line: dyna-record strips its own brands, never yours.
+ *
+ * Branch order is load-bearing twice over:
+ *
+ * - `undefined` is tested first because {@link NullableForeignKey} includes
+ *   `undefined` in its own definition. Unguarded, an optional attribute's
+ *   `undefined` member matches that branch and widens the whole property to
+ *   `string`.
+ * - The {@link SearchFilterable} payload is recovered after the brand
+ *   branches, so a filterable that wraps a library brand
+ *   (`SearchFilterable<ForeignKey<T>>`) strips through the outer branch while
+ *   a plain `SearchFilterable<string>` still reduces to `string` rather than
+ *   falling through to pass-through and keeping its brand.
+ *
+ * Distribution over unions is what lets the optional forms share the branches
+ * above instead of needing duplicates of their own.
+ *
+ * @typeParam T - The attribute's declared type.
+ */
+export type LibraryBrandToValue<T> = T extends undefined
+  ? undefined
+  : T extends NullableForeignKey
+    ? string
+    : T extends ForeignKey
+      ? string
+      : T extends Searchable
+        ? string
+        : T extends { readonly __searchFilterable: infer U }
+          ? LibraryBrandToValue<U>
+          : T;
+
+/**
  * A branded string type marking an attribute as the entity's searchable text
  * for vector search. Apply the `@Searchable()` decorator over a string
  * attribute decorator to a property of this type.
