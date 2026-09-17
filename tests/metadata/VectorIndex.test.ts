@@ -831,8 +831,195 @@ describe("VectorIndex", () => {
       });
 
       expect(() => FreshTable.metadata()).toThrow(
-        "@SearchFilterable on DateFilterable.publishedOn must be layered over a string, number, boolean, enum, or foreign key attribute decorator (EX: @StringAttribute)"
+        "@SearchFilterable on DateFilterable.publishedOn must be layered over a string, number, enum, or foreign key attribute decorator (EX: @StringAttribute)"
       );
+    });
+
+    it("rejects @SearchFilterable layered over a boolean attribute", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        BooleanAttribute,
+        Searchable,
+        SearchFilterable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      @Entity
+      class BooleanFilterable extends FreshTable {
+        declare readonly type: "BooleanFilterable";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        // A boolean inline filter would have to be declared in the table's
+        // AttributeDefinitions, whose ScalarAttributeType set is [B, N, S].
+        // @ts-expect-error: boolean properties cannot carry the SearchFilterable brand - the runtime check must agree
+        @SearchFilterable()
+        @BooleanAttribute({ alias: "Featured" })
+        public readonly featured: boolean;
+      }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => BooleanFilterable]
+        }
+      });
+
+      expect(() => FreshTable.metadata()).toThrow(
+        "@SearchFilterable on BooleanFilterable.featured must be layered over a string, number, enum, or foreign key attribute decorator (EX: @StringAttribute)"
+      );
+    });
+
+    it("rejects a shared filterable whose members provision as different DynamoDB types", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        NumberAttribute,
+        Searchable,
+        SearchFilterable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      // Both members declare "grade" against the same table alias, but one
+      // provisions as S and the other as N. The alias-consistency check
+      // passes — the aliases agree — so without the provisioning check this
+      // reaches CreateTable and fails there instead.
+      @Entity
+      class StringGrade extends FreshTable {
+        declare readonly type: "StringGrade";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @SearchFilterable()
+        @StringAttribute({ alias: "Grade" })
+        public readonly grade: FilterableText;
+      }
+
+      @Entity
+      class NumberGrade extends FreshTable {
+        declare readonly type: "NumberGrade";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @SearchFilterable()
+        @NumberAttribute({ alias: "Grade" })
+        public readonly grade: FilterableText<number>;
+      }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => StringGrade, () => NumberGrade]
+        }
+      });
+
+      // Members resolve sorted by entity name, so NumberGrade is reported first
+      expect(() => FreshTable.metadata()).toThrow(
+        "@SearchFilterable property grade provisions as different DynamoDB types across members of vector index fresh-index (NumberGrade as N, StringGrade as S). One inline filter is one table attribute with one ScalarAttributeType; align the attribute kind across entities"
+      );
+    });
+
+    it("accepts a shared filterable whose members declare disjoint enum sets", async () => {
+      const {
+        default: DynaRecord,
+        Table,
+        Entity,
+        PartitionKeyAttribute,
+        SortKeyAttribute,
+        StringAttribute,
+        EnumAttribute,
+        Searchable,
+        SearchFilterable,
+        TitanTextEmbedV2
+      } = await loadFresh();
+
+      @Table({ name: "fresh-table" })
+      abstract class FreshTable extends DynaRecord {
+        @PartitionKeyAttribute({ alias: "PK" })
+        public readonly pk: PartitionKey;
+
+        @SortKeyAttribute({ alias: "SK" })
+        public readonly sk: SortKey;
+      }
+
+      // Different declared types, same provisioned type — the configuration
+      // the multi-member filter value typing exists to serve
+      @Entity
+      class WarmTier extends FreshTable {
+        declare readonly type: "WarmTier";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @SearchFilterable()
+        @EnumAttribute({ alias: "Tier", values: ["gold", "silver"] })
+        public readonly tier: FilterableText<"gold" | "silver">;
+      }
+
+      @Entity
+      class CoolTier extends FreshTable {
+        declare readonly type: "CoolTier";
+
+        @Searchable()
+        @StringAttribute({ alias: "Text" })
+        public readonly text: SearchableText;
+
+        @SearchFilterable()
+        @EnumAttribute({ alias: "Tier", values: ["bronze", "copper"] })
+        public readonly tier: FilterableText<"bronze" | "copper">;
+      }
+
+      FreshTable.vectorIndexes({
+        freshIndex: {
+          name: "fresh-index",
+          vectorAttribute: "__dyna_vector",
+          model: TitanTextEmbedV2,
+          provider: testProvider,
+          members: [() => WarmTier, () => CoolTier]
+        }
+      });
+
+      expect(() => FreshTable.metadata()).not.toThrow();
     });
 
     it("resolves searchSchema for a scoped index declared through members", async () => {

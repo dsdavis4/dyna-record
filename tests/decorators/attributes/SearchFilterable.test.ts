@@ -126,14 +126,19 @@ describe("SearchFilterable", () => {
       }
     });
 
-    it("can be applied to boolean attributes carrying the brand", () => {
+    it("rejects boolean attributes — DynamoDB cannot provision a BOOL inline filter", () => {
       @Entity
       class FilterableModelFive extends MockTable {
         declare readonly type: "FilterableModelFive";
 
-        // @ts-expect-no-error: branded boolean attributes are valid filterables (equality)
+        // Every vector-index inline filter must be declared in the table's
+        // AttributeDefinitions, whose ScalarAttributeType set is [B, N, S] —
+        // there is no BOOL, so a boolean filterable describes a table that
+        // cannot be created. Verified against DynamoDB in us-west-2.
+        // @ts-expect-error: the decorator rejects a boolean property
         @SearchFilterable()
         @BooleanAttribute({ alias: "Featured" })
+        // @ts-expect-error: and the brand rejects boolean as its type argument
         public readonly featured: SearchFilterable<boolean>;
       }
     });
@@ -165,6 +170,8 @@ describe("SearchFilterable", () => {
       type DateBrand = SearchFilterable<Date>;
       // @ts-expect-error: objects are not equality-filterable scalars
       type ObjectBrand = SearchFilterable<{ a: string }>;
+      // @ts-expect-error: booleans cannot be declared in AttributeDefinitions
+      type BooleanBrand = SearchFilterable<boolean>;
       // @ts-expect-no-error: string literal unions are valid scalar types
       type LiteralBrand = SearchFilterable<"a" | "b">;
     });

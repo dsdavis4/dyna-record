@@ -121,7 +121,7 @@ export type Searchable<T extends string = string> = Brand<T, "Searchable">;
  * attribute is absent simply never matches an equality filter.
  */
 export type SearchFilterable<
-  T extends Optional<string | number | boolean> = string
+  T extends Optional<string | number> = string
 > = T extends undefined
   ? undefined
   : T & {

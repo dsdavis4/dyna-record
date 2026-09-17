@@ -160,12 +160,21 @@ export type FilterAttributeResolver = (
 // ─── Search Filter Types ────────────────────────────────────────────────────
 
 /**
- * Scalar values accepted by vector search filter conditions. DynamoDB's
- * `SearchConditionExpression` is an equality-only conjunction, so operator
- * objects (`$beginsWith`, `$contains`), "IN" arrays, and `$or` blocks are not
- * representable — value types are restricted to scalars accordingly.
+ * Scalar values a vector search filter condition may take.
+ *
+ * Two constraints narrow this. DynamoDB's `SearchConditionExpression` is an
+ * equality-only conjunction, so operator objects (`$beginsWith`,
+ * `$contains`), "IN" arrays, and `$or` blocks are not representable. And
+ * every inline filter attribute must be declared in the table's
+ * `AttributeDefinitions`, whose `ScalarAttributeType` set is `B | N | S` — so
+ * a filter value is a string or a number, never a boolean, and binary is not
+ * modeled by this library.
+ *
+ * This is the bound on what a filterable attribute may declare, not the type
+ * a given filter key accepts; {@link SearchFilterParams} resolves that from
+ * the attribute's own declaration.
  */
-export type SearchFilterValue = string | number | boolean;
+export type SearchFilterValue = string | number;
 
 /**
  * The runtime shape of vector search filter conditions: equality-only

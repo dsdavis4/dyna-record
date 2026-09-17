@@ -10,7 +10,7 @@ import type {
  * `SearchFilterable` name — the single `export { SearchFilterable }` below
  * carries both the value (decorator) and type (brand) meanings.
  */
-type SearchFilterable<T extends Optional<string | number | boolean> = string> =
+type SearchFilterable<T extends Optional<string | number> = string> =
   SearchFilterableBrand<T>;
 
 /**
@@ -63,7 +63,7 @@ type SearchFilterable<T extends Optional<string | number | boolean> = string> =
  */
 function SearchFilterable<
   T extends DynaRecord,
-  K extends Optional<SearchFilterableBrand<string | number | boolean>>
+  K extends Optional<SearchFilterableBrand<string | number>>
 >() {
   return function (
     _value: undefined,
