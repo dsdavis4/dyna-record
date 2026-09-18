@@ -29,7 +29,8 @@ import type {
   PartitionKey,
   SortKey,
   ForeignKey,
-  NullableForeignKey
+  NullableForeignKey,
+  Optional
 } from "../../src/types.js";
 
 export const addressSchema = {
@@ -1021,6 +1022,15 @@ class Listing extends SearchTable {
   @StringAttribute({ alias: "Category" })
   public readonly category: SearchFilterable;
 
+  // Shares the "Tier" alias with Review.tier but declares a disjoint value
+  // set. One inline filter is one table attribute, so the two members must
+  // agree on the scalar type it provisions as — both are enums, both store
+  // as S — while their declared TS types differ, which is what the
+  // union-across-members filter typing has to resolve.
+  @SearchFilterable()
+  @EnumAttribute({ alias: "Tier", values: ["gold", "silver"], nullable: true })
+  public readonly tier?: SearchFilterable<Optional<"gold" | "silver">>;
+
   @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
   public readonly storeId: ForeignKey<Store>;
 
@@ -1038,6 +1048,22 @@ class Review extends SearchTable {
   @Searchable()
   @StringAttribute({ alias: "Body" })
   public readonly body: Searchable;
+
+  // The other half of the shared "Tier" filter — see Listing.tier
+  @SearchFilterable()
+  @EnumAttribute({
+    alias: "Tier",
+    values: ["bronze", "copper"],
+    nullable: true
+  })
+  public readonly tier?: SearchFilterable<Optional<"bronze" | "copper">>;
+
+  // Declared on Review alone, so a filter key present on one member but not
+  // the other has a subject in both directions (Listing.category is the
+  // mirror case). Also the index's only N-provisioned inline filter.
+  @SearchFilterable()
+  @NumberAttribute({ alias: "Rating", nullable: true })
+  public readonly rating?: SearchFilterable<Optional<number>>;
 
   @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
   public readonly storeId: ForeignKey<Store>;

@@ -3,7 +3,7 @@ import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type ZodType } from "zod";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
-import type { Optional } from "../types.js";
+import type { LibraryBrandToValue, Optional } from "../types.js";
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
@@ -160,12 +160,21 @@ export type FilterAttributeResolver = (
 // ─── Search Filter Types ────────────────────────────────────────────────────
 
 /**
- * Scalar values accepted by vector search filter conditions. DynamoDB's
- * `SearchConditionExpression` is an equality-only conjunction, so operator
- * objects (`$beginsWith`, `$contains`), "IN" arrays, and `$or` blocks are not
- * representable — value types are restricted to scalars accordingly.
+ * Scalar values a vector search filter condition may take.
+ *
+ * Two constraints narrow this. DynamoDB's `SearchConditionExpression` is an
+ * equality-only conjunction, so operator objects (`$beginsWith`,
+ * `$contains`), "IN" arrays, and `$or` blocks are not representable. And
+ * every inline filter attribute must be declared in the table's
+ * `AttributeDefinitions`, whose `ScalarAttributeType` set is `B | N | S` — so
+ * a filter value is a string or a number, never a boolean, and binary is not
+ * modeled by this library.
+ *
+ * This is the bound on what a filterable attribute may declare, not the type
+ * a given filter key accepts; {@link SearchFilterParams} resolves that from
+ * the attribute's own declaration.
  */
-export type SearchFilterValue = string | number | boolean;
+export type SearchFilterValue = string | number;
 
 /**
  * The runtime shape of vector search filter conditions: equality-only
@@ -215,6 +224,55 @@ type SearchFilterableKeysFor<Entities extends DynaRecord> =
  *
  * @template Entities - The union of member entity types being searched.
  */
+/**
+ * The value a single filterable attribute accepts, recovered from its
+ * declaration rather than widened to every scalar.
+ *
+ * The `SearchFilterable` brand carries the declared type in its phantom key
+ * precisely so it can be read back here; that payload then passes through
+ * {@link LibraryBrandToValue}, so a filterable foreign key takes a plain
+ * string while a consumer's own brand survives. `NonNullable` is applied to
+ * the attribute before the payload is inferred because a filter condition
+ * always takes a defined value — a row missing the attribute never matches an
+ * equality filter on it — which also means the inferred payload can never
+ * carry `undefined` and needs no second unwrapping.
+ *
+ * Resolves to `never` for anything not carrying the brand, which keeps a
+ * non-filterable attribute out of the accepted key set.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type SearchFilterableValue<V> =
+  NonNullable<V> extends { readonly __searchFilterable: infer U }
+    ? LibraryBrandToValue<U>
+    : never;
+
+/**
+ * The value a filter key accepts across the entities being searched.
+ *
+ * Distributes over the member union, so the result is the union of the
+ * declared types of exactly those members that declare `K` — a key declared by
+ * one member contributes only that member's type, and members that do not
+ * declare it contribute `never`, which vanishes from the union. This mirrors
+ * the runtime resolver, which already builds a zod union across members that
+ * register different types for one filterable property.
+ *
+ * `in:` narrowing needs no separate handling: the search options type passes
+ * the already-narrowed member union, so a narrowed search resolves against one
+ * member's declarations alone.
+ *
+ * @typeParam Entities - The union of member entities being searched.
+ * @typeParam K - The filter key.
+ */
+export type SearchFilterValueFor<
+  Entities extends DynaRecord,
+  K
+> = Entities extends DynaRecord
+  ? K extends keyof EntityAttributesOnly<Entities>
+    ? SearchFilterableValue<EntityAttributesOnly<Entities>[K]>
+    : never
+  : never;
+
 export type SearchFilterParams<Entities extends DynaRecord = DynaRecord> = {
-  [K in SearchFilterableKeysFor<Entities>]?: SearchFilterValue;
+  [K in SearchFilterableKeysFor<Entities>]?: SearchFilterValueFor<Entities, K>;
 } & { type?: never; $or?: never };

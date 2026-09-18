@@ -3,6 +3,7 @@ import type { MakeOptional, Optional } from "../types.js";
 import TableMetadata from "./TableMetadata.js";
 import EntityMetadata from "./EntityMetadata.js";
 import AttributeMetadata from "./AttributeMetadata.js";
+import { FILTERABLE_ATTRIBUTE_KINDS } from "./filterScalarTypes.js";
 import JoinTableMetadata from "./JoinTableMetadata.js";
 import type VectorIndexMetadata from "./VectorIndexMetadata.js";
 import type {
@@ -39,32 +40,12 @@ const SEARCHABLE_BY_KIND = {
   foreignKey: false
 } as const satisfies Record<AttributeKind, boolean>;
 
-/**
- * Whether each attribute kind's values are equality-comparable scalars for
- * @SearchFilterable. Exhaustive over {@link AttributeKind} — adding a new
- * kind fails compilation here until the new kind declares a stance. Must stay
- * in agreement with the `SearchFilterable` brand's type-level constraint in
- * src/types.ts (dates and objects have no reliable equality semantics as
- * inline filters)
- */
-const FILTERABLE_BY_KIND = {
-  string: true,
-  number: true,
-  boolean: true,
-  enum: true,
-  foreignKey: true,
-  date: false,
-  object: false
-} as const satisfies Record<AttributeKind, boolean>;
-
 const attributeKindsWhere = (
   kindMap: Record<AttributeKind, boolean>
 ): AttributeKind[] =>
   (Object.keys(kindMap) as AttributeKind[]).filter(kind => kindMap[kind]);
 
 const SEARCHABLE_ATTRIBUTE_KINDS = attributeKindsWhere(SEARCHABLE_BY_KIND);
-
-const FILTERABLE_ATTRIBUTE_KINDS = attributeKindsWhere(FILTERABLE_BY_KIND);
 
 /**
  * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.
@@ -531,7 +512,7 @@ class MetadataStorage {
           )
         ) {
           throw new Error(
-            `@SearchFilterable on ${entityName}.${attributeName} must be layered over a string, number, boolean, enum, or foreign key attribute decorator (EX: @StringAttribute)`
+            `@SearchFilterable on ${entityName}.${attributeName} must be layered over a string, number, enum, or foreign key attribute decorator (EX: @StringAttribute)`
           );
         }
         entityMetadata.searchFilterableAttributes.push(

@@ -1,3 +1,23 @@
+## 3.1.0 - 2026-09-17
+
+### Changed
+
+- **Search filter values are typed from the attribute's declaration.** `filter` validated which attributes could be filtered but not what values they could hold: every filterable key accepted the flat `string | number | boolean` union, so an enum filterable took any string and a string filterable took a number. Both were already rejected at runtime by the attribute's registered zod type — the gap was entirely at compile time, over a rule the library already enforced. A filter value now resolves from the declaration: an enum accepts only its declared members, a number filterable rejects a string, and a filterable foreign key still accepts a plain string.
+
+  When several members of an index declare the same filterable property, the accepted value is the **union** of their declared types, and `in:` narrows it to the named member's — mirroring the runtime resolver, which already accepted a value matching any member's type. Two members declaring `tier` as `"gold" | "silver"` and `"bronze" | "copper"` accept all four values un-narrowed, and two apiece under `in:`.
+
+- **Consumer-defined brands survive into filter values.** dyna-record strips the brands it imposes — `ForeignKey`, `NullableForeignKey`, `Searchable` — from every caller-facing input, because a consumer never asked for them. A brand you define with `Brand<...>` is not stripped, in filters or in `create`/`update` inputs: it exists so that a bare value fails, which is the whole reason it was declared.
+
+### Breaking (type-level only)
+
+- **`boolean` is no longer a filterable attribute type.** Every vector-index inline filter must be declared in the table's `AttributeDefinitions`, whose `ScalarAttributeType` set is `B | N | S`. There is no BOOL, so `@SearchFilterable()` over a `@BooleanAttribute` described a table DynamoDB refuses to create. `SearchFilterValue` is now `string | number`, and the `SearchFilterable` brand and decorator reject `boolean`. No working search is affected — on an index member such a filter could never be provisioned, and off every index it was inert — so drop the `@SearchFilterable()` mark from any boolean attribute.
+
+- **Filter values that were widened now need narrowing at the call site.** Two shapes compiled and ran correctly before and no longer compile, because brands and enum literals have no runtime representation for the runtime check to catch: a `string`-typed variable passed to an enum filterable, and a plain value passed to a consumer-branded filterable. Parse or narrow at the boundary — `filter: { status: parseStatus(req.query.status) }` rather than passing a widened `string` through.
+
+### Added
+
+- **Metadata initialization rejects a filterable whose members provision differently.** One filterable property is one table attribute, and one `AttributeDefinitions` entry carries one `ScalarAttributeType`. Members may declare a shared filterable with different _declared_ types — two enum value sets — but declaring it a string on one member and a number on another now throws at initialization, naming both entities and their scalar types, instead of failing later at `CreateTable`.
+
 ## 3.0.0 - 2026-09-16
 
 > **Major release: per-index vector attributes and explicit membership.** The version is major because previously-valid vector search declarations no longer compile or initialize: the per-call `vectorIndex()` static is removed in favor of a single `vectorIndexes({...})` declaration per table, every index must declare its own unique `vectorAttribute` and its complete `members` list, and the pre-3.0 shared-attribute model — where all of a table's indexes derived overlapping membership over one `__dyna_vector` attribute — is gone, and the entity-anchored `Parent.search(...)` surface is removed in favor of searching the index construct. **The DynamoDB side is not breaking**: an existing index migrated with `vectorAttribute: "__dyna_vector"` keeps its exact provisioning contract — no re-provision, no data migration (its `fingerprint` changes format once; see below). The migration is mechanical; the README's [Migrating from 2.x](README.md#migrating-from-2x) section is the complete guide. Tables without vector indexes upgrade with no source changes.

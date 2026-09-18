@@ -789,7 +789,29 @@ describe("Search", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(FilterError);
         expect(e.message).toEqual(
-          'Invalid search filter key "unknownAttr": attribute "unknownAttr" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category'
+          'Invalid search filter key "unknownAttr": attribute "unknownAttr" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("rejects a real attribute that is not declared @SearchFilterable", async () => {
+      expect.assertions(3);
+
+      // Distinct from the unknown-key case above: `description` is a genuine
+      // attribute on Listing, carrying @Searchable. The resolver builds its
+      // map from searchFilterableAttributes alone, so existing on the entity
+      // is not enough — and this asserts the search path is wired to that
+      // resolver, which the resolver's own unit tests cannot show.
+      try {
+        await storeSearchIndex.search("123", "mugs", {
+          // @ts-expect-error: compile-time rejection too; this is the JS backstop
+          filter: { description: "text" }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          'Invalid search filter key "description": attribute "description" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
         );
       }
       expect(mockSend).not.toHaveBeenCalled();
@@ -805,7 +827,7 @@ describe("Search", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(FilterError);
         expect(e.message).toEqual(
-          'Invalid search filter key "constructor": attribute "constructor" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category'
+          'Invalid search filter key "constructor": attribute "constructor" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
         );
       }
       expect(mockSend).not.toHaveBeenCalled();
@@ -970,15 +992,17 @@ describe("Search", () => {
       "#Id": "Id",
       "#Name": "Name",
       "#PK": "PK",
+      "#Rating": "Rating",
       "#SK": "SK",
       "#StoreId": "StoreId",
+      "#Tier": "Tier",
       "#Title": "Title",
       "#Type": "Type",
       "#UpdatedAt": "UpdatedAt"
     };
 
     const expectedProjectionExpression =
-      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #SK, #StoreId, #Title, #Type, #UpdatedAt";
+      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #Rating, #SK, #StoreId, #Tier, #Title, #Type, #UpdatedAt";
 
     it("findById on a vector-indexed table projects every alias except the vector", async () => {
       expect.assertions(1);
@@ -1650,6 +1674,116 @@ describe("types", () => {
 
       // @ts-expect-no-error: nullable filterables clear like any nullable
       await ScopedProduct.update("p1", { supplierId: null });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("filter values narrow to the attribute's declared type", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: category is a plain string filterable
+      await storeSearchIndex.search("1", "q", { filter: { category: "Mugs" } });
+
+      // @ts-expect-error: category is declared string, not number
+      await storeSearchIndex.search("1", "q", { filter: { category: 42 } });
+
+      // @ts-expect-no-error: rating is declared number
+      await storeSearchIndex.search("1", "q", { filter: { rating: 5 } });
+
+      // @ts-expect-error: rating is declared number, not string
+      await storeSearchIndex.search("1", "q", { filter: { rating: "5" } });
+
+      // @ts-expect-no-error: a foreign key filterable takes a plain string —
+      // the library's own brand never reaches the caller
+      await scopedFilterIndex.search("1", "q", { filter: { shopId: "5" } });
+
+      // @ts-expect-error: a foreign key filterable is still a string
+      await scopedFilterIndex.search("1", "q", { filter: { shopId: 5 } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("an enum filterable accepts only its declared members", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: "gold" is declared on Listing.tier
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { tier: "gold" }
+      });
+
+      // @ts-expect-error: "platinum" is not a declared member of either tier
+      await storeSearchIndex.search("1", "q", { filter: { tier: "platinum" } });
+
+      const widened: string = "gold";
+      // @ts-expect-error: a widened string cannot satisfy an enum filterable
+      await storeSearchIndex.search("1", "q", { filter: { tier: widened } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("a shared filter key unions its members' declared types, and `in:` narrows it", () => {
+    const _test = async (): Promise<void> => {
+      // Listing.tier is "gold" | "silver"; Review.tier is "bronze" | "copper".
+      // One table attribute, two declared types.
+
+      // @ts-expect-no-error: with no `in:`, either member's values are in range
+      await storeSearchIndex.search("1", "q", { filter: { tier: "gold" } });
+      // @ts-expect-no-error: the other member's values too
+      await storeSearchIndex.search("1", "q", { filter: { tier: "bronze" } });
+
+      // @ts-expect-no-error: `in:` narrows the union to the named member
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { tier: "silver" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        // @ts-expect-error: "bronze" belongs to Review, not Listing
+        filter: { tier: "bronze" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        // @ts-expect-error: "gold" belongs to Listing, not Review
+        filter: { tier: "gold" }
+      });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("filter keys follow `in:` narrowing to the named member's declarations", () => {
+    const _test = async (): Promise<void> => {
+      // @ts-expect-no-error: category is declared on Listing only, and with no
+      // `in:` a key present on one member is in range for the whole index
+      await storeSearchIndex.search("1", "q", { filter: { category: "Mugs" } });
+
+      // @ts-expect-no-error: narrowing to the member that declares it
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        filter: { category: "Mugs" }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        // @ts-expect-error: category is not declared on Review
+        filter: { category: "Mugs" }
+      });
+
+      // @ts-expect-no-error: rating is declared on Review only
+      await storeSearchIndex.search("1", "q", {
+        in: "Review",
+        filter: { rating: 4 }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        in: "Listing",
+        // @ts-expect-error: rating is not declared on Listing
+        filter: { rating: 4 }
+      });
     };
 
     expect(_test).toBeDefined();

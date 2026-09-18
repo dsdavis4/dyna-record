@@ -1,6 +1,7 @@
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityClass, Optional } from "../types.js";
 import type EntityMetadata from "./EntityMetadata.js";
+import { filterScalarTypeForKind } from "./filterScalarTypes.js";
 import type TableMetadata from "./TableMetadata.js";
 import VectorIndexMetadata, {
   isValidVectorAttributeName,
@@ -458,7 +459,16 @@ class VectorIndexRegistry {
     // One inline filter is one table attribute: a filterable property must
     // resolve to the same table alias across every member entity
     const filterAliasByProperty = new Map<string, string>();
-    for (const [, entityMetadata] of members) {
+    // One inline filter is also one AttributeDefinitions entry, and an entry
+    // carries exactly one ScalarAttributeType. Members may declare a shared
+    // filterable with different TS types — two enum value sets, say — but not
+    // with kinds that provision differently, which would ask DynamoDB to
+    // declare one attribute as both S and N.
+    const filterScalarTypeByProperty = new Map<
+      string,
+      { scalarType: "S" | "N"; entityName: string }
+    >();
+    for (const [entityName, entityMetadata] of members) {
       for (const attrMeta of entityMetadata.searchFilterableAttributes) {
         const existingAlias = filterAliasByProperty.get(attrMeta.name);
         if (existingAlias !== undefined && existingAlias !== attrMeta.alias) {
@@ -467,6 +477,25 @@ class VectorIndexRegistry {
           );
         }
         filterAliasByProperty.set(attrMeta.name, attrMeta.alias);
+
+        const scalarType = filterScalarTypeForKind(attrMeta.kind);
+        // Unreachable: reconcileFilterableMarks is the sole writer of
+        // searchFilterableAttributes and runs before this resolve, admitting
+        // only kinds drawn from FILTERABLE_ATTRIBUTE_KINDS — which is itself
+        // derived from the kinds this map gives a scalar type. Filterable and
+        // has-a-scalar-type are one fact; the return type just cannot say so.
+        if (scalarType === undefined) continue;
+
+        const existing = filterScalarTypeByProperty.get(attrMeta.name);
+        if (existing !== undefined && existing.scalarType !== scalarType) {
+          throw new Error(
+            `@SearchFilterable property ${attrMeta.name} provisions as different DynamoDB types across members of vector index ${index.name} (${existing.entityName} as ${existing.scalarType}, ${entityName} as ${scalarType}). One inline filter is one table attribute with one ScalarAttributeType; align the attribute kind across entities`
+          );
+        }
+        filterScalarTypeByProperty.set(attrMeta.name, {
+          scalarType,
+          entityName
+        });
       }
     }
 
