@@ -3,6 +3,7 @@ import type { MakeOptional, Optional } from "../types.js";
 import TableMetadata from "./TableMetadata.js";
 import EntityMetadata from "./EntityMetadata.js";
 import AttributeMetadata from "./AttributeMetadata.js";
+import { FILTERABLE_ATTRIBUTE_KINDS } from "./filterScalarTypes.js";
 import JoinTableMetadata from "./JoinTableMetadata.js";
 import type VectorIndexMetadata from "./VectorIndexMetadata.js";
 import type {
@@ -39,58 +40,12 @@ const SEARCHABLE_BY_KIND = {
   foreignKey: false
 } as const satisfies Record<AttributeKind, boolean>;
 
-/**
- * The DynamoDB scalar type each attribute kind provisions as when it is
- * declared `@SearchFilterable`, or `undefined` when the kind cannot be an
- * inline filter at all. Exhaustive over {@link AttributeKind} — adding a new
- * kind fails compilation here until it declares a stance.
- *
- * Every vector-index inline filter must appear in the table's
- * `AttributeDefinitions`, whose `ScalarAttributeType` set is `B | N | S`. That
- * is what excludes booleans: there is no BOOL, so a boolean filterable
- * describes a table DynamoDB refuses to create. Dates and objects are
- * excluded for a different reason — no reliable equality semantics as an
- * inline filter. Binary is provisionable but this library models no binary
- * attribute kind.
- *
- * This map is the single allowlist: the type-level constraint on the
- * `SearchFilterable` brand in src/types.ts must agree with it, and the
- * per-index provisioning check reads it rather than defining its own set.
- */
-const FILTER_SCALAR_TYPE_BY_KIND = {
-  string: "S",
-  number: "N",
-  boolean: undefined,
-  enum: "S",
-  foreignKey: "S",
-  date: undefined,
-  object: undefined
-} as const satisfies Record<AttributeKind, Optional<"S" | "N">>;
-
-/**
- * The DynamoDB scalar type a filterable attribute kind provisions as.
- * `undefined` for a kind that cannot be an inline filter.
- * @param kind - The attribute kind
- * @returns The scalar type, or undefined when the kind is not filterable
- */
-export const filterScalarTypeForKind = (
-  kind: AttributeKind
-): Optional<"S" | "N"> => FILTER_SCALAR_TYPE_BY_KIND[kind];
-
 const attributeKindsWhere = (
   kindMap: Record<AttributeKind, boolean>
 ): AttributeKind[] =>
   (Object.keys(kindMap) as AttributeKind[]).filter(kind => kindMap[kind]);
 
 const SEARCHABLE_ATTRIBUTE_KINDS = attributeKindsWhere(SEARCHABLE_BY_KIND);
-
-/**
- * The attribute kinds that may be declared `@SearchFilterable` — exactly
- * those {@link FILTER_SCALAR_TYPE_BY_KIND} gives a provisionable scalar type.
- */
-const FILTERABLE_ATTRIBUTE_KINDS = (
-  Object.keys(FILTER_SCALAR_TYPE_BY_KIND) as AttributeKind[]
-).filter(kind => FILTER_SCALAR_TYPE_BY_KIND[kind] !== undefined);
 
 /**
  * Central storage for managing and accessing all metadata related to entities, attributes, relationships, and tables within the ORM.

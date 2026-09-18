@@ -1,7 +1,7 @@
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityClass, Optional } from "../types.js";
 import type EntityMetadata from "./EntityMetadata.js";
-import { filterScalarTypeForKind } from "./MetadataStorage.js";
+import { filterScalarTypeForKind } from "./filterScalarTypes.js";
 import type TableMetadata from "./TableMetadata.js";
 import VectorIndexMetadata, {
   isValidVectorAttributeName,
