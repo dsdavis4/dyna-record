@@ -479,8 +479,11 @@ class VectorIndexRegistry {
         filterAliasByProperty.set(attrMeta.name, attrMeta.alias);
 
         const scalarType = filterScalarTypeForKind(attrMeta.kind);
-        // A kind with no scalar type is already rejected when the filterable
-        // marks are reconciled; this is the plain-JS backstop
+        // Unreachable: reconcileFilterableMarks is the sole writer of
+        // searchFilterableAttributes and runs before this resolve, admitting
+        // only kinds drawn from FILTERABLE_ATTRIBUTE_KINDS — which is itself
+        // derived from the kinds this map gives a scalar type. Filterable and
+        // has-a-scalar-type are one fact; the return type just cannot say so.
         if (scalarType === undefined) continue;
 
         const existing = filterScalarTypeByProperty.get(attrMeta.name);
