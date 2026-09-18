@@ -1313,7 +1313,7 @@ dyna-record supports [DynamoDB vector search](https://docs.aws.amazon.com/amazon
 
 ### Declaring searchable entities
 
-Mark exactly one attribute per entity as its searchable text with the layered `@Searchable()` decorator and the `Searchable` property brand. Attributes that searches may filter on are declared with `@SearchFilterable()` and the `SearchFilterable` brand — strings, numbers, booleans, enums, and foreign keys qualify (dates and objects do not). Nullable attributes compose: instantiate the brand with the optional form (`Filterable<NullableForeignKey<Brand>>`, `Filterable<Optional<string>>`) and the property stays optional — a row where the attribute is absent simply never matches an equality filter on it:
+Mark exactly one attribute per entity as its searchable text with the layered `@Searchable()` decorator and the `Searchable` property brand. Attributes that searches may filter on are declared with `@SearchFilterable()` and the `SearchFilterable` brand — strings, numbers, enums, and foreign keys qualify. Dates and objects do not, having no reliable equality semantics as an inline filter, and neither do booleans: every inline filter must be declared in the table's `AttributeDefinitions`, whose `ScalarAttributeType` set is `B | N | S`, so a boolean filter attribute cannot be provisioned at all. Nullable attributes compose: instantiate the brand with the optional form (`Filterable<NullableForeignKey<Brand>>`, `Filterable<Optional<string>>`) and the property stays optional — a row where the attribute is absent simply never matches an equality filter on it:
 
 ```typescript
 import DynaRecord, {
@@ -1607,8 +1607,49 @@ The vector must come from the **same model and dimension count** the index was p
 
 Both sides of every search are inferred from your declarations — the same brand-driven inference that powers typed query filters:
 
-- **Inputs:** `in:` accepts only the index's declared member entity names. `filter` keys narrow to exactly the searched members' `@SearchFilterable` attributes, and narrow further when `in:` is present; non-filterable attributes and unsupported operator shapes are compile errors. Scoped constructs require the scope value first; unscoped constructs reject one.
+- **Inputs:** `in:` accepts only the index's declared member entity names. `filter` keys narrow to exactly the searched members' `@SearchFilterable` attributes, and `filter` values narrow to each attribute's declared type — both narrow further when `in:` is present. Non-filterable attributes, unsupported operator shapes, and values the attribute cannot hold are compile errors. Scoped constructs require the scope value first; unscoped constructs reject one.
 - **Responses:** the return type is inferred, not declared. `in:` present → `Array<SearchResult<ThatEntity>>`; `in:` omitted → the widened union across the index's whole declared membership (`Array<SearchResult<A> | SearchResult<B>>`), where only shared attributes are accessible until you discriminate on `entity.type` — exactly like query result narrowing. Because membership is declared explicitly, scoped and unscoped constructs are typed identically, and the union always matches what the search actually returns.
+
+#### Filter value typing
+
+A `filter` value is typed from the attribute's own declaration, not widened to "some scalar". An enum filterable accepts only its declared members; a number filterable rejects a string; a filterable foreign key accepts a plain string, because the library's own brands never reach a caller.
+
+Consumer-defined brands are the exception, and deliberately so. dyna-record strips the brands it imposes — `ForeignKey`, `NullableForeignKey`, `Searchable` — because you never asked for them. A brand of your own exists precisely so that a bare value fails, so it survives into the filter type, exactly as it does in `create` and `update` inputs. The rule in one line: **dyna-record strips its own brands, never yours.**
+
+When several members of an index declare the same filterable property, the accepted value is the union of their declared types, and `in:` narrows it to the named member:
+
+```typescript
+@Entity
+class Listing extends SearchTable {
+  @SearchFilterable()
+  @EnumAttribute({ alias: "Tier", values: ["gold", "silver"] })
+  public readonly tier: Filterable<"gold" | "silver">;
+  // ...
+}
+
+@Entity
+class Review extends SearchTable {
+  @SearchFilterable()
+  @EnumAttribute({ alias: "Tier", values: ["bronze", "copper"] })
+  public readonly tier: Filterable<"bronze" | "copper">;
+  // ...
+}
+
+// No `in:` — either member's values are in range
+await storeSearchIndex.search("store-1", "mugs", { filter: { tier: "gold" } });
+await storeSearchIndex.search("store-1", "mugs", {
+  filter: { tier: "bronze" }
+});
+
+// `in:` narrows the union to that member's declarations
+await storeSearchIndex.search("store-1", "mugs", {
+  in: "Listing",
+  // Error: Type '"bronze"' is not assignable to type '"gold" | "silver" | undefined'
+  filter: { tier: "bronze" }
+});
+```
+
+Members sharing a filterable property must agree on the **type it provisions as**, even when their declared types differ. One filterable property is one table attribute, and one `AttributeDefinitions` entry carries one `ScalarAttributeType` — so two enum value sets are fine (both store as `S`), while a string on one member and a number on another is rejected at metadata initialization rather than at `CreateTable`.
 
 ### Filters, scoping, and tenant isolation
 
@@ -1621,11 +1662,13 @@ Two mechanisms narrow a search, and they are not interchangeable:
 
 A third boundary is the index itself. Because each searchable entity belongs to exactly one index and each index writes its own `vectorAttribute`, **membership is physically disjoint**: an index's searches can never be crowded by another index's corpus, and each corpus is ingested and billed only by its own index. Two indexes may share a scope parent — a catalog corpus and a support corpus both scoped by Organization, say — and remain fully independent: separate attributes, separate physical indexes, separately rankable, optionally separate embedding models. This matters because DynamoDB's filter grammar has no `IN`/`OR`: a shared index could not exclude a co-resident corpus from an un-narrowed search, but disjoint indexes never need to.
 
-Search filters are runtime-guarded for untrusted input: unknown keys, non-filterable attributes, unsupported operator shapes, and mistyped values are rejected before any AWS call. Still, **allowlist keys before spreading request input into `filter`** — a valid-but-unintended filterable key is indistinguishable from an intended one.
+Search filters are checked twice. Keys and values are constrained at compile time as described above, and the same conditions are re-checked at runtime for untrusted input — unknown keys, non-filterable attributes, unsupported operator shapes, and mistyped values are rejected before any AWS call, whether or not the caller was typed. Still, **allowlist keys before spreading request input into `filter`** — a valid-but-unintended filterable key is indistinguishable from an intended one.
 
 ### Provisioning
 
-Vector indexes are infrastructure. dyna-record declares and validates the configuration and executes searches, but does not create the index — provision it with your IaC tool using the serialized contract from `metadata()`:
+Vector indexes are infrastructure. dyna-record declares and validates the configuration and executes searches, but does not create the index — provision it with your IaC tool using the serialized contract from `metadata()`.
+
+Every attribute in a `searchSchema` — the `hash` and every entry in `inlineFilters` — **must also be declared in the table's `AttributeDefinitions`**, the same way key attributes are for a global secondary index, with the `ScalarAttributeType` its kind provisions as: `S` for strings, enums, and foreign keys, `N` for numbers. Since dyna-record does not create the table, this is yours to get right; the library's part is refusing to declare a filter it knows cannot be provisioned.
 
 ```typescript
 MyTable.metadata().vectorIndexes;

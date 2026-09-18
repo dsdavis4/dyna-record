@@ -7,6 +7,15 @@ import type DynaRecord from "./DynaRecord.js";
 
 /**
  * A utility type for branding primitives to ensure type safety with unique identifiers.
+ *
+ * dyna-record brands some attributes on its own behalf — {@link ForeignKey},
+ * {@link NullableForeignKey}, {@link Searchable} — and strips those brands
+ * from every caller-facing input, so `create`, `update`, and search filters
+ * all accept the plain underlying value. A brand you define with this type is
+ * treated as the opposite: it exists precisely so that a bare value fails, so
+ * it is never stripped and a caller must supply the branded value.
+ *
+ * The rule in one line: dyna-record strips its own brands, never yours.
  */
 export type Brand<K, T> = K & { __brand: T };
 
@@ -111,7 +120,10 @@ export type Searchable<T extends string = string> = Brand<T, "Searchable">;
  * also carries the underlying type so create/update inputs recover it.
  *
  * The brand never leaks into consumer ergonomics: it is assignable to its
- * underlying type on read, and create/update inputs accept plain values.
+ * underlying type on read, and create/update inputs and search filter values
+ * accept plain values. That stripping applies to dyna-record's own brands
+ * only — a consumer-defined {@link Brand} survives into every caller-facing
+ * input, since requiring it is the whole reason it was declared.
  *
  * Nullable attributes compose: instantiate with the optional form of the
  * underlying type (EX: `SearchFilterable<NullableForeignKey<Brand>>` or
@@ -120,13 +132,12 @@ export type Searchable<T extends string = string> = Brand<T, "Searchable">;
  * the brand. Filters always take a defined value — a row where the
  * attribute is absent simply never matches an equality filter.
  */
-export type SearchFilterable<
-  T extends Optional<string | number> = string
-> = T extends undefined
-  ? undefined
-  : T & {
-      readonly __searchFilterable: T;
-    };
+export type SearchFilterable<T extends Optional<string | number> = string> =
+  T extends undefined
+    ? undefined
+    : T & {
+        readonly __searchFilterable: T;
+      };
 
 /**
  * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.

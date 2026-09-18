@@ -1051,7 +1051,11 @@ class Review extends SearchTable {
 
   // The other half of the shared "Tier" filter — see Listing.tier
   @SearchFilterable()
-  @EnumAttribute({ alias: "Tier", values: ["bronze", "copper"], nullable: true })
+  @EnumAttribute({
+    alias: "Tier",
+    values: ["bronze", "copper"],
+    nullable: true
+  })
   public readonly tier?: SearchFilterable<Optional<"bronze" | "copper">>;
 
   // Declared on Review alone, so a filter key present on one member but not

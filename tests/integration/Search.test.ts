@@ -795,6 +795,28 @@ describe("Search", () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
+    it("rejects a real attribute that is not declared @SearchFilterable", async () => {
+      expect.assertions(3);
+
+      // Distinct from the unknown-key case above: `description` is a genuine
+      // attribute on Listing, carrying @Searchable. The resolver builds its
+      // map from searchFilterableAttributes alone, so existing on the entity
+      // is not enough — and this asserts the search path is wired to that
+      // resolver, which the resolver's own unit tests cannot show.
+      try {
+        await storeSearchIndex.search("123", "mugs", {
+          // @ts-expect-error: compile-time rejection too; this is the JS backstop
+          filter: { description: "text" }
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          'Invalid search filter key "description": attribute "description" is not declared @SearchFilterable on the members of vector index store-search-index. Filterable attributes are: category, tier, rating'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
     it("rejects prototype-chain filter keys with the same guard as unknown keys", async () => {
       expect.assertions(3);
 

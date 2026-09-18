@@ -264,12 +264,14 @@ export type SearchFilterableValue<V> =
  * @typeParam Entities - The union of member entities being searched.
  * @typeParam K - The filter key.
  */
-export type SearchFilterValueFor<Entities extends DynaRecord, K> =
-  Entities extends DynaRecord
-    ? K extends keyof EntityAttributesOnly<Entities>
-      ? SearchFilterableValue<EntityAttributesOnly<Entities>[K]>
-      : never
-    : never;
+export type SearchFilterValueFor<
+  Entities extends DynaRecord,
+  K
+> = Entities extends DynaRecord
+  ? K extends keyof EntityAttributesOnly<Entities>
+    ? SearchFilterableValue<EntityAttributesOnly<Entities>[K]>
+    : never
+  : never;
 
 export type SearchFilterParams<Entities extends DynaRecord = DynaRecord> = {
   [K in SearchFilterableKeysFor<Entities>]?: SearchFilterValueFor<Entities, K>;
