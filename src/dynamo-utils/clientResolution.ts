@@ -61,9 +61,8 @@ export interface DynaRecordDocumentClient {
  * ```
  */
 export type TableClientOptions =
-  | { client?: never; clientConfig?: never }
-  | { client: DynaRecordDocumentClient; clientConfig?: never }
-  | { client?: never; clientConfig: DynamoDBClientConfig };
+  | { client?: DynaRecordDocumentClient; clientConfig?: never }
+  | { client?: never; clientConfig?: DynamoDBClientConfig };
 
 /**
  * The process-wide client for tables that configure none. Held here rather than
@@ -135,23 +134,61 @@ export const resetDefaultClient = (): void => {
 };
 
 /**
+ * Checks the client options a table was declared with and returns them, so
+ * that a misconfigured table fails where it is declared rather than on its
+ * first query.
+ *
+ * The exclusivity check reads the options through a widened view on purpose.
+ * {@link TableClientOptions} already forbids declaring both, so against the
+ * declared type the check is unreachable — and unreachable is the point: a
+ * JavaScript caller gets no compile error, and this is the check they get
+ * instead
+ * @param options - The client options passed to the Table decorator
+ * @param tableClassName - Name of the table class being declared
+ * @returns The options, with any supplied client proven able to send commands
+ */
+export const normalizeClientOptions = (
+  options: TableClientOptions,
+  tableClassName: string
+): TableClientOptions => {
+  const declared: { client?: unknown; clientConfig?: unknown } = options;
+
+  if (declared.client !== undefined && declared.clientConfig !== undefined) {
+    throw new Error(
+      `Table ${tableClassName} declares both client and clientConfig. Declare one: clientConfig configures the client dyna-record builds, client replaces it`
+    );
+  }
+
+  const { client, clientConfig } = options;
+
+  if (client !== undefined) {
+    return { client: assertCanSend(client, tableClassName) };
+  }
+
+  if (clientConfig !== undefined) {
+    return { clientConfig };
+  }
+
+  return {};
+};
+
+/**
  * Resolves the client a table sends through: its own client, a client built
  * from its config, or the shared default, in that order.
  *
- * Pure with respect to the table — the result is memoized per table by
- * {@link TableMetadata}, so a table builds at most one client
- * @param options - The client options declared on the table
- * @param tableClassName - Name of the table class, for error messages
+ * Takes options already checked by {@link normalizeClientOptions}, so it does
+ * not re-validate. Pure with respect to the table — the result is memoized per
+ * table by {@link TableMetadata}, so a table builds at most one client
+ * @param options - The table's normalized client options
  * @returns The client for this table
  */
 export const resolveClient = (
-  options: TableClientOptions,
-  tableClassName: string
+  options: TableClientOptions
 ): DynaRecordDocumentClient => {
   const { client, clientConfig } = options;
 
   if (client !== undefined) {
-    return assertCanSend(client, tableClassName);
+    return client;
   }
 
   if (clientConfig !== undefined) {

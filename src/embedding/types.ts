@@ -17,9 +17,10 @@ import type { VectorDistanceFunction as SdkVectorDistanceFunction } from "@aws-s
  * dyna-record's own union rather than a re-export of the SDK's, so that no
  * published declaration names the SDK's internal module layout — TypeScript
  * emits the declaring module's path for an inferred type, and that layout has
- * moved between SDK releases. A type-level assertion in the test tree holds
- * this equal to the SDK's union in both directions, so a service addition or
- * rename fails the build rather than drifting silently.
+ * moved between SDK releases. The assertion below holds this equal to the
+ * SDK's union in both directions, so a service addition or rename fails the
+ * build — here rather than in the test tree, so that drift cannot reach a
+ * publish through `prepublishOnly`, which runs the build alone.
  */
 export type VectorDistanceFunction = "COSINE" | "DOT_PRODUCT" | "EUCLIDEAN";
 

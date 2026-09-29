@@ -17,7 +17,7 @@ import {
 import type VectorIndexMetadata from "./VectorIndexMetadata.js";
 import DynamoClient from "../dynamo-utils/DynamoClient.js";
 import {
-  assertCanSend,
+  normalizeClientOptions,
   resolveClient,
   type TableClientOptions
 } from "../dynamo-utils/clientResolution.js";
@@ -116,25 +116,16 @@ class TableMetadata {
   readonly #clientOptions: TableClientOptions;
 
   /**
-   * Name of the table class, for error messages naming what to fix
-   */
-  readonly #tableClassName: string;
-
-  /**
-   * The resolved client, memoized on first use. Memoizing here is what makes
-   * a client function run once per table, and what keeps tables configured
-   * with different clients from sharing one
+   * The resolved client, memoized on first use. Memoizing here is what keeps
+   * tables configured with different clients from sharing one, and what keeps
+   * the default client from being rebuilt per operation
    */
   #dynamo: Optional<DynamoClient>;
 
   constructor(options: TableMetadataOptions, tableClassName: string) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
 
-    this.#tableClassName = tableClassName;
-    this.#clientOptions = TableMetadata.validateClientOptions(
-      options,
-      tableClassName
-    );
+    this.#clientOptions = normalizeClientOptions(options, tableClassName);
 
     this.name = options.name;
     this.delimiter = options.delimiter ?? "#";
@@ -172,42 +163,8 @@ class TableMetadata {
    * first use and reused thereafter
    */
   public get dynamo(): DynamoClient {
-    this.#dynamo ??= new DynamoClient(
-      resolveClient(this.#clientOptions, this.#tableClassName)
-    );
+    this.#dynamo ??= new DynamoClient(resolveClient(this.#clientOptions));
     return this.#dynamo;
-  }
-
-  /**
-   * Rejects client options the type system cannot, and checks a supplied client
-   * eagerly so a misconfigured table fails where it is declared rather than on
-   * its first query
-   * @param options - The options passed to the Table decorator
-   * @param tableClassName - Name of the table class being declared
-   * @returns The client options, unchanged
-   */
-  private static validateClientOptions(
-    options: TableMetadataOptions,
-    tableClassName: string
-  ): TableClientOptions {
-    const { client, clientConfig } = options;
-
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- TableClientOptions makes this unreachable by type, which is the point: only a JavaScript caller can declare both, and this is the check they get instead of a compile error
-    if (client !== undefined && clientConfig !== undefined) {
-      throw new Error(
-        `Table ${tableClassName} declares both client and clientConfig. Declare one: clientConfig configures the client dyna-record builds, client replaces it`
-      );
-    }
-
-    if (client !== undefined) {
-      return { client: assertCanSend(client, tableClassName) };
-    }
-
-    if (clientConfig !== undefined) {
-      return { clientConfig };
-    }
-
-    return {};
   }
 
   /**

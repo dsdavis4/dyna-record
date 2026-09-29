@@ -2,6 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import {
   getDefaultClient,
+  normalizeClientOptions,
   resetDefaultClient,
   resolveClient,
   assertCanSend,
@@ -45,7 +46,7 @@ describe("clientResolution", () => {
     it("constructs the client with an empty config so the SDK resolves region, credentials and endpoint itself", () => {
       expect.assertions(2);
 
-      resolveClient({}, "MockTable");
+      resolveClient({});
 
       expect(mockedDynamoDBClient.mock.calls).toEqual([[{}]]);
       expect(mockedFrom.mock.calls).toEqual([
@@ -66,8 +67,8 @@ describe("clientResolution", () => {
     it("constructs the default once and shares it across tables that configure none", () => {
       expect.assertions(2);
 
-      const first = resolveClient({}, "MockTable");
-      const second = resolveClient({}, "OtherTable");
+      const first = resolveClient({});
+      const second = resolveClient({});
 
       expect(second).toBe(first);
       expect(mockedFrom).toHaveBeenCalledTimes(1);
@@ -78,15 +79,12 @@ describe("clientResolution", () => {
     it("constructs a client from the given config", () => {
       expect.assertions(1);
 
-      resolveClient(
-        {
-          clientConfig: {
-            region: "us-east-1",
-            endpoint: "http://localhost:8000"
-          }
-        },
-        "MockTable"
-      );
+      resolveClient({
+        clientConfig: {
+          region: "us-east-1",
+          endpoint: "http://localhost:8000"
+        }
+      });
 
       expect(mockedDynamoDBClient.mock.calls).toEqual([
         [{ region: "us-east-1", endpoint: "http://localhost:8000" }]
@@ -96,11 +94,10 @@ describe("clientResolution", () => {
     it("does not construct or reuse the default client", () => {
       expect.assertions(2);
 
-      const configured = resolveClient(
-        { clientConfig: { region: "us-east-1" } },
-        "MockTable"
-      );
-      const fallback = resolveClient({}, "OtherTable");
+      const configured = resolveClient({
+        clientConfig: { region: "us-east-1" }
+      });
+      const fallback = resolveClient({});
 
       expect(configured).not.toBe(fallback);
       expect(mockedDynamoDBClient.mock.calls).toEqual([
@@ -116,7 +113,7 @@ describe("clientResolution", () => {
 
       const client = stubClient();
 
-      expect(resolveClient({ client }, "MockTable")).toBe(client);
+      expect(resolveClient({ client })).toBe(client);
       expect(mockedDynamoDBClient).not.toHaveBeenCalled();
     });
 
@@ -126,33 +123,51 @@ describe("clientResolution", () => {
       const late = stubClient();
       const delegating = { send: late.send };
 
-      expect(resolveClient({ client: delegating }, "MockTable")).toBe(
-        delegating
-      );
+      expect(resolveClient({ client: delegating })).toBe(delegating);
       expect(mockedDynamoDBClient).not.toHaveBeenCalled();
     });
   });
 
-  describe("guard", () => {
-    it("rejects a client that cannot send commands, naming the table class", () => {
+  describe("normalizeClientOptions", () => {
+    it("passes a usable client through", () => {
+      expect.assertions(1);
+
+      const client = stubClient();
+
+      expect(normalizeClientOptions({ client }, "MockTable")).toEqual({
+        client
+      });
+    });
+
+    it("rejects declaring both client and clientConfig, naming the table class", () => {
       expect.assertions(1);
 
       expect(() =>
-        // @ts-expect-error a plain JavaScript caller can reach the guard with a
-        // value the option's type rejects, which is the case the guard exists for
-        resolveClient({ client: { send: "nope" } }, "MockTable")
+        normalizeClientOptions(
+          // @ts-expect-error the option type forbids both, so only a plain
+          // JavaScript caller reaches this check
+          { client: stubClient(), clientConfig: { region: "us-east-1" } },
+          "MockTable"
+        )
       ).toThrow(
+        "Table MockTable declares both client and clientConfig. Declare one: clientConfig configures the client dyna-record builds, client replaces it"
+      );
+    });
+  });
+
+  describe("assertCanSend", () => {
+    it("rejects a value that cannot send commands, naming the table class", () => {
+      expect.assertions(1);
+
+      expect(() => assertCanSend({ send: "nope" }, "MockTable")).toThrow(
         "Table MockTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient"
       );
     });
 
-    it("rejects a client with no send at all, naming the table class", () => {
+    it("rejects a value with no send at all, naming the table class", () => {
       expect.assertions(1);
 
-      expect(() =>
-        // @ts-expect-error as above: only an untyped caller reaches this branch
-        resolveClient({ client: {} }, "OtherTable")
-      ).toThrow(
+      expect(() => assertCanSend({}, "OtherTable")).toThrow(
         "Table OtherTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient"
       );
     });

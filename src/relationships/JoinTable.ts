@@ -143,8 +143,9 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     keys: ForeignKeyProperties<ThisClass>
   ): Promise<void> {
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
+    const transactionProps = JoinTable.transactionProps(keys, rel2, rel1);
     const transactionBuilder = new TransactionBuilder(
-      Metadata.getEntityTable(rel1.entity.name).dynamo
+      transactionProps.tableProps.dynamo
     );
 
     JoinTable.deleteLink(transactionBuilder, keys, rel1, rel2);
