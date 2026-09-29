@@ -2,6 +2,10 @@ export * from "./decorators/index.js";
 export * from "./errors.js";
 export * from "./relationships/index.js";
 export * from "./dynamo-utils/errors.js";
+export type {
+  DynaRecordDocumentClient,
+  TableClientOptions
+} from "./dynamo-utils/clientResolution.js";
 
 export type {
   EntityAttributesOnly,

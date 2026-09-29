@@ -1,4 +1,4 @@
-import DynamoClient from "./DynamoClient.js";
+import type DynamoClient from "./DynamoClient.js";
 import { chunkArray } from "../utils.js";
 import type {
   Get,
@@ -14,6 +14,14 @@ const MAX_TRANSACTION_ITEMS = 100;
  */
 class TransactGetBuilder {
   readonly #transactionItems: TransactGetItems = [];
+  readonly #dynamo: DynamoClient;
+
+  /**
+   * @param dynamo - The client of the table this transaction reads from
+   */
+  constructor(dynamo: DynamoClient) {
+    this.#dynamo = dynamo;
+  }
 
   /**
    * Execute the transaction
@@ -28,7 +36,7 @@ class TransactGetBuilder {
     const res = await Promise.all(
       transactionChunks.map(
         async chunk =>
-          await DynamoClient.transactGetItems({ TransactItems: chunk })
+          await this.#dynamo.transactGetItems({ TransactItems: chunk })
       )
     );
 

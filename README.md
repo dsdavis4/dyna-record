@@ -13,6 +13,9 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
 - [Getting Started](#getting-started)
   - [Installation](#installation)
   - [Configuration](#configuration)
+    - [Configuring one table](#configuring-one-table)
+    - [Supplying your own client](#supplying-your-own-client)
+    - [Binding a client late](#binding-a-client-late)
 - [Defining Entities](#defining-entities)
   - [Entity inheritance and shared base classes](#entity-inheritance-and-shared-base-classes)
   - [Attributes](#attributes)
@@ -82,6 +85,91 @@ Direct `require("dyna-record")` only works on Node 22.12+ via Node's stabilized 
 >   }
 > }
 > ```
+
+### Configuration
+
+dyna-record constructs its DynamoDB client on first use, with no configuration of its own. Region, credentials, and endpoint resolve exactly the way they do for any other AWS SDK consumer:
+
+- **Region** — `AWS_REGION`, then `AWS_DEFAULT_REGION`, then the region on the shared config profile.
+- **Credentials** — the standard provider chain: environment variables, SSO and shared config profiles, then the container or instance role. On Lambda, ECS, and EC2 this needs no configuration.
+- **Endpoint** — `AWS_ENDPOINT_URL_DYNAMODB`, then `AWS_ENDPOINT_URL`.
+
+So a local DynamoDB needs no dyna-record feature at all, only the environment variable the SDK already reads:
+
+```bash
+AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 npm test
+```
+
+#### Configuring one table
+
+When the environment is not where the answer belongs — a table in a fixed region, or two tables in different regions — declare it on the table:
+
+```typescript
+@Table({ name: "my-table", clientConfig: { region: "us-east-1" } })
+abstract class MyTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+```
+
+`clientConfig` takes the AWS SDK's `DynamoDBClientConfig`, so anything the client accepts — `endpoint`, `credentials`, `maxAttempts`, `requestHandler` — belongs here. dyna-record builds the document client from it, once, and every operation on that table uses it.
+
+#### Supplying your own client
+
+To share a client with the rest of your application, instrument one, or substitute a fake in tests, pass it directly. `client` and `clientConfig` are mutually exclusive — `clientConfig` configures the client dyna-record builds, `client` replaces it:
+
+```typescript
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+
+const documentClient = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: "us-east-1" })
+);
+
+@Table({ name: "my-table", client: documentClient })
+abstract class MyTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+```
+
+Commands are built from dyna-record's own copy of `@aws-sdk/lib-dynamodb`, but **marshalling follows the client you supply**: the AWS SDK hands each command the sending client's config, and lib-dynamodb reads `translateConfig` from it. Build the client you pass with the SDK's default marshalling.
+
+A client with `unmarshallOptions.wrapNumbers` enabled is rejected where the table is declared, because every number attribute would come back as a wrapper object and fail its attribute schema on the first read. If your application needs a document client configured that way, keep it, and give dyna-record its own:
+
+```typescript
+@Table({ name: "my-table", clientConfig: { region: "us-east-1" } })
+```
+
+The option is typed structurally: anything that can send a command satisfies it, including a test double. That is deliberate. The SDK's `DynamoDBDocumentClient` is a nominal type, so naming it here would reject a perfectly good client built from a second copy of the AWS SDK — a common outcome when your project's lockfile pins an older version than dyna-record's. A client that cannot send commands is rejected where the table is declared, naming the table class.
+
+If you inject a client, build it from `@aws-sdk/lib-dynamodb` **3.1103.0 or later** — the release that introduced `SearchVectorsCommand`, which dyna-record constructs. Consumers who configure nothing, or who use `clientConfig`, are unaffected by their own SDK version.
+
+#### Binding a client late
+
+Decorators evaluate at module load, before your application's bootstrap runs, so a client built during startup is not available where the table is declared. Pass one that delegates to it instead:
+
+```typescript
+@Table({
+  name: "my-table",
+  client: { send: command => getClient().send(command) }
+})
+abstract class MyTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+```
+
+The object is a valid client the moment it is declared, and the real one is looked up when a command is actually sent.
 
 ## Defining Entities
 

@@ -15,6 +15,13 @@ import {
   TableMetadataTransform
 } from "./schemas.js";
 import type VectorIndexMetadata from "./VectorIndexMetadata.js";
+import DynamoClient from "../dynamo-utils/DynamoClient.js";
+import {
+  normalizeClientOptions,
+  resolveClient,
+  type TableClientOptions
+} from "../dynamo-utils/clientResolution.js";
+import type { Optional } from "../types.js";
 
 export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
 
@@ -101,8 +108,24 @@ class TableMetadata {
    */
   public readProjection?: ReadProjection;
 
-  constructor(options: TableMetadataOptions) {
+  /**
+   * How this table reaches DynamoDB, as declared on the Table decorator.
+   * Never serialized through {@link toJSON} — a client config can carry
+   * credentials
+   */
+  readonly #clientOptions: TableClientOptions;
+
+  /**
+   * The resolved client, memoized on first use. Memoizing here is what keeps
+   * tables configured with different clients from sharing one, and what keeps
+   * the default client from being rebuilt per operation
+   */
+  #dynamo: Optional<DynamoClient>;
+
+  constructor(options: TableMetadataOptions, tableClassName: string) {
     const defaultAttrMeta = this.buildDefaultAttributesMetadata(options);
+
+    this.#clientOptions = normalizeClientOptions(options, tableClassName);
 
     this.name = options.name;
     this.delimiter = options.delimiter ?? "#";
@@ -132,6 +155,16 @@ class TableMetadata {
     this.reservedKeys = Object.fromEntries(
       defaultAttrNames.map(key => [key, true])
     );
+  }
+
+  /**
+   * The client every operation on this table sends through: the table's own
+   * client, a client built from its config, or the shared default, resolved on
+   * first use and reused thereafter
+   */
+  public get dynamo(): DynamoClient {
+    this.#dynamo ??= new DynamoClient(resolveClient(this.#clientOptions));
+    return this.#dynamo;
   }
 
   /**

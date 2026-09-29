@@ -1,4 +1,4 @@
-import DynamoClient from "./DynamoClient.js";
+import type DynamoClient from "./DynamoClient.js";
 import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
   ConditionalCheckFailedError,
@@ -19,13 +19,21 @@ import type {
 class TransactionBuilder {
   readonly #transactionItems: TransactWriteItems = [];
   readonly #errorMessages: Record<number, string> = {};
+  readonly #dynamo: DynamoClient;
+
+  /**
+   * @param dynamo - The client of the table this transaction writes to
+   */
+  constructor(dynamo: DynamoClient) {
+    this.#dynamo = dynamo;
+  }
 
   /**
    * Execute the transaction
    */
   public async executeTransaction(): Promise<void> {
     try {
-      const response = await DynamoClient.transactWriteItems({
+      const response = await this.#dynamo.transactWriteItems({
         TransactItems: this.#transactionItems
       });
       Logger.log("Transaction successful:", response);

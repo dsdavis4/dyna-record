@@ -1,6 +1,5 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
-  DynamoDBDocumentClient,
+  type DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
   TransactWriteCommand,
@@ -18,12 +17,8 @@ import {
 import Logger from "../Logger.js";
 import { isVectorAttributeKey } from "../metadata/VectorIndexMetadata.js";
 import type { DynamoTableItem } from "../types.js";
+import type { DynaRecordDocumentClient } from "./clientResolution.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
-
-// Initialize the DynamoDB Document Client with a specific AWS region.
-const dynamo = DynamoDBDocumentClient.from(
-  new DynamoDBClient({ region: "us-west-2" })
-);
 
 /**
  * Returns the log placeholder for a redacted vector, carrying only its
@@ -126,21 +121,56 @@ const redactVectorWrites = (
 };
 
 /**
- * A utility class for interacting with DynamoDB, providing static methods
+ * Interacts with DynamoDB through a single document client, providing methods
  * for common operations such as retrieving, querying, and transacting items.
+ *
+ * One instance per table, resolved and memoized by that table's metadata, so
+ * tables configured with different clients never share one.
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class DynamoClient {
+  /**
+   * The document client every command is sent through.
+   */
+  readonly #client: DynaRecordDocumentClient;
+
+  /**
+   * @param client - The document client every command is sent through
+   */
+  constructor(client: DynaRecordDocumentClient) {
+    this.#client = client;
+  }
+
+  /**
+   * The client's `send`, typed as the SDK types it.
+   *
+   * Read per command rather than bound once in the constructor. A
+   * `DynamoClient` is memoized for the life of its table, so capturing the
+   * method would pin whatever `send` existed at first use — and test doubles
+   * reassign it between tests (`aws-sdk-client-mock` stubs the prototype and
+   * restores it), as does instrumentation applied after bootstrap.
+   */
+  get #send(): DynamoDBDocumentClient["send"] {
+    // The only assertion in this file, and the reason the public client option
+    // is structural: the SDK's client type carries a private member, so
+    // TypeScript compares it nominally and a client from a second SDK
+    // installation could not be named in the option without being rejected.
+    // This is the boundary where a supplied client regains the SDK's own
+    // command input and output typing, which every method below relies on.
+    return this.#client.send.bind(
+      this.#client
+    ) as DynamoDBDocumentClient["send"];
+  }
+
   /**
    * Retrieves a single item from DynamoDB based on the provided parameters.
    * @param params The parameters for the GetCommand to DynamoDB.
    * @returns A Promise resolving to the retrieved item.
    */
-  public static async getItem(
+  public async getItem(
     params: GetCommandInput
   ): Promise<GetCommandOutput["Item"]> {
     Logger.log("getItem", { params });
-    const response = await dynamo.send(new GetCommand(params));
+    const response = await this.#send(new GetCommand(params));
     return response.Item;
   }
 
@@ -159,7 +189,7 @@ class DynamoClient {
    * @param params The parameters for the QueryCommand to DynamoDB.
    * @returns A Promise resolving to an array of the queried items.
    */
-  public static async query(params: QueryCommandInput): Promise<QueryItems> {
+  public async query(params: QueryCommandInput): Promise<QueryItems> {
     Logger.log("query", { params });
 
     const items: QueryItems = [];
@@ -169,7 +199,7 @@ class DynamoClient {
       const remaining =
         params.Limit !== undefined ? params.Limit - items.length : undefined;
 
-      const response = await dynamo.send(
+      const response = await this.#send(
         new QueryCommand({
           ...params,
           ExclusiveStartKey: exclusiveStartKey,
@@ -195,11 +225,11 @@ class DynamoClient {
    * @param params The parameters for the TransactGetCommand to DynamoDB.
    * @returns A Promise resolving to the responses of the transactional get operation.
    */
-  public static async transactGetItems(
+  public async transactGetItems(
     params: TransactGetCommandInput
   ): Promise<TransactGetItemResponses> {
     Logger.log("transactGetItems", { params });
-    const response = await dynamo.send(new TransactGetCommand(params));
+    const response = await this.#send(new TransactGetCommand(params));
     return response.Responses ?? [];
   }
 
@@ -208,11 +238,11 @@ class DynamoClient {
    * @param params The parameters for the TransactWriteCommand to DynamoDB.
    * @returns A Promise resolving to the output of the transactional write operation.
    */
-  public static async transactWriteItems(
+  public async transactWriteItems(
     params: TransactWriteCommandInput
   ): Promise<TransactWriteCommandOutput> {
     Logger.log("transactWriteItems", { params: redactVectorWrites(params) });
-    return await dynamo.send(new TransactWriteCommand(params));
+    return await this.#send(new TransactWriteCommand(params));
   }
 
   /**
@@ -224,7 +254,7 @@ class DynamoClient {
    * @param params The parameters for the SearchVectorsCommand to DynamoDB.
    * @returns A Promise resolving to the array of search results.
    */
-  public static async searchVectors(
+  public async searchVectors(
     params: SearchVectorsCommandInput
   ): Promise<NonNullable<SearchVectorsCommandOutput["SearchResults"]>> {
     Logger.log("searchVectors", {
@@ -233,7 +263,7 @@ class DynamoClient {
         SearchVector: vectorPlaceholder(params.SearchVector?.length ?? 0)
       }
     });
-    const response = await dynamo.send(new SearchVectorsCommand(params));
+    const response = await this.#send(new SearchVectorsCommand(params));
     return response.SearchResults ?? [];
   }
 }

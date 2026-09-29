@@ -9,14 +9,43 @@
  * consumed by index definitions, validations, and typing.
  */
 
-import type { VectorDistanceFunction } from "@aws-sdk/client-dynamodb";
+import type { VectorDistanceFunction as SdkVectorDistanceFunction } from "@aws-sdk/client-dynamodb";
 
 /**
- * A distance function supported by DynamoDB vector indexes. Re-exported from
- * the AWS SDK so the accepted values track the service definition instead of
- * a hand-maintained duplicate.
+ * A distance function supported by DynamoDB vector indexes.
+ *
+ * dyna-record's own union rather than a re-export of the SDK's, so that no
+ * published declaration names the SDK's internal module layout — TypeScript
+ * emits the declaring module's path for an inferred type, and that layout has
+ * moved between SDK releases. The assertion below holds this equal to the
+ * SDK's union in both directions, so a service addition or rename fails the
+ * build — here rather than in the test tree, so that drift cannot reach a
+ * publish through `prepublishOnly`, which runs the build alone.
  */
-export type { VectorDistanceFunction };
+export type VectorDistanceFunction = "COSINE" | "DOT_PRODUCT" | "EUCLIDEAN";
+
+/**
+ * Mutual assignability. Both sides are wrapped in tuples so a union does not
+ * distribute, which would let a strict subset pass
+ */
+type Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * Fails compilation unless its argument is `true`
+ */
+type Assert<T extends true> = T;
+
+/**
+ * Holds {@link VectorDistanceFunction} equal to the SDK's union in both
+ * directions, so a service addition or rename fails the build here rather than
+ * drifting silently.
+ *
+ * Type-only and unexported on purpose: nothing is emitted for it, so the SDK
+ * type is named without reappearing in dyna-record's published declarations
+ */
+type _VectorDistanceFunctionsMatch = Assert<
+  Equals<VectorDistanceFunction, SdkVectorDistanceFunction>
+>;
 
 /**
  * An embed function supplied by the consumer on a vector index definition.

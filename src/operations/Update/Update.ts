@@ -144,7 +144,8 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
   ) {
     super(Entity);
     // Use the transaction builder passed to the class, or instantiate a new one
-    this.transactionBuilder = transactionBuilder ?? new TransactWriteBuilder();
+    this.transactionBuilder =
+      transactionBuilder ?? new TransactWriteBuilder(this.tableMetadata.dynamo);
   }
 
   /**
@@ -329,7 +330,9 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     );
 
     const { name: tableName } = this.tableMetadata;
-    const transactionBuilder = new TransactGetBuilder();
+    const transactionBuilder = new TransactGetBuilder(
+      this.tableMetadata.dynamo
+    );
 
     // Get the new BelongsTo relationship entities that are being updated
     belongsToRelFkAndMetas.forEach(({ meta, foreignKeyVal }) => {

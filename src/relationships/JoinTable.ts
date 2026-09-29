@@ -101,10 +101,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
   ): Promise<void> {
     const referentialIntegrityCheck =
       options?.referentialIntegrityCheck ?? true;
-    const transactionBuilder = new TransactionBuilder();
-
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
     const transactionProps = JoinTable.transactionProps(keys, rel2, rel1);
+    const transactionBuilder = new TransactionBuilder(
+      transactionProps.tableProps.dynamo
+    );
     const lookupTableItem = await JoinTable.preFetch(transactionProps);
 
     JoinTable.denormalizeLinkRecord(
@@ -141,9 +142,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>
   ): Promise<void> {
-    const transactionBuilder = new TransactionBuilder();
-
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
+    const transactionProps = JoinTable.transactionProps(keys, rel2, rel1);
+    const transactionBuilder = new TransactionBuilder(
+      transactionProps.tableProps.dynamo
+    );
 
     JoinTable.deleteLink(transactionBuilder, keys, rel1, rel2);
     JoinTable.deleteLink(transactionBuilder, keys, rel2, rel1);
@@ -170,7 +173,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       ids.linkedEntityId
     );
 
-    const transactionGetBuilder = new TransactGetBuilder();
+    const transactionGetBuilder = new TransactGetBuilder(tableProps.dynamo);
 
     transactionGetBuilder.addGet({
       TableName: tableProps.name,
