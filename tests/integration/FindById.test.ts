@@ -93,7 +93,7 @@ describe("FindById", () => {
 
     // An empty config is the contract: passing a region here would override
     // AWS_REGION, the profile's region, and AWS_ENDPOINT_URL_DYNAMODB, which
-    // is what pinned every consumer to us-west-2 before 4.0.0
+    // is what pinned every consumer to us-west-2 before 3.2.0
     expect(mockedDynamoDBClient.mock.calls).toEqual([[{}]]);
     expect(mockedDynamoDBDocumentClient.from.mock.calls).toEqual([
       [{ key: "MockDynamoDBClient" }]

@@ -1,3 +1,35 @@
+## 3.2.0 - 2026-09-28
+
+> **Read before upgrading: the DynamoDB client is configurable, and no longer pinned to `us-west-2`.** dyna-record built its client with `region: "us-west-2"` written in, which overrode `AWS_REGION`, `AWS_DEFAULT_REGION`, and the profile's region. Fixing that defect changes which region a deployed application talks to, and **nothing breaks at the type level** — the new options are additive and optional — so the compiler will not flag it for you. If your table is in `us-west-2`, check the migration below before upgrading.
+
+### Breaking (runtime behavior)
+
+- **The region is no longer forced to `us-west-2`.** dyna-record now constructs its client with an empty config, so region, credentials, and endpoint resolve through the SDK's own chain: `AWS_REGION` then `AWS_DEFAULT_REGION` then the shared config profile, the standard credential provider chain, and `AWS_ENDPOINT_URL_DYNAMODB` / `AWS_ENDPOINT_URL`. On Lambda, ECS, and EC2 this is already correct and nothing changes.
+
+  Before this release every dyna-record table had to live in `us-west-2`, since nothing else was reachable. So the upgrade affects you if your environment resolves any other region: a Lambda outside `us-west-2`, where `AWS_REGION` is always the function's own region, or a local script under a profile defaulting elsewhere. Those reach the wrong region and fail with `ResourceNotFoundException` rather than a build error. An environment that resolves no region at all fails with the SDK's `Region is missing`.
+
+  Either set `AWS_REGION=us-west-2`, or declare it on the table, which is the durable fix: `@Table({ name: "my-table", clientConfig: { region: "us-west-2" } })`.
+
+### Added
+
+- **`clientConfig` on `@Table`.** Takes the AWS SDK's `DynamoDBClientConfig`, so a table can fix its own region, endpoint, credentials, retry posture, or request handler without touching the environment. dyna-record builds that table's document client from it, once. Two tables in different regions or accounts are now expressible.
+
+- **`client` on `@Table`.** Replaces the client dyna-record builds, for sharing one with the rest of your application, instrumenting it (X-Ray), or substituting a fake in tests. Mutually exclusive with `clientConfig` — a compile error if both are declared, and a throw naming the table class for JavaScript callers.
+
+  The option is typed structurally (`DynaRecordDocumentClient`: anything with a `send`) rather than as `DynamoDBDocumentClient`. The SDK's client class extends a smithy `Client` carrying a private member, which makes TypeScript compare it nominally: a client built from a second installed copy of the AWS SDK fails to satisfy it even when the two interoperate — measured between `3.1100.0` and `3.1105.0`, five releases apart. Since a project whose lockfile predates dyna-record's floor gets exactly that second copy, the nominal type would have rejected correct clients for most existing projects. A runtime check naming the table class replaces it, and a hand-written test double now type-checks with no cast.
+
+  A supplied client contributes transport, credentials, region, and endpoint only. Commands and their marshalling are built from dyna-record's own copy of `@aws-sdk/lib-dynamodb`. If you inject a client, build it from `@aws-sdk/lib-dynamodb` 3.1103.0 or later — the release that introduced `SearchVectorsCommand`. This applies only to injected clients.
+
+- **Exported types: `DynaRecordDocumentClient`, `TableClientOptions`.**
+
+### Changed
+
+- **The client is built on first use, not at import.** Importing dyna-record no longer constructs a DynamoDB client, and each table resolves and reuses exactly one client — so a table configured with its own client never falls back to the default, and two tables never share one. Tables that configure nothing share a single default client for the life of the process.
+
+- **`VectorDistanceFunction` is dyna-record's own union rather than a re-export of the SDK's.** Its three values are unchanged (`"COSINE" | "DOT_PRODUCT" | "EUCLIDEAN"`) and nothing about its use changes. The re-export made TypeScript emit a path into the SDK's internal module layout — `@aws-sdk/client-dynamodb/dist-types/models/enums.js` — inside dyna-record's own published declarations, and that layout has moved between SDK releases. An unexported type-level assertion holds the union equal to the SDK's in both directions, so a service addition fails dyna-record's build.
+
+- **The declared minimum AWS SDK version is corrected to `^3.1103.0`**, the first release containing `SearchVectorsCommand`. It was `^3.1105.0`, which was simply the current version when vector search shipped.
+
 ## 3.1.0 - 2026-09-17
 
 ### Changed
