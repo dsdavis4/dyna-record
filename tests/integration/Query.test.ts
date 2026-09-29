@@ -2067,13 +2067,25 @@ describe("Query", () => {
       });
 
       it("does not allow the partition key value if its the wrong type", async () => {
-        // @ts-expect-error: PartitionKey value must be a string
-        await Customer.query({ pk: 123, sk: "SomeVal" });
+        expect.assertions(1);
+
+        await expect(
+          // @ts-expect-error: PartitionKey value must be a string
+          Customer.query({ pk: 123, sk: "SomeVal" })
+        ).rejects.toThrow(
+          'Invalid filter value for attribute "pk": the value does not match the attribute\'s type'
+        );
       });
 
       it("does not allow the sort key value if its the wrong type", async () => {
-        // @ts-expect-error: PartitionKey value must be a string
-        await Customer.query({ pk: "123", sk: 456 });
+        expect.assertions(1);
+
+        await expect(
+          // @ts-expect-error: SortKey value must be a string
+          Customer.query({ pk: "123", sk: 456 })
+        ).rejects.toThrow(
+          'Invalid filter value for attribute "sk": the value does not match the attribute\'s type'
+        );
       });
 
       it("sort key is optional", async () => {
@@ -2094,6 +2106,57 @@ describe("Query", () => {
       it("key condition can only include key values", async () => {
         // @ts-expect-error: Can only query on keys for key condition
         await Customer.query({ pk: "123", name: "Testing" });
+      });
+
+      describe("index key condition values", () => {
+        it("accepts a $beginsWith condition on an index attribute", async () => {
+          // @ts-expect-no-error: $beginsWith is a valid condition on an indexed attribute
+          await Customer.query(
+            { name: { $beginsWith: "Test" } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("rejects a nested key-conditions record as an attribute's condition", async () => {
+          // Before 3.3.0 every index attribute was typed as a whole
+          // KeyConditions record rather than a condition on that attribute,
+          // and KeyConditions itself constrained nothing
+          // @ts-expect-error: an index attribute takes a condition, not a record of conditions
+          await Customer.query(
+            { name: { someOtherAttribute: "Testing" } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+      });
+
+      describe("filter values the type system now rejects", () => {
+        it("rejects $beginsWith with a non-string", async () => {
+          // @ts-expect-error: begins_with operates on strings, so a number cannot match
+          await Customer.query("123", {
+            filter: { name: { $beginsWith: 123 } }
+          }).catch(() => {});
+        });
+
+        it("rejects a Date, which is stored as an ISO string", async () => {
+          // @ts-expect-error: dates are stored as ISO strings and filtered as strings
+          await Customer.query("123", {
+            filter: { createdAt: new Date() }
+          }).catch(() => {});
+        });
+
+        it("rejects a function", async () => {
+          // @ts-expect-error: a function is not a value DynamoDB can store
+          await Customer.query("123", {
+            filter: { name: () => "Testing" }
+          }).catch(() => {});
+        });
+
+        it("rejects an object that is not a supported operator", async () => {
+          // @ts-expect-error: $gt is not a supported filter operator
+          await Customer.query("123", {
+            filter: { name: { $gt: "Testing" } }
+          }).catch(() => {});
+        });
       });
 
       it("key condition can include non-key values if querying on an index", async () => {
@@ -4363,7 +4426,7 @@ describe("Query", () => {
         // @ts-expect-no-error: top-level AND with $or
         await DiscriminatedUnionEntity.query("123", {
           filter: {
-            "payment.amount": { $gt: 50 },
+            "payment.amount": 50,
             $or: [
               { "payment.method.type": "creditCard" },
               { "payment.method.type": "bankTransfer" }

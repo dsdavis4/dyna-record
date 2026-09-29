@@ -195,9 +195,11 @@ describe("searchFilterAttributeResolver", () => {
 
     const builder = searchBuilderInstance();
 
+    // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
     expect(() => builder.filterParams({ category: { $gt: "a" } })).toThrowError(
       FilterError
     );
+    // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
     expect(() => builder.filterParams({ category: { $gt: "a" } })).toThrowError(
       'Invalid filter value for attribute "category": the value does not match the attribute\'s type'
     );

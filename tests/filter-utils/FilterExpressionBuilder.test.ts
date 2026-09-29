@@ -140,6 +140,121 @@ describe("FilterExpressionBuilder", () => {
     });
   });
 
+  describe("value validation", () => {
+    it("rejects a value that does not match the attribute's declared type", () => {
+      expect.assertions(1);
+
+      // The builder's own FilterParams has no per-attribute typing — that
+      // lives at the query surface — so the runtime guard is what rejects this
+      expect(() =>
+        searchBuilderInstance().filterParams({ price: "not a number" })
+      ).toThrow(
+        'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+      );
+    });
+
+    it("validates each element of an IN condition", () => {
+      expect.assertions(1);
+
+      // An IN condition is a set of equality candidates, so each element is a
+      // value of the attribute in its own right
+      const builder = new FilterExpressionBuilder({
+        capabilities: queryFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+      expect(() => builder.filterParams({ price: [1, "two"] })).toThrow(
+        'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+      );
+    });
+
+    it("does not validate a nested value against the enclosing attribute's type", () => {
+      expect.assertions(1);
+
+      // The resolver answers for the top level attribute; a nested field's
+      // value is not a value of the object that contains it
+      const builder = new FilterExpressionBuilder({
+        capabilities: queryFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+      expect(builder.filterParams({ "meta.label": "anything" })).toEqual({
+        expression: "#Meta.#label = :Metalabel1",
+        values: { Metalabel1: "anything" }
+      });
+    });
+  });
+
+  describe("conditions with no value", () => {
+    it("drops a filter condition explicitly set to undefined", () => {
+      expect.assertions(1);
+
+      // Filter keys are optional, so forwarding an optional input is the
+      // ordinary way to build one
+      // Legal under FilterParams: filter keys are optional, so an optional
+      // input that resolved to undefined type-checks
+      expect(queryBuilderInstance().filterParams({ name: undefined })).toEqual({
+        expression: "",
+        values: {}
+      });
+    });
+
+    it("keeps the remaining conditions when one is dropped", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          name: "Testing",
+          price: undefined
+        })
+      ).toEqual({ expression: "#Name = :Name1", values: { Name1: "Testing" } });
+    });
+
+    it("drops an undefined $or rather than reading it as an attribute", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ $or: undefined, name: "Testing" })
+      ).toEqual({ expression: "#Name = :Name1", values: { Name1: "Testing" } });
+    });
+
+    it("names no attribute for a dropped condition", () => {
+      expect.assertions(1);
+
+      // An ExpressionAttributeNames entry with no reference in the expression
+      // is rejected by DynamoDB
+      expect(
+        queryBuilderInstance().expressionAttributeNames([], { name: undefined })
+      ).toEqual({});
+    });
+
+    it("rejects an operator given no value", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error the operator type declares a string operand, so
+          // only a plain JavaScript caller or an optional input reaches this
+          name: { $beginsWith: undefined }
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "name": $beginsWith was given no value'
+      );
+    });
+
+    it("rejects a key condition with no value rather than dropping it", () => {
+      expect.assertions(1);
+
+      // Dropping a key condition would widen the query to the whole partition,
+      // where dropping a filter only widens within it
+      expect(() =>
+        queryBuilderInstance().andFilter({ name: undefined })
+      ).toThrow(
+        'Invalid key condition for attribute "name": the condition has no value'
+      );
+    });
+  });
+
   describe("search capabilities", () => {
     it("compiles equality conditions joined by AND with every attribute name aliased", () => {
       expect.assertions(2);
@@ -277,9 +392,11 @@ describe("FilterExpressionBuilder", () => {
 
       const builder = searchBuilderInstance();
 
+      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
         FilterError
       );
+      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
         'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
       );

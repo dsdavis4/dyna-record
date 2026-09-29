@@ -10,6 +10,7 @@
  */
 
 import type { VectorDistanceFunction as SdkVectorDistanceFunction } from "@aws-sdk/client-dynamodb";
+import type { Assert, Equals } from "../types.js";
 
 /**
  * A distance function supported by DynamoDB vector indexes.
@@ -23,17 +24,6 @@ import type { VectorDistanceFunction as SdkVectorDistanceFunction } from "@aws-s
  * publish through `prepublishOnly`, which runs the build alone.
  */
 export type VectorDistanceFunction = "COSINE" | "DOT_PRODUCT" | "EUCLIDEAN";
-
-/**
- * Mutual assignability. Both sides are wrapped in tuples so a union does not
- * distribute, which would let a strict subset pass
- */
-type Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
-
-/**
- * Fails compilation unless its argument is `true`
- */
-type Assert<T extends true> = T;
 
 /**
  * Holds {@link VectorDistanceFunction} equal to the SDK's union in both

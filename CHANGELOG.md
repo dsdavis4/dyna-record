@@ -1,3 +1,39 @@
+## 3.3.0 - 2026-09-28
+
+### Breaking (type-level only)
+
+- **Filter values are checked.** `FilterTypes` — the value type behind every key in a query `filter` — resolved to `any`, because it was built on the AWS SDK's `NativeAttributeValue`, whose union ends in an `InstanceType<{ new (...args: any[]): any }>` branch that collapses the whole type. A filter value is now a string, number, bigint, boolean, `null` or binary, an array of those for an `IN` condition, or a `$beginsWith` / `$contains` operator object.
+
+  Four shapes compiled before and no longer do. A **`Date`** — dyna-record stores dates as ISO 8601 strings, so filter on the string (`{ createdAt: { $beginsWith: "2026-09" } }`), which is what the documented examples already do. A **function or class instance**, which the document client could never marshal. **`$beginsWith` with a non-string**, since `begins_with` operates on strings. And an **unsupported operator** such as `$gt`, which the search builder already rejected at runtime with a `FilterError` and which query filters silently compiled into an equality against a map.
+
+- **Index key conditions are checked.** `IndexKeyConditions<T>` typed every entity field's value as a whole `KeyConditions` record rather than as a condition on that field, and `KeyConditions` itself resolved to `{}` — a type that accepts any object. Both were consequences of the same `any`. Each attribute now takes a value to match or a `$beginsWith`, so `{ name: { someOtherAttribute: "x" } }` is a compile error where it previously passed.
+
+- **`SortKeyCondition`, `BeginsWithFilter`, `ContainsFilter` and `DynamoTableItem` narrow accordingly**, as does the `Serializers` pair — a custom `toEntityAttribute` typed against the SDK's `NativeScalarAttributeValue` now takes `DynamoNativeValue`.
+
+### Fixed
+
+- **Query filter and key condition values are validated at runtime**, against the same attribute schemas the type system checks against. Compile-time typing is erased for JavaScript callers and for anything that reaches a filter as `unknown`, so a restriction that exists only in the types is not a restriction at all; this closes that gap for the query path, which vector search filters already had. A value that cannot match the attribute is rejected with a `FilterError` naming it, rather than compiled into a query that silently returns nothing.
+
+  Three cases are deliberately left unvalidated, because in each the value is not a value of the attribute being compared. An attribute stored differently from how it is declared — a date, declared as `Date` and stored as an ISO string — since the filter names the stored form. A nested `@ObjectAttribute` field reached by dot path, since it is not a value of the object that contains it. And the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment rather than a whole value. Each element of an `IN` array _is_ validated, since those are equality candidates.
+
+- **A filter condition explicitly set to `undefined` is dropped rather than compiled.** Filter keys are optional, so forwarding an optional input — `filter: { name: req.query.name }` — is an ordinary way to build one. Previously that compiled an expression referencing a placeholder with nothing bound to it, and named the attribute in `ExpressionAttributeNames` without referencing it, either of which DynamoDB rejects with a `ValidationException` that names neither the attribute nor the cause. An undefined `$or` drops the same way instead of being read as an attribute named `"$or"`.
+
+- **A key condition with no value is rejected** with a `FilterError` naming the attribute, rather than dropped. The asymmetry is the point: key conditions are what scope a query to a partition, so silently dropping one widens the query to everything under that partition, while dropping a filter only widens the result set inside the partition the key conditions already bounded. One is a quietly wrong answer; the other is a narrower answer than intended.
+
+- **An operator given no value is rejected** with a `FilterError` naming the attribute and the operator — `{ name: { $beginsWith: undefined } }` — instead of emitting a `begins_with` or `contains` whose placeholder has nothing bound to it.
+
+### Added
+
+- **`DynamoScalarValue` and `DynamoNativeValue`** are exported: the value a DynamoDB attribute can hold, and its recursive form including documents and sets. They are dyna-record's own unions, held inside the SDK's scalar union by an unexported type-level assertion so a type the service stops supporting fails the build. The assertion is one-directional because `DynamoScalarValue` is deliberately narrower than the SDK's: no `undefined`, no `NumberValue` wrapper (rejected on a supplied client since 3.2.0), and no wide binary union, since dyna-record models no binary attribute type. `DynamoNativeValue` does include `undefined`, which is how an absent attribute and an unset serializer result are represented.
+
+### Changed
+
+- **The update expression types no longer derive from `UpdateCommandInput`**, and two type-level assertions hold them equal to the SDK's. `ExpressionAttributeValues` is deliberately unasserted: the SDK's value type is `any`, so any check against it passes vacuously — which is why it was worth owning.
+
+- **Published type declarations naming the AWS SDK drop from twelve files to four.** The four that remain are the command shapes dyna-record sends, the query command input `QueryBuilder` builds, and `DynamoDBClientConfig` — none of which can be duplicated without maintaining a parallel copy of the SDK's command surface.
+
+- **Seven `no-unsafe-assignment` suppressions are gone** from the source, along with two casts in the filter guards, because nothing on these paths is `any` any more.
+
 ## 3.2.0 - 2026-09-28
 
 > **Read before upgrading: the DynamoDB client is configurable, and no longer pinned to `us-west-2`.** dyna-record built its client with `region: "us-west-2"` written in, which overrode `AWS_REGION`, `AWS_DEFAULT_REGION`, and the profile's region. Fixing that defect changes which region a deployed application talks to, and **nothing breaks at the type level** — the new options are additive and optional — so the compiler will not flag it for you. If your table is in `us-west-2`, check the migration below before upgrading.

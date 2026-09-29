@@ -1,5 +1,5 @@
 import type DynaRecord from "./DynaRecord.js";
-import type { DynamoTableItem, Nullable } from "./types.js";
+import type { DynamoNativeValue, DynamoTableItem, Nullable } from "./types.js";
 import Metadata from "./metadata/index.js";
 import { type EntityAttributesOnly } from "./operations/index.js";
 
@@ -20,9 +20,12 @@ export const entityToTableItem = (
       if (key in attributesMeta) {
         const attrMeta = attributesMeta[key];
         const { alias, serializers } = attrMeta;
-        const val: unknown = rawVal;
+        // `Partial<DynaRecord>` types only the four base fields, while real
+        // entity data carries the subclass's attributes — including the nulls
+        // tested for below, and the values of attributes whose decorators only
+        // permit types DynamoDB can store
+        const val = rawVal as DynamoNativeValue;
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- DynamoTableItem values are NativeAttributeValue (any) from AWS SDK
         acc[alias] =
           serializers === undefined || val === null
             ? val
@@ -54,7 +57,7 @@ export const tableItemToEntity = <T extends DynaRecord>(
       const { name: entityKey, serializers } = attrMeta;
 
       if (isKeyOfEntity(entity, entityKey)) {
-        const rawVal: unknown = tableItem[attrName];
+        const rawVal = tableItem[attrName];
         const val =
           serializers?.toEntityAttribute === undefined
             ? rawVal

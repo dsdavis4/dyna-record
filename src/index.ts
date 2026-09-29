@@ -23,6 +23,8 @@ export type {
 } from "./operations/index.js";
 export type {
   Brand,
+  DynamoNativeValue,
+  DynamoScalarValue,
   PartitionKey,
   SortKey,
   ForeignKey,

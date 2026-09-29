@@ -1,8 +1,8 @@
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type {
   BelongsToRelationship,
   RelationshipMetadata
 } from "./metadata/index.js";
+import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
 import type DynaRecord from "./DynaRecord.js";
 
 /**
@@ -140,9 +140,88 @@ export type SearchFilterable<T extends Optional<string | number> = string> =
       };
 
 /**
- * Defines a general type for items stored in a DynamoDB table, using string keys and native scalar attribute values.
+ * Mutual assignability. Both sides are wrapped in tuples so a union does not
+ * distribute, which would let a strict subset pass.
+ *
+ * Internal: exported so drift assertions elsewhere in `src` can use it, never
+ * from the package entry point.
  */
-export type DynamoTableItem = Record<string, NativeAttributeValue>;
+export type Equals<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : false
+  : false;
+
+/**
+ * Whether `A` is assignable to `B`. The one-directional counterpart to
+ * {@link Equals}, for types dyna-record deliberately narrows.
+ */
+export type Extends<A, B> = [A] extends [B] ? true : false;
+
+/**
+ * Fails compilation unless its argument is `true`.
+ */
+export type Assert<T extends true> = T;
+
+/**
+ * A single, indivisible value DynamoDB can store: the types its scalar
+ * attribute comparisons, sort key conditions, and filter operands accept.
+ *
+ * dyna-record's own union rather than the SDK's `NativeScalarAttributeValue`,
+ * which ends in an `InstanceType<{ new (...args: any[]): any }>` branch that
+ * collapses the whole type to `any`. Owning it is what lets a filter value be
+ * checked at all — a `Date`, a function, or a class instance is rejected here
+ * rather than failing when the document client marshals it.
+ *
+ * Three things are deliberately absent. `Date`, because dyna-record stores
+ * dates as ISO strings, so a date is filtered and compared as the string it is
+ * stored as. The SDK's `NumberValue` wrapper, which appears only under
+ * `unmarshallOptions.wrapNumbers` — rejected on a supplied client since 3.2.0.
+ * And the SDK's wider binary union, since dyna-record models no binary
+ * attribute type.
+ */
+export type DynamoScalarValue =
+  | string
+  | number
+  | bigint
+  | boolean
+  | null
+  | Uint8Array;
+
+/**
+ * Holds {@link DynamoScalarValue} within the SDK's own scalar union, so a type
+ * the service stops supporting fails the build here. One-directional because
+ * dyna-record's union is deliberately narrower — see its omissions above.
+ *
+ * Type-only and unexported, so the SDK type is named without reappearing in
+ * dyna-record's published declarations.
+ */
+type _DynamoScalarValueIsStorable = Assert<
+  Extends<DynamoScalarValue, NativeScalarAttributeValue>
+>;
+
+/**
+ * Any value DynamoDB can store under an attribute, including the documents and
+ * sets it composes from {@link DynamoScalarValue}.
+ *
+ * The recursive counterpart to the scalar union, and the type of a table
+ * item's values. Mirrors the SDK's `NativeAttributeValue` minus the
+ * class-instance escape hatch that made it `any`.
+ */
+export type DynamoNativeValue =
+  | DynamoScalarValue
+  | undefined
+  | DynamoNativeValue[]
+  | Set<string>
+  | Set<number>
+  | Set<bigint>
+  | Set<Uint8Array>
+  | { [key: string]: DynamoNativeValue };
+
+/**
+ * Defines a general type for items stored in a DynamoDB table, using string keys and native attribute values.
+ */
+export type DynamoTableItem = Record<string, DynamoNativeValue>;
 
 /**
  * A utility type for objects with string keys and string values.
@@ -180,7 +259,7 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> &
 
 /**
  * Detects the `any` type. Resolves to `true` when T is `any`, `false` otherwise.
- * Used internally to guard against `any` propagation from AWS SDK's `NativeAttributeValue`.
+ * Used internally to guard against `any` propagation from third-party types.
  */
 export type IsAny<T> = 0 extends 1 & T ? true : false;
 

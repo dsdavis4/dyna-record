@@ -985,6 +985,12 @@ The type system validates:
 - **SK-scoped filters**: When `skCondition` narrows to specific entities, the `filter` parameter is scoped to only those entities' attributes. For example, `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes — using `lastFour` (a PaymentMethod attribute) produces a compile error.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
+- **Filter values**: A filter value must be something DynamoDB can store — a string, number, bigint, boolean, `null`, or binary — or an array of those for an `IN` condition, or a `$beginsWith` / `$contains` operator object. A `Date`, a function, a class instance, or an unsupported operator such as `$gt` is a compile error. Dates are stored as ISO 8601 strings, so filter on the string: `filter: { createdAt: { $beginsWith: "2026-09" } }`.
+- **Key condition values**: When querying an index, each attribute takes a condition on that attribute — a value to match, or `$beginsWith`.
+
+Filter and key condition values are also checked at runtime against the attribute's schema, so a value that cannot match is reported as a `FilterError` naming the attribute rather than compiled into a query that returns nothing. Three things are not checked, because in each the value is not a value of the attribute being compared: an attribute stored differently from how it is declared (a date is declared as a `Date` and stored as an ISO string, so filter on the string), a nested field reached by dot path, and the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment. Each element of an `IN` array is checked.
+
+A filter condition set to `undefined` is dropped, so forwarding an optional input (`filter: { name: req.query.name }`) filters on it only when it has a value. A **key** condition set to `undefined` is an error instead: key conditions are what scope a query to a partition, so dropping one would silently widen the query to everything under it, where dropping a filter only widens the results within the partition already scoped. An operator given no value — `{ name: { $beginsWith: undefined } }` — is an error for the same reason it cannot be dropped: it asks for a comparison and supplies nothing to compare against.
 
 ##### Filter key validation
 
@@ -1826,7 +1832,7 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Attribute Type Enforcement**: Ensures that the data types of attributes match their definitions in your entities.
 - **Method Parameter Checking**: Validates method parameters against entity definitions, preventing invalid operations.
 - **Relationship Integrity**: Automatically manages the consistency of relationships between entities, ensuring data integrity.
-- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names.
+- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names. Filter values are checked too: only values DynamoDB can store, and only supported operators, are accepted.
 - **Return Type Narrowing**: When a query filter specifies a `type` value, the return type is automatically narrowed to only the matching entity types instead of the full partition union.
 - **`$or` Element Narrowing**: Each element in a `$or` filter array is independently type-checked based on its own `type` field, preventing attribute mismatches.
 - **Searchable Brands**: `@Searchable()` and `@SearchFilterable()` require the `Searchable`/`SearchFilterable` property brands, so the searchable and filterable sets are known at compile time — search `in:` values, filter keys, and result unions all derive from them. A second `@Searchable` attribute on one entity is a compile error at the `@Entity` decorator.
