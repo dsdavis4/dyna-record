@@ -2096,6 +2096,91 @@ describe("Query", () => {
         await Customer.query({ pk: "123", name: "Testing" });
       });
 
+      describe("index key condition values", () => {
+        it("accepts a scalar condition on an index attribute", async () => {
+          // @ts-expect-no-error: a scalar is a valid condition on an indexed attribute
+          await Customer.query({ name: "Testing" }, { indexName: "MyIndex" });
+        });
+
+        it("accepts a $beginsWith condition on an index attribute", async () => {
+          // @ts-expect-no-error: $beginsWith is a valid condition on an indexed attribute
+          await Customer.query(
+            { name: { $beginsWith: "Test" } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("rejects a nested key-conditions record as an attribute's condition", async () => {
+          // Before 3.3.0 every index attribute was typed as a whole
+          // KeyConditions record rather than a condition on that attribute,
+          // and KeyConditions itself constrained nothing
+          // @ts-expect-error: an index attribute takes a condition, not a record of conditions
+          await Customer.query(
+            { name: { someOtherAttribute: "Testing" } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("rejects an arbitrary object as an attribute's condition", async () => {
+          // @ts-expect-error: only a scalar or $beginsWith is a condition
+          await Customer.query(
+            { name: { whatever: 123 } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+      });
+
+      describe("filter values", () => {
+        it("accepts the scalars DynamoDB can store", async () => {
+          // @ts-expect-no-error: strings, numbers and booleans are storable values
+          await Customer.query("123", {
+            filter: { name: "Testing", type: "Customer" }
+          }).catch(() => {});
+        });
+
+        it("accepts an array for an IN condition", async () => {
+          // @ts-expect-no-error: an array of scalars is an IN condition
+          await Customer.query("123", {
+            filter: { name: ["Testing", "Other"] }
+          }).catch(() => {});
+        });
+
+        it("accepts $beginsWith with a string", async () => {
+          // @ts-expect-no-error: begins_with operates on strings
+          await Customer.query("123", {
+            filter: { name: { $beginsWith: "Test" } }
+          }).catch(() => {});
+        });
+
+        it("rejects $beginsWith with a non-string", async () => {
+          // @ts-expect-error: begins_with operates on strings, so a number cannot match
+          await Customer.query("123", {
+            filter: { name: { $beginsWith: 123 } }
+          }).catch(() => {});
+        });
+
+        it("rejects a Date, which is stored as an ISO string", async () => {
+          // @ts-expect-error: dates are stored as ISO strings and filtered as strings
+          await Customer.query("123", {
+            filter: { createdAt: new Date() }
+          }).catch(() => {});
+        });
+
+        it("rejects a function", async () => {
+          // @ts-expect-error: a function is not a value DynamoDB can store
+          await Customer.query("123", {
+            filter: { name: () => "Testing" }
+          }).catch(() => {});
+        });
+
+        it("rejects an object that is not a supported operator", async () => {
+          // @ts-expect-error: $gt is not a supported filter operator
+          await Customer.query("123", {
+            filter: { name: { $gt: "Testing" } }
+          }).catch(() => {});
+        });
+      });
+
       it("key condition can include non-key values if querying on an index", async () => {
         // @ts-expect-no-error: Key condition can include non key values if querying on an index
         await Customer.query({ name: "Testing" }, { indexName: "MyIndex" });

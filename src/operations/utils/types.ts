@@ -1,27 +1,54 @@
 import { type UpdateCommandInput } from "@aws-sdk/lib-dynamodb";
+import type {
+  Assert,
+  DynamoNativeValue,
+  Equals,
+  StringObj
+} from "../../types.js";
 
 /**
  * Defines the structure for an update expression using the SET action in DynamoDB, which is used to add new attributes to an item or modify existing attributes. This interface encapsulates the necessary components of an update expression for the [SET](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.SET) action.
  */
 export interface UpdateSetExpression {
-  UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
-  ExpressionAttributeNames: NonNullable<
-    UpdateCommandInput["ExpressionAttributeNames"]
-  >;
-  ExpressionAttributeValues: NonNullable<
-    UpdateCommandInput["ExpressionAttributeValues"]
-  >;
+  UpdateExpression: string;
+  ExpressionAttributeNames: StringObj;
+  ExpressionAttributeValues: Record<string, DynamoNativeValue>;
 }
 
 /**
  * Defines the structure for an update expression using the REMOVE action in DynamoDB, which is used to delete attributes from an item. This interface encapsulates the necessary components of an update expression for the [REMOVE](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.UpdateExpressions.html#Expressions.UpdateExpressions.REMOVE) action, including attribute names and the update expression itself.
  */
 export interface UpdateRemoveExpression {
-  UpdateExpression: NonNullable<UpdateCommandInput["UpdateExpression"]>;
-  ExpressionAttributeNames: NonNullable<
-    UpdateCommandInput["ExpressionAttributeNames"]
-  >;
+  UpdateExpression: string;
+  ExpressionAttributeNames: StringObj;
 }
+
+/**
+ * Holds the expression shapes above equal to the SDK's, so a rename or a
+ * retype in `UpdateCommandInput` fails the build here rather than at the call
+ * to DynamoDB.
+ *
+ * `ExpressionAttributeValues` has no assertion: the SDK types its values as
+ * `NativeAttributeValue`, which collapses to `any`, so any check against it
+ * passes vacuously. Owning that one outright is the reason this file no longer
+ * derives its types from the command input.
+ *
+ * Type-only and unexported: nothing is emitted for these, so the SDK types are
+ * named without reappearing in dyna-record's published declarations.
+ */
+type _UpdateExpressionMatchesSdk = Assert<
+  Equals<
+    UpdateSetExpression["UpdateExpression"],
+    NonNullable<UpdateCommandInput["UpdateExpression"]>
+  >
+>;
+
+type _ExpressionAttributeNamesMatchSdk = Assert<
+  Equals<
+    UpdateSetExpression["ExpressionAttributeNames"],
+    NonNullable<UpdateCommandInput["ExpressionAttributeNames"]>
+  >
+>;
 
 /**
  * Represents either an update expression for setting new or modifying existing attributes of an item (UpdateSetExpression) or an update expression for removing attributes from an item (UpdateRemoveExpression) in DynamoDB.
