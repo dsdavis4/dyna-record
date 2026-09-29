@@ -1,7 +1,6 @@
 import type DynaRecord from "../../DynaRecord.js";
 import { type RelationshipMetadata } from "../../metadata/index.js";
 import { includedRelationshipsFilter } from "../../query-utils/Filters.js";
-import { DynamoClient } from "../../dynamo-utils/index.js";
 import type { Optional, RelationshipLookup } from "../../types.js";
 import { safeAssign, tableItemToEntity } from "../../utils.js";
 import OperationBase from "../OperationBase.js";
@@ -64,7 +63,7 @@ class FindById<T extends DynaRecord> extends OperationBase<T> {
   ): Promise<Optional<T>> {
     const { name: tableName, readProjection } = this.tableMetadata;
 
-    const res = await DynamoClient.getItem({
+    const res = await this.tableMetadata.dynamo.getItem({
       TableName: tableName,
       Key: {
         [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),

@@ -185,7 +185,7 @@ class MetadataStorage {
    * @param options
    */
   public addTable(tableClassName: string, options: TableMetadataOptions): void {
-    this.#tables[tableClassName] = new TableMetadata(options);
+    this.#tables[tableClassName] = new TableMetadata(options, tableClassName);
   }
 
   /**

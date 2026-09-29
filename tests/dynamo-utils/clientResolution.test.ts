@@ -120,28 +120,16 @@ describe("clientResolution", () => {
       expect(mockedDynamoDBClient).not.toHaveBeenCalled();
     });
 
-    it("uses the value a factory returns, and constructs nothing", () => {
-      expect.assertions(3);
+    it("uses a client that delegates to one bound later, the documented answer for late binding", () => {
+      expect.assertions(2);
 
-      const client = stubClient();
-      const factory = vi.fn().mockReturnValue(client);
+      const late = stubClient();
+      const delegating = { send: late.send };
 
-      expect(resolveClient({ client: factory }, "MockTable")).toBe(client);
-      expect(factory).toHaveBeenCalledTimes(1);
-      expect(mockedDynamoDBClient).not.toHaveBeenCalled();
-    });
-
-    it("propagates an error thrown by a factory unchanged", () => {
-      expect.assertions(1);
-
-      const failure = new Error("credentials are not ready");
-      const factory = vi.fn().mockImplementation(() => {
-        throw failure;
-      });
-
-      expect(() => resolveClient({ client: factory }, "MockTable")).toThrow(
-        failure
+      expect(resolveClient({ client: delegating }, "MockTable")).toBe(
+        delegating
       );
+      expect(mockedDynamoDBClient).not.toHaveBeenCalled();
     });
   });
 
@@ -154,17 +142,18 @@ describe("clientResolution", () => {
         // value the option's type rejects, which is the case the guard exists for
         resolveClient({ client: { send: "nope" } }, "MockTable")
       ).toThrow(
-        "Table MockTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient, or a function returning one"
+        "Table MockTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient"
       );
     });
 
-    it("rejects what a factory returns when it cannot send commands, naming the table class", () => {
+    it("rejects a client with no send at all, naming the table class", () => {
       expect.assertions(1);
 
-      // @ts-expect-error as above: the function's return type is checked at
-      // compile time, so only an untyped caller reaches this branch
-      expect(() => resolveClient({ client: () => ({}) }, "OtherTable")).toThrow(
-        "Table OtherTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient, or a function returning one"
+      expect(() =>
+        // @ts-expect-error as above: only an untyped caller reaches this branch
+        resolveClient({ client: {} }, "OtherTable")
+      ).toThrow(
+        "Table OtherTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient"
       );
     });
 
@@ -172,7 +161,7 @@ describe("clientResolution", () => {
       expect.assertions(1);
 
       expect(() => assertCanSend(null, "MockTable")).toThrow(
-        "Table MockTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient, or a function returning one"
+        "Table MockTable was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient"
       );
     });
 

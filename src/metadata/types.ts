@@ -12,6 +12,7 @@ import type DynaRecord from "../DynaRecord.js";
 import type { EntityClass, MakeOptional } from "../types.js";
 import type { ZodType } from "zod";
 import type { ObjectSchema } from "../decorators/attributes/types.js";
+import type { TableClientOptions } from "../dynamo-utils/clientResolution.js";
 
 /**
  * Represents relationship metadata that includes a foreign key reference to another entity.
@@ -69,17 +70,18 @@ export type TableDefaultFields = Record<
 >;
 
 /**
- * Options for configuring table metadata, including the table name, delimiter, and default fields.
+ * Options for configuring table metadata, including the table name, delimiter, default fields, and how the table reaches DynamoDB.
  *
  * @remarks
  * - **name**: The table name (required).
  * - **delimiter**: An optional character used to separate fields in the table. If not provided, it defaults to `'#'`.
  * - **defaultFields**: An optional mapping of default fields to their attribute metadata table aliases.
+ * - **client** / **clientConfig**: Optional, mutually exclusive. See {@link TableClientOptions}. With neither, dyna-record builds a client using the AWS SDK's default resolution.
  */
 export type TableMetadataOptions = Pick<TableMetadata, "name"> &
   Partial<Pick<TableMetadata, "delimiter">> & {
     defaultFields?: Partial<TableDefaultFields>;
-  };
+  } & TableClientOptions;
 
 /**
  * Options for configuring keys in attribute metadata, making all properties except `nullable` optional, including `alias`.

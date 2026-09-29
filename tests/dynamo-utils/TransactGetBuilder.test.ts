@@ -1,11 +1,23 @@
 import TransactGetBuilder from "../../src/dynamo-utils/TransactGetBuilder.js";
-
 import DynamoClient from "../../src/dynamo-utils/DynamoClient.js";
-vi.mock("../../src/dynamo-utils/DynamoClient");
+import { TransactGetCommand } from "@aws-sdk/lib-dynamodb";
+
+const mockSend = vi.fn();
+
+vi.mock("@aws-sdk/lib-dynamodb", () => {
+  return {
+    TransactGetCommand: vi.fn().mockImplementation(input => {
+      return { name: "TransactGetCommand", input };
+    })
+  };
+});
+
+const mockedTransactGetCommand = vi.mocked(TransactGetCommand);
 
 describe("TransactGetBuilder", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    mockSend.mockReset();
   });
 
   it("will handle transactions of more than the max allowed by Dynamo (100) into multiple requests", async () => {
@@ -13,16 +25,20 @@ describe("TransactGetBuilder", () => {
 
     const numTransactions = 303;
 
-    const mockTransactGetItems = vi.spyOn(DynamoClient, "transactGetItems");
-
-    mockTransactGetItems.mockImplementation(async params => {
-      const transactions = params.TransactItems ?? [];
-      return await Promise.resolve(
-        transactions.map(transaction => ({ Item: transaction.Get?.Key }))
-      );
+    mockSend.mockImplementation(async command => {
+      const transactions = command.input.TransactItems ?? [];
+      return await Promise.resolve({
+        Responses: transactions.map(
+          (transaction: { Get?: { Key: unknown } }) => ({
+            Item: transaction.Get?.Key
+          })
+        )
+      });
     });
 
-    const transactionBuilder = new TransactGetBuilder();
+    const transactionBuilder = new TransactGetBuilder(
+      new DynamoClient({ send: async command => await mockSend(command) })
+    );
 
     for (let i = 0; i < numTransactions; i++) {
       transactionBuilder.addGet({
@@ -41,6 +57,23 @@ describe("TransactGetBuilder", () => {
         }))
     );
     expect(res).toHaveLength(numTransactions);
-    expect(mockTransactGetItems).toHaveBeenCalledTimes(4);
+    expect(mockedTransactGetCommand).toHaveBeenCalledTimes(4);
+  });
+
+  it("sends through the client it was constructed with", async () => {
+    expect.assertions(2);
+
+    mockSend.mockResolvedValueOnce({ Responses: [{ Item: { PK: "PK#1" } }] });
+
+    const transactionBuilder = new TransactGetBuilder(
+      new DynamoClient({ send: async command => await mockSend(command) })
+    );
+
+    transactionBuilder.addGet({ TableName: "mock-table", Key: { PK: "PK#1" } });
+
+    const res = await transactionBuilder.executeTransaction();
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(res).toEqual([{ Item: { PK: "PK#1" } }]);
   });
 });

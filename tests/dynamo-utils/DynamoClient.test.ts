@@ -11,25 +11,8 @@ const mockedQueryCommand = vi.mocked(QueryCommand);
 const mockedSearchVectorsCommand = vi.mocked(SearchVectorsCommand);
 const mockedTransactWriteCommand = vi.mocked(TransactWriteCommand);
 
-vi.mock("@aws-sdk/client-dynamodb", () => {
-  return {
-    DynamoDBClient: vi.fn().mockImplementation(() => {
-      return { key: "MockDynamoDBClient" };
-    })
-  };
-});
-
 vi.mock("@aws-sdk/lib-dynamodb", () => {
   return {
-    DynamoDBDocumentClient: {
-      from: vi.fn().mockImplementation(() => {
-        return {
-          send: vi.fn().mockImplementation(async command => {
-            return await mockSend(command);
-          })
-        };
-      })
-    },
     QueryCommand: vi.fn().mockImplementation(input => {
       return { name: "QueryCommand", input };
     }),
@@ -40,6 +23,10 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
       return { name: "TransactWriteCommand", input };
     })
   };
+});
+
+const dynamoClient = new DynamoClient({
+  send: async command => await mockSend(command)
 });
 
 describe("DynamoClient", () => {
@@ -56,7 +43,7 @@ describe("DynamoClient", () => {
 
       mockSend.mockResolvedValueOnce({ Items: [{ id: "1" }, { id: "2" }] });
 
-      const res = await DynamoClient.query({ TableName: "mock-table" });
+      const res = await dynamoClient.query({ TableName: "mock-table" });
 
       expect(res).toEqual([{ id: "1" }, { id: "2" }]);
       expect(mockSend).toHaveBeenCalledTimes(1);
@@ -76,7 +63,7 @@ describe("DynamoClient", () => {
         })
         .mockResolvedValueOnce({ Items: [{ id: "3" }] });
 
-      const res = await DynamoClient.query({ TableName: "mock-table" });
+      const res = await dynamoClient.query({ TableName: "mock-table" });
 
       expect(res).toEqual([{ id: "1" }, { id: "2" }, { id: "3" }]);
       expect(mockSend).toHaveBeenCalledTimes(3);
@@ -102,7 +89,7 @@ describe("DynamoClient", () => {
         LastEvaluatedKey: { PK: "a", SK: "b" }
       });
 
-      const res = await DynamoClient.query({
+      const res = await dynamoClient.query({
         TableName: "mock-table",
         Limit: 2
       });
@@ -134,7 +121,7 @@ describe("DynamoClient", () => {
         TopK: 2
       };
 
-      const res = await DynamoClient.searchVectors(params);
+      const res = await dynamoClient.searchVectors(params);
 
       expect(res).toEqual(searchResults);
       expect(mockSend).toHaveBeenCalledTimes(1);
@@ -146,7 +133,7 @@ describe("DynamoClient", () => {
 
       mockSend.mockResolvedValueOnce({});
 
-      const res = await DynamoClient.searchVectors({
+      const res = await dynamoClient.searchVectors({
         TableName: "mock-table",
         IndexName: "mock-vector-index",
         SearchVector: [0.1, 0.2],
@@ -163,7 +150,7 @@ describe("DynamoClient", () => {
       mockSend.mockResolvedValueOnce({ SearchResults: [] });
 
       const searchVector = [0.111, 0.222, 0.333, 0.444];
-      await DynamoClient.searchVectors({
+      await dynamoClient.searchVectors({
         TableName: "mock-table",
         IndexName: "mock-vector-index",
         SearchVector: searchVector,
@@ -197,7 +184,7 @@ describe("DynamoClient", () => {
         TopK: 2
       };
 
-      await DynamoClient.searchVectors(params);
+      await dynamoClient.searchVectors(params);
 
       expect(params.SearchVector).toEqual([0.1, 0.2, 0.3]);
       // The command itself must receive the real vector, not the placeholder
@@ -239,7 +226,7 @@ describe("DynamoClient", () => {
         ]
       };
 
-      await DynamoClient.transactWriteItems(params);
+      await dynamoClient.transactWriteItems(params);
 
       expect(logSpy.mock.calls).toEqual([
         [
@@ -310,7 +297,7 @@ describe("DynamoClient", () => {
         ]
       };
 
-      await DynamoClient.transactWriteItems(params);
+      await dynamoClient.transactWriteItems(params);
 
       expect(logSpy.mock.calls).toEqual([
         [
@@ -353,7 +340,7 @@ describe("DynamoClient", () => {
       const logSpy = vi.spyOn(Logger, "log").mockImplementation(() => {});
       mockSend.mockResolvedValueOnce({});
 
-      await DynamoClient.transactWriteItems({
+      await dynamoClient.transactWriteItems({
         TransactItems: [
           {
             Update: {
@@ -433,7 +420,7 @@ describe("DynamoClient", () => {
         ]
       };
 
-      await DynamoClient.transactWriteItems(params);
+      await dynamoClient.transactWriteItems(params);
 
       expect(params.TransactItems[0].Put?.Item?.__dyna_vector).toEqual([
         0.1, 0.2
@@ -464,7 +451,7 @@ describe("DynamoClient", () => {
         ]
       };
 
-      await DynamoClient.transactWriteItems(params);
+      await dynamoClient.transactWriteItems(params);
 
       expect(logSpy.mock.calls).toEqual([["transactWriteItems", { params }]]);
     });

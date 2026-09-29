@@ -1,5 +1,4 @@
 import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
-import DynamoClient from "../../dynamo-utils/DynamoClient.js";
 import { embedQueryVector } from "../../embedding/embed.js";
 import { FilterError, ValidationError } from "../../errors.js";
 import {
@@ -87,7 +86,7 @@ class Search {
     const condition = this.buildSearchCondition(options);
     const searchVector = await this.resolveSearchVector(query);
 
-    const searchResults = await DynamoClient.searchVectors({
+    const searchResults = await this.#tableMetadata.dynamo.searchVectors({
       TableName: this.#tableMetadata.name,
       IndexName: this.#index.name,
       SearchVector: searchVector,

@@ -25,18 +25,6 @@ export interface DynaRecordDocumentClient {
 }
 
 /**
- * A document client, or a function returning one.
- *
- * The function form exists for clients that cannot be constructed when the
- * entity classes are declared — credentials resolved asynchronously, or a test
- * double installed after import. It is invoked on first use and its result is
- * reused for the life of the table (see {@link TableMetadata.dynamo}).
- */
-export type DynaRecordClientProvider =
-  | DynaRecordDocumentClient
-  | (() => DynaRecordDocumentClient);
-
-/**
  * How a table reaches DynamoDB.
  *
  * Supply neither option and dyna-record constructs a client with the AWS SDK's
@@ -60,10 +48,21 @@ export type DynaRecordClientProvider =
  * })
  * abstract class Storefront extends DynaRecord {}
  * ```
+ * @example Binding late, when the client cannot exist where the table is declared
+ *
+ * Decorators evaluate at module load, before application bootstrap runs, so a
+ * client built during startup is not available here. Delegate to it instead:
+ * ```typescript
+ * @Table({
+ *   name: "storefront",
+ *   client: { send: command => getClient().send(command) }
+ * })
+ * abstract class Storefront extends DynaRecord {}
+ * ```
  */
 export type TableClientOptions =
   | { client?: never; clientConfig?: never }
-  | { client: DynaRecordClientProvider; clientConfig?: never }
+  | { client: DynaRecordDocumentClient; clientConfig?: never }
   | { client?: never; clientConfig: DynamoDBClientConfig };
 
 /**
@@ -91,9 +90,9 @@ const canSend = (client: unknown): client is DynaRecordDocumentClient =>
  * This is the check the type system cannot make: the public option is
  * structural by necessity (see {@link DynaRecordDocumentClient}), so a value
  * that cannot send commands reaches here rather than failing to compile. It
- * runs before any command is built so the failure reads as configuration rather
- * than as an error from inside an operation
- * @param client - The value supplied through the `client` option, or returned by a client function
+ * runs where the table is declared, so the failure reads as configuration
+ * rather than as an error from inside an operation
+ * @param client - The value supplied through the `client` option
  * @param tableClassName - Name of the table class the value was declared on
  * @returns The value, narrowed
  */
@@ -103,7 +102,7 @@ export const assertCanSend = (
 ): DynaRecordDocumentClient => {
   if (!canSend(client)) {
     throw new Error(
-      `Table ${tableClassName} was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient, or a function returning one`
+      `Table ${tableClassName} was given a client that cannot send commands. The client option takes a DynamoDBDocumentClient`
     );
   }
 
@@ -140,7 +139,7 @@ export const resetDefaultClient = (): void => {
  * from its config, or the shared default, in that order.
  *
  * Pure with respect to the table — the result is memoized per table by
- * {@link TableMetadata}, which is what makes a client function run once
+ * {@link TableMetadata}, so a table builds at most one client
  * @param options - The client options declared on the table
  * @param tableClassName - Name of the table class, for error messages
  * @returns The client for this table
@@ -152,8 +151,7 @@ export const resolveClient = (
   const { client, clientConfig } = options;
 
   if (client !== undefined) {
-    const resolved = typeof client === "function" ? client() : client;
-    return assertCanSend(resolved, tableClassName);
+    return assertCanSend(client, tableClassName);
   }
 
   if (clientConfig !== undefined) {

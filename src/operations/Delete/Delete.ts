@@ -64,7 +64,9 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
-    this.#transactionBuilder = new TransactWriteBuilder();
+    this.#transactionBuilder = new TransactWriteBuilder(
+      this.tableMetadata.dynamo
+    );
 
     const { name: tableName } = this.tableMetadata;
 

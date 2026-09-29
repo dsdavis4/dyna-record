@@ -51,7 +51,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
 
   constructor(Entity: EntityClass<T>) {
     super(Entity);
-    this.#transactionBuilder = new TransactWriteBuilder();
+    this.#transactionBuilder = new TransactWriteBuilder(
+      this.tableMetadata.dynamo
+    );
   }
 
   /**
@@ -344,7 +346,9 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     entityData: EntityAttributesOnly<DynaRecord>
   ): Promise<DynamoTableItem[]> {
     const { name: tableName } = this.tableMetadata;
-    const transactionBuilder = new TransactGetBuilder();
+    const transactionBuilder = new TransactGetBuilder(
+      this.tableMetadata.dynamo
+    );
     const relMetas = this.entityMetadata.relationships;
 
     const belongsToRelMetas = Object.values(relMetas).filter(relMeta =>

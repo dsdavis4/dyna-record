@@ -84,15 +84,17 @@ describe("FindById", () => {
     vi.clearAllMocks();
   });
 
-  it("will initialize a Dynamo client", async () => {
-    expect.assertions(3);
+  it("will initialize a Dynamo client with an empty config, leaving region, credentials and endpoint to the SDK", async () => {
+    expect.assertions(2);
 
     mockGet.mockResolvedValueOnce({});
 
     await Customer.findById("123");
 
-    expect(mockedDynamoDBClient).toHaveBeenCalledWith({ region: "us-west-2" });
-    expect(mockedDynamoDBClient).toHaveBeenCalledTimes(1);
+    // An empty config is the contract: passing a region here would override
+    // AWS_REGION, the profile's region, and AWS_ENDPOINT_URL_DYNAMODB, which
+    // is what pinned every consumer to us-west-2 before 4.0.0
+    expect(mockedDynamoDBClient.mock.calls).toEqual([[{}]]);
     expect(mockedDynamoDBDocumentClient.from.mock.calls).toEqual([
       [{ key: "MockDynamoDBClient" }]
     ]);

@@ -4,7 +4,6 @@ import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils/index.js";
-import DynamoClient from "../../dynamo-utils/DynamoClient.js";
 import type { DynamoTableItem } from "../../types.js";
 import { isString, tableItemToEntity } from "../../utils.js";
 import OperationBase from "../OperationBase.js";
@@ -57,7 +56,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
       options
     }).build();
 
-    const queryResults = await DynamoClient.query(params);
+    const queryResults = await this.tableMetadata.dynamo.query(params);
 
     return this.resolveQueryResults(queryResults);
   }
@@ -91,7 +90,7 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
       options
     }).build();
 
-    const queryResults = await DynamoClient.query(params);
+    const queryResults = await this.tableMetadata.dynamo.query(params);
 
     return this.resolveQueryResults(queryResults);
   }
