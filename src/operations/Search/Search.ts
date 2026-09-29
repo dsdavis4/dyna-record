@@ -239,8 +239,8 @@ class Search {
       resolveAttribute: this.buildFilterAttributeResolver()
     });
 
-    // The filter type admits undefined values (optional keys of the typed
-    // filter params); an explicitly-undefined condition is no condition
+    // An explicitly-undefined condition is no condition; the builder skips
+    // them, and the name list has to agree with the expression it built
     const definedConditions = Object.fromEntries(
       Object.entries(filter).filter(([, value]) => value !== undefined)
     );

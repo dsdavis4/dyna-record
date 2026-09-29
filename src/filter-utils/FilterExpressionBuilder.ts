@@ -84,7 +84,15 @@ class FilterExpressionBuilder {
    * @param filter
    * @returns
    */
-  public filterParams(filter: FilterParams): FilterExpression {
+  public filterParams(rawFilter: FilterParams): FilterExpression {
+    // A condition explicitly set to undefined is no condition. Filter keys are
+    // optional, so forwarding an optional input — `filter: { name: req.query.name }`
+    // — is the ordinary way to build one, and the alternative to dropping it is
+    // an expression referencing a placeholder with nothing bound to it, which
+    // DynamoDB rejects. `$or` blocks reach this method through orCondition, so
+    // they are covered here too, and an undefined `$or` drops rather than being
+    // read as an attribute named "$or"
+    const filter = this.definedConditions(rawFilter);
     const isOrFilter = this.isOrFilter(filter);
 
     if (isOrFilter) {
@@ -98,6 +106,22 @@ class FilterExpressionBuilder {
     } else {
       return this.andFilter(filter);
     }
+  }
+
+  /**
+   * Returns a condition set without its undefined entries.
+   *
+   * Scoped to filters. Key conditions get the opposite treatment in
+   * {@link andCondition}: dropping one would silently widen the query to the
+   * whole partition, where dropping a filter only widens the result set within
+   * the partition the key conditions already scoped
+   * @param conditions - The filter conditions as the caller supplied them
+   * @returns The conditions that carry a value
+   */
+  private definedConditions(conditions: FilterParams): FilterParams {
+    return Object.fromEntries(
+      Object.entries(conditions).filter(([, value]) => value !== undefined)
+    );
   }
 
   /**
@@ -145,12 +169,20 @@ class FilterExpressionBuilder {
     if (filter !== undefined) {
       const { $or: orFilters = [], ...andFilters } = filter;
 
+      // Undefined conditions build no expression (see andFilter), so naming
+      // their attributes would leave an unused ExpressionAttributeNames entry,
+      // which DynamoDB rejects
+      const definedKeys = (conditions: object): string[] =>
+        Object.entries(conditions)
+          .filter(([, value]) => value !== undefined)
+          .map(([key]) => key);
+
       const or = orFilters.reduce<StringObj>((acc: StringObj, filter) => {
-        Object.keys(filter).forEach(key => accumulator(acc, key));
+        definedKeys(filter).forEach(key => accumulator(acc, key));
         return acc;
       }, {});
 
-      const and = Object.keys(andFilters).reduce<StringObj>(
+      const and = definedKeys(andFilters).reduce<StringObj>(
         (acc, key) => accumulator(acc, key),
         {}
       );
@@ -206,6 +238,12 @@ class FilterExpressionBuilder {
     attr: string,
     value: FilterParams[string]
   ): FilterExpression {
+    if (value === undefined) {
+      throw new FilterError(
+        `Invalid key condition for attribute "${attr}": the condition has no value. A key condition narrows the query, so dropping it would widen the query to the entire partition`
+      );
+    }
+
     const resolved = this.resolveAttrPath(attr);
 
     if (
@@ -239,6 +277,7 @@ class FilterExpressionBuilder {
           `$beginsWith conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $beginsWith condition`
         );
       }
+      this.assertOperandDefined(value.$beginsWith, attr, "$beginsWith");
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `begins_with(${resolved.expressionPath}, :${placeholder})`;
 
@@ -249,6 +288,7 @@ class FilterExpressionBuilder {
           `$contains conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $contains condition`
         );
       }
+      this.assertOperandDefined(value.$contains, attr, "$contains");
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `contains(${resolved.expressionPath}, :${placeholder})`;
 
@@ -377,6 +417,31 @@ class FilterExpressionBuilder {
       : `${andParams.expression} OR `;
 
     return { expression, values: andParams.values };
+  }
+
+  /**
+   * Rejects an operator whose operand is undefined.
+   *
+   * The operator types declare a defined operand, so this is unreachable
+   * against the declared type — but an optional value resolving to undefined
+   * (`{ $beginsWith: req.query.prefix }`) reaches here with the key present and
+   * nothing under it. Without this the builder emits a condition referencing a
+   * placeholder with no value bound to it, which DynamoDB rejects with a
+   * ValidationException that names neither the attribute nor the operator
+   * @param operand - The value supplied to the operator
+   * @param attr - The attribute being filtered, for the error message
+   * @param operator - The operator name, for the error message
+   */
+  private assertOperandDefined(
+    operand: unknown,
+    attr: string,
+    operator: string
+  ): void {
+    if (operand === undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": ${operator} was given no value`
+      );
+    }
   }
 
   /**

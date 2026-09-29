@@ -10,6 +10,14 @@
 
 - **`SortKeyCondition`, `BeginsWithFilter`, `ContainsFilter` and `DynamoTableItem` narrow accordingly**, as does the `Serializers` pair — a custom `toEntityAttribute` typed against the SDK's `NativeScalarAttributeValue` now takes `DynamoNativeValue`.
 
+### Fixed
+
+- **A filter condition explicitly set to `undefined` is dropped rather than compiled.** Filter keys are optional, so forwarding an optional input — `filter: { name: req.query.name }` — is an ordinary way to build one. Previously that compiled an expression referencing a placeholder with nothing bound to it, and named the attribute in `ExpressionAttributeNames` without referencing it, either of which DynamoDB rejects with a `ValidationException` that names neither the attribute nor the cause. An undefined `$or` drops the same way instead of being read as an attribute named `"$or"`.
+
+- **A key condition with no value is rejected** with a `FilterError` naming the attribute, rather than dropped. The asymmetry is the point: key conditions are what scope a query to a partition, so silently dropping one widens the query to everything under that partition, while dropping a filter only widens the result set inside the partition the key conditions already bounded. One is a quietly wrong answer; the other is a narrower answer than intended.
+
+- **An operator given no value is rejected** with a `FilterError` naming the attribute and the operator — `{ name: { $beginsWith: undefined } }` — instead of emitting a `begins_with` or `contains` whose placeholder has nothing bound to it.
+
 ### Added
 
 - **`DynamoScalarValue` and `DynamoNativeValue`** are exported: the value a DynamoDB attribute can hold, and its recursive form including documents and sets. They are dyna-record's own unions, held inside the SDK's scalar union by an unexported type-level assertion so a type the service stops supporting fails the build. The assertion is one-directional because `DynamoScalarValue` is deliberately narrower than the SDK's: no `undefined`, no `NumberValue` wrapper (rejected on a supplied client since 3.2.0), and no wide binary union, since dyna-record models no binary attribute type. `DynamoNativeValue` does include `undefined`, which is how an absent attribute and an unset serializer result are represented.

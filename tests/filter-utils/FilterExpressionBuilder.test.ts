@@ -140,6 +140,76 @@ describe("FilterExpressionBuilder", () => {
     });
   });
 
+  describe("conditions with no value", () => {
+    it("drops a filter condition explicitly set to undefined", () => {
+      expect.assertions(1);
+
+      // Filter keys are optional, so forwarding an optional input is the
+      // ordinary way to build one
+      // Legal under FilterParams: filter keys are optional, so an optional
+      // input that resolved to undefined type-checks
+      expect(queryBuilderInstance().filterParams({ name: undefined })).toEqual({
+        expression: "",
+        values: {}
+      });
+    });
+
+    it("keeps the remaining conditions when one is dropped", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          name: "Testing",
+          price: undefined
+        })
+      ).toEqual({ expression: "#Name = :Name1", values: { Name1: "Testing" } });
+    });
+
+    it("drops an undefined $or rather than reading it as an attribute", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ $or: undefined, name: "Testing" })
+      ).toEqual({ expression: "#Name = :Name1", values: { Name1: "Testing" } });
+    });
+
+    it("names no attribute for a dropped condition", () => {
+      expect.assertions(1);
+
+      // An ExpressionAttributeNames entry with no reference in the expression
+      // is rejected by DynamoDB
+      expect(
+        queryBuilderInstance().expressionAttributeNames([], { name: undefined })
+      ).toEqual({});
+    });
+
+    it("rejects an operator given no value", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error the operator type declares a string operand, so
+          // only a plain JavaScript caller or an optional input reaches this
+          name: { $beginsWith: undefined }
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "name": $beginsWith was given no value'
+      );
+    });
+
+    it("rejects a key condition with no value rather than dropping it", () => {
+      expect.assertions(1);
+
+      // Dropping a key condition would widen the query to the whole partition,
+      // where dropping a filter only widens within it
+      expect(() =>
+        queryBuilderInstance().andFilter({ name: undefined })
+      ).toThrow(
+        'Invalid key condition for attribute "name": the condition has no value'
+      );
+    });
+  });
+
   describe("search capabilities", () => {
     it("compiles equality conditions joined by AND with every attribute name aliased", () => {
       expect.assertions(2);
