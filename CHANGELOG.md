@@ -12,7 +12,7 @@
 
 ### Added
 
-- **`DynamoScalarValue` and `DynamoNativeValue`** are exported: the value a DynamoDB attribute can hold, and its recursive form including documents and sets. They are dyna-record's own unions, held inside the SDK's scalar union by an unexported type-level assertion so a type the service stops supporting fails the build. The assertion is one-directional because dyna-record's union is deliberately narrower — no `undefined` (only a whole attribute can be absent), no `NumberValue` wrapper (rejected on a supplied client since 3.2.0), and no wide binary union, since dyna-record models no binary attribute type.
+- **`DynamoScalarValue` and `DynamoNativeValue`** are exported: the value a DynamoDB attribute can hold, and its recursive form including documents and sets. They are dyna-record's own unions, held inside the SDK's scalar union by an unexported type-level assertion so a type the service stops supporting fails the build. The assertion is one-directional because `DynamoScalarValue` is deliberately narrower than the SDK's: no `undefined`, no `NumberValue` wrapper (rejected on a supplied client since 3.2.0), and no wide binary union, since dyna-record models no binary attribute type. `DynamoNativeValue` does include `undefined`, which is how an absent attribute and an unset serializer result are represented.
 
 ### Changed
 
