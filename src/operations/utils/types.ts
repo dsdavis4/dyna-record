@@ -24,17 +24,11 @@ export interface UpdateRemoveExpression {
 }
 
 /**
- * Holds the expression shapes above equal to the SDK's, so a rename or a
- * retype in `UpdateCommandInput` fails the build here rather than at the call
- * to DynamoDB.
- *
- * `ExpressionAttributeValues` has no assertion: the SDK types its values as
- * `NativeAttributeValue`, which collapses to `any`, so any check against it
- * passes vacuously. Owning that one outright is the reason this file no longer
- * derives its types from the command input.
- *
- * Type-only and unexported: nothing is emitted for these, so the SDK types are
- * named without reappearing in dyna-record's published declarations.
+ * Hold the shapes above equal to the SDK's, so a rename or retype in
+ * `UpdateCommandInput` fails the build here rather than at the call to
+ * DynamoDB. `ExpressionAttributeValues` has none: the SDK types its values as
+ * `any`, so a check against it passes vacuously — which is why this file no
+ * longer derives from the command input at all.
  */
 type _UpdateExpressionMatchesSdk = Assert<
   Equals<

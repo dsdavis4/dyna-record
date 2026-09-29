@@ -1,9 +1,4 @@
-import type { DynamoScalarValue } from "../types.js";
-import type {
-  BeginsWithFilter,
-  FilterParams,
-  KeyConditions
-} from "../filter-utils/index.js";
+import type { FilterParams, KeyConditions } from "../filter-utils/index.js";
 
 // The filter type family is shared with the vector search context and lives
 // in filter-utils. Re-exported here so query consumers keep a single import
@@ -15,15 +10,8 @@ export type {
   FilterTypes,
   KeyConditions,
   OrFilter,
-  OrOptional
+  SortKeyCondition
 } from "../filter-utils/index.js";
-
-/**
- * Defines the condition for a sort key in a query, allowing for exact matches or "begins with" conditions.
- *
- * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
- */
-export type SortKeyCondition = BeginsWithFilter | DynamoScalarValue;
 
 /**
  * Specifies additional options for querying items, including optional consistent read, index name and filter conditions.

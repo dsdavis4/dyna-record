@@ -9,15 +9,20 @@ import type {
 } from "../types.js";
 
 /**
+ * The condition an attribute must satisfy in a key condition: the value it
+ * equals, or a {@link BeginsWithFilter} prefix.
+ *
+ * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
+ */
+export type SortKeyCondition = BeginsWithFilter | DynamoScalarValue;
+
+/**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
  *
- * Keys are attribute names; values are the scalar each key must equal, or a
- * {@link BeginsWithFilter} on the sort key.
+ * Keys are attribute names; each value is that attribute's
+ * {@link SortKeyCondition}.
  */
-export type KeyConditions = Record<
-  string,
-  DynamoScalarValue | BeginsWithFilter | undefined
->;
+export type KeyConditions = Record<string, Optional<SortKeyCondition>>;
 
 /**
  * Defines the structure for a filter expression used in querying items, including the expression string and a record of values associated with the expression placeholders.
@@ -85,13 +90,6 @@ export type AndFilter = Record<string, FilterTypes | undefined>;
  * @type {OrFilter} - A record with an "$or" key containing an array of `AndFilter` objects, indicating any of the conditions can be met (OR logic).
  */
 export type OrFilter = Record<"$or", AndFilter[]>;
-
-/**
- * Makes the '$or' key optional in an `OrFilter`, allowing for filters that primarily use AND logic but optionally include OR conditions.
- *
- * @type {OrOptional} - An `OrFilter` type with the '$or' key made optional.
- */
-export type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
 
 /**
  * Combines `AndFilter` and `OrFilter` types, supporting complex filters that use both AND and OR logic within the same filter structure.

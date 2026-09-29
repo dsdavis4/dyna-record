@@ -20,16 +20,15 @@ export const entityToTableItem = (
       if (key in attributesMeta) {
         const attrMeta = attributesMeta[key];
         const { alias, serializers } = attrMeta;
-        const val: unknown = rawVal;
+        // `Partial<DynaRecord>` types only the four base fields, while real
+        // entity data carries the subclass's attributes — including the nulls
+        // tested for below, and the values of attributes whose decorators only
+        // permit types DynamoDB can store
+        const val = rawVal as DynamoNativeValue;
 
         acc[alias] =
           serializers === undefined || val === null
-            ? // Read as `unknown` deliberately: `Partial<DynaRecord>` describes
-              // only the four base fields, while real entity data carries the
-              // subclass's attributes, including the nulls the branch above
-              // tests for. An attribute reaching here has no serializer, which
-              // the decorators only permit for a type DynamoDB can store
-              (val as DynamoNativeValue)
+            ? val
             : serializers.toTableAttribute(val);
       }
       return acc;

@@ -1,4 +1,3 @@
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { embedQueryVector } from "../../embedding/embed.js";
 import { FilterError, ValidationError } from "../../errors.js";
 import {
@@ -11,7 +10,11 @@ import Metadata, {
   type TableMetadata,
   type VectorIndexSchema
 } from "../../metadata/index.js";
-import type { StringObj } from "../../types.js";
+import type {
+  DynamoNativeValue,
+  DynamoTableItem,
+  StringObj
+} from "../../types.js";
 import { isString, tableItemToEntity } from "../../utils.js";
 import type {
   SearchOptions,
@@ -37,7 +40,7 @@ const MAX_TOP_K = 100;
 interface SearchCondition {
   expression: string;
   names: StringObj;
-  values: Record<string, NativeAttributeValue>;
+  values: Record<string, DynamoNativeValue>;
 }
 
 /**
@@ -158,7 +161,7 @@ class Search {
   private buildSearchCondition(options?: SearchOptions): SearchCondition {
     const terms: string[] = [];
     let names: StringObj = {};
-    let values: Record<string, NativeAttributeValue> = {};
+    let values: Record<string, DynamoNativeValue> = {};
 
     const { hashAlias } = this.#index;
 
@@ -283,7 +286,7 @@ class Search {
    * @returns The typed {@link SearchResult}
    */
   private resolveSearchResult(res: {
-    Item?: Record<string, NativeAttributeValue>;
+    Item?: DynamoTableItem;
     Score?: number;
   }): SearchResult {
     const { Item: item, Score: score } = res;

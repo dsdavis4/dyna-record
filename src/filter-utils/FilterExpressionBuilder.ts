@@ -1,7 +1,6 @@
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
-import type { StringObj } from "../types.js";
-import type { DynamoNativeValue } from "../types.js";
+import type { DynamoNativeValue, StringObj } from "../types.js";
 import type {
   AndFilter,
   AndOrFilter,
@@ -11,7 +10,6 @@ import type {
   FilterCapabilities,
   FilterExpression,
   FilterParams,
-  FilterTypes,
   KeyConditions,
   OrFilter
 } from "./types.js";
@@ -206,7 +204,7 @@ class FilterExpressionBuilder {
    */
   private andCondition(
     attr: string,
-    value: FilterTypes | AndFilter[] | undefined
+    value: FilterParams[string]
   ): FilterExpression {
     const resolved = this.resolveAttrPath(attr);
 
@@ -387,7 +385,7 @@ class FilterExpressionBuilder {
    * @returns
    */
   private isBeginsWithFilter(
-    filter: FilterTypes | AndFilter[] | undefined
+    filter: FilterParams[string]
   ): filter is BeginsWithFilter {
     // The null check keeps an untyped caller's null condition value on the
     // equality path, where the value guard rejects it with a FilterError
@@ -402,7 +400,7 @@ class FilterExpressionBuilder {
    * @returns
    */
   private isContainsFilter(
-    filter: FilterTypes | AndFilter[] | undefined
+    filter: FilterParams[string]
   ): filter is ContainsFilter {
     return (
       typeof filter === "object" && filter !== null && "$contains" in filter

@@ -173,8 +173,12 @@ export type Assert<T extends true> = T;
  * checked at all — a `Date`, a function, or a class instance is rejected here
  * rather than failing when the document client marshals it.
  *
- * `Date` is deliberately absent: dyna-record stores dates as ISO strings, so a
- * date is filtered and compared as the string it is stored as.
+ * Three things are deliberately absent. `Date`, because dyna-record stores
+ * dates as ISO strings, so a date is filtered and compared as the string it is
+ * stored as. The SDK's `NumberValue` wrapper, which appears only under
+ * `unmarshallOptions.wrapNumbers` — rejected on a supplied client since 3.2.0.
+ * And the SDK's wider binary union, since dyna-record models no binary
+ * attribute type.
  */
 export type DynamoScalarValue =
   | string
@@ -186,18 +190,11 @@ export type DynamoScalarValue =
 
 /**
  * Holds {@link DynamoScalarValue} within the SDK's own scalar union, so a type
- * the service stops supporting fails the build here rather than reaching
- * DynamoDB.
+ * the service stops supporting fails the build here. One-directional because
+ * dyna-record's union is deliberately narrower — see its omissions above.
  *
- * One-directional on purpose: dyna-record's union is deliberately the narrower
- * one. It omits `undefined` (which belongs to {@link DynamoNativeValue}, since
- * only a whole attribute can be absent), the `NumberValue` wrapper (which
- * appears only under `unmarshallOptions.wrapNumbers`, rejected on a supplied
- * client), and the wider binary union, since dyna-record models no binary
- * attribute type.
- *
- * Type-only and unexported: nothing is emitted for it, so the SDK type is named
- * without reappearing in dyna-record's published declarations.
+ * Type-only and unexported, so the SDK type is named without reappearing in
+ * dyna-record's published declarations.
  */
 type _DynamoScalarValueIsStorable = Assert<
   Extends<DynamoScalarValue, NativeScalarAttributeValue>
@@ -208,10 +205,8 @@ type _DynamoScalarValueIsStorable = Assert<
  * sets it composes from {@link DynamoScalarValue}.
  *
  * The recursive counterpart to the scalar union, and the type of a table
- * item's values. Mirrors the SDK's `NativeAttributeValue` minus the two
- * branches that made it `any`: the class-instance escape hatch, and the
- * `NumberValue` wrapper that only appears under `unmarshallOptions.wrapNumbers`,
- * which dyna-record rejects on a supplied client.
+ * item's values. Mirrors the SDK's `NativeAttributeValue` minus the
+ * class-instance escape hatch that made it `any`.
  */
 export type DynamoNativeValue =
   | DynamoScalarValue

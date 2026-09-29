@@ -6,7 +6,6 @@ import {
   TransactGetCommand,
   type QueryCommandInput,
   type GetCommandInput,
-  type GetCommandOutput,
   type TransactWriteCommandInput,
   type TransactWriteCommandOutput,
   type TransactGetCommandInput,
@@ -16,7 +15,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import Logger from "../Logger.js";
 import { isVectorAttributeKey } from "../metadata/VectorIndexMetadata.js";
-import type { DynamoTableItem } from "../types.js";
+import type { DynamoTableItem, Optional } from "../types.js";
 import type { DynaRecordDocumentClient } from "./clientResolution.js";
 import type { QueryItems, TransactGetItemResponses } from "./types.js";
 
@@ -168,7 +167,7 @@ class DynamoClient {
    */
   public async getItem(
     params: GetCommandInput
-  ): Promise<GetCommandOutput["Item"]> {
+  ): Promise<Optional<DynamoTableItem>> {
     Logger.log("getItem", { params });
     const response = await this.#send(new GetCommand(params));
     return response.Item;

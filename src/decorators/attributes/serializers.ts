@@ -71,10 +71,8 @@ export function objectToTableItem(
     }
     result[key] = convertFieldToTableItem(fieldDef, val);
   }
-  // The one assertion in this conversion chain, at the point it exits: every
-  // value above came from convertFieldToTableItem, which converts each
-  // schema-described field to a storable value. The chain plumbs `unknown`
-  // because it walks consumer data, so that fact cannot be carried in the type
+  // The chain's one assertion, where it exits: every value came from
+  // convertFieldToTableItem, which the `unknown` plumbing cannot carry
   return result as DynamoTableItem;
 }
 

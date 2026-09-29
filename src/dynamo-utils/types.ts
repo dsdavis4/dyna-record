@@ -1,9 +1,9 @@
 import type {
-  QueryCommandOutput,
   TransactGetCommandOutput,
   TransactGetCommandInput,
   TransactWriteCommandInput
 } from "@aws-sdk/lib-dynamodb";
+import type { DynamoTableItem } from "../types.js";
 
 /**
  * Represents the responses from a `TransactGetItems` operation in DynamoDB.
@@ -15,7 +15,7 @@ export type TransactGetItemResponses = NonNullable<
 /**
  * Represents the items returned from a `Query` operation in DynamoDB.
  */
-export type QueryItems = NonNullable<QueryCommandOutput["Items"]>;
+export type QueryItems = DynamoTableItem[];
 
 /**
  * Represents a non-nullable version of the `TransactItems` array from the `TransactGetCommandInput` interface. This type ensures that the `TransactItems` array cannot be null, enhancing type safety by enforcing the presence of transaction items in operations that require them. It is commonly used in contexts where a transaction involves multiple actions, and each item in the transaction must be explicitly defined without allowing for null values.

@@ -18,7 +18,12 @@ import type {
   SearchableAttributeKeys
 } from "../operations/Search/types.js";
 import { ValidationError } from "../errors.js";
-import type { DynamoTableItem, EntityClass, Optional } from "../types.js";
+import type {
+  DynamoTableItem,
+  EntityClass,
+  Equals,
+  Optional
+} from "../types.js";
 
 /**
  * Reserved prefix of library-managed vector attribute names. Every index's
@@ -160,11 +165,7 @@ type AreEqualLiterals<A, B> = string extends A
   ? false
   : string extends B
     ? false
-    : [A] extends [B]
-      ? [B] extends [A]
-        ? true
-        : false
-      : false;
+    : Equals<A, B>;
 
 /**
  * The other declaration keys whose `Field` literal equals one entry's —

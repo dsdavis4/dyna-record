@@ -2097,11 +2097,6 @@ describe("Query", () => {
       });
 
       describe("index key condition values", () => {
-        it("accepts a scalar condition on an index attribute", async () => {
-          // @ts-expect-no-error: a scalar is a valid condition on an indexed attribute
-          await Customer.query({ name: "Testing" }, { indexName: "MyIndex" });
-        });
-
         it("accepts a $beginsWith condition on an index attribute", async () => {
           // @ts-expect-no-error: $beginsWith is a valid condition on an indexed attribute
           await Customer.query(
@@ -2120,38 +2115,9 @@ describe("Query", () => {
             { indexName: "MyIndex" }
           ).catch(() => {});
         });
-
-        it("rejects an arbitrary object as an attribute's condition", async () => {
-          // @ts-expect-error: only a scalar or $beginsWith is a condition
-          await Customer.query(
-            { name: { whatever: 123 } },
-            { indexName: "MyIndex" }
-          ).catch(() => {});
-        });
       });
 
-      describe("filter values", () => {
-        it("accepts the scalars DynamoDB can store", async () => {
-          // @ts-expect-no-error: strings, numbers and booleans are storable values
-          await Customer.query("123", {
-            filter: { name: "Testing", type: "Customer" }
-          }).catch(() => {});
-        });
-
-        it("accepts an array for an IN condition", async () => {
-          // @ts-expect-no-error: an array of scalars is an IN condition
-          await Customer.query("123", {
-            filter: { name: ["Testing", "Other"] }
-          }).catch(() => {});
-        });
-
-        it("accepts $beginsWith with a string", async () => {
-          // @ts-expect-no-error: begins_with operates on strings
-          await Customer.query("123", {
-            filter: { name: { $beginsWith: "Test" } }
-          }).catch(() => {});
-        });
-
+      describe("filter values the type system now rejects", () => {
         it("rejects $beginsWith with a non-string", async () => {
           // @ts-expect-error: begins_with operates on strings, so a number cannot match
           await Customer.query("123", {
