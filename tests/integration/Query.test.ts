@@ -4363,7 +4363,7 @@ describe("Query", () => {
         // @ts-expect-no-error: top-level AND with $or
         await DiscriminatedUnionEntity.query("123", {
           filter: {
-            "payment.amount": { $gt: 50 },
+            "payment.amount": 50,
             $or: [
               { "payment.method.type": "creditCard" },
               { "payment.method.type": "bankTransfer" }

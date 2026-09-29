@@ -1,28 +1,32 @@
-import { type QueryCommandInput } from "@aws-sdk/lib-dynamodb";
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type ZodType } from "zod";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
-import type { LibraryBrandToValue, Optional } from "../types.js";
+import type {
+  DynamoNativeValue,
+  DynamoScalarValue,
+  LibraryBrandToValue,
+  Optional
+} from "../types.js";
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
  *
- * @type {KeyConditions} - Derived from the `KeyConditions` part of the `QueryCommandInput` from AWS SDK, excluding the "undefined" type to ensure type safety.
+ * Keys are attribute names; values are the scalar each key must equal, or a
+ * {@link BeginsWithFilter} on the sort key.
  */
-export type KeyConditions = Omit<
-  QueryCommandInput["KeyConditions"],
-  "undefined"
+export type KeyConditions = Record<
+  string,
+  DynamoScalarValue | BeginsWithFilter | undefined
 >;
 
 /**
  * Defines the structure for a filter expression used in querying items, including the expression string and a record of values associated with the expression placeholders.
  *
- * @property {Record<string, NativeAttributeValue>} values - A mapping of placeholder tokens in the filter expression to their actual values.
+ * @property {Record<string, DynamoNativeValue>} values - A mapping of placeholder tokens in the filter expression to their actual values.
  * @property {string} expression - The filter expression string, using DynamoDB's expression syntax.
  */
 export interface FilterExpression {
-  values: Record<string, NativeAttributeValue>;
+  values: Record<string, DynamoNativeValue>;
   expression: string;
 }
 
@@ -31,7 +35,7 @@ export interface FilterExpression {
  *
  * @type {BeginsWithFilter} - A record with "$beginsWith" key pointing to the prefix value.
  */
-export type BeginsWithFilter = Record<"$beginsWith", NativeAttributeValue>;
+export type BeginsWithFilter = Record<"$beginsWith", string>;
 
 /**
  * Represents a filter condition specifying that a list contains a given element, or a string contains a given substring.
@@ -53,7 +57,7 @@ export type BeginsWithFilter = Record<"$beginsWith", NativeAttributeValue>;
  * filter: { name: { $contains: "john" } }
  * ```
  */
-export type ContainsFilter = Record<"$contains", NativeAttributeValue>;
+export type ContainsFilter = Record<"$contains", DynamoScalarValue>;
 
 /**
  * Defines possible types of values that can be used in a filter condition, including begins with, contains, exact value, or an array for "IN" conditions.
@@ -62,20 +66,18 @@ export type ContainsFilter = Record<"$contains", NativeAttributeValue>;
  *
  * @type {FilterTypes} - A union of `BeginsWithFilter`, `ContainsFilter`, a single scalar value, or an array of scalar values.
  */
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents -- NativeAttributeValue is 'any' from AWS SDK */
 export type FilterTypes =
   | BeginsWithFilter
   | ContainsFilter
-  | NativeAttributeValue
-  | NativeAttributeValue[];
-/* eslint-enable @typescript-eslint/no-redundant-type-constituents */
+  | DynamoScalarValue
+  | DynamoScalarValue[];
 
 /**
  * Represents a filter condition using an AND logical operator. All items in this record will be queried with "AND"
  *
  * @type {AndFilter} - A record mapping attribute names to their filter conditions, implying all conditions must be met (AND logic).
  */
-export type AndFilter = Record<string, FilterTypes>;
+export type AndFilter = Record<string, FilterTypes | undefined>;
 
 /**
  * Represents a filter condition using an OR logical operator, allowing for grouping of multiple `AndFilter` conditions under a single '$or' key.
@@ -96,7 +98,14 @@ export type OrOptional = Omit<OrFilter, "$or"> & Partial<Pick<OrFilter, "$or">>;
  *
  * @type {FilterParams} - A combination of `AndFilter` or `OrFilter` with optional OR conditions.
  */
-export type FilterParams = (AndFilter | OrFilter) & OrOptional;
+export type FilterParams = {
+  /**
+   * Condition blocks combined with OR. Declared alongside the index signature
+   * because its value is a list of blocks rather than an attribute condition
+   */
+  $or?: AndFilter[];
+  [attributeName: string]: FilterTypes | AndFilter[] | undefined;
+};
 
 /**
  * Represents complex filters combining AND and OR logic, specifically allowing for an 'OrFilter' at the top level.

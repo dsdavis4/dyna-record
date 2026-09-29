@@ -188,10 +188,8 @@ const sortAttributesByOperand = (
     (acc, [key, value]) => {
       const isRemovingAttr = value === null;
       if (isRemovingAttr) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- DynamoTableItem values are NativeAttributeValue (any) from AWS SDK
         acc.remove[key] = value;
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- DynamoTableItem values are NativeAttributeValue (any) from AWS SDK
         acc.set[key] = value;
       }
       return acc;
@@ -221,7 +219,7 @@ const buildUpdateSetExpression = (
       const expression = ` ${attrName} = ${attrVal},`;
 
       acc.ExpressionAttributeNames[attrName] = key;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- DynamoTableItem values are NativeAttributeValue (any) from AWS SDK
+
       acc.ExpressionAttributeValues[attrVal] = val;
       acc.UpdateExpression = acc.UpdateExpression.concat(expression);
 

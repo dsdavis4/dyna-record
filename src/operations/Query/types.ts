@@ -1,6 +1,5 @@
 import type DynaRecord from "../../DynaRecord.js";
 import type {
-  KeyConditions as QueryKeyConditions,
   QueryOptions as QueryBuilderOptions,
   FilterTypes,
   SortKeyCondition
@@ -86,7 +85,7 @@ export type EntityKeyConditions<T extends DynaRecord = DynaRecord> = {
  * silently routing entity-id queries into the index overload.
  */
 export type IndexKeyConditions<T> = {
-  [K in Exclude<keyof T, FunctionFields<T>>]?: QueryKeyConditions;
+  [K in Exclude<keyof T, FunctionFields<T>>]?: SortKeyCondition;
 };
 
 /**

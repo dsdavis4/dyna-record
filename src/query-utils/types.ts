@@ -1,4 +1,4 @@
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import type { DynamoScalarValue } from "../types.js";
 import type {
   BeginsWithFilter,
   FilterParams,
@@ -23,8 +23,7 @@ export type {
  *
  * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
  */
-// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- NativeAttributeValue is 'any' from AWS SDK
-export type SortKeyCondition = BeginsWithFilter | NativeAttributeValue;
+export type SortKeyCondition = BeginsWithFilter | DynamoScalarValue;
 
 /**
  * Specifies additional options for querying items, including optional consistent read, index name and filter conditions.

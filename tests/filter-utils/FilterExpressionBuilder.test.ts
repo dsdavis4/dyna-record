@@ -277,9 +277,11 @@ describe("FilterExpressionBuilder", () => {
 
       const builder = searchBuilderInstance();
 
+      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
         FilterError
       );
+      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
         'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
       );

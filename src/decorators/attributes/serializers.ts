@@ -1,4 +1,4 @@
-import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import type { DynamoNativeValue, DynamoTableItem } from "../../types.js";
 import type { ObjectSchema, FieldDef } from "./types.js";
 import type { Serializers } from "../../metadata/types.js";
 
@@ -10,7 +10,7 @@ import type { Serializers } from "../../metadata/types.js";
  *
  */
 export const dateSerializer = {
-  toEntityAttribute: (val: NativeAttributeValue): unknown => {
+  toEntityAttribute: (val: DynamoNativeValue): unknown => {
     if (typeof val === "string") {
       return new Date(val);
     }
@@ -62,7 +62,7 @@ function resolveVariantSchema(
 export function objectToTableItem(
   schema: ObjectSchema,
   value: Record<string, unknown>
-): Record<string, unknown> {
+): DynamoTableItem {
   const result: Record<string, unknown> = {};
   for (const [key, fieldDef] of Object.entries(schema)) {
     const val = value[key];
@@ -71,7 +71,11 @@ export function objectToTableItem(
     }
     result[key] = convertFieldToTableItem(fieldDef, val);
   }
-  return result;
+  // The one assertion in this conversion chain, at the point it exits: every
+  // value above came from convertFieldToTableItem, which converts each
+  // schema-described field to a storable value. The chain plumbs `unknown`
+  // because it walks consumer data, so that fact cannot be carried in the type
+  return result as DynamoTableItem;
 }
 
 /**
@@ -88,7 +92,7 @@ function convertDiscriminatedUnion(
     schema: ObjectSchema,
     value: Record<string, unknown>
   ) => Record<string, unknown>
-): unknown {
+): Record<string, unknown> {
   const variantSchema = resolveVariantSchema(fieldDef, value);
   if (variantSchema === undefined) return value;
   const result = schemaConverter(variantSchema, value);
@@ -211,7 +215,7 @@ export function createObjectSerializer(schema: ObjectSchema): Serializers {
   return {
     toTableAttribute: (val: unknown) =>
       objectToTableItem(schema, val as Record<string, unknown>),
-    toEntityAttribute: (val: NativeAttributeValue) =>
+    toEntityAttribute: (val: DynamoNativeValue) =>
       tableItemToObject(schema, val as Record<string, unknown>)
   };
 }

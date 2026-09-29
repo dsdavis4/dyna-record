@@ -4,6 +4,7 @@ import {
   QueryBuilder,
   type QueryOptions as QueryBuilderOptions
 } from "../../query-utils/index.js";
+import type { KeyConditions } from "../../filter-utils/index.js";
 import type { DynamoTableItem } from "../../types.js";
 import { isString, tableItemToEntity } from "../../utils.js";
 import OperationBase from "../OperationBase.js";
@@ -76,10 +77,9 @@ class Query<T extends DynaRecord> extends OperationBase<T> {
     const modelPk = this.tableMetadata.partitionKeyAttribute.name;
     const modelSk = this.tableMetadata.sortKeyAttribute.name;
 
-    const keyCondition: Record<string, unknown> = {
+    const keyCondition: KeyConditions = {
       [modelPk]: this.EntityClass.partitionKeyValue(id),
       ...(options?.skCondition !== undefined && {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- SortKeyCondition includes NativeAttributeValue (any) from AWS SDK
         [modelSk]: options.skCondition
       })
     };

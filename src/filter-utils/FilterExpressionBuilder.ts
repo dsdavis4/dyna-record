@@ -1,7 +1,7 @@
-import { type NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import type { StringObj } from "../types.js";
+import type { DynamoNativeValue } from "../types.js";
 import type {
   AndFilter,
   AndOrFilter,
@@ -107,7 +107,7 @@ class FilterExpressionBuilder {
    * @param filter
    * @returns
    */
-  public andFilter(filter: KeyConditions | AndFilter): FilterExpression {
+  public andFilter(filter: FilterParams | KeyConditions): FilterExpression {
     const params = Object.entries(filter).reduce<FilterExpression>(
       (obj, [attr, value]) => {
         const { expression, values } = this.andCondition(attr, value);
@@ -175,7 +175,7 @@ class FilterExpressionBuilder {
     return Object.entries(values).reduce<FilterExpression["values"]>(
       (params, [placeholder, value]) => ({
         ...params,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
+
         [`:${placeholder}`]: value
       }),
       {}
@@ -204,7 +204,10 @@ class FilterExpressionBuilder {
    * @param value
    * @returns
    */
-  private andCondition(attr: string, value: FilterTypes): FilterExpression {
+  private andCondition(
+    attr: string,
+    value: FilterTypes | AndFilter[] | undefined
+  ): FilterExpression {
     const resolved = this.resolveAttrPath(attr);
 
     if (
@@ -218,14 +221,14 @@ class FilterExpressionBuilder {
 
     let condition;
 
-    let values: Record<string, NativeAttributeValue> = {};
+    let values: Record<string, DynamoNativeValue> = {};
     if (Array.isArray(value)) {
       if (!this.#capabilities.in) {
         throw new FilterError(
           `IN conditions (array values) are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has an array value`
         );
       }
-      const mappings = (value as unknown[]).reduce<string[]>((acc, val) => {
+      const mappings = value.reduce<string[]>((acc, val) => {
         const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
 
         values[placeholder] = val;
@@ -240,7 +243,7 @@ class FilterExpressionBuilder {
       }
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `begins_with(${resolved.expressionPath}, :${placeholder})`;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
+
       values = { [placeholder]: value.$beginsWith };
     } else if (this.isContainsFilter(value)) {
       if (!this.#capabilities.contains) {
@@ -250,13 +253,13 @@ class FilterExpressionBuilder {
       }
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `contains(${resolved.expressionPath}, :${placeholder})`;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
+
       values = { [placeholder]: value.$contains };
     } else {
       this.validateConditionValue(resolved, attr, value);
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `${resolved.expressionPath} = :${placeholder}`;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- NativeAttributeValue is 'any' from AWS SDK
+
       values = { [placeholder]: value };
     }
 
@@ -283,7 +286,7 @@ class FilterExpressionBuilder {
   private validateConditionValue(
     resolved: ResolvedPath,
     attr: string,
-    value: NativeAttributeValue
+    value: DynamoNativeValue
   ): void {
     if (resolved.valueSchema === undefined) return;
 
@@ -383,13 +386,13 @@ class FilterExpressionBuilder {
    * @param filter
    * @returns
    */
-  private isBeginsWithFilter(filter: FilterTypes): filter is BeginsWithFilter {
+  private isBeginsWithFilter(
+    filter: FilterTypes | AndFilter[] | undefined
+  ): filter is BeginsWithFilter {
     // The null check keeps an untyped caller's null condition value on the
     // equality path, where the value guard rejects it with a FilterError
     return (
-      typeof filter === "object" &&
-      filter !== null &&
-      (filter as BeginsWithFilter).$beginsWith !== undefined
+      typeof filter === "object" && filter !== null && "$beginsWith" in filter
     );
   }
 
@@ -398,11 +401,11 @@ class FilterExpressionBuilder {
    * @param filter
    * @returns
    */
-  private isContainsFilter(filter: FilterTypes): filter is ContainsFilter {
+  private isContainsFilter(
+    filter: FilterTypes | AndFilter[] | undefined
+  ): filter is ContainsFilter {
     return (
-      typeof filter === "object" &&
-      filter !== null &&
-      (filter as ContainsFilter).$contains !== undefined
+      typeof filter === "object" && filter !== null && "$contains" in filter
     );
   }
 

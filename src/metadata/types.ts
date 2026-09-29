@@ -1,4 +1,3 @@
-import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 import type {
   AttributeMetadata,
   BelongsToRelationship,
@@ -9,7 +8,7 @@ import type {
   TableMetadata
 } from "./index.js";
 import type DynaRecord from "../DynaRecord.js";
-import type { EntityClass, MakeOptional } from "../types.js";
+import type { DynamoNativeValue, EntityClass, MakeOptional } from "../types.js";
 import type { ZodType } from "zod";
 import type { ObjectSchema } from "../decorators/attributes/types.js";
 import type { TableClientOptions } from "../dynamo-utils/clientResolution.js";
@@ -94,12 +93,12 @@ export type KeysAttributeMetadataOptions = MakeOptional<
 /**
  * Function that takes a attribute from a Dynamo table item, and serialize it to a non-Dynamo native type (EX: Date)
  */
-export type EntitySerializer = (param: NativeAttributeValue) => unknown;
+export type EntitySerializer = (param: DynamoNativeValue) => unknown;
 
 /**
  * Function that takes a attribute from an Entity which is not a native Dynamo type and serializes it a type that is supported by Dynamo
  */
-export type TableSerializer = (param: unknown) => NativeAttributeValue;
+export type TableSerializer = (param: unknown) => DynamoNativeValue;
 
 /**
  * Functions for serializing attribute types that are not native to Dynamo from table item -> entity and entity -> table item

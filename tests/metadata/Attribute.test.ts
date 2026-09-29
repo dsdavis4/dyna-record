@@ -1,4 +1,4 @@
-import type { NativeScalarAttributeValue } from "@aws-sdk/util-dynamodb";
+import type { DynamoNativeValue } from "../../src/types.js";
 import Metadata from "../../src/metadata/index.js";
 import { z } from "zod";
 vi.mock("../../src/metadata");
@@ -24,7 +24,7 @@ describe("Attribute metadata", () => {
           nullable: true,
           // @ts-expect-error: Missing toTableAttribute
           serializers: {
-            toEntityAttribute: (val: NativeScalarAttributeValue) => val
+            toEntityAttribute: (val: DynamoNativeValue) => val
           }
         });
 
@@ -46,7 +46,7 @@ describe("Attribute metadata", () => {
           type: z.any(),
           // @ts-expect-no-error: Both serializer functions are defined
           serializers: {
-            toEntityAttribute: (val: NativeScalarAttributeValue) => val,
+            toEntityAttribute: (val: DynamoNativeValue) => val,
             toTableAttribute: (val: any) => val
           }
         });
