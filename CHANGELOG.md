@@ -1,3 +1,27 @@
+## 3.3.0 - 2026-09-28
+
+### Breaking (type-level only)
+
+- **Filter values are checked.** `FilterTypes` — the value type behind every key in a query `filter` — resolved to `any`, because it was built on the AWS SDK's `NativeAttributeValue`, whose union ends in an `InstanceType<{ new (...args: any[]): any }>` branch that collapses the whole type. A filter value is now a string, number, bigint, boolean, `null` or binary, an array of those for an `IN` condition, or a `$beginsWith` / `$contains` operator object.
+
+  Four shapes compiled before and no longer do. A **`Date`** — dyna-record stores dates as ISO 8601 strings, so filter on the string (`{ createdAt: { $beginsWith: "2026-09" } }`), which is what the documented examples already do. A **function or class instance**, which the document client could never marshal. **`$beginsWith` with a non-string**, since `begins_with` operates on strings. And an **unsupported operator** such as `$gt`, which the search builder already rejected at runtime with a `FilterError` and which query filters silently compiled into an equality against a map.
+
+- **Index key conditions are checked.** `IndexKeyConditions<T>` typed every entity field's value as a whole `KeyConditions` record rather than as a condition on that field, and `KeyConditions` itself resolved to `{}` — a type that accepts any object. Both were consequences of the same `any`. Each attribute now takes a value to match or a `$beginsWith`, so `{ name: { someOtherAttribute: "x" } }` is a compile error where it previously passed.
+
+- **`SortKeyCondition`, `BeginsWithFilter`, `ContainsFilter` and `DynamoTableItem` narrow accordingly**, as does the `Serializers` pair — a custom `toEntityAttribute` typed against the SDK's `NativeScalarAttributeValue` now takes `DynamoNativeValue`.
+
+### Added
+
+- **`DynamoScalarValue` and `DynamoNativeValue`** are exported: the value a DynamoDB attribute can hold, and its recursive form including documents and sets. They are dyna-record's own unions, held inside the SDK's scalar union by an unexported type-level assertion so a type the service stops supporting fails the build. The assertion is one-directional because dyna-record's union is deliberately narrower — no `undefined` (only a whole attribute can be absent), no `NumberValue` wrapper (rejected on a supplied client since 3.2.0), and no wide binary union, since dyna-record models no binary attribute type.
+
+### Changed
+
+- **The update expression types no longer derive from `UpdateCommandInput`**, and two type-level assertions hold them equal to the SDK's. `ExpressionAttributeValues` is deliberately unasserted: the SDK's value type is `any`, so any check against it passes vacuously — which is why it was worth owning.
+
+- **Published type declarations naming the AWS SDK drop from twelve files to four.** The four that remain are the command shapes dyna-record sends, the query command input `QueryBuilder` builds, and `DynamoDBClientConfig` — none of which can be duplicated without maintaining a parallel copy of the SDK's command surface.
+
+- **Seven `no-unsafe-assignment` suppressions are gone** from the source, along with two casts in the filter guards, because nothing on these paths is `any` any more.
+
 ## 3.2.0 - 2026-09-28
 
 > **Read before upgrading: the DynamoDB client is configurable, and no longer pinned to `us-west-2`.** dyna-record built its client with `region: "us-west-2"` written in, which overrode `AWS_REGION`, `AWS_DEFAULT_REGION`, and the profile's region. Fixing that defect changes which region a deployed application talks to, and **nothing breaks at the type level** — the new options are additive and optional — so the compiler will not flag it for you. If your table is in `us-west-2`, check the migration below before upgrading.

@@ -985,6 +985,8 @@ The type system validates:
 - **SK-scoped filters**: When `skCondition` narrows to specific entities, the `filter` parameter is scoped to only those entities' attributes. For example, `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes — using `lastFour` (a PaymentMethod attribute) produces a compile error.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
+- **Filter values**: A filter value must be something DynamoDB can store — a string, number, bigint, boolean, `null`, or binary — or an array of those for an `IN` condition, or a `$beginsWith` / `$contains` operator object. A `Date`, a function, a class instance, or an unsupported operator such as `$gt` is a compile error. Dates are stored as ISO 8601 strings, so filter on the string: `filter: { createdAt: { $beginsWith: "2026-09" } }`.
+- **Key condition values**: When querying an index, each attribute takes a condition on that attribute — a value to match, or `$beginsWith`.
 
 ##### Filter key validation
 
@@ -1826,7 +1828,7 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Attribute Type Enforcement**: Ensures that the data types of attributes match their definitions in your entities.
 - **Method Parameter Checking**: Validates method parameters against entity definitions, preventing invalid operations.
 - **Relationship Integrity**: Automatically manages the consistency of relationships between entities, ensuring data integrity.
-- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names.
+- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names. Filter values are checked too: only values DynamoDB can store, and only supported operators, are accepted.
 - **Return Type Narrowing**: When a query filter specifies a `type` value, the return type is automatically narrowed to only the matching entity types instead of the full partition union.
 - **`$or` Element Narrowing**: Each element in a `$or` filter array is independently type-checked based on its own `type` field, preventing attribute mismatches.
 - **Searchable Brands**: `@Searchable()` and `@SearchFilterable()` require the `Searchable`/`SearchFilterable` property brands, so the searchable and filterable sets are known at compile time — search `in:` values, filter keys, and result unions all derive from them. A second `@Searchable` attribute on one entity is a compile error at the `@Entity` decorator.
