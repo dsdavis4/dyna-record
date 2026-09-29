@@ -265,6 +265,7 @@ class FilterExpressionBuilder {
         );
       }
       const mappings = value.reduce<string[]>((acc, val) => {
+        this.validateConditionValue(resolved, attr, val);
         const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
 
         values[placeholder] = val;
@@ -381,7 +382,9 @@ class FilterExpressionBuilder {
     const expressionPath = `#${tableKey}.${subSegments.map(s => `#${s}`).join(".")}`;
     const placeholderKey = `${tableKey}${subSegments.join("")}`;
 
-    return { expressionPath, names, placeholderKey, valueSchema };
+    // No valueSchema: the resolver answers for the top level attribute, and a
+    // nested field's value is not a value of the enclosing object's type
+    return { expressionPath, names, placeholderKey };
   }
 
   /**

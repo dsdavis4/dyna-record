@@ -2067,13 +2067,25 @@ describe("Query", () => {
       });
 
       it("does not allow the partition key value if its the wrong type", async () => {
-        // @ts-expect-error: PartitionKey value must be a string
-        await Customer.query({ pk: 123, sk: "SomeVal" });
+        expect.assertions(1);
+
+        await expect(
+          // @ts-expect-error: PartitionKey value must be a string
+          Customer.query({ pk: 123, sk: "SomeVal" })
+        ).rejects.toThrow(
+          'Invalid filter value for attribute "pk": the value does not match the attribute\'s type'
+        );
       });
 
       it("does not allow the sort key value if its the wrong type", async () => {
-        // @ts-expect-error: PartitionKey value must be a string
-        await Customer.query({ pk: "123", sk: 456 });
+        expect.assertions(1);
+
+        await expect(
+          // @ts-expect-error: SortKey value must be a string
+          Customer.query({ pk: "123", sk: 456 })
+        ).rejects.toThrow(
+          'Invalid filter value for attribute "sk": the value does not match the attribute\'s type'
+        );
       });
 
       it("sort key is optional", async () => {

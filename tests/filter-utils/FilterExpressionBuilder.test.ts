@@ -140,6 +140,51 @@ describe("FilterExpressionBuilder", () => {
     });
   });
 
+  describe("value validation", () => {
+    it("rejects a value that does not match the attribute's declared type", () => {
+      expect.assertions(1);
+
+      // The builder's own FilterParams has no per-attribute typing — that
+      // lives at the query surface — so the runtime guard is what rejects this
+      expect(() =>
+        searchBuilderInstance().filterParams({ price: "not a number" })
+      ).toThrow(
+        'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+      );
+    });
+
+    it("validates each element of an IN condition", () => {
+      expect.assertions(1);
+
+      // An IN condition is a set of equality candidates, so each element is a
+      // value of the attribute in its own right
+      const builder = new FilterExpressionBuilder({
+        capabilities: queryFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+      expect(() => builder.filterParams({ price: [1, "two"] })).toThrow(
+        'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+      );
+    });
+
+    it("does not validate a nested value against the enclosing attribute's type", () => {
+      expect.assertions(1);
+
+      // The resolver answers for the top level attribute; a nested field's
+      // value is not a value of the object that contains it
+      const builder = new FilterExpressionBuilder({
+        capabilities: queryFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+      expect(builder.filterParams({ "meta.label": "anything" })).toEqual({
+        expression: "#Meta.#label = :Metalabel1",
+        values: { Metalabel1: "anything" }
+      });
+    });
+  });
+
   describe("conditions with no value", () => {
     it("drops a filter condition explicitly set to undefined", () => {
       expect.assertions(1);
