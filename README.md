@@ -139,7 +139,13 @@ abstract class MyTable extends DynaRecord {
 }
 ```
 
-A supplied client contributes transport, credentials, region, and endpoint. Commands and their marshalling stay dyna-record's, built from its own copy of `@aws-sdk/lib-dynamodb` — so a client wrapped with unusual `translateConfig` does not change how your items are serialized.
+Commands are built from dyna-record's own copy of `@aws-sdk/lib-dynamodb`, but **marshalling follows the client you supply**: the AWS SDK hands each command the sending client's config, and lib-dynamodb reads `translateConfig` from it. Build the client you pass with the SDK's default marshalling.
+
+A client with `unmarshallOptions.wrapNumbers` enabled is rejected where the table is declared, because every number attribute would come back as a wrapper object and fail its attribute schema on the first read. If your application needs a document client configured that way, keep it, and give dyna-record its own:
+
+```typescript
+@Table({ name: "my-table", clientConfig: { region: "us-east-1" } })
+```
 
 The option is typed structurally: anything that can send a command satisfies it, including a test double. That is deliberate. The SDK's `DynamoDBDocumentClient` is a nominal type, so naming it here would reject a perfectly good client built from a second copy of the AWS SDK — a common outcome when your project's lockfile pins an older version than dyna-record's. A client that cannot send commands is rejected where the table is declared, naming the table class.
 

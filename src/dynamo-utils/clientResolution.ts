@@ -17,8 +17,13 @@ import type { Optional } from "../types.js";
  * overloaded `send` assignable here without introducing `any`, and they are
  * also what make a hand written test double assignable with no cast.
  *
- * dyna-record builds the commands and owns their marshalling, so a supplied
- * client contributes transport, credentials, region and endpoint only.
+ * A supplied client governs more than transport: the AWS SDK passes the
+ * *sending* client's config to every command, and lib-dynamodb reads
+ * `translateConfig` from it, so a client's marshalling options apply to
+ * dyna-record's own commands. Supply one built with the SDK's defaults — a
+ * client with `unmarshallOptions.wrapNumbers` enabled is rejected where the
+ * table is declared, since every number attribute would otherwise hydrate as a
+ * wrapper object and fail its schema on the first read.
  */
 export interface DynaRecordDocumentClient {
   send: (command: never, options?: never) => Promise<unknown>;
@@ -109,6 +114,62 @@ export const assertCanSend = (
 };
 
 /**
+ * Whether a client is configured to unmarshall numbers as wrapper objects.
+ *
+ * Walked defensively rather than typed: {@link DynaRecordDocumentClient} only
+ * promises `send`, so every level here may be absent — a test double has no
+ * config at all, and that is not an error
+ * @param client - The client supplied through the `client` option
+ * @returns Whether `unmarshallOptions.wrapNumbers` is enabled on it
+ */
+const unmarshallsWrappedNumbers = (
+  client: DynaRecordDocumentClient
+): boolean => {
+  if (!("config" in client)) return false;
+  const { config } = client;
+
+  if (typeof config !== "object" || config === null) return false;
+  if (!("translateConfig" in config)) return false;
+  const { translateConfig } = config;
+
+  if (typeof translateConfig !== "object" || translateConfig === null)
+    return false;
+  if (!("unmarshallOptions" in translateConfig)) return false;
+  const { unmarshallOptions } = translateConfig;
+
+  if (typeof unmarshallOptions !== "object" || unmarshallOptions === null)
+    return false;
+
+  return (
+    "wrapNumbers" in unmarshallOptions && unmarshallOptions.wrapNumbers === true
+  );
+};
+
+/**
+ * Throws if a supplied client would marshall in a way dyna-record cannot read
+ * back.
+ *
+ * The AWS SDK hands every command the *sending* client's config, and
+ * lib-dynamodb reads `translateConfig` from it, so an injected client's
+ * marshalling applies to dyna-record's own commands. `wrapNumbers` is the
+ * setting that breaks silently: every number attribute would arrive as a
+ * wrapper object and fail its attribute schema on the first read, far from the
+ * declaration that caused it
+ * @param client - The client supplied through the `client` option
+ * @param tableClassName - Name of the table class the client was declared on
+ */
+const assertMarshallingSupported = (
+  client: DynaRecordDocumentClient,
+  tableClassName: string
+): void => {
+  if (unmarshallsWrappedNumbers(client)) {
+    throw new Error(
+      `Table ${tableClassName} was given a client with unmarshallOptions.wrapNumbers enabled, which dyna-record cannot read number attributes back from. Give dyna-record its own client through clientConfig, or supply one built with the SDK's default marshalling`
+    );
+  }
+};
+
+/**
  * Returns the shared client used by every table that configures none,
  * constructing it on first use.
  *
@@ -162,7 +223,9 @@ export const normalizeClientOptions = (
   const { client, clientConfig } = options;
 
   if (client !== undefined) {
-    return { client: assertCanSend(client, tableClassName) };
+    const checked = assertCanSend(client, tableClassName);
+    assertMarshallingSupported(checked, tableClassName);
+    return { client: checked };
   }
 
   if (clientConfig !== undefined) {

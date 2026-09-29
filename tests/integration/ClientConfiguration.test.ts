@@ -1,6 +1,5 @@
 import DynaRecord from "../../index.js";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import {
   Entity,
   PartitionKeyAttribute,
@@ -9,7 +8,6 @@ import {
   Table
 } from "../../src/decorators/index.js";
 import type { PartitionKey, SortKey } from "../../src/types.js";
-import { resetDefaultClient } from "../../src/dynamo-utils/clientResolution.js";
 
 const mockDefaultSend = vi.fn();
 
@@ -40,7 +38,6 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
 });
 
 const mockedDynamoDBClient = vi.mocked(DynamoDBClient);
-const mockedFrom = vi.mocked(DynamoDBDocumentClient.from);
 
 const eastSend = vi.fn();
 const westSend = vi.fn();
@@ -170,23 +167,23 @@ describe("client configuration", () => {
   });
 
   describe("no client options", () => {
-    it("builds one client with an empty config and sends every operation through it", async () => {
-      expect.assertions(3);
-
-      // The table has not resolved a client yet, so this is the one test in
-      // the file that observes the default being built
-      resetDefaultClient();
+    it("sends every operation through the default client", async () => {
+      expect.assertions(2);
 
       await DefaultStore.findById("123");
       await DefaultStore.findById("456");
       await DefaultStore.findById("789");
 
-      // An empty config is the contract: a region here would override
-      // AWS_REGION, the profile's region and AWS_ENDPOINT_URL_DYNAMODB
-      expect(mockedDynamoDBClient.mock.calls).toEqual([[{}]]);
-      expect(mockedFrom.mock.calls).toEqual([
-        [{ key: "MockDynamoDBClient", config: {} }]
-      ]);
+      // Any client built here was built from an empty config, which is what
+      // leaves region, credentials and endpoint to the SDK. How many were
+      // built belongs to the resolution unit tests, which own the memo and can
+      // reset it — asserting a count here would depend on this test running
+      // before anything else touches DefaultStore
+      expect(
+        mockedDynamoDBClient.mock.calls.every(
+          ([config]) => Object.keys(config ?? {}).length === 0
+        )
+      ).toBe(true);
       expect(mockDefaultSend.mock.calls).toEqual([
         [getCommandFor("default-client-table", "DefaultStore", "123")],
         [getCommandFor("default-client-table", "DefaultStore", "456")],
@@ -196,8 +193,8 @@ describe("client configuration", () => {
   });
 
   describe("clientConfig", () => {
-    it("sends through a client built from the declared config", async () => {
-      expect.assertions(2);
+    it("builds one client from the declared config and reuses it", async () => {
+      expect.assertions(3);
 
       await ConfiguredStore.findById("123");
 
@@ -207,12 +204,9 @@ describe("client configuration", () => {
       expect(mockDefaultSend.mock.calls).toEqual([
         [getCommandFor("configured-table", "ConfiguredStore", "123")]
       ]);
-    });
 
-    it("builds its client once and never rebuilds it", async () => {
-      expect.assertions(1);
+      vi.clearAllMocks();
 
-      await ConfiguredStore.findById("123");
       await ConfiguredStore.findById("456");
 
       expect(mockedDynamoDBClient).not.toHaveBeenCalled();

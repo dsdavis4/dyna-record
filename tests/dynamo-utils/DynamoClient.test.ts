@@ -30,6 +30,26 @@ const dynamoClient = new DynamoClient({
 });
 
 describe("DynamoClient", () => {
+  it("reads send per command, so a client whose send is replaced later is honored", async () => {
+    expect.assertions(2);
+
+    const first = vi.fn().mockResolvedValue({ Items: [{ id: "1" }] });
+    const second = vi.fn().mockResolvedValue({ Items: [{ id: "2" }] });
+    const swappable = { send: first };
+    const client = new DynamoClient(swappable);
+
+    await client.query({ TableName: "mock-table" });
+
+    // The shape aws-sdk-client-mock produces between tests: the method is
+    // replaced on the client that was already handed to dyna-record
+    swappable.send = second;
+
+    await client.query({ TableName: "mock-table" });
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
     // clearAllMocks does not drain the `...Once` queue; reset it so queued

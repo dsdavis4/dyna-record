@@ -155,6 +155,63 @@ describe("clientResolution", () => {
     });
   });
 
+  describe("marshalling guard", () => {
+    /**
+     * A client carrying the SDK's resolved config shape, which is where
+     * lib-dynamodb reads translateConfig from when it marshalls a command
+     */
+    const clientWithTranslateConfig = (translateConfig: object) => ({
+      send: vi.fn(),
+      config: { translateConfig }
+    });
+
+    it("rejects a client that unmarshalls numbers as wrappers, naming the table class", () => {
+      expect.assertions(1);
+
+      const client = clientWithTranslateConfig({
+        unmarshallOptions: { wrapNumbers: true }
+      });
+
+      expect(() => normalizeClientOptions({ client }, "MockTable")).toThrow(
+        "Table MockTable was given a client with unmarshallOptions.wrapNumbers enabled, which dyna-record cannot read number attributes back from. Give dyna-record its own client through clientConfig, or supply one built with the SDK's default marshalling"
+      );
+    });
+
+    it("accepts a client that leaves wrapNumbers off", () => {
+      expect.assertions(1);
+
+      const client = clientWithTranslateConfig({
+        unmarshallOptions: { wrapNumbers: false }
+      });
+
+      expect(normalizeClientOptions({ client }, "MockTable")).toEqual({
+        client
+      });
+    });
+
+    it("accepts a client carrying other marshalling options", () => {
+      expect.assertions(1);
+
+      const client = clientWithTranslateConfig({
+        marshallOptions: { removeUndefinedValues: true }
+      });
+
+      expect(normalizeClientOptions({ client }, "MockTable")).toEqual({
+        client
+      });
+    });
+
+    it("accepts a client with no config at all, which is every test double", () => {
+      expect.assertions(1);
+
+      const client = stubClient();
+
+      expect(normalizeClientOptions({ client }, "MockTable")).toEqual({
+        client
+      });
+    });
+  });
+
   describe("assertCanSend", () => {
     it("rejects a value that cannot send commands, naming the table class", () => {
       expect.assertions(1);

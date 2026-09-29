@@ -129,21 +129,36 @@ const redactVectorWrites = (
  */
 class DynamoClient {
   /**
-   * The client's bound `send`, typed as the SDK types it.
+   * The document client every command is sent through.
    */
-  readonly #send: DynamoDBDocumentClient["send"];
+  readonly #client: DynaRecordDocumentClient;
 
   /**
    * @param client - The document client every command is sent through
    */
   constructor(client: DynaRecordDocumentClient) {
+    this.#client = client;
+  }
+
+  /**
+   * The client's `send`, typed as the SDK types it.
+   *
+   * Read per command rather than bound once in the constructor. A
+   * `DynamoClient` is memoized for the life of its table, so capturing the
+   * method would pin whatever `send` existed at first use — and test doubles
+   * reassign it between tests (`aws-sdk-client-mock` stubs the prototype and
+   * restores it), as does instrumentation applied after bootstrap.
+   */
+  get #send(): DynamoDBDocumentClient["send"] {
     // The only assertion in this file, and the reason the public client option
     // is structural: the SDK's client type carries a private member, so
     // TypeScript compares it nominally and a client from a second SDK
     // installation could not be named in the option without being rejected.
     // This is the boundary where a supplied client regains the SDK's own
     // command input and output typing, which every method below relies on.
-    this.#send = client.send.bind(client) as DynamoDBDocumentClient["send"];
+    return this.#client.send.bind(
+      this.#client
+    ) as DynamoDBDocumentClient["send"];
   }
 
   /**

@@ -72,6 +72,27 @@ describe("Table metadata", () => {
       );
     });
 
+    it("rejects a client whose marshalling dyna-record cannot read back", () => {
+      expect.assertions(1);
+
+      // Hoisted rather than inlined, the way a consumer builds a client: the
+      // option's type promises only `send`, so a fresh literal carrying more
+      // trips the excess property check
+      const wrapNumbersClient = {
+        send: async () => await Promise.resolve({}),
+        config: {
+          translateConfig: { unmarshallOptions: { wrapNumbers: true } }
+        }
+      };
+
+      expect(() => {
+        @Table({ name: "other-table", client: wrapNumbersClient })
+        abstract class WrappedNumbersTable extends DynaRecord {}
+      }).toThrow(
+        "Table WrappedNumbersTable was given a client with unmarshallOptions.wrapNumbers enabled, which dyna-record cannot read number attributes back from. Give dyna-record its own client through clientConfig, or supply one built with the SDK's default marshalling"
+      );
+    });
+
     it("optionally allows clientConfig to be set", () => {
       // @ts-expect-no-error: clientConfig is optional
       @Table({ name: "other-table", clientConfig: { region: "us-east-1" } })
