@@ -782,11 +782,13 @@ describe("FilterExpressionBuilder", () => {
 
       expect(() =>
         queryBuilderInstance().filterParams({
+          // @ts-expect-error a null bound is a plain JavaScript caller
           price: { $between: [null, 5] }
         })
       ).toThrow(new FilterError(message));
       expect(() =>
         queryBuilderInstance().filterParams({
+          // @ts-expect-error a null bound is a plain JavaScript caller
           price: { $between: [5, null] }
         })
       ).toThrow(new FilterError(message));

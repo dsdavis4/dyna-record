@@ -14,6 +14,7 @@ export type {
   FilterParams,
   FilterTypes,
   KeyConditions,
+  OrderedFilterValue,
   OrFilter,
   SortKeyCondition,
   StoredFilterTypes

@@ -78,6 +78,19 @@ export type ContainsFilter = Record<"$contains", DynamoScalarValue>;
 export type FilterValue = DynamoScalarValue | Date;
 
 /**
+ * A value an ordered comparison may carry: a {@link FilterValue} that is not
+ * `null`.
+ *
+ * dyna-record removes a nulled attribute rather than storing DynamoDB's NULL,
+ * so there is no stored null for `<`, `<=`, `>`, `>=` or `BETWEEN` to match —
+ * and DynamoDB orders NULL against a scalar not at all. A comparison against
+ * `null` asks for something no row can satisfy, which is worth rejecting rather
+ * than compiling. Equality still accepts whatever the attribute's own type
+ * admits; this narrows only the operators that impose an order.
+ */
+export type OrderedFilterValue = Exclude<FilterValue, null>;
+
+/**
  * Comparison conditions on one attribute, compiling to DynamoDB's `<`, `<=`,
  * `>` and `>=`.
  *
@@ -86,7 +99,10 @@ export type FilterValue = DynamoScalarValue | Date;
  * required — an empty object is no condition at all.
  *
  * Every operand is a whole value of the attribute, so each is validated and
- * converted the way an equality value is.
+ * converted the way an equality value is. `null` is not among them:
+ * {@link FilterConditionFor} excludes it, because dyna-record removes a nulled
+ * attribute rather than storing DynamoDB's NULL, leaving nothing for an ordered
+ * comparison to match.
  */
 export type ComparisonFilter<V> = AtLeastOne<{
   $gt: V;
@@ -104,8 +120,9 @@ export type ComparisonFilter<V> = AtLeastOne<{
  * it instead.
  *
  * Both bounds are operands of the same kind as an equality value — whole values
- * of the attribute — so both are validated and converted. A half-open range is
- * expressed with {@link ComparisonFilter} instead: `{ $gte: start, $lt: end }`.
+ * of the attribute, and never `null` — so both are validated and converted. A
+ * half-open range is expressed with {@link ComparisonFilter} instead:
+ * `{ $gte: start, $lt: end }`.
  */
 export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
 
@@ -138,8 +155,8 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
 export type FilterConditionFor<V> =
   | BeginsWithFilter
   | ContainsFilter
-  | ComparisonFilter<V>
-  | BetweenFilter<V>
+  | ComparisonFilter<Exclude<V, null>>
+  | BetweenFilter<Exclude<V, null>>
   | V
   | V[];
 

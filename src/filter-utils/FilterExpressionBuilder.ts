@@ -13,6 +13,7 @@ import type {
   BetweenFilter,
   ComparisonFilter,
   FilterValue,
+  OrderedFilterValue,
   AndOrFilter,
   BeginsWithFilter,
   ContainsFilter,
@@ -456,7 +457,7 @@ class FilterExpressionBuilder {
    * @returns The operators present, ordered
    */
   private presentComparisons(
-    filter: ComparisonFilter<FilterValue>
+    filter: ComparisonFilter<OrderedFilterValue>
   ): ComparisonOperator[] {
     const operators = Object.keys(comparisonOperators) as ComparisonOperator[];
     return operators.filter(operator => operator in filter);
@@ -474,9 +475,9 @@ class FilterExpressionBuilder {
    * @returns The lower and upper bounds, as the caller supplied them
    */
   private betweenBounds(
-    filter: BetweenFilter<FilterValue>,
+    filter: BetweenFilter<OrderedFilterValue>,
     attr: string
-  ): readonly [FilterValue, FilterValue] {
+  ): readonly [OrderedFilterValue, OrderedFilterValue] {
     // Checked through a widened binding: the declared type says a pair, so the
     // compiler holds the shape proven and a check against it unreachable. A
     // plain JavaScript caller is who this answers for, and the alternative is
@@ -811,7 +812,7 @@ class FilterExpressionBuilder {
    */
   private isComparisonFilter(
     filter: FilterParams[string]
-  ): filter is ComparisonFilter<FilterValue> {
+  ): filter is ComparisonFilter<OrderedFilterValue> {
     return (
       typeof filter === "object" &&
       filter !== null &&
@@ -826,7 +827,7 @@ class FilterExpressionBuilder {
    */
   private isBetweenFilter(
     filter: FilterParams[string]
-  ): filter is BetweenFilter<FilterValue> {
+  ): filter is BetweenFilter<OrderedFilterValue> {
     return (
       typeof filter === "object" && filter !== null && "$between" in filter
     );
