@@ -33,9 +33,11 @@ export type {
 } from "./types.js";
 export type { AttributeKind } from "./metadata/types.js";
 export type {
+  FilterTypes,
   SearchFilter,
   SearchFilterParams,
-  SearchFilterValue
+  SearchFilterValue,
+  StoredFilterTypes
 } from "./filter-utils/index.js";
 export type {
   SerializedTableMetadata,

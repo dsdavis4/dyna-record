@@ -11,6 +11,9 @@ export const queryFilterCapabilities: FilterCapabilities = {
   in: true,
   beginsWith: true,
   contains: true,
+  // Off until the builder compiles them; the condition types already name them
+  comparison: false,
+  between: false,
   nestedPaths: true,
   singleConditionPerAttribute: false
 };
@@ -29,6 +32,8 @@ export const searchFilterCapabilities: FilterCapabilities = {
   in: false,
   beginsWith: false,
   contains: false,
+  comparison: false,
+  between: false,
   nestedPaths: false,
   singleConditionPerAttribute: true
 };

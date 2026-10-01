@@ -1,12 +1,21 @@
 import type DynaRecord from "../../DynaRecord.js";
 import type {
   QueryOptions as QueryBuilderOptions,
-  FilterTypes,
-  SortKeyCondition
+  BeginsWithFilter,
+  FilterConditionFor,
+  FilterValue,
+  SortKeyCondition,
+  StoredFilterTypes
 } from "../../query-utils/index.js";
-import type { IsAny, PartitionKey, SortKey } from "../../types.js";
+import type {
+  IsAny,
+  LibraryBrandToValue,
+  PartitionKey,
+  SortKey
+} from "../../types.js";
 import type {
   EntityAttributesInstance,
+  EntityAttributesOnly,
   EntityFilterableKeys,
   FunctionFields
 } from "../types.js";
@@ -84,8 +93,8 @@ export type EntityKeyConditions<T extends DynaRecord = DynaRecord> = {
  * through shared built-in method names (EX: `String.prototype.search`),
  * silently routing entity-id queries into the index overload.
  */
-export type IndexKeyConditions<T> = {
-  [K in Exclude<keyof T, FunctionFields<T>>]?: SortKeyCondition;
+export type IndexKeyConditions<T extends DynaRecord> = {
+  [K in Exclude<keyof T, FunctionFields<T>>]?: QueryKeyConditionValue<T[K]>;
 };
 
 /**
@@ -192,13 +201,124 @@ export type PartitionEntityNames<T extends DynaRecord> =
   PartitionEntities<T>["type"];
 
 /**
- * Maps a union of string keys to an optional FilterTypes record.
- * Shared helper for building filter records from key unions.
+ * The conditions a filter key accepts for an attribute of declared type `V`.
  *
- * @template Keys - The union of string keys to include in the record.
+ * The attribute is named as the entity declares it, so the value is too: a
+ * date attribute takes a `Date`, which the expression builder converts to the
+ * ISO string the table stores. Library brands are stripped, so a foreign key
+ * takes a plain string while a consumer's own brand survives.
+ *
+ * `$beginsWith` and `$contains` stay string- and scalar-operand operators
+ * whatever the attribute's declared type, because their operands are a prefix
+ * and a fragment of the *stored* form rather than values of the attribute —
+ * which is how a date is matched by partial value.
+ *
+ * @typeParam V - The attribute's declared type.
  */
-type FilterRecord<Keys extends string> = {
-  [K in Keys]?: FilterTypes;
+export type QueryFilterValue<V> = FilterConditionFor<
+  LibraryBrandToValue<NonNullable<V>>
+>;
+
+/**
+ * The condition an index key attribute accepts: the declared value it must
+ * equal, or a {@link BeginsWithFilter} prefix of the stored form.
+ *
+ * The same vocabulary as {@link QueryFilterValue} without `IN` or `$contains`,
+ * neither of which DynamoDB accepts in a key condition.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type QueryKeyConditionValue<V> = [KeyConditionDeclaredValue<V>] extends [
+  FilterValue
+]
+  ? KeyConditionDeclaredValue<V> | BeginsWithFilter
+  : SortKeyCondition;
+
+/**
+ * An index key attribute's declared value with dyna-record's brands removed.
+ *
+ * {@link LibraryBrandToValue} strips the brands that mark a value's role;
+ * `PartitionKey` and `SortKey` mark the attribute's role instead, and a caller
+ * writes a plain string for both, so they are stripped here as well.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+type KeyConditionDeclaredValue<V> =
+  NonNullable<V> extends PartitionKey | SortKey
+    ? string
+    : LibraryBrandToValue<NonNullable<V>>;
+
+export type QueryFilterValueFor<
+  Entities extends DynaRecord,
+  K
+> = Entities extends DynaRecord
+  ? K extends keyof EntityAttributesOnly<Entities>
+    ? QueryFilterValue<EntityAttributesOnly<Entities>[K]>
+    : never
+  : never;
+
+/**
+ * The type at a dot path within an entity's attributes.
+ *
+ * Walks the path the way {@link DotPathKeys} generated it, so a path that type
+ * produced always resolves. `NonNullable` is applied at each hop because an
+ * optional object still has fields, and a condition on one of them takes a
+ * defined value.
+ *
+ * @typeParam T - The type the path starts at.
+ * @typeParam P - The remaining dot path.
+ */
+type TypeAtDotPath<
+  T,
+  P extends string
+> = P extends `${infer Head}.${infer Rest}`
+  ? Head extends keyof T
+    ? TypeAtDotPath<NonNullable<T[Head]>, Rest>
+    : never
+  : P extends keyof T
+    ? T[P]
+    : never;
+
+/**
+ * The conditions a dot-path key accepts, from the declared type of the field it
+ * names.
+ *
+ * A nested field is resolved to its own definition and converted as that field,
+ * so `"shippedAt.at"` on a nested date takes a `Date` just as a top level date
+ * attribute does. A path that cannot be resolved — through an array element or
+ * a discriminated union variant, which one path does not identify — falls back
+ * to {@link StoredFilterTypes}, matching the expression builder, which leaves
+ * such a value unvalidated and unconverted.
+ *
+ * @typeParam Entities - The union of entities whose attributes are in scope.
+ * @typeParam K - The dot-path key.
+ */
+type QueryDotPathValueFor<Entities extends DynaRecord, K> = K extends string
+  ? [TypeAtDotPath<EntityAttributesOnly<Entities>, K>] extends [never]
+    ? StoredFilterTypes
+    : QueryFilterValue<TypeAtDotPath<EntityAttributesOnly<Entities>, K>>
+  : StoredFilterTypes;
+
+/**
+ * Maps a union of filter keys to the conditions each one accepts.
+ *
+ * A key naming an attribute of any entity in scope resolves to that attribute's
+ * declared type, unioned across the entities that declare it. Everything else
+ * is a dot path, which resolves to the field it names.
+ *
+ * The emptiness test distributes where `keyof EntityAttributesOnly<Entities>`
+ * would not: `Omit` is not distributive, so `keyof` over a union yields the
+ * keys every entity shares, which would send an attribute declared by one
+ * entity down the dot-path branch.
+ *
+ * @template Entities - The entities whose attributes the keys name.
+ */
+type FilterRecord<Entities extends DynaRecord> = {
+  [K in FilterableKeysFor<Entities>]?: [
+    QueryFilterValueFor<Entities, K>
+  ] extends [never]
+    ? QueryDotPathValueFor<Entities, K>
+    : QueryFilterValueFor<Entities, K>;
 };
 
 /**
@@ -206,9 +326,7 @@ type FilterRecord<Keys extends string> = {
  *
  * @template E - The entity type whose attributes form the record keys.
  */
-export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<
-  EntityFilterableKeys<E>
->;
+export type EntityFilterRecord<E extends DynaRecord> = FilterRecord<E>;
 
 /**
  * Union of filterable keys across a set of entities (distributive).
@@ -228,8 +346,8 @@ type AndFilterForEntities<Entities extends DynaRecord> =
   | (Entities extends infer E extends DynaRecord
       ? { type: E["type"] } & EntityFilterRecord<E>
       : never)
-  | ({ type: Entities["type"][] } & FilterRecord<FilterableKeysFor<Entities>>)
-  | ({ type?: never } & FilterRecord<FilterableKeysFor<Entities>>);
+  | ({ type: Entities["type"][] } & FilterRecord<Entities>)
+  | ({ type?: never } & FilterRecord<Entities>);
 
 /**
  * Typed `$or` filter scoped to a set of entities.

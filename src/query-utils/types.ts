@@ -5,12 +5,18 @@ import type { FilterParams, KeyConditions } from "../filter-utils/index.js";
 // site for query building types
 export type {
   BeginsWithFilter,
+  BetweenFilter,
+  ComparisonFilter,
+  ContainsFilter,
+  FilterConditionFor,
+  FilterValue,
   FilterExpression,
   FilterParams,
   FilterTypes,
   KeyConditions,
   OrFilter,
-  SortKeyCondition
+  SortKeyCondition,
+  StoredFilterTypes
 } from "../filter-utils/index.js";
 
 /**

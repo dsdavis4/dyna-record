@@ -135,17 +135,10 @@ class QueryBuilder {
       );
     }
 
-    const { alias, serializers, type } = this.#attributeMetadata[attributeKey];
-
-    // The validator describes the attribute as the entity declares it, while a
-    // filter names the value as the table stores it. Those agree only for
-    // attributes that round-trip unchanged — a date is declared as a Date and
-    // stored as an ISO string, so validating "2026-09" against z.date() would
-    // reject the documented way to filter on one
-    return {
-      alias,
-      ...(serializers === undefined && { type })
-    };
+    // AttributeMetadata already is a FilterAttribute: the alias, the validator
+    // and the serializers all describe the attribute as the entity declares it,
+    // which is how a filter names it
+    return this.#attributeMetadata[attributeKey];
   }
 }
 

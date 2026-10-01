@@ -1325,7 +1325,7 @@ describe("Query", () => {
           customerId: "cust-1",
           $or: [
             {
-              orderDate: "2023-01-15",
+              orderDate: { $beginsWith: "2023-01-15" },
               paymentMethodId: "pm-1"
             },
             {
@@ -1375,7 +1375,7 @@ describe("Query", () => {
               ":Type4": "Order"
             },
             FilterExpression:
-              "((#OrderDate = :OrderDate1 AND #PaymentMethodId = :PaymentMethodId2) OR begins_with(#CreatedAt, :CreatedAt3)) AND (#Type = :Type4 AND #CustomerId = :CustomerId5)",
+              "((begins_with(#OrderDate, :OrderDate1) AND #PaymentMethodId = :PaymentMethodId2) OR begins_with(#CreatedAt, :CreatedAt3)) AND (#Type = :Type4 AND #CustomerId = :CustomerId5)",
             ConsistentRead: false
           }
         ]
@@ -2129,6 +2129,454 @@ describe("Query", () => {
         });
       });
 
+      describe("attributes declared by one entity of the partition", () => {
+        it("takes the declared value without narrowing by type", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // orderDate is on Order alone. EntityAttributesOnly uses Omit, which
+          // does not distribute, so a keyof test over the partition union would
+          // see only the keys every entity shares and send this down the
+          // dot-path branch — leaving the attribute with no spelling that both
+          // compiles and validates
+          // @ts-expect-no-error: orderDate is declared as a Date
+          await Customer.query("123", {
+            filter: { orderDate: new Date("2023-01-15T12:12:18.123Z") }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "#OrderDate = :OrderDate1",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#OrderDate": "OrderDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Customer#123",
+                  ":OrderDate1": "2023-01-15T12:12:18.123Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects the stored string, in the type and at runtime", async () => {
+          expect.assertions(1);
+
+          await expect(
+            // @ts-expect-error: orderDate is declared as a Date
+            Customer.query("123", { filter: { orderDate: "2023-01-15" } })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "orderDate": the value does not match the attribute\'s type'
+          );
+        });
+      });
+
+      describe("nested array fields", () => {
+        it("takes an IN condition of elements", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // An array field's schema describes the list, while the condition
+          // carries an element, so the field is left unvalidated
+          // @ts-expect-no-error: tags is an array of strings
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { "objectAttribute.tags": ["a", "b"] }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "#objectAttribute.#tags IN (:objectAttributetags1,:objectAttributetags2)",
+                KeyConditionExpression: "#PK = :PK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#objectAttribute": "objectAttribute",
+                  "#tags": "tags"
+                },
+                ExpressionAttributeValues: {
+                  ":PK3": "MyClassWithAllAttributeTypes#123",
+                  ":objectAttributetags1": "a",
+                  ":objectAttributetags2": "b"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+      });
+
+      describe("nested date fields", () => {
+        it("takes a Date at a dot path, like a top level date attribute", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: objectAttribute.createdDate is declared a date
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: {
+              "objectAttribute.createdDate": new Date(
+                "2023-01-15T12:12:18.123Z"
+              )
+            }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "#objectAttribute.#createdDate = :objectAttributecreatedDate1",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#objectAttribute": "objectAttribute",
+                  "#createdDate": "createdDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "MyClassWithAllAttributeTypes#123",
+                  ":objectAttributecreatedDate1": "2023-01-15T12:12:18.123Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects the stored string at a dot path", async () => {
+          expect.assertions(1);
+
+          await expect(
+            // @ts-expect-error: the field is declared as a date
+            MyClassWithAllAttributeTypes.query("123", {
+              filter: { "objectAttribute.createdDate": "2023" }
+            })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "objectAttribute.createdDate": the value does not match the attribute\'s type'
+          );
+        });
+
+        it("accepts the stored string at a dot path with beginsWith", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // An operand is a prefix of the stored ISO string rather than a value
+          // of the field, so it is neither validated nor converted — the same
+          // rule that applies to a top level date attribute
+          // @ts-expect-no-error: the field is declared as a date but can filter on iso string with beginsWith
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { "objectAttribute.createdDate": { $beginsWith: "2023" } }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "begins_with(#objectAttribute.#createdDate, :objectAttributecreatedDate1)",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#objectAttribute": "objectAttribute",
+                  "#createdDate": "createdDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "MyClassWithAllAttributeTypes#123",
+                  ":objectAttributecreatedDate1": "2023"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("accepts the stored string at a dot path with contains", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: the field is declared as a date but can filter on iso string with contains
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { "objectAttribute.createdDate": { $contains: "2023" } }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "contains(#objectAttribute.#createdDate, :objectAttributecreatedDate1)",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#objectAttribute": "objectAttribute",
+                  "#createdDate": "createdDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "MyClassWithAllAttributeTypes#123",
+                  ":objectAttributecreatedDate1": "2023"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("still takes a string at a nested string field", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: a nested string field is unaffected
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { "objectAttribute.email": "someone@example.com" }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "#objectAttribute.#email = :objectAttributeemail1",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#objectAttribute": "objectAttribute",
+                  "#email": "email"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "MyClassWithAllAttributeTypes#123",
+                  ":objectAttributeemail1": "someone@example.com"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+      });
+
+      describe("index key condition values on a date attribute", () => {
+        it("accepts a Date and sends the stored ISO string", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // The resolver that supplies serializers serves key conditions as
+          // well as filters, so both name the attribute as declared
+          // @ts-expect-no-error: createdAt is declared as a Date
+          await Customer.query(
+            { createdAt: new Date("2023-01-15T12:12:18.123Z") },
+            { indexName: "MyIndex" }
+          );
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                IndexName: "MyIndex",
+                KeyConditionExpression: "#CreatedAt = :CreatedAt1",
+                ExpressionAttributeNames: { "#CreatedAt": "CreatedAt" },
+                ExpressionAttributeValues: {
+                  ":CreatedAt1": "2023-01-15T12:12:18.123Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("accepts a $beginsWith year alongside the partition key", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // DynamoDB requires a partition key equality in every key condition
+          // and allows begins_with only on the sort key, so this is the shape a
+          // prefix match on an index actually takes
+          // @ts-expect-no-error: prefix matching stays a string
+          await Customer.query(
+            { pk: "Customer#123", createdAt: { $beginsWith: "2023" } },
+            { indexName: "MyIndex" }
+          );
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                IndexName: "MyIndex",
+                KeyConditionExpression:
+                  "#PK = :PK1 AND begins_with(#CreatedAt, :CreatedAt2)",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#CreatedAt": "CreatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":PK1": "Customer#123",
+                  ":CreatedAt2": "2023"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects the stored string, at compile time and at runtime", async () => {
+          expect.assertions(1);
+
+          await expect(
+            // @ts-expect-error: createdAt is declared as a Date
+            Customer.query({ createdAt: "2023" }, { indexName: "MyIndex" })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "createdAt": the value does not match the attribute\'s type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)'
+          );
+        });
+
+        it("still takes a plain string for the partition key", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // PartitionKey and SortKey brands mark the attribute's role, not a
+          // value the caller has to construct
+          // @ts-expect-no-error: a plain string is a partition key value
+          await Customer.query(
+            { pk: "Customer#123", sk: { $beginsWith: "Order" } },
+            { indexName: "MyIndex" }
+          );
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                IndexName: "MyIndex",
+                KeyConditionExpression: "#PK = :PK1 AND begins_with(#SK, :SK2)",
+                ExpressionAttributeNames: { "#PK": "PK", "#SK": "SK" },
+                ExpressionAttributeValues: {
+                  ":PK1": "Customer#123",
+                  ":SK2": "Order"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+      });
+
+      describe("date attribute filter values", () => {
+        it("accepts a Date for equality and sends the stored ISO string", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: createdAt is declared as a Date
+          await Customer.query("123", {
+            filter: { createdAt: new Date("2023-01-15T12:12:18.123Z") }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "#CreatedAt = :CreatedAt1",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#CreatedAt": "CreatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Customer#123",
+                  ":CreatedAt1": "2023-01-15T12:12:18.123Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("accepts an array of Dates for an IN condition", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: an IN condition takes values of the attribute
+          await Customer.query("123", {
+            filter: {
+              createdAt: [
+                new Date("2023-01-15T12:12:18.123Z"),
+                new Date("2024-02-20T08:00:00.000Z")
+              ]
+            }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "#CreatedAt IN (:CreatedAt1,:CreatedAt2)",
+                KeyConditionExpression: "#PK = :PK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#CreatedAt": "CreatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":PK3": "Customer#123",
+                  ":CreatedAt1": "2023-01-15T12:12:18.123Z",
+                  ":CreatedAt2": "2024-02-20T08:00:00.000Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("accepts a $beginsWith year, which matches by stored prefix", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: $beginsWith operands stay strings whatever the
+          // attribute's declared type — they are a prefix of the stored form
+          await Customer.query("123", {
+            filter: { createdAt: { $beginsWith: "2023" } }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "begins_with(#CreatedAt, :CreatedAt1)",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#CreatedAt": "CreatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":PK2": "Customer#123",
+                  ":CreatedAt1": "2023"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects a Date on a $beginsWith operand", async () => {
+          // @ts-expect-error: a prefix of the stored string, not a Date
+          await Customer.query("123", {
+            filter: { createdAt: { $beginsWith: new Date() } }
+          }).catch(() => {});
+        });
+      });
+
       describe("filter values the type system now rejects", () => {
         it("rejects $beginsWith with a non-string", async () => {
           // @ts-expect-error: begins_with operates on strings, so a number cannot match
@@ -2137,11 +2585,15 @@ describe("Query", () => {
           }).catch(() => {});
         });
 
-        it("rejects a Date, which is stored as an ISO string", async () => {
-          // @ts-expect-error: dates are stored as ISO strings and filtered as strings
-          await Customer.query("123", {
-            filter: { createdAt: new Date() }
-          }).catch(() => {});
+        it("rejects a string where the attribute is declared as a Date", async () => {
+          // Equality names the attribute as the entity declares it; matching a
+          // date by prefix is what $beginsWith is for
+          await expect(
+            // @ts-expect-error: createdAt is declared as a Date
+            Customer.query("123", { filter: { createdAt: "2023" } })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "createdAt": the value does not match the attribute\'s type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)'
+          );
         });
 
         it("rejects a function", async () => {
@@ -2152,10 +2604,64 @@ describe("Query", () => {
         });
 
         it("rejects an object that is not a supported operator", async () => {
-          // @ts-expect-error: $gt is not a supported filter operator
+          // @ts-expect-error: $ne is not a supported filter operator
           await Customer.query("123", {
-            filter: { name: { $gt: "Testing" } }
+            filter: { name: { $ne: "Testing" } }
           }).catch(() => {});
+        });
+
+        it("types a comparison operand as the attribute declares it", async () => {
+          // @ts-expect-no-error: createdAt is declared as a Date, so its
+          // comparison operands are Dates
+          await Customer.query("123", {
+            filter: { createdAt: { $gte: new Date(), $lt: new Date() } }
+          }).catch(() => {});
+
+          // @ts-expect-error: a comparison operand is a whole value of the
+          // attribute, not a prefix of its stored string
+          await Customer.query("123", {
+            filter: { createdAt: { $gte: "2023" } }
+          }).catch(() => {});
+        });
+
+        it("types both $between bounds as the attribute declares it", async () => {
+          // @ts-expect-no-error: both bounds are whole values of the attribute
+          await Customer.query("123", {
+            filter: { createdAt: { $between: [new Date(), new Date()] } }
+          }).catch(() => {});
+
+          // @ts-expect-error: $between takes an ordered pair, not a single bound
+          await Customer.query("123", {
+            filter: { createdAt: { $between: [new Date()] } }
+          }).catch(() => {});
+        });
+
+        it("rejects a comparison operator object with no operands", async () => {
+          // @ts-expect-error: an empty operator object is no condition at all
+          await Customer.query("123", {
+            filter: { name: {} }
+          }).catch(() => {});
+        });
+
+        it("rejects a comparison operator while the builder cannot compile one", async () => {
+          // The condition types already name $gt, so this is a runtime
+          // rejection rather than a type error. It becomes a supported
+          // condition once the builder compiles comparisons
+          await expect(
+            Customer.query("123", { filter: { name: { $gt: "Testing" } } })
+          ).rejects.toThrow(
+            'Comparison conditions are not supported in query filters. Attribute "name" has a comparison condition'
+          );
+        });
+
+        it("rejects a $between condition while the builder cannot compile one", async () => {
+          await expect(
+            Customer.query("123", {
+              filter: { name: { $between: ["A", "B"] } }
+            })
+          ).rejects.toThrow(
+            '$between conditions are not supported in query filters. Attribute "name" has a $between condition'
+          );
         });
       });
 
@@ -2312,7 +2818,11 @@ describe("Query", () => {
       it("accepts default fields as filter keys", async () => {
         // @ts-expect-no-error: id, type, createdAt, updatedAt are valid on all entities
         await Customer.query("123", {
-          filter: { id: "abc", createdAt: "2023", updatedAt: "2024" }
+          filter: {
+            id: "abc",
+            createdAt: { $beginsWith: "2023" },
+            updatedAt: { $beginsWith: "2024" }
+          }
         });
       });
 
@@ -2434,7 +2944,14 @@ describe("Query", () => {
       it("narrows attributes when type is a single entity", async () => {
         // @ts-expect-no-error: orderDate is valid when type is "Order"
         await Customer.query("123", {
-          filter: { type: "Order", orderDate: "2023" }
+          filter: { type: "Order", orderDate: { $beginsWith: "2023" } }
+        });
+      });
+
+      it("narrows attributes when type is a single entity, with a declared value", async () => {
+        // @ts-expect-no-error: orderDate is valid when type is "Order"
+        await Customer.query("123", {
+          filter: { type: "Order", orderDate: new Date() }
         });
       });
 
@@ -2450,7 +2967,10 @@ describe("Query", () => {
       it("allows all partition attributes when type is an array", async () => {
         // @ts-expect-no-error: with array type, all partition attrs allowed
         await Customer.query("123", {
-          filter: { type: ["Order", "PaymentMethod"], createdAt: "2023" }
+          filter: {
+            type: ["Order", "PaymentMethod"],
+            createdAt: { $beginsWith: "2023" }
+          }
         });
       });
 
@@ -2459,7 +2979,7 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023" },
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
               { type: "PaymentMethod", lastFour: "1234" }
             ]
           }
@@ -2927,7 +3447,7 @@ describe("Query", () => {
       it("shared attribute filter does not narrow — returns full union", async () => {
         // createdAt exists on ALL entities, so no narrowing occurs
         const result = await Customer.query("123", {
-          filter: { createdAt: "2023" }
+          filter: { createdAt: { $beginsWith: "2023" } }
         });
 
         // Exhaustive: exact full union
@@ -2948,7 +3468,7 @@ describe("Query", () => {
       it("entity-specific filter key narrows return type by key", async () => {
         // orderDate only exists on Order → narrows to Order
         const result = await Customer.query("123", {
-          filter: { orderDate: "2023" }
+          filter: { orderDate: { $beginsWith: "2023" } }
         });
 
         // @ts-expect-no-error: narrowed to Order
@@ -2965,7 +3485,7 @@ describe("Query", () => {
         // orderDate is only on Order
         // Intersection: only Order has both → narrows to Order
         const result = await Customer.query("123", {
-          filter: { customerId: "c1", orderDate: "2023" }
+          filter: { customerId: "c1", orderDate: { $beginsWith: "2023" } }
         });
 
         // @ts-expect-no-error: narrowed to Order (only entity with both keys)
@@ -3012,7 +3532,7 @@ describe("Query", () => {
       it("type field takes priority over key-based narrowing", async () => {
         // type: "Order" takes priority, even though orderDate also narrows to Order
         const result = await Customer.query("123", {
-          filter: { type: "Order", orderDate: "2023" }
+          filter: { type: "Order", orderDate: { $beginsWith: "2023" } }
         });
 
         // @ts-expect-no-error: narrowed to Order
@@ -3106,7 +3626,7 @@ describe("Query", () => {
         // @ts-expect-no-error: type narrowing works with object key form
         await Customer.query(
           { pk: "Customer#123" },
-          { filter: { type: "Order", orderDate: "2023" } }
+          { filter: { type: "Order", orderDate: { $beginsWith: "2023" } } }
         );
       });
     });
@@ -3451,7 +3971,7 @@ describe("Query", () => {
           // @ts-expect-error: orderDate not valid for Customer or ContactInformation
           await Customer.query("123", {
             skCondition: { $beginsWith: "C" },
-            filter: { orderDate: "2023" }
+            filter: { orderDate: { $beginsWith: "2023" } }
           });
         });
 
@@ -3459,7 +3979,11 @@ describe("Query", () => {
           // @ts-expect-no-error: id, createdAt, updatedAt are default fields on all entities
           await Customer.query("123", {
             skCondition: { $beginsWith: "Order" },
-            filter: { id: "order-1", createdAt: "2023", updatedAt: "2024" }
+            filter: {
+              id: "order-1",
+              createdAt: { $beginsWith: "2023" },
+              updatedAt: { $beginsWith: "2024" }
+            }
           });
         });
 
@@ -3473,7 +3997,7 @@ describe("Query", () => {
               $or: [
                 { name: "Alice" },
                 { email: "a@b.com" },
-                { orderDate: "2023" }
+                { orderDate: { $beginsWith: "2023" } }
               ]
             }
           });
@@ -3568,7 +4092,11 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023-01-01", customerId: "c1" },
+              {
+                type: "Order",
+                orderDate: { $beginsWith: "2023-01-01" },
+                customerId: "c1"
+              },
               { type: "PaymentMethod", lastFour: "4242" },
               { type: "Customer", name: "Alice", address: "123 Main St" },
               { type: "ContactInformation", email: "alice@example.com" }
@@ -3581,7 +4109,10 @@ describe("Query", () => {
         // @ts-expect-error: "Person" is not related to Customer
         await Customer.query("123", {
           filter: {
-            $or: [{ type: "Order", orderDate: "2023" }, { type: "Person" }]
+            $or: [
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
+              { type: "Person" }
+            ]
           }
         });
       });
@@ -3592,7 +4123,7 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { name: "Alice", orderDate: "2023" },
+              { name: "Alice", orderDate: { $beginsWith: "2023" } },
               { lastFour: "4242", email: "test@test.com" }
             ]
           }
@@ -3611,7 +4142,10 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             type: "Order",
-            $or: [{ orderDate: "2023-01-01" }, { orderDate: "2024-01-01" }]
+            $or: [
+              { orderDate: { $beginsWith: "2023-01-01" } },
+              { orderDate: { $beginsWith: "2024-01-01" } }
+            ]
           }
         });
 
@@ -3628,7 +4162,7 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023" },
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
               { type: "PaymentMethod", lastFour: "1234" }
             ]
           }
@@ -3651,7 +4185,10 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             type: ["Order", "ContactInformation"],
-            $or: [{ orderDate: "2023" }, { email: "test@example.com" }]
+            $or: [
+              { orderDate: { $beginsWith: "2023" } },
+              { email: "test@example.com" }
+            ]
           }
         });
 
@@ -3686,7 +4223,11 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023", customerId: "c1" },
+              {
+                type: "Order",
+                orderDate: { $beginsWith: "2023" },
+                customerId: "c1"
+              },
               { type: "PaymentMethod", lastFour: "4242", customerId: "c1" },
               { type: "ContactInformation", email: "a@b.com", phone: "555" },
               { type: "Customer", name: "Alice" }
@@ -3700,7 +4241,11 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023", nonExistent: "x" },
+              {
+                type: "Order",
+                orderDate: { $beginsWith: "2023" },
+                nonExistent: "x"
+              },
               { type: "PaymentMethod", lastFour: "4242" }
             ]
           }
@@ -3712,7 +4257,7 @@ describe("Query", () => {
         await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023" },
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
               { name: "Alice", lastFour: "1234" }
             ]
           }
@@ -3723,7 +4268,10 @@ describe("Query", () => {
         // @ts-expect-error: nonExistent not valid on any entity
         await Customer.query("123", {
           filter: {
-            $or: [{ type: "Order", orderDate: "2023" }, { nonExistent: "x" }]
+            $or: [
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
+              { nonExistent: "x" }
+            ]
           }
         }).catch(() => {});
       });
@@ -3734,7 +4282,10 @@ describe("Query", () => {
         // Union: Order | PaymentMethod
         const result = await Customer.query("123", {
           filter: {
-            $or: [{ type: "Order", orderDate: "2023" }, { lastFour: "1234" }]
+            $or: [
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
+              { lastFour: "1234" }
+            ]
           }
         });
 
@@ -3754,7 +4305,7 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023" },
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
               { type: "PaymentMethod", lastFour: "1234" }
             ]
           }
@@ -3778,7 +4329,7 @@ describe("Query", () => {
         // Union: Order | PaymentMethod
         const result = await Customer.query("123", {
           filter: {
-            $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
+            $or: [{ orderDate: { $beginsWith: "2023" } }, { lastFour: "1234" }]
           }
         });
 
@@ -3842,7 +4393,7 @@ describe("Query", () => {
       it("skCondition with untyped filter: return type narrows by skCondition", async () => {
         const result = await Customer.query("123", {
           skCondition: "Order",
-          filter: { createdAt: "2023" }
+          filter: { createdAt: { $beginsWith: "2023" } }
         });
 
         // @ts-expect-no-error: skCondition "Order" narrows return type
@@ -3859,7 +4410,10 @@ describe("Query", () => {
         await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: {
-            $or: [{ type: "Order", orderDate: "2023" }, { customerId: "c1" }]
+            $or: [
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
+              { customerId: "c1" }
+            ]
           }
         });
       });
@@ -3870,7 +4424,7 @@ describe("Query", () => {
           skCondition: { $beginsWith: "Order" },
           filter: {
             $or: [
-              { type: "Order", orderDate: "2023" },
+              { type: "Order", orderDate: { $beginsWith: "2023" } },
               { type: "PaymentMethod", lastFour: "1234" }
             ]
           }
@@ -3977,7 +4531,7 @@ describe("Query", () => {
         await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: {
-            $or: [{ orderDate: "2023" }, { lastFour: "1234" }]
+            $or: [{ orderDate: { $beginsWith: "2023" } }, { lastFour: "1234" }]
           }
         });
       });
@@ -3986,7 +4540,7 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           skCondition: { $beginsWith: "Order" },
           filter: {
-            $or: [{ orderDate: "2023" }, { customerId: "c1" }]
+            $or: [{ orderDate: { $beginsWith: "2023" } }, { customerId: "c1" }]
           }
         });
 
@@ -4081,7 +4635,7 @@ describe("Query", () => {
       it("queryByKeys with filter key narrows return type", async () => {
         const result = await Customer.query(
           { pk: "Customer#123" },
-          { filter: { orderDate: "2023" } }
+          { filter: { orderDate: { $beginsWith: "2023" } } }
         );
 
         // @ts-expect-no-error: orderDate only on Order → narrows
@@ -4099,7 +4653,7 @@ describe("Query", () => {
           {
             filter: {
               $or: [
-                { type: "Order", orderDate: "2023" },
+                { type: "Order", orderDate: { $beginsWith: "2023" } },
                 { type: "PaymentMethod", lastFour: "1234" }
               ]
             }
@@ -4125,7 +4679,7 @@ describe("Query", () => {
         // DynamoDB ANDs them: must satisfy both. No entity has both → never[].
         const result = await Customer.query("123", {
           filter: {
-            orderDate: "2023",
+            orderDate: { $beginsWith: "2023" },
             $or: [{ lastFour: "1234" }]
           }
         });
@@ -4143,7 +4697,7 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             customerId: "c1",
-            $or: [{ orderDate: "2023" }]
+            $or: [{ orderDate: { $beginsWith: "2023" } }]
           }
         });
 
@@ -4177,7 +4731,7 @@ describe("Query", () => {
         const result = await Customer.query("123", {
           filter: {
             type: "Order",
-            $or: [{ type: "Order", orderDate: "2023" }]
+            $or: [{ type: "Order", orderDate: { $beginsWith: "2023" } }]
           }
         });
 
@@ -4192,7 +4746,7 @@ describe("Query", () => {
 
       it("top-level keys without $or still narrow normally", async () => {
         const result = await Customer.query("123", {
-          filter: { orderDate: "2023" }
+          filter: { orderDate: { $beginsWith: "2023" } }
         });
 
         // @ts-expect-no-error: narrowed to Order (no $or to intersect with)

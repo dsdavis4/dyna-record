@@ -1,3 +1,31 @@
+## 3.4.0 - 2026-09-30
+
+### Breaking (type-level only)
+
+- **A filter value is named the way the entity declares the attribute.** Filter _keys_ were always entity-side — the attribute names you declared — while filter _values_ were table-side, the form DynamoDB stores. Those coincide for every attribute except the ones with serializers, which is why 3.3.0 had to exclude `Date` from filter values, exempt serialized attributes from validation, and tell you to write the ISO string yourself.
+
+  A date attribute now takes a `Date`, and dyna-record converts it to the stored ISO string:
+
+  ```typescript
+  await Order.query("123", { filter: { orderDate: new Date("2026-01-15") } });
+  ```
+
+  Passing the stored string for equality no longer compiles or validates, because equality on a date means that date, not a fragment of how it is written. **Matching a date by partial value is unchanged** and is what `$beginsWith` has always been for — `filter: { orderDate: { $beginsWith: "2026" } }` still finds everything in that year. `$beginsWith` and `$contains` operands stay strings and scalars whatever the attribute's declared type, because each is a fragment of the stored form rather than a value of the attribute.
+
+  Each element of an `IN` array is converted the same way, so `filter: { orderDate: [d1, d2] }` takes Dates.
+
+- **Index key conditions take the declared form too.** `IndexKeyConditions` typed every attribute as a stored-form value, while the resolver that now converts and validates serves key conditions as well as filters — so a date attribute was typed as a string and validated as a `Date`. Both surfaces now agree: a key condition takes the declared value or a `$beginsWith` prefix. `PartitionKey` and `SortKey` still take plain strings; those brands mark the attribute's role, not a value you construct.
+
+- **Nested fields are named the way they are declared too.** A dot-path condition resolves through the attribute's object schema to the field it names, so `filter: { "shipment.dispatchedAt": someDate }` takes a `Date` exactly as a top level date attribute does — matching `update()`, which has always taken a `Date` at a nested path. The field's own schema validates the value and its own definition converts it.
+
+  A path that names no single field — one descending through an array element or a discriminated union variant, which a path alone does not identify — is left unvalidated and unconverted, and takes `StoredFilterTypes`. That is the one place a filter still speaks the stored form.
+
+- **`null` is no longer a filter value.** `filter: { someNullableAttribute: null }` compiled before and does not now. dyna-record removes a nulled attribute rather than storing `NULL`, so an equality on `null` could never match a row — the condition was always a way of asking for nothing.
+
+### Fixed
+
+- **Values are validated in their declared form**, which removes the carve-out 3.3.0 added where attributes with serializers skipped validation entirely. A date filter is now checked — as a `Date` — where before it was not checked at all.
+
 ## 3.3.0 - 2026-09-28
 
 ### Breaking (type-level only)

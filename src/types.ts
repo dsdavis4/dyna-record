@@ -273,6 +273,18 @@ export type IsAny<T> = 0 extends 1 & T ? true : false;
 export type EntityClass<T> = (new () => T) & typeof DynaRecord;
 
 /**
+ * Requires at least one of an object's properties to be present, while leaving
+ * every property optional individually.
+ *
+ * Distributes over the keys, so the result is the union of "this one is
+ * required, the rest are optional" — which is what lets several be supplied
+ * together while rejecting the empty object.
+ */
+export type AtLeastOne<T> = {
+  [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
+}[keyof T];
+
+/**
  * Make a single property of an object required
  */
 export type WithRequired<T, K extends keyof T> = Omit<T, K> & {

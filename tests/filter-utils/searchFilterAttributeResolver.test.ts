@@ -190,18 +190,16 @@ describe("searchFilterAttributeResolver", () => {
     );
   });
 
-  it("rejects a nested operator object where a scalar is expected", () => {
+  it("rejects a comparison operator, naming the context", () => {
     expect.assertions(2);
 
     const builder = searchBuilderInstance();
 
-    // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
     expect(() => builder.filterParams({ category: { $gt: "a" } })).toThrowError(
       FilterError
     );
-    // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
     expect(() => builder.filterParams({ category: { $gt: "a" } })).toThrowError(
-      'Invalid filter value for attribute "category": the value does not match the attribute\'s type'
+      'Comparison conditions are not supported in search filters. Attribute "category" has a comparison condition'
     );
   });
 

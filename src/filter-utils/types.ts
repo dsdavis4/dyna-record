@@ -1,7 +1,10 @@
 import { type ZodType } from "zod";
+import type { Serializers } from "../metadata/types.js";
+import type { ObjectSchema } from "../decorators/attributes/types.js";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
 import type {
+  AtLeastOne,
   DynamoNativeValue,
   DynamoScalarValue,
   LibraryBrandToValue,
@@ -12,9 +15,9 @@ import type {
  * The condition an attribute must satisfy in a key condition: the value it
  * equals, or a {@link BeginsWithFilter} prefix.
  *
- * @type {SortKeyCondition} - A `BeginsWithFilter` or a single scalar value, used for sort key conditions in queries.
+ * @type {SortKeyCondition} - A `BeginsWithFilter` or a single value, named the way the entity declares the attribute.
  */
-export type SortKeyCondition = BeginsWithFilter | DynamoScalarValue;
+export type SortKeyCondition = BeginsWithFilter | FilterValue;
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
@@ -65,17 +68,97 @@ export type BeginsWithFilter = Record<"$beginsWith", string>;
 export type ContainsFilter = Record<"$contains", DynamoScalarValue>;
 
 /**
+ * A value a filter condition may carry, named as the entity declares it.
+ *
+ * Wider than {@link DynamoScalarValue}, which is what the table stores: a
+ * caller filters a date attribute with a `Date`, and the expression builder
+ * converts it to the ISO string the table holds through the attribute's
+ * serializers.
+ */
+export type FilterValue = DynamoScalarValue | Date;
+
+/**
+ * Comparison conditions on one attribute, compiling to DynamoDB's `<`, `<=`,
+ * `>` and `>=`.
+ *
+ * Several may be supplied together and compose with AND, which is how a
+ * half-open range is written: `{ $gte: start, $lt: end }`. At least one is
+ * required — an empty object is no condition at all.
+ *
+ * Every operand is a whole value of the attribute, so each is validated and
+ * converted the way an equality value is.
+ */
+export type ComparisonFilter<V> = AtLeastOne<{
+  $gt: V;
+  $gte: V;
+  $lt: V;
+  $lte: V;
+}>;
+
+/**
+ * A condition matching values within an inclusive range, compiling to
+ * DynamoDB's `BETWEEN`.
+ *
+ * The pair is ordered: the first bound is the lower one. DynamoDB accepts an
+ * inverted pair and silently matches nothing, so the expression builder rejects
+ * it instead.
+ *
+ * Both bounds are operands of the same kind as an equality value — whole values
+ * of the attribute — so both are validated and converted. A half-open range is
+ * expressed with {@link ComparisonFilter} instead: `{ $gte: start, $lt: end }`.
+ */
+export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
+
+/**
+ * The conditions a filter key accepts for a value of type `V`: the value
+ * itself, a list of them for an `IN` condition, or an operator object.
+ *
+ * Parameterized because the same members are offered over three different
+ * value domains — what a caller may write ({@link FilterTypes}), what a nested
+ * field must be written as ({@link StoredFilterTypes}), and what one attribute
+ * declares (`QueryFilterValue`). Naming the shape once is what keeps a new
+ * operator from reaching two of them and not the third.
+ *
+ * Two kinds of operand live here, and which kind an operator takes is the one
+ * rule that decides whether its value is validated against the attribute's
+ * schema and converted to the form the table stores:
+ *
+ * - A **whole value** of the attribute — an equality value, every `IN` element,
+ *   every {@link ComparisonFilter} operand, both {@link BetweenFilter} bounds.
+ *   Named the way the entity declares the attribute, so a date attribute takes
+ *   a `Date`. Validated and converted.
+ * - A **fragment** of the stored form — {@link BeginsWithFilter}'s prefix, and
+ *   {@link ContainsFilter}'s substring. There is no "Date that starts with
+ *   2026", so these stay strings and scalars whatever the attribute declares,
+ *   and are neither validated nor converted.
+ *
+ * An operator added here declares which kind it takes and gets both behaviors
+ * from that, rather than each compilation branch deciding for itself.
+ */
+export type FilterConditionFor<V> =
+  | BeginsWithFilter
+  | ContainsFilter
+  | ComparisonFilter<V>
+  | BetweenFilter<V>
+  | V
+  | V[];
+
+/**
  * Defines possible types of values that can be used in a filter condition, including begins with, contains, exact value, or an array for "IN" conditions.
  *
  * Filter keys support dot-path notation for nested `@ObjectAttribute` Map fields (e.g., `"address.city"`).
- *
- * @type {FilterTypes} - A union of `BeginsWithFilter`, `ContainsFilter`, a single scalar value, or an array of scalar values.
  */
-export type FilterTypes =
-  | BeginsWithFilter
-  | ContainsFilter
-  | DynamoScalarValue
-  | DynamoScalarValue[];
+export type FilterTypes = FilterConditionFor<FilterValue>;
+
+/**
+ * The conditions a key accepts when it names no single declared field — a dot
+ * path descending through an array element or a discriminated union variant,
+ * which one path does not identify.
+ *
+ * The expression builder neither validates nor converts such a value, so it has
+ * to be written the way the table stores it.
+ */
+export type StoredFilterTypes = FilterConditionFor<DynamoScalarValue>;
 
 /**
  * Represents a filter condition using an AND logical operator. All items in this record will be queried with "AND"
@@ -135,6 +218,14 @@ export interface FilterCapabilities {
   in: boolean;
   beginsWith: boolean;
   contains: boolean;
+  /**
+   * Whether `$gt`, `$gte`, `$lt` and `$lte` conditions are supported.
+   */
+  comparison: boolean;
+  /**
+   * Whether `$between` conditions are supported.
+   */
+  between: boolean;
   nestedPaths: boolean;
   singleConditionPerAttribute: boolean;
 }
@@ -148,6 +239,18 @@ export interface FilterCapabilities {
 export interface FilterAttribute {
   alias: string;
   type?: ZodType;
+  /**
+   * The attribute's serializers, when its stored form differs from its declared
+   * one. See `FilterExpressionBuilder.toStoredValue` for where they are applied
+   * and to which parts of a condition.
+   */
+  serializers?: Serializers;
+  /**
+   * The attribute's object schema, when it is an `@ObjectAttribute`. A dot-path
+   * condition resolves through this to the field it names, so a nested value is
+   * validated and converted as that field rather than as the whole object.
+   */
+  objectSchema?: ObjectSchema;
 }
 
 /**

@@ -6,14 +6,35 @@ import {
   type FilterAttributeResolver
 } from "../../src/filter-utils/index.js";
 import { FilterError } from "../../src/errors.js";
+import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
+import type { Serializers } from "../../src/metadata/types.js";
+import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
 
-const attributes: Record<string, { alias: string; type: z.ZodType }> = {
+const attributes: Record<
+  string,
+  {
+    alias: string;
+    type: z.ZodType;
+    serializers?: Serializers;
+    objectSchema?: ObjectSchema;
+  }
+> = {
   pk: { alias: "PK", type: z.string() },
   type: { alias: "Type", type: z.string() },
   name: { alias: "Name", type: z.string() },
   category: { alias: "Category", type: z.string() },
   price: { alias: "Price", type: z.number() },
-  meta: { alias: "Meta", type: z.object({}) }
+  meta: {
+    alias: "Meta",
+    type: z.object({}),
+    objectSchema: {
+      label: { type: "string" },
+      recordedAt: { type: "date" }
+    } as const satisfies ObjectSchema
+  },
+  // Declared as a Date, stored as an ISO string — the pairing the whole
+  // declared-form/stored-form split exists for
+  createdAt: { alias: "CreatedAt", type: z.date(), serializers: dateSerializer }
 };
 
 /**
@@ -24,7 +45,8 @@ const aliasResolver: FilterAttributeResolver = (attributeKey, filterKey) => {
   if (!(attributeKey in attributes)) {
     throw new FilterError(`Invalid filter key "${filterKey}"`);
   }
-  return { alias: attributes[attributeKey].alias };
+  const { alias, serializers, objectSchema } = attributes[attributeKey];
+  return { alias, serializers, objectSchema };
 };
 
 /**
@@ -181,6 +203,152 @@ describe("FilterExpressionBuilder", () => {
       expect(builder.filterParams({ "meta.label": "anything" })).toEqual({
         expression: "#Meta.#label = :Metalabel1",
         values: { Metalabel1: "anything" }
+      });
+    });
+  });
+
+  describe("declared form to stored form", () => {
+    const iso = "2023-01-15T12:12:18.123Z";
+
+    it("converts an equality value to the form the table stores", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ createdAt: new Date(iso) })
+      ).toEqual({
+        expression: "#CreatedAt = :CreatedAt1",
+        values: { CreatedAt1: iso }
+      });
+    });
+
+    it("converts every element of an IN condition", () => {
+      expect.assertions(1);
+
+      const other = "2024-02-20T08:00:00.000Z";
+
+      expect(
+        queryBuilderInstance().filterParams({
+          createdAt: [new Date(iso), new Date(other)]
+        })
+      ).toEqual({
+        expression: "#CreatedAt IN (:CreatedAt1,:CreatedAt2)",
+        values: { CreatedAt1: iso, CreatedAt2: other }
+      });
+    });
+
+    it("leaves a $contains operand alone", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          createdAt: { $contains: "-01-" }
+        })
+      ).toEqual({
+        expression: "contains(#CreatedAt, :CreatedAt1)",
+        values: { CreatedAt1: "-01-" }
+      });
+    });
+
+    it("converts a nested field as the field it names", () => {
+      expect.assertions(1);
+
+      // Resolved through the attribute's object schema to the field's own
+      // definition, so a nested date takes a Date like a top level one
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.recordedAt": new Date(iso)
+        })
+      ).toEqual({
+        expression: "#Meta.#recordedAt = :MetarecordedAt1",
+        values: { MetarecordedAt1: iso }
+      });
+    });
+
+    it("leaves a nested value alone when the path cannot be resolved", () => {
+      expect.assertions(1);
+
+      // An array element has no single field definition, so the value is
+      // written as stored
+      expect(
+        queryBuilderInstance().filterParams({ "meta.missing.deeper": iso })
+      ).toEqual({
+        expression: "#Meta.#missing.#deeper = :Metamissingdeeper1",
+        values: { Metamissingdeeper1: iso }
+      });
+    });
+  });
+
+  describe("values are validated in their declared form", () => {
+    const typedQueryBuilder = (): FilterExpressionBuilder =>
+      new FilterExpressionBuilder({
+        capabilities: queryFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+    it("accepts a Date for an attribute declared as a Date", () => {
+      expect.assertions(1);
+
+      // The only test that runs a Date through the validator: the conversion
+      // tests above use a resolver that supplies no schema, so validation is
+      // skipped there
+      expect(
+        typedQueryBuilder().filterParams({
+          createdAt: new Date("2023-01-15T12:12:18.123Z")
+        })
+      ).toEqual({
+        expression: "#CreatedAt = :CreatedAt1",
+        values: { CreatedAt1: "2023-01-15T12:12:18.123Z" }
+      });
+    });
+
+    it("rejects the stored string where the declared form is a Date", () => {
+      expect.assertions(1);
+
+      // Equality names the attribute as declared; matching by stored prefix is
+      // what $beginsWith is for
+      expect(() =>
+        typedQueryBuilder().filterParams({ createdAt: "2023" })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "createdAt": the value does not match the attribute\'s type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)'
+        )
+      );
+    });
+
+    it("says nothing extra for a nested field stored as declared", () => {
+      expect.assertions(1);
+
+      // The remedy points at the declared form, which is wrong advice for a
+      // field that stores exactly what it declares
+      expect(() =>
+        typedQueryBuilder().filterParams({ "meta.label": 123 })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.label": the value does not match the attribute\'s type'
+        )
+      );
+    });
+
+    it("says nothing extra for an attribute stored as declared", () => {
+      expect.assertions(1);
+
+      expect(() => typedQueryBuilder().filterParams({ price: "free" })).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+        )
+      );
+    });
+
+    it("still accepts a $beginsWith year on a date attribute", () => {
+      expect.assertions(1);
+
+      expect(
+        typedQueryBuilder().filterParams({
+          createdAt: { $beginsWith: "2023" }
+        })
+      ).toEqual({
+        expression: "begins_with(#CreatedAt, :CreatedAt1)",
+        values: { CreatedAt1: "2023" }
       });
     });
   });
@@ -387,18 +555,16 @@ describe("FilterExpressionBuilder", () => {
       );
     });
 
-    it("rejects a nested operator object where a scalar is expected", () => {
+    it("rejects a comparison operator, naming the context", () => {
       expect.assertions(2);
 
       const builder = searchBuilderInstance();
 
-      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
         FilterError
       );
-      // @ts-expect-error unsupported operators are now rejected at compile time; the runtime guard below still covers plain JavaScript callers
       expect(() => builder.filterParams({ price: { $gt: 10 } })).toThrowError(
-        'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+        'Comparison conditions are not supported in search filters. Attribute "price" has a comparison condition'
       );
     });
 

@@ -1,8 +1,18 @@
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import type { DynamoNativeValue, StringObj } from "../types.js";
+import type { TableSerializer } from "../metadata/types.js";
+import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
+import {
+  fieldConverts,
+  resolveFieldDef,
+  toStoredFieldValue
+} from "./resolveFieldDef.js";
 import type {
   AndFilter,
+  BetweenFilter,
+  ComparisonFilter,
+  FilterValue,
   AndOrFilter,
   BeginsWithFilter,
   ContainsFilter,
@@ -21,12 +31,14 @@ import type {
  * @property names - The ExpressionAttributeNames entries for each path segment
  * @property placeholderKey - A flat key for use in value placeholders (e.g., `Addresscity`)
  * @property valueSchema - Optional zod validator to run on condition values for the attribute
+ * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
  */
 interface ResolvedPath {
   expressionPath: string;
   names: StringObj;
   placeholderKey: string;
   valueSchema?: ZodType;
+  toStored?: TableSerializer;
 }
 
 /**
@@ -264,14 +276,22 @@ class FilterExpressionBuilder {
           `IN conditions (array values) are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has an array value`
         );
       }
-      const mappings = value.reduce<string[]>((acc, val) => {
+      const mappings = value.map(val => {
         this.validateConditionValue(resolved, attr, val);
         const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
 
-        values[placeholder] = val;
-        return acc.concat(`:${placeholder}`);
-      }, []);
+        values[placeholder] = this.toStoredValue(resolved, val);
+        return `:${placeholder}`;
+      });
       condition = `${resolved.expressionPath} IN (${mappings.join()})`;
+    } else if (this.isComparisonFilter(value)) {
+      throw new FilterError(
+        `Comparison conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a comparison condition`
+      );
+    } else if (this.isBetweenFilter(value)) {
+      throw new FilterError(
+        `$between conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $between condition`
+      );
     } else if (this.isBeginsWithFilter(value)) {
       if (!this.#capabilities.beginsWith) {
         throw new FilterError(
@@ -299,7 +319,7 @@ class FilterExpressionBuilder {
       const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
       condition = `${resolved.expressionPath} = :${placeholder}`;
 
-      values = { [placeholder]: value };
+      values = { [placeholder]: this.toStoredValue(resolved, value) };
     }
 
     // Recorded only after the condition compiles, so a rejected condition
@@ -309,6 +329,47 @@ class FilterExpressionBuilder {
     }
 
     return { expression: `${condition} AND `, values };
+  }
+
+  /**
+   * Converts a condition value from the form the entity declares to the form
+   * the table stores, when the attribute distinguishes them.
+   *
+   * Applied to equality values and to each element of an `IN` condition, which
+   * are whole values of the attribute. Not applied to `$beginsWith` or
+   * `$contains` operands — those are a prefix and a fragment of the stored
+   * form rather than values to convert — and not to nested paths, whose value
+   * belongs to a field of the object rather than to the object itself
+   * @param resolved - The resolved attribute path
+   * @param value - The condition value as the caller supplied it
+   * @returns The value as the table stores it
+   */
+  private toStoredValue(
+    resolved: ResolvedPath,
+    value: FilterValue | AndFilter
+  ): DynamoNativeValue {
+    if (resolved.toStored !== undefined && value !== null) {
+      return resolved.toStored(value);
+    }
+
+    // No serializers means the declared form is already storable
+    return value as DynamoNativeValue;
+  }
+
+  /**
+   * The remedy to append to a rejected value's error, for an attribute whose
+   * stored form differs from its declared one.
+   *
+   * That mismatch is the likeliest reason such a value is rejected: a filter
+   * names an attribute the way the entity declares it, so a caller reaching for
+   * the stored form is writing the right query in the wrong vocabulary
+   * @param resolved - The resolved attribute path
+   * @returns The remedy, or an empty string when there is nothing specific to say
+   */
+  private declaredFormHint(resolved: ResolvedPath): string {
+    return resolved.toStored === undefined
+      ? ""
+      : ". A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)";
   }
 
   /**
@@ -325,14 +386,14 @@ class FilterExpressionBuilder {
   private validateConditionValue(
     resolved: ResolvedPath,
     attr: string,
-    value: DynamoNativeValue
+    value: unknown
   ): void {
     if (resolved.valueSchema === undefined) return;
 
     const parsed = resolved.valueSchema.safeParse(value);
     if (!parsed.success) {
       throw new FilterError(
-        `Invalid filter value for attribute "${attr}": the value does not match the attribute's type`,
+        `Invalid filter value for attribute "${attr}": the value does not match the attribute's type${this.declaredFormHint(resolved)}`,
         { cause: parsed.error.issues }
       );
     }
@@ -358,10 +419,12 @@ class FilterExpressionBuilder {
       );
     }
 
-    const { alias: tableKey, type: valueSchema } = this.#resolveAttribute(
-      topLevelKey,
-      key
-    );
+    const {
+      alias: tableKey,
+      type: valueSchema,
+      serializers,
+      objectSchema
+    } = this.#resolveAttribute(topLevelKey, key);
 
     const names: StringObj = { [`#${tableKey}`]: tableKey };
 
@@ -370,7 +433,8 @@ class FilterExpressionBuilder {
         expressionPath: `#${tableKey}`,
         names,
         placeholderKey: tableKey,
-        valueSchema
+        valueSchema,
+        toStored: serializers?.toTableAttribute
       };
     }
 
@@ -382,9 +446,24 @@ class FilterExpressionBuilder {
     const expressionPath = `#${tableKey}.${subSegments.map(s => `#${s}`).join(".")}`;
     const placeholderKey = `${tableKey}${subSegments.join("")}`;
 
-    // No valueSchema: the resolver answers for the top level attribute, and a
-    // nested field's value is not a value of the enclosing object's type
-    return { expressionPath, names, placeholderKey };
+    // The resolver answers for the top level attribute, so a nested value is
+    // validated and converted as the field it names rather than as the object
+    // that contains it
+    const fieldDef = resolveFieldDef(objectSchema, subSegments);
+
+    return {
+      expressionPath,
+      names,
+      placeholderKey,
+      ...(fieldDef !== undefined && {
+        valueSchema: fieldDefToZod(fieldDef),
+        // Only when the field converts: toStored doubles as the signal that a
+        // rejected value's remedy should point at the declared form
+        ...(fieldConverts(fieldDef) && {
+          toStored: value => toStoredFieldValue(fieldDef, value)
+        })
+      })
+    };
   }
 
   /**
@@ -445,6 +524,41 @@ class FilterExpressionBuilder {
         `Invalid filter value for attribute "${attr}": ${operator} was given no value`
       );
     }
+  }
+
+  /**
+   * Type guard for a {@link ComparisonFilter}.
+   *
+   * Presence rather than definedness, matching {@link isBeginsWithFilter}: an
+   * operand that resolved to undefined belongs on this path, where the operand
+   * check rejects it by name, rather than falling through to equality
+   * @param filter - The condition value
+   * @returns Whether it carries at least one comparison operand
+   */
+  private isComparisonFilter(
+    filter: FilterParams[string]
+  ): filter is ComparisonFilter<FilterValue> {
+    return (
+      typeof filter === "object" &&
+      filter !== null &&
+      ("$gt" in filter ||
+        "$gte" in filter ||
+        "$lt" in filter ||
+        "$lte" in filter)
+    );
+  }
+
+  /**
+   * Type guard for a {@link BetweenFilter}
+   * @param filter - The condition value
+   * @returns Whether it carries a `$between` pair
+   */
+  private isBetweenFilter(
+    filter: FilterParams[string]
+  ): filter is BetweenFilter<FilterValue> {
+    return (
+      typeof filter === "object" && filter !== null && "$between" in filter
+    );
   }
 
   /**
