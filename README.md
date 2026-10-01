@@ -1,8 +1,12 @@
 # Dyna-Record
 
-[API Documentation](https://docs.dyna-record.com/)
+[Home Page](https://www.dyna-record.com/) | [API Documentation](https://docs.dyna-record.com/)
 
-[Medium Article](https://medium.com/@drewdavis888/unlock-relational-data-modeling-in-dynamodb-with-dyna-record-5b9cce27c3ce)
+### Articles
+
+- [Unlock Relational Data Modeling in DynamoDB with dyna-record](https://medium.com/@drewdavis888/unlock-relational-data-modeling-in-dynamodb-with-dyna-record-5b9cce27c3ce)
+- [DynamoDB Deserves a Real ORM: Meet dyna-record](https://medium.com/@drewdavis888/dynamodb-deserves-a-real-orm-meet-dyna-record-22e93fb9b557)
+- [Type-Safe Vector Search Comes to DynamoDB: Meet dyna-record 2.0](https://medium.com/@drewdavis888/type-safe-vector-search-comes-to-dynamodb-meet-dyna-record-2-0-e773c205bc4b)
 
 Dyna-Record is a strongly typed Data Modeler and ORM (Object-Relational Mapping) tool designed for modeling and interacting with data stored in DynamoDB in a structured and type-safe manner. It simplifies the process of defining data models (entities), performing CRUD operations, and handling complex queries. To support relational data, dyna-record implements a flavor of the [single-table design pattern](https://aws.amazon.com/blogs/compute/creating-a-single-table-design-with-amazon-dynamodb/) and the [adjacency list design pattern](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-adjacency-graphs.html). All operations are [ACID compliant transactions\*](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html)\. To enforce data integrity beyond the type system, schema validation is performed at runtime.
 
