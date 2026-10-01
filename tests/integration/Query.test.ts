@@ -2642,26 +2642,279 @@ describe("Query", () => {
             filter: { name: {} }
           }).catch(() => {});
         });
+      });
 
-        it("rejects a comparison operator while the builder cannot compile one", async () => {
-          // The condition types already name $gt, so this is a runtime
-          // rejection rather than a type error. It becomes a supported
-          // condition once the builder compiles comparisons
-          await expect(
-            Customer.query("123", { filter: { name: { $gt: "Testing" } } })
-          ).rejects.toThrow(
-            'Comparison conditions are not supported in query filters. Attribute "name" has a comparison condition'
-          );
+      describe("comparison and range operand typing", () => {
+        // Every assertion here is type-level. Each query is allowed to reject
+        // at runtime -- the builder's own behavior is pinned in
+        // tests/filter-utils -- so what is under test is whether the operand
+        // type the attribute declares is the one the operator accepts
+        const swallow = async (promise: Promise<unknown>): Promise<void> => {
+          await promise.catch(() => {});
+        };
+
+        describe("a date attribute", () => {
+          it("accepts a Date operand on every comparison operator", async () => {
+            await swallow(
+              // @ts-expect-no-error: dateAttribute is declared as a Date
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  dateAttribute: { $gt: new Date() },
+                  nullableDateAttribute: { $lte: new Date() }
+                }
+              })
+            );
+          });
+
+          it("rejects the stored ISO string", async () => {
+            await swallow(
+              // @ts-expect-error: a comparison operand is a whole value, not the stored form
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { dateAttribute: { $gte: "2023-01-01" } }
+              })
+            );
+          });
+
+          it("rejects a number operand", async () => {
+            await swallow(
+              // @ts-expect-error: an epoch number is not a Date
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { dateAttribute: { $lt: 1672531200000 } }
+              })
+            );
+          });
+
+          it("accepts a Date pair for $between and rejects a mixed pair", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds are whole values of the attribute
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  dateAttribute: { $between: [new Date(), new Date()] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: the upper bound is not a Date
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { dateAttribute: { $between: [new Date(), "2023"] } }
+              })
+            );
+          });
+
+          it("still takes a string prefix for $beginsWith", async () => {
+            await swallow(
+              // @ts-expect-no-error: a prefix is a fragment of the stored form
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { dateAttribute: { $beginsWith: "2023" } }
+              })
+            );
+          });
         });
 
-        it("rejects a $between condition while the builder cannot compile one", async () => {
-          await expect(
-            Customer.query("123", {
-              filter: { name: { $between: ["A", "B"] } }
-            })
-          ).rejects.toThrow(
-            '$between conditions are not supported in query filters. Attribute "name" has a $between condition'
-          );
+        describe("a number attribute", () => {
+          it("accepts a number operand and a number pair", async () => {
+            await swallow(
+              // @ts-expect-no-error: numberAttribute is declared as a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  numberAttribute: { $gte: 10, $lt: 100 },
+                  nullableNumberAttribute: { $between: [1, 2] }
+                }
+              })
+            );
+          });
+
+          it("rejects a string operand", async () => {
+            await swallow(
+              // @ts-expect-error: a numeric string is not a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $lt: "100" } }
+              })
+            );
+          });
+
+          it("rejects a Date operand", async () => {
+            await swallow(
+              // @ts-expect-error: a Date is not a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $gt: new Date() } }
+              })
+            );
+          });
+        });
+
+        describe("a string attribute", () => {
+          it("accepts a string operand", async () => {
+            await swallow(
+              // @ts-expect-no-error: stringAttribute is declared as a string
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { stringAttribute: { $gte: "A", $lte: "M" } }
+              })
+            );
+          });
+
+          it("rejects a number operand", async () => {
+            await swallow(
+              // @ts-expect-error: a number is not a string
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { stringAttribute: { $gt: 10 } }
+              })
+            );
+          });
+        });
+
+        describe("an enum attribute", () => {
+          it("accepts a declared member and rejects a non-member", async () => {
+            await swallow(
+              // @ts-expect-no-error: "val-1" is a declared member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-1" } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "val-3" is not a declared member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-3" } }
+              })
+            );
+          });
+        });
+
+        describe("a boolean attribute", () => {
+          it("accepts a boolean operand and rejects a string", async () => {
+            await swallow(
+              // @ts-expect-no-error: boolAttribute is declared as a boolean
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: { $gte: true } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "true" is not a boolean
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: { $gte: "true" } }
+              })
+            );
+          });
+        });
+
+        describe("a nullable attribute", () => {
+          it("rejects null as a comparison operand", async () => {
+            // The attribute is nullable, but an ordered comparison against
+            // null can match nothing, so the operand type drops it
+            await swallow(
+              // @ts-expect-error: null is not a comparison operand
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableNumberAttribute: { $gt: null } }
+              })
+            );
+          });
+
+          it("rejects null as a $between bound", async () => {
+            await swallow(
+              // @ts-expect-error: null is not a $between bound
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  nullableDateAttribute: { $between: [null, new Date()] }
+                }
+              })
+            );
+          });
+        });
+
+        describe("$between arity", () => {
+          it("rejects a single bound", async () => {
+            await swallow(
+              // @ts-expect-error: $between takes an ordered pair
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $between: [1] } }
+              })
+            );
+          });
+
+          it("rejects a third bound", async () => {
+            await swallow(
+              // @ts-expect-error: $between takes exactly two bounds
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $between: [1, 2, 3] } }
+              })
+            );
+          });
+
+          it("rejects an empty pair", async () => {
+            await swallow(
+              // @ts-expect-error: $between takes exactly two bounds
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $between: [] } }
+              })
+            );
+          });
+        });
+
+        describe("operator object shape", () => {
+          it("rejects an empty operator object", async () => {
+            await swallow(
+              // @ts-expect-error: an empty object names no operator
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: {} }
+              })
+            );
+          });
+
+          it("rejects an operand explicitly set to undefined", async () => {
+            await swallow(
+              // @ts-expect-error: an operator given no value is not a condition
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $gt: undefined } }
+              })
+            );
+          });
+
+          it("rejects an operator that does not exist", async () => {
+            await swallow(
+              // @ts-expect-error: $ne is not a supported operator
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $ne: 10 } }
+              })
+            );
+          });
+        });
+
+        describe("nested fields", () => {
+          it("types a nested date field's operand as a Date", async () => {
+            await swallow(
+              // @ts-expect-no-error: objectAttribute.createdDate is declared as a Date
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.createdDate": { $gte: new Date() } }
+              })
+            );
+          });
+
+          it("rejects the stored form on a nested date field", async () => {
+            await swallow(
+              // @ts-expect-error: the field is declared as a Date
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.createdDate": { $gte: "2023" } }
+              })
+            );
+          });
+
+          it("types a deeply nested number field's operand as a number", async () => {
+            await swallow(
+              // @ts-expect-no-error: addressAttribute.geo.lat is declared as a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo.lat": { $between: [0, 90] } }
+              })
+            );
+          });
+
+          it("rejects a mistyped operand on a deeply nested field", async () => {
+            await swallow(
+              // @ts-expect-error: lat is declared as a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo.lat": { $gt: "0" } }
+              })
+            );
+          });
         });
       });
 

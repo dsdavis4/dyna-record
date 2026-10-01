@@ -2,8 +2,9 @@ import type { FilterCapabilities } from "./types.js";
 
 /**
  * Capability set of the query filter context — the full filter vocabulary:
- * `$or` blocks, "IN" arrays, `$beginsWith`, `$contains`, dot-path notation
- * for nested Map attributes, and any number of conditions per attribute.
+ * `$or` blocks, "IN" arrays, `$beginsWith`, `$contains`, the comparison
+ * operators, `$between`, dot-path notation for nested Map attributes, and any
+ * number of conditions per attribute.
  */
 export const queryFilterCapabilities: FilterCapabilities = {
   context: "query",
@@ -11,9 +12,8 @@ export const queryFilterCapabilities: FilterCapabilities = {
   in: true,
   beginsWith: true,
   contains: true,
-  // Off until the builder compiles them; the condition types already name them
-  comparison: false,
-  between: false,
+  comparison: true,
+  between: true,
   nestedPaths: true,
   singleConditionPerAttribute: false
 };

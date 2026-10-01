@@ -24,12 +24,25 @@ const attributes: Record<
   name: { alias: "Name", type: z.string() },
   category: { alias: "Category", type: z.string() },
   price: { alias: "Price", type: z.number() },
+  inStock: { alias: "InStock", type: z.boolean() },
+  serial: { alias: "Serial", type: z.bigint() },
+  thumbnail: { alias: "Thumbnail", type: z.instanceof(Uint8Array) },
+  discount: { alias: "Discount", type: z.number().nullable() },
   meta: {
     alias: "Meta",
     type: z.object({}),
     objectSchema: {
       label: { type: "string" },
-      recordedAt: { type: "date" }
+      recordedAt: { type: "date" },
+      tags: { type: "array", items: { type: "string" } },
+      nested: {
+        type: "object",
+        fields: { deepAt: { type: "date" }, count: { type: "number" } }
+      },
+      history: {
+        type: "array",
+        items: { type: "object", fields: { at: { type: "date" } } }
+      }
     } as const satisfies ObjectSchema
   },
   // Declared as a Date, stored as an ISO string — the pairing the whole
@@ -69,6 +82,16 @@ const queryBuilderInstance = (): FilterExpressionBuilder =>
 const searchBuilderInstance = (): FilterExpressionBuilder =>
   new FilterExpressionBuilder({
     capabilities: searchFilterCapabilities,
+    resolveAttribute: typedResolver
+  });
+
+/**
+ * Query-shaped builder whose resolver also supplies each attribute's zod type,
+ * so both halves of the operand rule are observable: validation and conversion
+ */
+const typedQueryBuilder = (): FilterExpressionBuilder =>
+  new FilterExpressionBuilder({
+    capabilities: queryFilterCapabilities,
     resolveAttribute: typedResolver
   });
 
@@ -279,12 +302,6 @@ describe("FilterExpressionBuilder", () => {
   });
 
   describe("values are validated in their declared form", () => {
-    const typedQueryBuilder = (): FilterExpressionBuilder =>
-      new FilterExpressionBuilder({
-        capabilities: queryFilterCapabilities,
-        resolveAttribute: typedResolver
-      });
-
     it("accepts a Date for an attribute declared as a Date", () => {
       expect.assertions(1);
 
@@ -350,6 +367,701 @@ describe("FilterExpressionBuilder", () => {
         expression: "begins_with(#CreatedAt, :CreatedAt1)",
         values: { CreatedAt1: "2023" }
       });
+    });
+  });
+
+  describe("comparison and range conditions", () => {
+    it("compiles each comparison operator to its DynamoDB comparator", () => {
+      expect.assertions(4);
+
+      // A fresh builder per assertion so each starts the placeholder counter
+      // at the same point, which is what makes the four comparable
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gt: 10 } })
+      ).toEqual({ expression: "#Price > :Price1", values: { Price1: 10 } });
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gte: 10 } })
+      ).toEqual({ expression: "#Price >= :Price1", values: { Price1: 10 } });
+      expect(
+        queryBuilderInstance().filterParams({ price: { $lt: 10 } })
+      ).toEqual({ expression: "#Price < :Price1", values: { Price1: 10 } });
+      expect(
+        queryBuilderInstance().filterParams({ price: { $lte: 10 } })
+      ).toEqual({ expression: "#Price <= :Price1", values: { Price1: 10 } });
+    });
+
+    it("converts a comparison operand to the stored form", () => {
+      expect.assertions(1);
+
+      // The operand is a whole value of the attribute, so it is named as the
+      // entity declares it and converted the way an equality value is
+      expect(
+        typedQueryBuilder().filterParams({
+          createdAt: { $gte: new Date("2023-01-15T12:12:18.123Z") }
+        })
+      ).toEqual({
+        expression: "#CreatedAt >= :CreatedAt1",
+        values: { CreatedAt1: "2023-01-15T12:12:18.123Z" }
+      });
+    });
+
+    it("leaves a comparison operand alone on an attribute that stores what it declares", () => {
+      expect.assertions(1);
+
+      expect(typedQueryBuilder().filterParams({ price: { $lt: 10 } })).toEqual({
+        expression: "#Price < :Price1",
+        values: { Price1: 10 }
+      });
+    });
+
+    it("converts a comparison operand on a nested date field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.recordedAt": { $gt: new Date("2023-01-15T12:12:18.123Z") }
+        })
+      ).toEqual({
+        expression: "#Meta.#recordedAt > :MetarecordedAt1",
+        values: { MetarecordedAt1: "2023-01-15T12:12:18.123Z" }
+      });
+    });
+
+    it("composes several comparisons on one attribute with AND", () => {
+      expect.assertions(1);
+
+      // A half-open range, which is what composition is for
+      expect(
+        typedQueryBuilder().filterParams({
+          createdAt: {
+            $gte: new Date("2023-01-01T00:00:00.000Z"),
+            $lt: new Date("2023-02-01T00:00:00.000Z")
+          }
+        })
+      ).toEqual({
+        expression: "#CreatedAt >= :CreatedAt1 AND #CreatedAt < :CreatedAt2",
+        values: {
+          CreatedAt1: "2023-01-01T00:00:00.000Z",
+          CreatedAt2: "2023-02-01T00:00:00.000Z"
+        }
+      });
+    });
+
+    it("compiles composed comparisons in operator order rather than literal order", () => {
+      expect.assertions(1);
+
+      // The same condition written with its keys the other way round compiles
+      // identically, so an expression is a function of the condition and not
+      // of how the caller's object literal happened to be written
+      expect(
+        queryBuilderInstance().filterParams({
+          price: { $lte: 100, $gt: 10 }
+        })
+      ).toEqual({
+        expression: "#Price > :Price1 AND #Price <= :Price2",
+        values: { Price1: 10, Price2: 100 }
+      });
+    });
+
+    it("compiles $between with both bounds converted", () => {
+      expect.assertions(1);
+
+      expect(
+        typedQueryBuilder().filterParams({
+          createdAt: {
+            $between: [
+              new Date("2023-01-01T00:00:00.000Z"),
+              new Date("2023-12-31T23:59:59.999Z")
+            ]
+          }
+        })
+      ).toEqual({
+        expression: "#CreatedAt BETWEEN :CreatedAt1 AND :CreatedAt2",
+        values: {
+          CreatedAt1: "2023-01-01T00:00:00.000Z",
+          CreatedAt2: "2023-12-31T23:59:59.999Z"
+        }
+      });
+    });
+
+    it("parenthesizes a multi-operand condition inside an $or block", () => {
+      expect.assertions(1);
+
+      // AND binds tighter than OR in DynamoDB, so the parentheses are not
+      // strictly required — they are what makes the grouping legible, and
+      // pinning them here catches a change that drops them for one operator
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ price: { $between: [10, 100] } }, { name: "Scale-A" }]
+        })
+      ).toEqual({
+        expression: "(#Price BETWEEN :Price1 AND :Price2) OR #Name = :Name3",
+        values: { Price1: 10, Price2: 100, Name3: "Scale-A" }
+      });
+    });
+
+    it("numbers each operand from the shared counter", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          price: { $gte: 10, $lt: 100 },
+          category: { $between: ["a", "m"] }
+        })
+      ).toEqual({
+        expression:
+          "#Price >= :Price1 AND #Price < :Price2 AND #Category BETWEEN :Category3 AND :Category4",
+        values: { Price1: 10, Price2: 100, Category3: "a", Category4: "m" }
+      });
+    });
+
+    it("rejects an inverted $between, naming the attribute", () => {
+      expect.assertions(2);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $between: [100, 10] } })
+      ).toThrow(FilterError);
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $between: [100, 10] } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+        )
+      );
+    });
+
+    it("rejects an inverted $between compared in the stored form", () => {
+      expect.assertions(1);
+
+      // A Date has no relational order DynamoDB sees — what it compares is the
+      // ISO string, which is what the check has to compare too
+      expect(() =>
+        typedQueryBuilder().filterParams({
+          createdAt: {
+            $between: [
+              new Date("2023-12-31T00:00:00.000Z"),
+              new Date("2023-01-01T00:00:00.000Z")
+            ]
+          }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "createdAt": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+        )
+      );
+    });
+
+    it("accepts a $between whose bounds are equal", () => {
+      expect.assertions(1);
+
+      // BETWEEN is inclusive, so an equal pair matches that one value rather
+      // than nothing — it is a degenerate range, not an inverted one
+      expect(
+        queryBuilderInstance().filterParams({ price: { $between: [10, 10] } })
+      ).toEqual({
+        expression: "#Price BETWEEN :Price1 AND :Price2",
+        values: { Price1: 10, Price2: 10 }
+      });
+    });
+
+    it("rejects a comparison operand the attribute cannot hold", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        typedQueryBuilder().filterParams({ price: { $gt: "ten" } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": the value does not match the attribute\'s type'
+        )
+      );
+    });
+
+    it("rejects a comparison operand that resolved to undefined", () => {
+      expect.assertions(1);
+
+      // Forwarding an optional input: the key is present with nothing under
+      // it, which would otherwise emit a placeholder with no value bound
+      expect(() =>
+        // @ts-expect-error an operand resolving to undefined is a plain JavaScript caller
+        queryBuilderInstance().filterParams({ price: { $gt: undefined } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": $gt was given no value'
+        )
+      );
+    });
+
+    it("rejects a $between bound that resolved to undefined", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a bound resolving to undefined is a plain JavaScript caller
+          price: { $between: [10, undefined] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": $between was given no value'
+        )
+      );
+    });
+
+    it("rejects a $between that is not an ordered pair", () => {
+      expect.assertions(1);
+
+      // The type requires a pair, so this answers for a plain JavaScript caller
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error $between takes a pair; a third bound is a plain JavaScript caller
+          price: { $between: [10, 20, 30] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": $between takes an ordered pair of bounds'
+        )
+      );
+    });
+
+    it("rejects a condition combining operators from different families", () => {
+      expect.assertions(1);
+
+      // The branch that compiles one would silently drop the other, giving a
+      // query narrower or wider than asked for with nothing to indicate it
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          price: { $gt: 10, $between: [20, 30] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": a condition combines comparison and $between, and only comparison operators compose. Split it across separate conditions'
+        )
+      );
+    });
+
+    it("rejects $beginsWith combined with a comparison", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          name: { $beginsWith: "Scale", $gt: "Scale-A" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "name": a condition combines comparison and $beginsWith, and only comparison operators compose. Split it across separate conditions'
+        )
+      );
+    });
+
+    it("leaves $beginsWith and $contains operands in the stored form", () => {
+      expect.assertions(1);
+
+      // The contrast the operand rule draws: a comparison on createdAt takes a
+      // Date, while a $beginsWith on it takes a prefix of the stored string
+      expect(
+        typedQueryBuilder().filterParams({ createdAt: { $beginsWith: "2023" } })
+      ).toEqual({
+        expression: "begins_with(#CreatedAt, :CreatedAt1)",
+        values: { CreatedAt1: "2023" }
+      });
+    });
+  });
+
+  describe("comparison and range operand boundaries", () => {
+    it("treats a falsy operand as a value rather than a missing one", () => {
+      expect.assertions(3);
+
+      // 0, "" and false are the operands a definedness check written as a
+      // truthiness check would silently drop
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gt: 0 } })
+      ).toEqual({ expression: "#Price > :Price1", values: { Price1: 0 } });
+      expect(
+        queryBuilderInstance().filterParams({ name: { $gte: "" } })
+      ).toEqual({ expression: "#Name >= :Name1", values: { Name1: "" } });
+      expect(
+        queryBuilderInstance().filterParams({ inStock: { $lte: false } })
+      ).toEqual({
+        expression: "#InStock <= :InStock1",
+        values: { InStock1: false }
+      });
+    });
+
+    it("compiles a $between whose bounds are both falsy", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ price: { $between: [0, 0] } })
+      ).toEqual({
+        expression: "#Price BETWEEN :Price1 AND :Price2",
+        values: { Price1: 0, Price2: 0 }
+      });
+    });
+
+    it("compiles bigint operands and orders them", () => {
+      expect.assertions(2);
+
+      expect(
+        queryBuilderInstance().filterParams({ serial: { $gt: 10n } })
+      ).toEqual({ expression: "#Serial > :Serial1", values: { Serial1: 10n } });
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          serial: { $between: [20n, 10n] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "serial": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+        )
+      );
+    });
+
+    it("rejects an inverted $between on strings", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $between: ["m", "a"] } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "name": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error`'.replace(
+            "`",
+            ""
+          )
+        )
+      );
+    });
+
+    it("leaves an unorderable pair unchecked rather than checking it wrongly", () => {
+      expect.assertions(2);
+
+      // JavaScript's > does not reproduce DynamoDB's unsigned-byte ordering of
+      // binary, and a boolean has no ordering at all, so neither is rejected
+      // for inversion. Compiling them is better than guessing which way round
+      // they belong
+      expect(
+        queryBuilderInstance().filterParams({
+          thumbnail: {
+            $between: [new Uint8Array([9]), new Uint8Array([1])]
+          }
+        })
+      ).toEqual({
+        expression: "#Thumbnail BETWEEN :Thumbnail1 AND :Thumbnail2",
+        values: {
+          Thumbnail1: new Uint8Array([9]),
+          Thumbnail2: new Uint8Array([1])
+        }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          inStock: { $between: [true, false] }
+        })
+      ).toEqual({
+        expression: "#InStock BETWEEN :InStock1 AND :InStock2",
+        values: { InStock1: true, InStock2: false }
+      });
+    });
+
+    it("rejects null as a comparison operand", () => {
+      expect.assertions(4);
+
+      for (const operator of ["$gt", "$gte", "$lt", "$lte"]) {
+        expect(() =>
+          // @ts-expect-error a null operand is a plain JavaScript caller
+          queryBuilderInstance().filterParams({ price: { [operator]: null } })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "price": ${operator} cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no row can satisfy an ordered comparison against it`
+          )
+        );
+      }
+    });
+
+    it("rejects null as either $between bound", () => {
+      expect.assertions(2);
+
+      const message =
+        'Invalid filter value for attribute "price": $between cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no row can satisfy an ordered comparison against it';
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          price: { $between: [null, 5] }
+        })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          price: { $between: [5, null] }
+        })
+      ).toThrow(new FilterError(message));
+    });
+
+    it("rejects a $between that is not a pair, at every arity", () => {
+      expect.assertions(3);
+
+      const message =
+        'Invalid filter value for attribute "price": $between takes an ordered pair of bounds';
+
+      expect(() =>
+        // @ts-expect-error an empty pair is a plain JavaScript caller
+        queryBuilderInstance().filterParams({ price: { $between: [] } })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        // @ts-expect-error a single bound is a plain JavaScript caller
+        queryBuilderInstance().filterParams({ price: { $between: [10] } })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        // @ts-expect-error a non-array $between is a plain JavaScript caller
+        queryBuilderInstance().filterParams({ price: { $between: "10-20" } })
+      ).toThrow(new FilterError(message));
+    });
+
+    it("compiles all four comparisons on one attribute", () => {
+      expect.assertions(1);
+
+      // Contradictory as a query, but the composition rule does not depend on
+      // how many operators compose, and the placeholder numbering must hold
+      expect(
+        queryBuilderInstance().filterParams({
+          price: { $gt: 1, $gte: 2, $lt: 3, $lte: 4 }
+        })
+      ).toEqual({
+        expression:
+          "#Price > :Price1 AND #Price >= :Price2 AND #Price < :Price3 AND #Price <= :Price4",
+        values: { Price1: 1, Price2: 2, Price3: 3, Price4: 4 }
+      });
+    });
+
+    it("compiles a comparison alongside conditions on other attributes", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          name: "Scale-A",
+          price: { $gte: 10 },
+          category: { $beginsWith: "books" }
+        })
+      ).toEqual({
+        expression:
+          "#Name = :Name1 AND #Price >= :Price2 AND begins_with(#Category, :Category3)",
+        values: { Name1: "Scale-A", Price2: 10, Category3: "books" }
+      });
+    });
+
+    it("keeps placeholder numbering continuous across $or and top level ranges", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          price: { $gte: 10, $lt: 20 },
+          $or: [{ category: { $between: ["a", "m"] } }, { name: { $gt: "A" } }]
+        })
+      ).toEqual({
+        expression:
+          "((#Category BETWEEN :Category1 AND :Category2) OR #Name > :Name3) AND (#Price >= :Price4 AND #Price < :Price5)",
+        values: {
+          Category1: "a",
+          Category2: "m",
+          Name3: "A",
+          Price4: 10,
+          Price5: 20
+        }
+      });
+    });
+  });
+
+  describe("comparison and range conditions on nested paths", () => {
+    it("converts a comparison operand on a deeply nested date field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.nested.deepAt": { $lte: new Date("2023-06-01T00:00:00.000Z") }
+        })
+      ).toEqual({
+        expression: "#Meta.#nested.#deepAt <= :MetanesteddeepAt1",
+        values: { MetanesteddeepAt1: "2023-06-01T00:00:00.000Z" }
+      });
+    });
+
+    it("converts both $between bounds on a nested date field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.recordedAt": {
+            $between: [
+              new Date("2023-01-01T00:00:00.000Z"),
+              new Date("2023-12-31T00:00:00.000Z")
+            ]
+          }
+        })
+      ).toEqual({
+        expression:
+          "#Meta.#recordedAt BETWEEN :MetarecordedAt1 AND :MetarecordedAt2",
+        values: {
+          MetarecordedAt1: "2023-01-01T00:00:00.000Z",
+          MetarecordedAt2: "2023-12-31T00:00:00.000Z"
+        }
+      });
+    });
+
+    it("validates a comparison operand against the nested field's own type", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.nested.count": { $gt: "ten" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.nested.count": the value does not match the attribute\'s type'
+        )
+      );
+    });
+
+    it("leaves a comparison operand in the stored form on a path through an array", () => {
+      expect.assertions(1);
+
+      // A path cannot identify which element it means, so no field definition
+      // resolves and the operand is neither validated nor converted
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $gte: "2023-01-01T00:00:00.000Z" }
+        })
+      ).toEqual({
+        expression: "#Meta.#history.#at >= :MetahistoryAt1".replace(
+          "At1",
+          "at1"
+        ),
+        values: { Metahistoryat1: "2023-01-01T00:00:00.000Z" }
+      });
+    });
+
+    it("leaves a comparison operand in the stored form on a path naming no field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.unknown": { $gt: "x" }
+        })
+      ).toEqual({
+        expression: "#Meta.#unknown > :Metaunknown1",
+        values: { Metaunknown1: "x" }
+      });
+    });
+
+    it("rejects a comparison on an array-typed nested field without validating it", () => {
+      expect.assertions(1);
+
+      // An array field's schema describes the list, not an element, so no
+      // validation runs and the operand compiles as supplied
+      expect(
+        queryBuilderInstance().filterParams({ "meta.tags": { $gt: "a" } })
+      ).toEqual({
+        expression: "#Meta.#tags > :Metatags1",
+        values: { Metatags1: "a" }
+      });
+    });
+  });
+
+  describe("operator object shape", () => {
+    it("rejects an empty operator object", () => {
+      expect.assertions(1);
+
+      // Without this it compiles to an equality against {} — a condition
+      // DynamoDB accepts, matches nothing for, and reports no error about
+      expect(() =>
+        // @ts-expect-error an empty operator object is no condition at all
+        queryBuilderInstance().filterParams({ price: {} })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
+        )
+      );
+    });
+
+    it("rejects an object naming an operator that does not exist", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        // @ts-expect-error $ne is not a supported operator
+        queryBuilderInstance().filterParams({ price: { $ne: 5 } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
+        )
+      );
+    });
+
+    it("rejects a plain object that is not an operator object at all", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        // @ts-expect-error a whole-object equality is not a supported condition
+        queryBuilderInstance().filterParams({ meta: { label: "x" } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
+        )
+      );
+    });
+
+    it("does not mistake a Date or a Uint8Array for an operator object", () => {
+      expect.assertions(2);
+
+      // Both are objects to typeof and whole values to a filter
+      expect(
+        queryBuilderInstance().filterParams({
+          createdAt: new Date("2023-01-15T12:12:18.123Z")
+        })
+      ).toEqual({
+        expression: "#CreatedAt = :CreatedAt1",
+        values: { CreatedAt1: "2023-01-15T12:12:18.123Z" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          thumbnail: new Uint8Array([1, 2])
+        })
+      ).toEqual({
+        expression: "#Thumbnail = :Thumbnail1",
+        values: { Thumbnail1: new Uint8Array([1, 2]) }
+      });
+    });
+
+    it("rejects each combination of operator families", () => {
+      expect.assertions(5);
+
+      const combine =
+        (condition: object): (() => unknown) =>
+        () =>
+          queryBuilderInstance().filterParams({
+            name: condition
+          } as never);
+
+      expect(combine({ $gt: "a", $between: ["a", "b"] })).toThrow(
+        "a condition combines comparison and $between"
+      );
+      expect(combine({ $gt: "a", $beginsWith: "a" })).toThrow(
+        "a condition combines comparison and $beginsWith"
+      );
+      expect(combine({ $gt: "a", $contains: "a" })).toThrow(
+        "a condition combines comparison and $contains"
+      );
+      expect(combine({ $between: ["a", "b"], $beginsWith: "a" })).toThrow(
+        "a condition combines $between and $beginsWith"
+      );
+      expect(combine({ $beginsWith: "a", $contains: "a" })).toThrow(
+        "a condition combines $beginsWith and $contains"
+      );
+    });
+
+    it("names all three families when a condition combines three", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          name: { $gt: "a", $between: ["a", "b"], $contains: "a" }
+        } as never)
+      ).toThrow(
+        "a condition combines comparison and $between and $contains, and only comparison operators compose. Split it across separate conditions"
+      );
     });
   });
 
