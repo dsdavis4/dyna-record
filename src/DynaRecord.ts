@@ -195,7 +195,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * @param {string | EntityKeyConditions<T>} key - Entity Id (string) or an object with PartitionKey and optional SortKey conditions.
    * @param {Object=} options - QueryOptions. Supports typed filter, consistentRead and skCondition. indexName is not supported.
    * @param {SKScopedFilterParams<T, SK>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes, scoped by `skCondition` when present. The `type` field accepts valid entity class names within the SK scope.
-   * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Accepts entity names, entity-name-prefixed strings, or `$beginsWith` with exact names or partial prefixes. Narrows the return type and scopes the filter to matched entities.
+   * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Accepts entity names, entity-name-prefixed strings, `$beginsWith` with exact names or partial prefixes, a single comparison, or a `$between` range. Narrows the return type and scopes the filter to matched entities.
    * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value, filter keys, and `skCondition`.
    *
    * @example By entity ID
@@ -226,10 +226,36 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * const orders = await Customer.query("123", {
    *   skCondition: { $beginsWith: "Order" },
-   *   filter: { type: "Order", orderDate: "2023-01-01" }
+   *   filter: { type: "Order", orderDate: new Date("2023-01-01") }
    * });
    * // orders is Array<EntityAttributesInstance<Order>>
    * // filter: { lastFour: "1234" } would be a compile error (PaymentMethod attribute)
+   * ```
+   *
+   * @example Filtering on a range
+   * ```typescript
+   * // Several comparison operators on one attribute compose with AND
+   * const orders = await Customer.query("123", {
+   *   filter: {
+   *     type: "Order",
+   *     orderDate: { $gte: new Date("2026-01-01"), $lt: new Date("2026-02-01") }
+   *   }
+   * });
+   *
+   * // $between is inclusive on both bounds
+   * const results = await Customer.query("123", {
+   *   filter: { orderDate: { $between: [new Date("2026-01-01"), new Date("2026-12-31")] } }
+   * });
+   * ```
+   *
+   * @example Narrowing the read with a sort key range
+   * ```typescript
+   * // A key condition narrows what DynamoDB reads; a filter discards rows
+   * // after reading them. A sort key takes one condition, so a two-sided
+   * // range is $between
+   * const orders = await Customer.query("123", {
+   *   skCondition: { $between: ["Order#100", "Order#200"] }
+   * });
    * ```
    *
    * @example By primary key (sk validated, return type NOT narrowed)

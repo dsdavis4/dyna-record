@@ -50,9 +50,29 @@ export interface FilterExpression {
 }
 
 /**
- * Represents a filter condition specifying that a value must begin with a certain prefix.
+ * Matches values starting with a given prefix. Maps to the DynamoDB
+ * `begins_with()` function.
  *
- * @type {BeginsWithFilter} - A record with "$beginsWith" key pointing to the prefix value.
+ * The prefix is a fragment of the **stored** form, not a value of the
+ * attribute, so it stays a string whatever the attribute declares. That is how
+ * a date is matched by partial value: a date attribute is stored as an ISO 8601
+ * string, so a year is a prefix of it.
+ *
+ * Offered only where the stored form can carry a prefix — a String — so it is
+ * absent from a number, boolean or Map attribute. See
+ * {@link BeginsWithConditionFor}.
+ *
+ * @example
+ * ```typescript
+ * // Everything in a given year, on an attribute declared as a Date
+ * filter: { createdAt: { $beginsWith: "2026" } }
+ *
+ * // A prefix of a nested string field
+ * filter: { "address.street": { $beginsWith: "123" } }
+ *
+ * // Narrow a query to one entity type within the partition
+ * skCondition: { $beginsWith: "Order" }
+ * ```
  */
 export type BeginsWithFilter = Record<"$beginsWith", string>;
 
@@ -61,6 +81,10 @@ export type BeginsWithFilter = Record<"$beginsWith", string>;
  * Maps to the DynamoDB `contains()` function.
  *
  * Works with both top-level attributes and nested `@ObjectAttribute` fields via dot-path notation.
+ *
+ * Offered only where the stored form can carry it — a String, a List or a Set —
+ * so it is absent from a number, boolean or Map attribute. See
+ * {@link ContainsConditionFor}.
  *
  * @type {ContainsFilter} - A record with "$contains" key pointing to the value to check for.
  *
@@ -119,6 +143,15 @@ export type OrderedFilterValue = Exclude<FilterValue, boolean | null>;
  * {@link FilterConditionFor} excludes it, because dyna-record removes a nulled
  * attribute rather than storing DynamoDB's NULL, leaving nothing for an ordered
  * comparison to match.
+ *
+ * @example
+ * ```typescript
+ * // One bound
+ * filter: { total: { $gte: 50 } }
+ *
+ * // Two compose with AND, which is how a half-open range is written
+ * filter: { createdAt: { $gte: new Date("2026-01-01"), $lt: new Date("2026-02-01") } }
+ * ```
  */
 export type ComparisonFilter<V> = AtLeastOne<{
   $gt: V;
@@ -134,6 +167,15 @@ export type ComparisonFilter<V> = AtLeastOne<{
  * in a filter cannot compose there — a two-sided key range is
  * {@link BetweenFilter}. {@link ExactlyOne} makes the second operand an error
  * rather than leaving it to the runtime rejection.
+ *
+ * @example
+ * ```typescript
+ * // Valid: one condition on the sort key
+ * skCondition: { $gte: "Order#100" }
+ *
+ * // A compile error: use $between for a two-sided key range
+ * skCondition: { $gte: "Order#100", $lt: "Order#200" }
+ * ```
  */
 export type SingleComparisonFilter<V> = ExactlyOne<{
   $gt: V;
@@ -154,6 +196,18 @@ export type SingleComparisonFilter<V> = ExactlyOne<{
  * of the attribute, and never `null` — so both are validated and converted. A
  * half-open range is expressed with {@link ComparisonFilter} instead:
  * `{ $gte: start, $lt: end }`.
+ *
+ * @example
+ * ```typescript
+ * // Inclusive on both bounds
+ * filter: { total: { $between: [50, 100] } }
+ *
+ * // On an attribute declared as a Date, the bounds are Dates
+ * filter: { createdAt: { $between: [new Date("2026-01-01"), new Date("2026-12-31")] } }
+ *
+ * // A two-sided range on a sort key, where the comparators cannot compose
+ * skCondition: { $between: ["Order#100", "Order#200"] }
+ * ```
  */
 export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
 
@@ -294,9 +348,25 @@ export type FilterConditionFor<V> =
   | V[];
 
 /**
- * Defines possible types of values that can be used in a filter condition, including begins with, contains, exact value, or an array for "IN" conditions.
+ * Every condition a filter key accepts, over the values a caller may write.
  *
- * Filter keys support dot-path notation for nested `@ObjectAttribute` Map fields (e.g., `"address.city"`).
+ * A value to match, an array of them for an "IN" condition, a comparison, a
+ * `$between` range, a `$beginsWith` prefix or a `$contains` check. Which of
+ * those a given attribute actually offers depends on the form the table stores
+ * it in — see {@link FilterConditionFor}.
+ *
+ * Filter keys support dot-path notation for nested `@ObjectAttribute` Map
+ * fields (e.g., `"address.city"`).
+ *
+ * @example
+ * ```typescript
+ * filter: { name: "Scale-A" }                    // equality
+ * filter: { name: ["Scale-A", "Scale-B"] }       // IN
+ * filter: { total: { $gte: 50, $lt: 100 } }      // a half-open range
+ * filter: { total: { $between: [50, 100] } }     // an inclusive range
+ * filter: { createdAt: { $beginsWith: "2026" } } // a prefix of the stored form
+ * filter: { tags: { $contains: "vip" } }         // List membership
+ * ```
  */
 export type FilterTypes = FilterConditionFor<FilterValue>;
 

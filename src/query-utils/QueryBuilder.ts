@@ -16,7 +16,7 @@ import { FilterError } from "../errors.js";
 /**
  * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
  *
- * Utilizing metadata about the entity and its attributes, `QueryBuilder` generates the necessary DynamoDB expressions to perform precise queries, including support for conditional operators like '=', 'begins_with', 'contains', and 'IN', as well as logical 'AND' and 'OR' operations. Supports dot-path notation for filtering on nested Map attributes.
+ * Utilizing metadata about the entity and its attributes, `QueryBuilder` generates the necessary DynamoDB expressions to perform precise queries. Filters support equality, 'IN', the comparators, 'BETWEEN', 'begins_with' and 'contains', joined with logical 'AND' and 'OR', over top level attributes and dot-path notation for nested Map attributes. Key conditions compile under a narrower vocabulary — see {@link keyConditionCapabilities}.
  *
  * Expression compilation is delegated to a {@link FilterExpressionBuilder}
  * instance parameterized with the query capability set (the full filter

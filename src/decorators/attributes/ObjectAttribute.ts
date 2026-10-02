@@ -116,8 +116,11 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
  * must provide a complete variant object. See {@link DiscriminatedUnionFieldDef} for
  * the rationale.
  *
- * Object attributes support filtering in queries using dot-path notation for nested fields
- * and the `$contains` operator for List membership checks.
+ * Object attributes support filtering in queries using dot-path notation for nested fields.
+ * A dot-path key is typed by the field it names and offers the operators that field's stored
+ * form can carry — so a nested date field takes `Date` operands and accepts ranges, a nested
+ * string field accepts `$beginsWith`, and an array field accepts `$contains` for List
+ * membership.
  *
  * ```typescript
  * await MyEntity.query("123", {
@@ -126,6 +129,11 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
  *
  * await MyEntity.query("123", {
  *   filter: { "address.tags": { $contains: "home" } }
+ * });
+ *
+ * // A range on a nested number field
+ * await MyEntity.query("123", {
+ *   filter: { "address.geo.lat": { $between: [40, 41] } }
  * });
  * ```
  */

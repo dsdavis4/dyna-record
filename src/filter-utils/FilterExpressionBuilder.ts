@@ -158,7 +158,8 @@ class FilterExpressionBuilder {
    * Creates the filters
    *
    * Supports 'AND' and 'OR'
-   * Supports '=', 'begins_with', 'contains', and 'IN' operands
+   * Supports equality, 'IN', the comparators, 'BETWEEN', 'begins_with' and
+   * 'contains' operands, each subject to the capability set
    * Supports dot-path notation for nested Map attributes (e.g., 'address.city')
    *
    * Each of which is subject to the capability set of the filter context
@@ -359,7 +360,8 @@ class FilterExpressionBuilder {
 
   /**
    * Creates an AND condition.
-   * Supports equality, begins_with, contains, and IN operators.
+   * Supports equality, 'IN', the comparators, 'BETWEEN', 'begins_with' and
+   * 'contains', each subject to the capability set this compilation runs under.
    * Supports dot-path notation for nested Map attributes.
    * @param attr - The attribute key, optionally using dot notation for nested paths
    * @param value

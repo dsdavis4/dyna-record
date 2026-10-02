@@ -431,7 +431,25 @@ type EntityNamesStartingWith<
  * `$beginsWith: "Inv"` is valid when the partition contains "Invoice" and "Inventory",
  * since DynamoDB's `begins_with` would match both entity types.
  *
+ * A comparison or a `$between` range is also accepted, and is where a key
+ * condition earns its keep: it narrows what DynamoDB reads, where a filter
+ * discards rows already read. DynamoDB has room for exactly one condition on
+ * the sort key, so the comparison operators do not compose here — a two-sided
+ * range is `$between`.
+ *
  * @template T - The entity type being queried.
+ *
+ * @example
+ * ```typescript
+ * // One entity type within the partition
+ * skCondition: { $beginsWith: "Order" }
+ *
+ * // A one-sided range over the sort key
+ * skCondition: { $gte: "Order#100" }
+ *
+ * // A two-sided range, which must be $between
+ * skCondition: { $between: ["Order#100", "Order#200"] }
+ * ```
  */
 export type TypedSortKeyCondition<T extends DynaRecord> =
   | SortKeyValueFor<T>
