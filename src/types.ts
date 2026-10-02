@@ -285,6 +285,20 @@ export type AtLeastOne<T> = {
 }[keyof T];
 
 /**
+ * Requires exactly one of an object's properties to be present.
+ *
+ * Distributes the way {@link AtLeastOne} does, but types the other keys as
+ * `never` rather than leaving them optional, so supplying a second one is an
+ * error. That is the difference between a filter, where several comparison
+ * operators compose into a range, and a key condition, where DynamoDB has room
+ * for one condition on the sort key.
+ */
+export type ExactlyOne<T> = {
+  [K in keyof T]-?: Required<Pick<T, K>> &
+    Partial<Record<Exclude<keyof T, K>, never>>;
+}[keyof T];
+
+/**
  * Make a single property of an object required
  */
 export type WithRequired<T, K extends keyof T> = Omit<T, K> & {

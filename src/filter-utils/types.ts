@@ -5,6 +5,7 @@ import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
 import type {
   AtLeastOne,
+  ExactlyOne,
   DynamoNativeValue,
   DynamoScalarValue,
   LibraryBrandToValue,
@@ -12,12 +13,18 @@ import type {
 } from "../types.js";
 
 /**
- * The condition an attribute must satisfy in a key condition: the value it
- * equals, or a {@link BeginsWithFilter} prefix.
+ * The condition an attribute must satisfy in a key condition.
  *
- * @type {SortKeyCondition} - A `BeginsWithFilter` or a single value, named the way the entity declares the attribute.
+ * The value it equals, a {@link BeginsWithFilter} prefix, a single comparison,
+ * or a {@link BetweenFilter} range — the vocabulary DynamoDB accepts on a sort
+ * key. The comparison does not compose, because the expression has room for one
+ * condition there; a two-sided range is `$between`.
  */
-export type SortKeyCondition = BeginsWithFilter | FilterValue;
+export type SortKeyCondition =
+  | BeginsWithFilter
+  | SingleComparisonFilter<OrderedFilterValue>
+  | BetweenFilter<OrderedFilterValue>
+  | FilterValue;
 
 /**
  * Represents conditions used to specify the partition key and sort key (if applicable) for querying items in DynamoDB.
@@ -105,6 +112,21 @@ export type OrderedFilterValue = Exclude<FilterValue, null>;
  * comparison to match.
  */
 export type ComparisonFilter<V> = AtLeastOne<{
+  $gt: V;
+  $gte: V;
+  $lt: V;
+  $lte: V;
+}>;
+
+/**
+ * A single comparison condition, for a context with room for exactly one.
+ *
+ * A key condition's sort key takes one condition, so the operators that compose
+ * in a filter cannot compose there — a two-sided key range is
+ * {@link BetweenFilter}. {@link ExactlyOne} makes the second operand an error
+ * rather than leaving it to the runtime rejection.
+ */
+export type SingleComparisonFilter<V> = ExactlyOne<{
   $gt: V;
   $gte: V;
   $lt: V;
@@ -263,13 +285,28 @@ export type AndOrFilter = FilterParams & OrFilter;
 // ─── Capability-Parameterized Expression Building ───────────────────────────
 
 /**
+ * The context a rejection names, as a full noun phrase.
+ *
+ * A phrase rather than an adjective because a key condition is not a filter,
+ * and a message reading "key condition filters" would name something that does
+ * not exist. A closed union rather than `string` because these are every
+ * context there is — `capabilities.ts` is the only place a capability set is
+ * constructed — so a new context must be declared here before a message can
+ * name it, and a typo cannot reach a caller.
+ */
+export type FilterContext =
+  | "query filters"
+  | "search filters"
+  | "key conditions";
+
+/**
  * Declares the filter vocabulary a context supports. The
  * {@link FilterExpressionBuilder} enforces the capability set at runtime,
  * rejecting any condition outside it with a {@link FilterError} — the
  * compile-time filter typings are erased for plain JS callers, so every
  * context-specific restriction is backed by a capability here.
  *
- * @property {string} context - Human readable name of the filter context (EX: "query"), used in error messages.
+ * @property {FilterContext} context - The context a rejection names.
  * @property {boolean} or - Whether `$or` condition blocks are supported.
  * @property {boolean} in - Whether "IN" conditions (array values) are supported.
  * @property {boolean} beginsWith - Whether `$beginsWith` conditions are supported.
@@ -278,7 +315,7 @@ export type AndOrFilter = FilterParams & OrFilter;
  * @property {boolean} singleConditionPerAttribute - When true, at most one condition may target a given attribute across the lifetime of a builder instance.
  */
 export interface FilterCapabilities {
-  context: string;
+  context: FilterContext;
   or: boolean;
   in: boolean;
   beginsWith: boolean;
@@ -287,6 +324,14 @@ export interface FilterCapabilities {
    * Whether `$gt`, `$gte`, `$lt` and `$lte` conditions are supported.
    */
   comparison: boolean;
+  /**
+   * Whether several comparison operators on one attribute may compose with AND.
+   *
+   * A filter may: `{ $gte: start, $lt: end }` is how a half-open range is
+   * written. A key condition may not — DynamoDB allows exactly one condition on
+   * the sort key, so a two-sided key range is `$between` instead.
+   */
+  composedComparisons: boolean;
   /**
    * Whether `$between` conditions are supported.
    */

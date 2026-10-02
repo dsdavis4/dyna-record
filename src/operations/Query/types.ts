@@ -1,9 +1,11 @@
 import type DynaRecord from "../../DynaRecord.js";
 import type {
   QueryOptions as QueryBuilderOptions,
-  BeginsWithFilter,
+  BeginsWithConditionFor,
+  BetweenFilter,
   FilterConditionFor,
   FilterValue,
+  SingleComparisonFilter,
   SortKeyCondition,
   StoredFilterTypes
 } from "../../query-utils/index.js";
@@ -224,14 +226,25 @@ export type QueryFilterValue<V> = FilterConditionFor<
  * equal, or a {@link BeginsWithFilter} prefix of the stored form.
  *
  * The same vocabulary as {@link QueryFilterValue} without `IN` or `$contains`,
- * neither of which DynamoDB accepts in a key condition.
+ * neither of which DynamoDB accepts in a key condition — and with comparisons
+ * that do not compose, since the expression has room for one condition on the
+ * sort key. A range here narrows what DynamoDB reads, where a range in a filter
+ * discards rows after reading them.
+ *
+ * Offered on every index key attribute because `indexName` is a bare string:
+ * dyna-record does not know which attribute the index uses as its sort key, so
+ * it cannot offer the range only there.
  *
  * @typeParam V - The attribute's declared type.
  */
 export type QueryKeyConditionValue<V> = [KeyConditionDeclaredValue<V>] extends [
   FilterValue
 ]
-  ? KeyConditionDeclaredValue<V> | BeginsWithFilter
+  ?
+      | KeyConditionDeclaredValue<V>
+      | BeginsWithConditionFor<KeyConditionDeclaredValue<V>>
+      | SingleComparisonFilter<Exclude<KeyConditionDeclaredValue<V>, null>>
+      | BetweenFilter<Exclude<KeyConditionDeclaredValue<V>, null>>
   : SortKeyCondition;
 
 /**
@@ -419,14 +432,27 @@ type EntityNamesStartingWith<
  * @template T - The entity type being queried.
  */
 export type TypedSortKeyCondition<T extends DynaRecord> =
-  | PartitionEntityNames<T>
-  | `${PartitionEntityNames<T>}${string}`
+  | SortKeyValueFor<T>
   | {
-      $beginsWith:
-        | PartitionEntityNames<T>
-        | `${PartitionEntityNames<T>}${string}`
-        | Prefixes<PartitionEntityNames<T>>;
-    };
+      $beginsWith: SortKeyValueFor<T> | Prefixes<PartitionEntityNames<T>>;
+    }
+  | SingleComparisonFilter<SortKeyValueFor<T>>
+  | BetweenFilter<SortKeyValueFor<T>>;
+
+/**
+ * A sort key value within the queried partition: an entity name the partition
+ * contains, or that name followed by a delimiter and an id.
+ *
+ * Named because it is now the operand type of four conditions rather than the
+ * body of one. A range over the sort key is a range over these strings, which
+ * is what makes `{ $gte: "Order#100", $lt: ... }` mean anything — the ordering
+ * is lexicographic over the stored key.
+ *
+ * @template T - The entity type being queried.
+ */
+type SortKeyValueFor<T extends DynaRecord> =
+  | PartitionEntityNames<T>
+  | `${PartitionEntityNames<T>}${string}`;
 
 /**
  * Extracts entity names from a typed sort key condition for return type narrowing.

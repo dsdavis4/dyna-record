@@ -4,11 +4,14 @@ import type { FilterParams, KeyConditions } from "../filter-utils/index.js";
 // in filter-utils. Re-exported here so query consumers keep a single import
 // site for query building types
 export type {
+  BeginsWithConditionFor,
   BeginsWithFilter,
   BetweenFilter,
   ComparisonFilter,
+  ContainsConditionFor,
   ContainsFilter,
   FilterConditionFor,
+  SingleComparisonFilter,
   FilterValue,
   FilterExpression,
   FilterParams,

@@ -1,5 +1,6 @@
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
+import { keyConditionCapabilities } from "./capabilities.js";
 import type { DynamoNativeValue, StringObj } from "../types.js";
 import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
@@ -175,7 +176,7 @@ class FilterExpressionBuilder {
     if (isOrFilter) {
       if (!this.#capabilities.or) {
         throw new FilterError(
-          `$or conditions are not supported in ${this.#capabilities.context} filters`
+          `$or conditions are not supported in ${this.#capabilities.context}`
         );
       }
       const isAndOrFilter = this.isAndOrFilter(filter);
@@ -202,14 +203,49 @@ class FilterExpressionBuilder {
   }
 
   /**
-   * Creates an AND filter
-   * @param filter
-   * @returns
+   * Compiles a set of conditions joined with AND, under the builder's own
+   * capability set.
+   * @param filter - The conditions to compile
+   * @returns The compiled expression and its values
    */
   public andFilter(filter: FilterParams | KeyConditions): FilterExpression {
+    return this.conjunction(filter, this.#capabilities);
+  }
+
+  /**
+   * Compiles a query's key conditions, under the key condition capability set
+   * rather than the builder's own.
+   *
+   * A key condition is not a filter: the partition key takes an equality and
+   * the sort key takes one condition from a narrower vocabulary. Those
+   * restrictions belong to the compilation, not to the builder — the
+   * placeholder counter has to stay continuous across a query's key conditions
+   * and its filter, so compiling them with different vocabularies cannot mean
+   * two builder instances.
+   * @param keys - The key conditions to compile
+   * @returns The compiled expression and its values
+   */
+  public keyConditions(keys: KeyConditions): FilterExpression {
+    return this.conjunction(keys, keyConditionCapabilities);
+  }
+
+  /**
+   * Compiles conditions joined with AND under a given capability set.
+   * @param filter - The conditions to compile
+   * @param capabilities - The vocabulary this compilation may use
+   * @returns The compiled expression and its values
+   */
+  private conjunction(
+    filter: FilterParams | KeyConditions,
+    capabilities: FilterCapabilities
+  ): FilterExpression {
     const params = Object.entries(filter).reduce<FilterExpression>(
       (obj, [attr, value]) => {
-        const { expression, values } = this.andCondition(attr, value);
+        const { expression, values } = this.andCondition(
+          attr,
+          value,
+          capabilities
+        );
         return {
           expression: obj.expression.concat(expression),
           values: { ...obj.values, ...values }
@@ -233,7 +269,7 @@ class FilterExpressionBuilder {
     filter?: FilterParams
   ): StringObj {
     const accumulator = (obj: StringObj, key: string): StringObj => {
-      const resolved = this.resolveAttrPath(key);
+      const resolved = this.resolveAttrPath(key, this.#capabilities);
       Object.assign(obj, resolved.names);
       return obj;
     };
@@ -313,7 +349,8 @@ class FilterExpressionBuilder {
    */
   private andCondition(
     attr: string,
-    value: FilterParams[string]
+    value: FilterParams[string],
+    capabilities: FilterCapabilities
   ): FilterExpression {
     if (value === undefined) {
       throw new FilterError(
@@ -321,14 +358,14 @@ class FilterExpressionBuilder {
       );
     }
 
-    const resolved = this.resolveAttrPath(attr);
+    const resolved = this.resolveAttrPath(attr, capabilities);
 
     if (
-      this.#capabilities.singleConditionPerAttribute &&
+      capabilities.singleConditionPerAttribute &&
       this.#conditionedPaths.has(resolved.expressionPath)
     ) {
       throw new FilterError(
-        `${this.#capabilities.context} filters support a single condition per attribute. Attribute "${attr}" has more than one condition`
+        `${capabilities.context} support a single condition per attribute. Attribute "${attr}" has more than one condition`
       );
     }
 
@@ -338,9 +375,9 @@ class FilterExpressionBuilder {
 
     const values: Record<string, DynamoNativeValue> = {};
     if (Array.isArray(value)) {
-      if (!this.#capabilities.in) {
+      if (!capabilities.in) {
         throw new FilterError(
-          `IN conditions (array values) are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has an array value`
+          `IN conditions (array values) are not supported in ${capabilities.context}. Attribute "${attr}" has an array value`
         );
       }
       const mappings = value.map(val =>
@@ -348,12 +385,17 @@ class FilterExpressionBuilder {
       );
       condition = `${resolved.expressionPath} IN (${mappings.join()})`;
     } else if (this.isComparisonFilter(value)) {
-      if (!this.#capabilities.comparison) {
+      if (!capabilities.comparison) {
         throw new FilterError(
-          `Comparison conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a comparison condition`
+          `Comparison conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a comparison condition`
         );
       }
       const operands = this.presentComparisons(value);
+      if (operands.length > 1 && !capabilities.composedComparisons) {
+        throw new FilterError(
+          `Composed comparisons are not supported in ${capabilities.context}. Attribute "${attr}" has ${String(operands.length)} comparison operands, and DynamoDB allows one condition on the sort key — use $between for a two-sided range`
+        );
+      }
       condition = operands
         .map(operator => {
           const operand = value[operator];
@@ -369,9 +411,9 @@ class FilterExpressionBuilder {
         })
         .join(" AND ");
     } else if (this.isBetweenFilter(value)) {
-      if (!this.#capabilities.between) {
+      if (!capabilities.between) {
         throw new FilterError(
-          `$between conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $between condition`
+          `$between conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $between condition`
         );
       }
       const [lower, upper] = this.betweenBounds(value, attr);
@@ -380,9 +422,9 @@ class FilterExpressionBuilder {
       this.assertBoundsOrdered(values, lowerRef, upperRef, attr);
       condition = `${resolved.expressionPath} BETWEEN ${lowerRef} AND ${upperRef}`;
     } else if (this.isBeginsWithFilter(value)) {
-      if (!this.#capabilities.beginsWith) {
+      if (!capabilities.beginsWith) {
         throw new FilterError(
-          `$beginsWith conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $beginsWith condition`
+          `$beginsWith conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $beginsWith condition`
         );
       }
       this.assertOperandDefined(value.$beginsWith, attr, "$beginsWith");
@@ -390,9 +432,9 @@ class FilterExpressionBuilder {
       const reference = this.bindFragment(resolved, value.$beginsWith, values);
       condition = `begins_with(${resolved.expressionPath}, ${reference})`;
     } else if (this.isContainsFilter(value)) {
-      if (!this.#capabilities.contains) {
+      if (!capabilities.contains) {
         throw new FilterError(
-          `$contains conditions are not supported in ${this.#capabilities.context} filters. Attribute "${attr}" has a $contains condition`
+          `$contains conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $contains condition`
         );
       }
       this.assertOperandDefined(value.$contains, attr, "$contains");
@@ -406,7 +448,7 @@ class FilterExpressionBuilder {
 
     // Recorded only after the condition compiles, so a rejected condition
     // does not block a corrected retry on the same attribute
-    if (this.#capabilities.singleConditionPerAttribute) {
+    if (capabilities.singleConditionPerAttribute) {
       this.#conditionedPaths.add(resolved.expressionPath);
     }
 
@@ -725,13 +767,16 @@ class FilterExpressionBuilder {
    * @param key - The attribute key, optionally using dot notation
    * @returns The resolved expression path, attribute names, and placeholder key
    */
-  private resolveAttrPath(key: string): ResolvedPath {
+  private resolveAttrPath(
+    key: string,
+    capabilities: FilterCapabilities
+  ): ResolvedPath {
     const segments = key.split(".");
     const topLevelKey = segments[0];
 
-    if (segments.length > 1 && !this.#capabilities.nestedPaths) {
+    if (segments.length > 1 && !capabilities.nestedPaths) {
       throw new FilterError(
-        `Nested attribute paths are not supported in ${this.#capabilities.context} filters. Received filter key "${key}"`
+        `Nested attribute paths are not supported in ${capabilities.context}. Received filter key "${key}"`
       );
     }
 

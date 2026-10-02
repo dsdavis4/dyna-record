@@ -2129,6 +2129,170 @@ describe("Query", () => {
         });
       });
 
+      describe("key condition ranges", () => {
+        it("compiles a sort key range into the KeyConditionExpression", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // A range here narrows what DynamoDB reads. The same range as a
+          // filter would read the whole partition and discard rows after
+          // @ts-expect-no-error: a sort key takes a single comparison
+          await Customer.query("123", {
+            skCondition: { $gte: "Order#100" }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK1 AND #SK >= :SK2",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#SK": "SK"
+                },
+                ExpressionAttributeValues: {
+                  ":PK1": "Customer#123",
+                  ":SK2": "Order#100"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("compiles a sort key $between into the KeyConditionExpression", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: both bounds are sort key values in the partition
+          await Customer.query("123", {
+            skCondition: { $between: ["Order#100", "Order#200"] }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression:
+                  "#PK = :PK1 AND #SK BETWEEN :SK2 AND :SK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#SK": "SK"
+                },
+                ExpressionAttributeValues: {
+                  ":PK1": "Customer#123",
+                  ":SK2": "Order#100",
+                  ":SK3": "Order#200"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("numbers a filter's placeholders after the key condition's", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // One builder compiles both under different vocabularies, so the
+          // counter has to carry across them
+          await Customer.query("123", {
+            // @ts-expect-no-error: a sort key range alongside a filter range
+            skCondition: { $gte: "Order#100" },
+            filter: {
+              orderDate: { $gte: new Date("2023-01-01T00:00:00.000Z") }
+            }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "#OrderDate >= :OrderDate1",
+                KeyConditionExpression: "#PK = :PK2 AND #SK >= :SK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#SK": "SK",
+                  "#OrderDate": "OrderDate"
+                },
+                ExpressionAttributeValues: {
+                  ":OrderDate1": "2023-01-01T00:00:00.000Z",
+                  ":PK2": "Customer#123",
+                  ":SK3": "Order#100"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects composed comparisons on a sort key", async () => {
+          expect.assertions(1);
+
+          await expect(
+            // @ts-expect-error: DynamoDB allows one condition on the sort key
+            Customer.query("123", {
+              skCondition: { $gte: "Order#100", $lt: "Order#200" }
+            })
+          ).rejects.toThrow(
+            'Composed comparisons are not supported in key conditions. Attribute "sk" has 2 comparison operands, and DynamoDB allows one condition on the sort key — use $between for a two-sided range'
+          );
+        });
+
+        it("constrains a sort key range operand to the partition's entities", async () => {
+          // @ts-expect-error: Person is not in Customer's partition
+          await Customer.query("123", {
+            skCondition: { $gte: "Person#1" }
+          }).catch(() => {});
+        });
+
+        it("rejects a non-equality condition on the partition key", async () => {
+          expect.assertions(1);
+
+          // The partition key's value selects the partition to read, so there
+          // is nothing for another condition to narrow. The type already
+          // rejects this; an untyped caller gets the FilterError
+          await expect(
+            // @ts-expect-error: the partition key takes a plain value
+            Customer.query({ pk: { $gte: "Customer#100" }, sk: "Order" })
+          ).rejects.toThrow(
+            'Invalid key condition for attribute "pk": the partition key takes an equality. Its value selects the partition to read, so there is nothing for another condition to narrow'
+          );
+        });
+
+        it("does not apply the partition key check to an index query", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // indexName is a bare string, so dyna-record does not know the
+          // index's key schema and cannot tell which attribute plays the
+          // partition key role. The check is skipped rather than guessed at,
+          // and DynamoDB rejects a bad index key condition itself
+          await Customer.query(
+            // @ts-expect-no-error: an index key condition takes a range
+            { pk: { $gte: "Customer#100" } },
+            { indexName: "MyIndex" }
+          );
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                IndexName: "MyIndex",
+                KeyConditionExpression: "#PK >= :PK1",
+                ExpressionAttributeNames: { "#PK": "PK" },
+                ExpressionAttributeValues: { ":PK1": "Customer#100" },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+      });
+
       describe("attributes declared by one entity of the partition", () => {
         it("takes the declared value without narrowing by type", async () => {
           expect.assertions(1);

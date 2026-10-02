@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   FilterExpressionBuilder,
+  keyConditionCapabilities,
   queryFilterCapabilities,
   searchFilterCapabilities,
   type FilterAttributeResolver
@@ -1289,6 +1290,169 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({
         expression: "begins_with(#Thumbnail, :Thumbnail1)",
         values: { Thumbnail1: "x" }
+      });
+    });
+  });
+
+  describe("key conditions", () => {
+    it("accepts an equality and a $beginsWith", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().keyConditions({
+          pk: "Customer#123",
+          type: { $beginsWith: "Order" }
+        })
+      ).toEqual({
+        expression: "#PK = :PK1 AND begins_with(#Type, :Type2)",
+        values: { PK1: "Customer#123", Type2: "Order" }
+      });
+    });
+
+    it("accepts each comparison operator on a sort key", () => {
+      expect.assertions(4);
+
+      // A range here narrows what DynamoDB reads, where a range in a filter
+      // discards rows after reading them — which is the point of supporting it
+      expect(
+        queryBuilderInstance().keyConditions({ type: { $gt: "Order" } })
+      ).toEqual({ expression: "#Type > :Type1", values: { Type1: "Order" } });
+      expect(
+        queryBuilderInstance().keyConditions({ type: { $gte: "Order" } })
+      ).toEqual({ expression: "#Type >= :Type1", values: { Type1: "Order" } });
+      expect(
+        queryBuilderInstance().keyConditions({ type: { $lt: "Order" } })
+      ).toEqual({ expression: "#Type < :Type1", values: { Type1: "Order" } });
+      expect(
+        queryBuilderInstance().keyConditions({ type: { $lte: "Order" } })
+      ).toEqual({ expression: "#Type <= :Type1", values: { Type1: "Order" } });
+    });
+
+    it("accepts a $between on a sort key", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().keyConditions({
+          pk: "Customer#123",
+          type: { $between: ["Order#1", "Order#9"] }
+        })
+      ).toEqual({
+        expression: "#PK = :PK1 AND #Type BETWEEN :Type2 AND :Type3",
+        values: { PK1: "Customer#123", Type2: "Order#1", Type3: "Order#9" }
+      });
+    });
+
+    it("rejects composed comparisons, naming the remedy", () => {
+      expect.assertions(1);
+
+      // DynamoDB has room for one condition on the sort key, so the operators
+      // that compose into a range in a filter cannot compose here
+      expect(() =>
+        queryBuilderInstance().keyConditions({
+          // @ts-expect-error composed comparisons are a compile error here too; this is the JavaScript backstop
+          type: { $gte: "Order", $lt: "P" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Composed comparisons are not supported in key conditions. Attribute "type" has 2 comparison operands, and DynamoDB allows one condition on the sort key — use $between for a two-sided range'
+        )
+      );
+    });
+
+    it("rejects an IN condition", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        // @ts-expect-error a key condition takes no IN array
+        queryBuilderInstance().keyConditions({ type: ["Order", "Invoice"] })
+      ).toThrow(
+        new FilterError(
+          'IN conditions (array values) are not supported in key conditions. Attribute "type" has an array value'
+        )
+      );
+    });
+
+    it("rejects a $contains condition", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        // @ts-expect-error a key condition takes no $contains
+        queryBuilderInstance().keyConditions({ type: { $contains: "Order" } })
+      ).toThrow(
+        new FilterError(
+          '$contains conditions are not supported in key conditions. Attribute "type" has a $contains condition'
+        )
+      );
+    });
+
+    it("rejects a nested attribute path", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().keyConditions({ "meta.label": "x" })
+      ).toThrow(
+        new FilterError(
+          'Nested attribute paths are not supported in key conditions. Received filter key "meta.label"'
+        )
+      );
+    });
+
+    it("compiles key conditions under the key vocabulary while filters keep their own", () => {
+      expect.assertions(3);
+
+      // One builder, two vocabularies, one counter. The capability set is a
+      // property of the compilation rather than of the builder, because the
+      // placeholder numbering has to stay continuous across both
+      const builder = queryBuilderInstance();
+
+      expect(builder.keyConditions({ pk: "Customer#123" })).toEqual({
+        expression: "#PK = :PK1",
+        values: { PK1: "Customer#123" }
+      });
+      expect(builder.filterParams({ price: { $gte: 10, $lt: 100 } })).toEqual({
+        expression: "#Price >= :Price2 AND #Price < :Price3",
+        values: { Price2: 10, Price3: 100 }
+      });
+      // The same composed range the key condition refused is a filter's whole
+      // purpose, and the counter carried through both
+      expect(() =>
+        // @ts-expect-error composed comparisons are a compile error here too
+        builder.keyConditions({ type: { $gte: "a", $lt: "z" } })
+      ).toThrow(FilterError);
+    });
+
+    it("rejects an operator the key vocabulary has but the builder's own set does not", () => {
+      expect.assertions(1);
+
+      // A search-configured builder compiling key conditions still gets the
+      // key vocabulary, since the set travels with the call
+      const builder = new FilterExpressionBuilder({
+        capabilities: searchFilterCapabilities,
+        resolveAttribute: typedResolver
+      });
+
+      expect(builder.keyConditions({ name: { $beginsWith: "Scale" } })).toEqual(
+        {
+          expression: "begins_with(#Name, :Name1)",
+          values: { Name1: "Scale" }
+        }
+      );
+    });
+
+    it("declares a vocabulary narrower than a filter in every direction but the comparators", () => {
+      expect.assertions(1);
+
+      expect(keyConditionCapabilities).toEqual({
+        context: "key conditions",
+        or: false,
+        in: false,
+        beginsWith: true,
+        contains: false,
+        comparison: true,
+        composedComparisons: false,
+        between: true,
+        nestedPaths: false,
+        singleConditionPerAttribute: false
       });
     });
   });
