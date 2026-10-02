@@ -113,6 +113,40 @@ function convertDiscriminatedUnion(
  * @param val The entity-level value to convert
  * @returns The DynamoDB-compatible value
  */
+/**
+ * Whether {@link convertFieldToTableItem} transforms a field of each type, or
+ * passes it through unchanged.
+ *
+ * Exhaustive over `FieldDef`, so a new field type fails compilation here until
+ * it declares a stance — and it sits beside the switch it describes, because
+ * the two have to agree. A caller uses this to decide whether a value needs
+ * converting at all, which it cannot ask the switch without running it.
+ */
+const CONVERTS_BY_FIELD_TYPE: Record<FieldDef["type"], boolean> = {
+  date: true,
+  object: true,
+  array: true,
+  discriminatedUnion: true,
+  string: false,
+  number: false,
+  boolean: false,
+  enum: false
+};
+
+/**
+ * Whether a field's stored form differs from its declared one.
+ *
+ * A date is declared as a `Date` and stored as an ISO string; an object, an
+ * array and a discriminated union may contain one at any depth. A string,
+ * number, boolean or enum stores exactly what it declares, so a condition on
+ * one needs no conversion — and advice pointing a caller at "the declared form"
+ * would be meaningless for it.
+ * @param fieldDef - The field definition
+ * @returns Whether a value of this field has to be converted
+ */
+export const fieldConverts = (fieldDef: FieldDef): boolean =>
+  CONVERTS_BY_FIELD_TYPE[fieldDef.type];
+
 export function convertFieldToTableItem(
   fieldDef: FieldDef,
   val: unknown

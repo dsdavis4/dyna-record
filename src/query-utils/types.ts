@@ -8,10 +8,6 @@ export type {
   BeginsWithFilter,
   BetweenConditionFor,
   BetweenFilter,
-  ComparisonFilter,
-  ContainsConditionFor,
-  ContainsFilter,
-  ComparisonConditionFor,
   FilterConditionFor,
   SingleComparisonConditionFor,
   SingleComparisonFilter,
@@ -20,7 +16,6 @@ export type {
   FilterParams,
   FilterTypes,
   KeyConditions,
-  OrderedFilterValue,
   OrFilter,
   SortKeyCondition,
   StoredFilterTypes

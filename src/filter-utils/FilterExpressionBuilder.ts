@@ -6,12 +6,16 @@ import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
 import {
   fieldConverts,
+  fieldValidatesConditionValue,
   resolveFieldDef,
   toStoredFieldValue
 } from "./resolveFieldDef.js";
 import {
   fragmentOperatorApplies,
   fragmentOperatorDomain,
+  isDynamoOrderable,
+  isObjectValuedScalar,
+  orderedOperandDomain,
   orderedOperatorApplies,
   orderedOperatorDomain,
   storedFormOfAttribute,
@@ -87,8 +91,16 @@ type ComparisonOperator = keyof typeof comparisonOperators;
  * operator is told what the operators are and a caller who used one the
  * context cannot represent is told that by the capability rejection instead.
  */
+/**
+ * {@link comparisonOperators}' keys, hoisted so the guard and the compilation
+ * do not rebuild the list per condition. Mirrors {@link supportedOperators}.
+ */
+const comparisonOperatorNames = Object.keys(
+  comparisonOperators
+) as ComparisonOperator[];
+
 const supportedOperators = [
-  ...Object.keys(comparisonOperators),
+  ...comparisonOperatorNames,
   "$between",
   "$beginsWith",
   "$contains"
@@ -400,16 +412,27 @@ class FilterExpressionBuilder {
           `IN conditions (array values) are not supported in ${capabilities.context}. Attribute "${attr}" has an array value`
         );
       }
-      const mappings = value.map(val =>
-        this.bindWholeValue(resolved, attr, val, values)
-      );
-      condition = `${resolved.expressionPath} IN (${mappings.join()})`;
-    } else if (this.isComparisonFilter(value)) {
-      if (!capabilities.comparison) {
+      if (value.length === 0) {
         throw new FilterError(
-          `Comparison conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a comparison condition`
+          `Invalid filter value for attribute "${attr}": an IN condition has no values. DynamoDB has no syntax for an empty list, and a membership test against nothing matches nothing`
         );
       }
+      const mappings = value.map(val => {
+        // The same check every other operand gets. Without it an element that
+        // resolved to undefined still takes a placeholder, and the expression
+        // references one with no value bound to it
+        this.assertOperandDefined(val, attr, "IN");
+        return this.bindWholeValue(resolved, attr, val, values);
+      });
+      condition = `${resolved.expressionPath} IN (${mappings.join()})`;
+    } else if (this.isComparisonFilter(value)) {
+      this.assertCapability(
+        capabilities,
+        "comparison",
+        attr,
+        "Comparison",
+        "a comparison"
+      );
       const operands = this.presentComparisons(value);
       this.assertOrderedOperatorApplies(resolved, attr, operands.join(" and "));
       if (operands.length > 1 && !capabilities.composedComparisons) {
@@ -421,44 +444,52 @@ class FilterExpressionBuilder {
         .map(operator => {
           const operand = value[operator];
           this.assertOperandDefined(operand, attr, operator);
-          this.assertOperandOrderable(operand, attr, operator);
           const reference = this.bindWholeValue(
             resolved,
             attr,
             operand,
             values
           );
+          this.assertOperandOrdered(values, reference, attr, operator);
           return `${resolved.expressionPath} ${comparisonOperators[operator]} ${reference}`;
         })
         .join(" AND ");
     } else if (this.isBetweenFilter(value)) {
-      if (!capabilities.between) {
-        throw new FilterError(
-          `$between conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $between condition`
-        );
-      }
+      this.assertCapability(
+        capabilities,
+        "between",
+        attr,
+        "$between",
+        "a $between"
+      );
       this.assertOrderedOperatorApplies(resolved, attr, "$between");
       const [lower, upper] = this.betweenBounds(value, attr);
       const lowerRef = this.bindWholeValue(resolved, attr, lower, values);
       const upperRef = this.bindWholeValue(resolved, attr, upper, values);
+      this.assertOperandOrdered(values, lowerRef, attr, "$between");
+      this.assertOperandOrdered(values, upperRef, attr, "$between");
       this.assertBoundsOrdered(values, lowerRef, upperRef, attr);
       condition = `${resolved.expressionPath} BETWEEN ${lowerRef} AND ${upperRef}`;
     } else if (this.isBeginsWithFilter(value)) {
-      if (!capabilities.beginsWith) {
-        throw new FilterError(
-          `$beginsWith conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $beginsWith condition`
-        );
-      }
+      this.assertCapability(
+        capabilities,
+        "beginsWith",
+        attr,
+        "$beginsWith",
+        "a $beginsWith"
+      );
       this.assertOperandDefined(value.$beginsWith, attr, "$beginsWith");
       this.assertFragmentOperatorApplies(resolved, attr, "$beginsWith");
       const reference = this.bindFragment(resolved, value.$beginsWith, values);
       condition = `begins_with(${resolved.expressionPath}, ${reference})`;
     } else if (this.isContainsFilter(value)) {
-      if (!capabilities.contains) {
-        throw new FilterError(
-          `$contains conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $contains condition`
-        );
-      }
+      this.assertCapability(
+        capabilities,
+        "contains",
+        attr,
+        "$contains",
+        "a $contains"
+      );
       this.assertOperandDefined(value.$contains, attr, "$contains");
       this.assertFragmentOperatorApplies(resolved, attr, "$contains");
       const reference = this.bindFragment(resolved, value.$contains, values);
@@ -475,6 +506,33 @@ class FilterExpressionBuilder {
     }
 
     return { expression: `${condition} AND `, values };
+  }
+
+  /**
+   * Rejects an operator the context cannot represent.
+   *
+   * The four operator families whose rejection reads the same way share this,
+   * so the message shape is written once. `in` and `composedComparisons` keep
+   * their own blocks, because what they have to say genuinely differs — one
+   * names an array value, the other counts operands and points at `$between`
+   * @param capabilities - The vocabulary this compilation may use
+   * @param capability - The capability the operator needs
+   * @param attr - The attribute key, for the error message
+   * @param subject - The operator as the message opens with it (EX: `$between`)
+   * @param noun - The operator as the message refers back to it (EX: `a $between`)
+   */
+  private assertCapability(
+    capabilities: FilterCapabilities,
+    capability: "comparison" | "between" | "beginsWith" | "contains",
+    attr: string,
+    subject: string,
+    noun: string
+  ): void {
+    if (capabilities[capability]) return;
+
+    throw new FilterError(
+      `${subject} conditions are not supported in ${capabilities.context}. Attribute "${attr}" has ${noun} condition`
+    );
   }
 
   /**
@@ -535,8 +593,7 @@ class FilterExpressionBuilder {
   private presentComparisons(
     filter: ComparisonFilter<OrderedFilterValue>
   ): ComparisonOperator[] {
-    const operators = Object.keys(comparisonOperators) as ComparisonOperator[];
-    return operators.filter(operator => operator in filter);
+    return comparisonOperatorNames.filter(operator => operator in filter);
   }
 
   /**
@@ -571,8 +628,6 @@ class FilterExpressionBuilder {
     const [lower, upper] = filter.$between;
     this.assertOperandDefined(lower, attr, "$between");
     this.assertOperandDefined(upper, attr, "$between");
-    this.assertOperandOrderable(lower, attr, "$between");
-    this.assertOperandOrderable(upper, attr, "$between");
 
     return [lower, upper];
   }
@@ -626,14 +681,13 @@ class FilterExpressionBuilder {
     value: FilterParams[string],
     attr: string
   ): void {
-    // A Date and a Uint8Array are objects to `typeof` and whole values to a
-    // filter, so neither is an operator object
+    // An array is a condition shape of its own (an IN list), and a Date or a
+    // Uint8Array is a whole value, so none of them is an operator object
     if (
       typeof value !== "object" ||
       value === null ||
       Array.isArray(value) ||
-      value instanceof Date ||
-      value instanceof Uint8Array
+      isObjectValuedScalar(value)
     ) {
       return;
     }
@@ -715,25 +769,37 @@ class FilterExpressionBuilder {
   }
 
   /**
-   * Rejects `null` as an operand of an ordered comparison.
+   * Rejects an operand DynamoDB cannot order.
    *
-   * dyna-record removes a nulled attribute rather than storing DynamoDB's NULL,
-   * so there is no stored null for an ordered comparison to match — and
-   * DynamoDB has no ordering between NULL and a scalar in the first place. The
-   * condition asks for something no row can satisfy, which is worth saying
-   * rather than compiling
-   * @param operand - The operand supplied to the operator
+   * Checked on the **stored** value, which is the one DynamoDB compares, and
+   * delegated to {@link isDynamoOrderable} so the answer is given in one place
+   * rather than restated per operand kind. That subsumes several cases at once:
+   * `null` never reaches a stored row because dyna-record removes a nulled
+   * attribute instead of storing NULL, and a boolean, a Map and a List have no
+   * ordering at all. Binary is accepted, because DynamoDB orders it even though
+   * JavaScript's `>` does not — which is why this does not use `isOrdered`.
+   *
+   * The attribute-side gate ({@link assertOrderedOperatorApplies}) answers the
+   * same question from the schema, and abstains where the stored form could not
+   * be resolved — a dot path through an array element or a union variant. This
+   * is the check that still applies there, where the value is all there is to
+   * go on
+   * @param values - The value map the operand was bound into
+   * @param reference - The operand's placeholder reference
    * @param attr - The attribute key, for the error message
    * @param operator - The operator name, for the error message
    */
-  private assertOperandOrderable(
-    operand: FilterValue,
+  private assertOperandOrdered(
+    values: Record<string, DynamoNativeValue>,
+    reference: string,
     attr: string,
     operator: string
   ): void {
-    if (operand === null) {
+    const stored = values[reference.slice(1)];
+
+    if (!isDynamoOrderable(stored)) {
       throw new FilterError(
-        `Invalid filter value for attribute "${attr}": ${operator} cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no row can satisfy an ordered comparison against it`
+        `Invalid filter value for attribute "${attr}": ${operator} cannot order this value. ${orderedOperandDomain}`
       );
     }
   }
@@ -869,11 +935,10 @@ class FilterExpressionBuilder {
       placeholderKey,
       ...(fieldDef !== undefined && {
         storedForm: storedFormOfField(fieldDef),
-        // An array field's schema describes the list while a condition on it
-        // carries an element — an IN element, or a $contains operand — so
-        // validating against it would reject every one. Its stored form is
-        // still known, and is what decides which operators apply to it
-        ...(fieldDef.type !== "array" && {
+        // Not every field's schema describes the value a condition carries;
+        // where it does not, the stored form is still known and is what decides
+        // which operators apply
+        ...(fieldValidatesConditionValue(fieldDef) && {
           valueSchema: fieldDefToZod(fieldDef),
           // Only when the field converts: toStored doubles as the signal that a
           // rejected value's remedy should point at the declared form
@@ -960,7 +1025,7 @@ class FilterExpressionBuilder {
     return (
       typeof filter === "object" &&
       filter !== null &&
-      Object.keys(comparisonOperators).some(operator => operator in filter)
+      comparisonOperatorNames.some(operator => operator in filter)
     );
   }
 

@@ -785,13 +785,16 @@ describe("FilterExpressionBuilder", () => {
     it("rejects null as a comparison operand", () => {
       expect.assertions(4);
 
+      // Rejected by the value-side check, which asks what DynamoDB can order
+      // rather than testing for null specifically — so a boolean, a Map and a
+      // List are rejected by the same code on the same grounds
       for (const operator of ["$gt", "$gte", "$lt", "$lte"]) {
         expect(() =>
           // @ts-expect-error a null operand is a plain JavaScript caller
           queryBuilderInstance().filterParams({ price: { [operator]: null } })
         ).toThrow(
           new FilterError(
-            `Invalid filter value for attribute "price": ${operator} cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no row can satisfy an ordered comparison against it`
+            `Invalid filter value for attribute "price": ${operator} cannot order this value. An ordered comparison takes a String, a Number or Binary value. A Boolean, a Map and a List have no ordering, and dyna-record removes a nulled attribute rather than storing NULL, so there is nothing for the comparison to match`
           )
         );
       }
@@ -801,7 +804,7 @@ describe("FilterExpressionBuilder", () => {
       expect.assertions(2);
 
       const message =
-        'Invalid filter value for attribute "price": $between cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no row can satisfy an ordered comparison against it';
+        'Invalid filter value for attribute "price": $between cannot order this value. An ordered comparison takes a String, a Number or Binary value. A Boolean, a Map and a List have no ordering, and dyna-record removes a nulled attribute rather than storing NULL, so there is nothing for the comparison to match';
 
       expect(() =>
         queryBuilderInstance().filterParams({
@@ -815,6 +818,35 @@ describe("FilterExpressionBuilder", () => {
           price: { $between: [5, null] }
         })
       ).toThrow(new FilterError(message));
+    });
+
+    it("rejects an IN element that resolved to undefined", () => {
+      expect.assertions(1);
+
+      // Forwarding an optional input into a list. Without the check the
+      // element still takes a placeholder and the expression references one
+      // with no value bound to it, which DynamoDB answers with a
+      // ValidationException naming neither the attribute nor the operator
+      expect(() =>
+        // @ts-expect-error an undefined element is a plain JavaScript caller
+        queryBuilderInstance().filterParams({ name: ["a", undefined, "b"] })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "name": IN was given no value'
+        )
+      );
+    });
+
+    it("rejects an empty IN condition", () => {
+      expect.assertions(1);
+
+      // `#Name IN ()` is not valid DynamoDB syntax, and a membership test
+      // against nothing could not match in any case
+      expect(() => queryBuilderInstance().filterParams({ name: [] })).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "name": an IN condition has no values. DynamoDB has no syntax for an empty list, and a membership test against nothing matches nothing'
+        )
+      );
     });
 
     it("rejects a $between that is not a pair, at every arity", () => {
@@ -1267,6 +1299,51 @@ describe("FilterExpressionBuilder", () => {
           'Invalid filter value for attribute "meta.nested": $beginsWith does not apply to a value stored as a map. begins_with tests a prefix, which DynamoDB applies to String attributes'
         )
       );
+    });
+
+    it("still rejects an unorderable operand where the field cannot be resolved", () => {
+      expect.assertions(3);
+
+      // The attribute-side gate abstains here on purpose: a path through an
+      // array element names no field, so dyna-record cannot know the stored
+      // form. The value is then all there is to go on, and it is enough —
+      // without this the condition compiles and can never match
+      const message =
+        "cannot order this value. An ordered comparison takes a String, a Number or Binary value";
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a boolean operand is a plain JavaScript caller
+          "meta.history.at": { $gt: true }
+        })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a boolean pair is a plain JavaScript caller
+          "meta.history.at": { $between: [true, false] }
+        })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a Map operand is a plain JavaScript caller
+          "meta.history.at": { $gt: { a: 1 } }
+        })
+      ).toThrow(message);
+    });
+
+    it("accepts an orderable operand where the field cannot be resolved", () => {
+      expect.assertions(1);
+
+      // The value-side check must not narrow what an unresolved path accepts
+      // beyond what DynamoDB can order
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $gte: "2023-01-01T00:00:00.000Z" }
+        })
+      ).toEqual({
+        expression: "#Meta.#history.#at >= :Metahistoryat1",
+        values: { Metahistoryat1: "2023-01-01T00:00:00.000Z" }
+      });
     });
 
     it("leaves a path naming no field unconstrained", () => {

@@ -153,12 +153,22 @@ export type OrderedFilterValue = Exclude<FilterValue, boolean | null>;
  * filter: { createdAt: { $gte: new Date("2026-01-01"), $lt: new Date("2026-02-01") } }
  * ```
  */
-export type ComparisonFilter<V> = AtLeastOne<{
+export type ComparisonFilter<V> = AtLeastOne<ComparisonOperands<V>>;
+
+/**
+ * The operands the comparison operators take, named once so the operator list
+ * lives in one place.
+ *
+ * {@link ComparisonFilter} and {@link SingleComparisonFilter} differ only in how
+ * many of these may be supplied at once, which is the difference between a
+ * filter and a key condition — not a difference in the operators themselves.
+ */
+type ComparisonOperands<V> = {
   $gt: V;
   $gte: V;
   $lt: V;
   $lte: V;
-}>;
+};
 
 /**
  * A single comparison condition, for a context with room for exactly one.
@@ -177,12 +187,7 @@ export type ComparisonFilter<V> = AtLeastOne<{
  * skCondition: { $gte: "Order#100", $lt: "Order#200" }
  * ```
  */
-export type SingleComparisonFilter<V> = ExactlyOne<{
-  $gt: V;
-  $gte: V;
-  $lt: V;
-  $lte: V;
-}>;
+export type SingleComparisonFilter<V> = ExactlyOne<ComparisonOperands<V>>;
 
 /**
  * A condition matching values within an inclusive range, compiling to
@@ -225,6 +230,15 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * whole scalar union and stays unconstrained. Distribution is also what
  * excludes `null` and `boolean` without an explicit `Exclude` — neither extends
  * the comparable set, so both fall to the final branch.
+ *
+ * The set is spelled out here rather than reusing {@link OrderedFilterValue},
+ * which names the same values. In the true branch TypeScript narrows the type
+ * parameter to `V & CheckedType`, so checking against the whole union gives
+ * `ComparisonFilter<OrderedFilterValue & V>` — an intersection it cannot reduce
+ * when `V` is still generic, as it is in `QueryKeyConditionValue`. Checking
+ * against one narrow type per branch keeps that intersection meaningful. The
+ * difference is invisible at concrete instantiations and only appears through a
+ * generic, so a reviewer who tries the collapse should test it there.
  *
  * @typeParam V - The attribute's declared type.
  */

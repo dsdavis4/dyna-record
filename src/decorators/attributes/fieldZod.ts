@@ -16,6 +16,25 @@ import type {
  */
 const builtSchemas = new WeakMap<FieldDef, ZodType>();
 
+/*
+ * Why the memo pays for itself: `fieldDefToZod` runs once per condition and
+ * again for the same key from `expressionAttributeNames`, so a dot-path filter
+ * would rebuild its field's schema ~2x per query. Measured, zod construction
+ * costs ~10us for a scalar leaf and ~61us for a deep nested object against
+ * ~13ns for a hit.
+ *
+ * In practice the build cost is never paid at query time at all, because
+ * `@ObjectAttribute` calls `objectSchemaToZod` at class-definition time and
+ * pre-warms every FieldDef in the subtree. That pre-warm is load-bearing for
+ * the first query's latency — if decoration ever becomes lazy, the first query
+ * on a deep dot path pays the full build.
+ *
+ * Keyed on the FieldDef identity held by the decorator's `schema` option, which
+ * is stable for the class's lifetime and releases with it. An identity miss can
+ * only be a cache miss, never a wrong schema, because the function is pure in
+ * its FieldDef.
+ */
+
 /**
  * Builds a Zod shape record from an {@link ObjectSchema} using the provided
  * field converter function. Shared by both full and partial schema builders.

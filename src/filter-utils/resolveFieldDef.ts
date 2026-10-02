@@ -1,5 +1,8 @@
 import type { FieldDef, ObjectSchema } from "../decorators/attributes/types.js";
-import { convertFieldToTableItem } from "../decorators/attributes/serializers.js";
+import {
+  convertFieldToTableItem,
+  fieldConverts
+} from "../decorators/attributes/serializers.js";
 import type { DynamoNativeValue, Optional } from "../types.js";
 
 /**
@@ -43,6 +46,39 @@ export const resolveFieldDef = (
 };
 
 /**
+ * Whether a field's own schema can validate a condition value on it.
+ *
+ * Exhaustive over `FieldDef`, so a new field type fails compilation here until
+ * it declares a stance — the standard the stored-form map sets, applied to the
+ * other per-field question a condition has to ask.
+ *
+ * An array is the one that cannot: its schema describes the list, while a
+ * condition on it carries an element — an `IN` element, or a `$contains`
+ * operand — so validating against it would reject every one. A discriminated
+ * union can: a path ending at one names the whole field, and a condition on it
+ * carries a whole variant.
+ */
+const VALIDATES_CONDITION_VALUE: Record<FieldDef["type"], boolean> = {
+  string: true,
+  number: true,
+  boolean: true,
+  date: true,
+  enum: true,
+  object: true,
+  discriminatedUnion: true,
+  array: false
+};
+
+/**
+ * Whether a condition value on this field can be validated against the field's
+ * own schema.
+ * @param fieldDef - The field a dot path names
+ * @returns Whether the schema describes the value a condition carries
+ */
+export const fieldValidatesConditionValue = (fieldDef: FieldDef): boolean =>
+  VALIDATES_CONDITION_VALUE[fieldDef.type];
+
+/**
  * Converts a nested field's condition value to the form the table stores.
  *
  * The one assertion on this path. `convertFieldToTableItem` walks a schema whose
@@ -60,18 +96,6 @@ export const toStoredFieldValue = (
 ): DynamoNativeValue =>
   convertFieldToTableItem(fieldDef, value) as DynamoNativeValue;
 
-/**
- * Whether a field's stored form differs from its declared one.
- *
- * Only these field types convert: a date is declared as a `Date` and stored as
- * an ISO string, and an object or a discriminated union may contain one at any
- * depth. A string, number, boolean or enum stores exactly what it declares, so
- * a condition on one needs no conversion — and the remedy that points a caller
- * at the declared form would be wrong advice for it
- * @param fieldDef - The field the dot path names
- * @returns Whether a condition value for it has to be converted
- */
-export const fieldConverts = (fieldDef: FieldDef): boolean =>
-  fieldDef.type === "date" ||
-  fieldDef.type === "object" ||
-  fieldDef.type === "discriminatedUnion";
+// Re-exported from the module that owns the conversion, so a caller resolving a
+// field and a caller converting one consult the same answer
+export { fieldConverts };

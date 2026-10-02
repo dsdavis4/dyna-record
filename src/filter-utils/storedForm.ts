@@ -23,40 +23,33 @@ import type { Optional } from "../types.js";
 export type StoredForm = "string" | "number" | "boolean" | "map" | "list";
 
 /**
- * The stored form of each attribute kind. Exhaustive over
- * {@link AttributeKind}, so adding a kind fails compilation here until it
- * declares a stance.
+ * The stored form of every kind of thing a condition can name — an attribute,
+ * by its {@link AttributeKind}, or a nested field, by its `FieldDef` type.
+ *
+ * One map rather than two, because the question is the same and the two key
+ * sets overlap in six of nine entries. Exhaustive over both unions, so adding
+ * an attribute kind *or* a field type fails compilation here until it declares
+ * a stance — which two maps could not guarantee, since they could disagree on
+ * a kind they share.
  *
  * A date is the entry the whole distinction exists for: declared as a `Date`
  * and stored as an ISO 8601 string, so the operators that apply to it are the
  * ones that apply to a string. An enum and a foreign key are likewise strings
- * once stored.
+ * once stored. `array` and `discriminatedUnion` are field types only, and
+ * `foreignKey` an attribute kind only; the accessors below take the narrower
+ * parameter type, which is what keeps each caller to its own half.
  */
-const STORED_FORM_BY_ATTRIBUTE_KIND: Record<AttributeKind, StoredForm> = {
+const STORED_FORM_BY_KIND: Record<
+  AttributeKind | FieldDef["type"],
+  StoredForm
+> = {
   string: "string",
   number: "number",
   boolean: "boolean",
   date: "string",
   enum: "string",
   object: "map",
-  foreignKey: "string"
-};
-
-/**
- * The stored form of each nested field type. Exhaustive over `FieldDef`, so
- * adding a field type fails compilation here until it declares a stance.
- *
- * An array stores as a List and a discriminated union as a Map, neither of
- * which an attribute kind can be — which is why this is a separate map rather
- * than the same one.
- */
-const STORED_FORM_BY_FIELD_TYPE: Record<FieldDef["type"], StoredForm> = {
-  string: "string",
-  number: "number",
-  boolean: "boolean",
-  date: "string",
-  enum: "string",
-  object: "map",
+  foreignKey: "string",
   array: "list",
   discriminatedUnion: "map"
 };
@@ -111,10 +104,58 @@ export const orderedOperatorApplies = (
   storedForm === undefined || ORDERED_FORMS.some(form => form === storedForm);
 
 /**
+ * Whether a value is a whole value of an attribute rather than a condition on
+ * it.
+ *
+ * A `Date` and a `Uint8Array` are objects to `typeof` but values a filter
+ * compares against, so neither is an operator object. Stated here because two
+ * callers need it — the condition-shape guard, which must not mistake one for a
+ * mistyped operator, and the partition key check, which must not mistake one
+ * for a non-equality condition. They had drifted apart while each spelled it
+ * out.
+ * @param value - The condition value
+ * @returns Whether it is a whole value that happens to be an object
+ */
+export const isObjectValuedScalar = (value: object): boolean =>
+  value instanceof Date || value instanceof Uint8Array;
+
+/**
+ * Whether DynamoDB can order a stored value.
+ *
+ * The value-side counterpart of {@link ORDERED_FORMS}, which answers the same
+ * question from an attribute's schema. This one is needed where the schema
+ * could not answer — a dot path through an array element or a union variant
+ * resolves to no field, so the value is all there is to go on.
+ *
+ * Distinct from `isOrdered` in the expression builder, which asks the narrower
+ * question of whether *JavaScript's* `>` reproduces DynamoDB's ordering.
+ * Binary is the case that separates them: DynamoDB orders it as unsigned bytes,
+ * so a range over it is representable, while `>` on two `Uint8Array`s is not
+ * that comparison. This predicate accepts binary; that one does not.
+ * @param value - A value in the form the table stores it
+ * @returns Whether DynamoDB can order it
+ */
+export const isDynamoOrderable = (value: unknown): boolean =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "bigint" ||
+  value instanceof Uint8Array;
+
+/**
  * What the ordered operators apply to, for the error that rejects one.
  */
 export const orderedOperatorDomain =
   "DynamoDB orders String, Number and Binary values; a Boolean, a Map and a List have no ordering, so the comparison can never hold";
+
+/**
+ * What an ordered operator's own value must be, for the error that rejects one.
+ *
+ * Separate from {@link orderedOperatorDomain} because it answers for a value
+ * rather than an attribute, so it can name `null` — which is never a stored
+ * value at all, rather than a stored form with no ordering.
+ */
+export const orderedOperandDomain =
+  "An ordered comparison takes a String, a Number or Binary value. A Boolean, a Map and a List have no ordering, and dyna-record removes a nulled attribute rather than storing NULL, so there is nothing for the comparison to match";
 
 /**
  * The stored form of an attribute, from its kind.
@@ -124,7 +165,7 @@ export const orderedOperatorDomain =
 export const storedFormOfAttribute = (
   kind: Optional<AttributeKind>
 ): Optional<StoredForm> =>
-  kind === undefined ? undefined : STORED_FORM_BY_ATTRIBUTE_KIND[kind];
+  kind === undefined ? undefined : STORED_FORM_BY_KIND[kind];
 
 /**
  * The stored form of a nested field, from its definition.
@@ -132,7 +173,7 @@ export const storedFormOfAttribute = (
  * @returns The form the table stores it in
  */
 export const storedFormOfField = (fieldDef: FieldDef): StoredForm =>
-  STORED_FORM_BY_FIELD_TYPE[fieldDef.type];
+  STORED_FORM_BY_KIND[fieldDef.type];
 
 /**
  * Whether a fragment operator applies to a value stored in the given form.

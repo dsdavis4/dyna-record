@@ -12,6 +12,7 @@ import {
 import type { QueryCommandProps } from "./types.js";
 import { consistentReadVal } from "../operations/utils/index.js";
 import { FilterError } from "../errors.js";
+import { isObjectValuedScalar } from "../filter-utils/storedForm.js";
 
 /**
  * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
@@ -142,13 +143,15 @@ class QueryBuilder {
     const { name: attributeName } = this.#tableMetadata.partitionKeyAttribute;
     const condition = this.#props.key[attributeName];
 
-    // A whole value is an equality. Anything else is an operator object, which
-    // the key condition vocabulary may accept on the sort key but never here
+    // A whole value is an equality. Anything else — an operator object, or an
+    // IN array — is a condition the key vocabulary may accept on the sort key
+    // but never here. What counts as a whole value is stated once, in
+    // isObjectValuedScalar, because this check and the condition-shape guard
+    // both need it and had drifted apart
     if (
       typeof condition === "object" &&
       condition !== null &&
-      !(condition instanceof Date) &&
-      !(condition instanceof Uint8Array)
+      !isObjectValuedScalar(condition)
     ) {
       throw new FilterError(
         `Invalid key condition for attribute "${attributeName}": the partition key takes an equality. Its value selects the partition to read, so there is nothing for another condition to narrow`
