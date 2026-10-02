@@ -83,6 +83,40 @@ const FORMS_BY_FRAGMENT_OPERATOR = {
 export type FragmentOperator = keyof typeof FORMS_BY_FRAGMENT_OPERATOR;
 
 /**
+ * The stored forms DynamoDB can order.
+ *
+ * `<`, `<=`, `>`, `>=` and `BETWEEN` require *comparable* operands, which
+ * DynamoDB defines as String, Number and Binary. A Boolean, a Map, a List and a
+ * Set are not comparable: there is no ordering between two of them, so a
+ * condition asking for one can never hold.
+ *
+ * A date belongs here through its stored form, not its declared one — an ISO
+ * 8601 string orders lexicographically exactly as the `Date` orders
+ * chronologically, which is what makes a date range work at all.
+ */
+const ORDERED_FORMS: readonly StoredForm[] = ["string", "number"];
+
+/**
+ * Whether an ordered comparison applies to a value stored in the given form.
+ *
+ * An unknown form answers `true`, for the same reason
+ * {@link fragmentOperatorApplies} does: a dot path naming no single field is
+ * something dyna-record cannot resolve and therefore cannot judge.
+ * @param storedForm - The stored form, or undefined when it could not be resolved
+ * @returns Whether the comparators and `BETWEEN` can apply
+ */
+export const orderedOperatorApplies = (
+  storedForm: Optional<StoredForm>
+): boolean =>
+  storedForm === undefined || ORDERED_FORMS.some(form => form === storedForm);
+
+/**
+ * What the ordered operators apply to, for the error that rejects one.
+ */
+export const orderedOperatorDomain =
+  "DynamoDB orders String, Number and Binary values; a Boolean, a Map and a List have no ordering, so the comparison can never hold";
+
+/**
  * The stored form of an attribute, from its kind.
  * @param kind - The attribute's kind, as its decorator recorded it
  * @returns The form the table stores it in, or undefined when the kind is unknown

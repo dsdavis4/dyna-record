@@ -2,9 +2,11 @@ import type DynaRecord from "../../DynaRecord.js";
 import type {
   QueryOptions as QueryBuilderOptions,
   BeginsWithConditionFor,
+  BetweenConditionFor,
   BetweenFilter,
   FilterConditionFor,
   FilterValue,
+  SingleComparisonConditionFor,
   SingleComparisonFilter,
   SortKeyCondition,
   StoredFilterTypes
@@ -243,8 +245,8 @@ export type QueryKeyConditionValue<V> = [KeyConditionDeclaredValue<V>] extends [
   ?
       | KeyConditionDeclaredValue<V>
       | BeginsWithConditionFor<KeyConditionDeclaredValue<V>>
-      | SingleComparisonFilter<Exclude<KeyConditionDeclaredValue<V>, null>>
-      | BetweenFilter<Exclude<KeyConditionDeclaredValue<V>, null>>
+      | SingleComparisonConditionFor<KeyConditionDeclaredValue<V>>
+      | BetweenConditionFor<KeyConditionDeclaredValue<V>>
   : SortKeyCondition;
 
 /**

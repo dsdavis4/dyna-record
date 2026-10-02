@@ -19,11 +19,15 @@ import type {
  * or a {@link BetweenFilter} range — the vocabulary DynamoDB accepts on a sort
  * key. The comparison does not compose, because the expression has room for one
  * condition there; a two-sided range is `$between`.
+ *
+ * Built from the same per-operator gates {@link FilterConditionFor} uses, which
+ * makes it a structural subset of {@link FilterTypes} — so one compilation path
+ * can take either without widening a value to `any`.
  */
 export type SortKeyCondition =
-  | BeginsWithFilter
-  | SingleComparisonFilter<OrderedFilterValue>
-  | BetweenFilter<OrderedFilterValue>
+  | BeginsWithConditionFor<FilterValue>
+  | SingleComparisonConditionFor<FilterValue>
+  | BetweenConditionFor<FilterValue>
   | FilterValue;
 
 /**
@@ -85,17 +89,22 @@ export type ContainsFilter = Record<"$contains", DynamoScalarValue>;
 export type FilterValue = DynamoScalarValue | Date;
 
 /**
- * A value an ordered comparison may carry: a {@link FilterValue} that is not
- * `null`.
+ * A value an ordered comparison may carry: a {@link FilterValue} DynamoDB can
+ * order.
  *
- * dyna-record removes a nulled attribute rather than storing DynamoDB's NULL,
- * so there is no stored null for `<`, `<=`, `>`, `>=` or `BETWEEN` to match —
- * and DynamoDB orders NULL against a scalar not at all. A comparison against
- * `null` asks for something no row can satisfy, which is worth rejecting rather
- * than compiling. Equality still accepts whatever the attribute's own type
- * admits; this narrows only the operators that impose an order.
+ * `<`, `<=`, `>`, `>=` and `BETWEEN` require *comparable* operands, which
+ * DynamoDB defines as String, Number and Binary. A boolean is excluded because
+ * there is no ordering between two of them, and `null` because dyna-record
+ * removes a nulled attribute rather than storing DynamoDB's NULL — so a
+ * comparison against either asks for something no row can satisfy.
+ *
+ * A `Date` is included through its stored form: an ISO 8601 string orders
+ * lexicographically exactly as the `Date` orders chronologically.
+ *
+ * Equality still accepts whatever the attribute's own type admits. This narrows
+ * only the operators that impose an order.
  */
-export type OrderedFilterValue = Exclude<FilterValue, null>;
+export type OrderedFilterValue = Exclude<FilterValue, boolean | null>;
 
 /**
  * Comparison conditions on one attribute, compiling to DynamoDB's `<`, `<=`,
@@ -147,6 +156,60 @@ export type SingleComparisonFilter<V> = ExactlyOne<{
  * `{ $gte: start, $lt: end }`.
  */
 export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
+
+/**
+ * The comparison operators, offered only where DynamoDB can order the
+ * attribute's stored form.
+ *
+ * `<`, `<=`, `>`, `>=` take comparable operands — String, Number and Binary. A
+ * boolean, a Map and a List have no ordering, so a comparison on one holds for
+ * no row and DynamoDB reports nothing about it. A date keeps its comparisons
+ * through its stored form, as an ISO string that orders chronologically.
+ *
+ * Each branch tests `V` directly so the conditional distributes, for the same
+ * reason {@link BeginsWithConditionFor} does: an unresolved dot path takes the
+ * whole scalar union and stays unconstrained. Distribution is also what
+ * excludes `null` and `boolean` without an explicit `Exclude` — neither extends
+ * the comparable set, so both fall to the final branch.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type ComparisonConditionFor<V> = V extends Date
+  ? ComparisonFilter<V>
+  : V extends string | number | bigint | Uint8Array
+    ? ComparisonFilter<V>
+    : never;
+
+/**
+ * A single comparison, offered only where DynamoDB can order the attribute's
+ * stored form.
+ *
+ * The key condition counterpart of {@link ComparisonConditionFor}: same
+ * comparability rule, but the operators do not compose, because the expression
+ * has room for one condition on the sort key.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type SingleComparisonConditionFor<V> = V extends Date
+  ? SingleComparisonFilter<V>
+  : V extends string | number | bigint | Uint8Array
+    ? SingleComparisonFilter<V>
+    : never;
+
+/**
+ * `$between`, offered only where DynamoDB can order the attribute's stored
+ * form.
+ *
+ * `BETWEEN` is a pair of comparisons, so it takes exactly the operands
+ * {@link ComparisonConditionFor} does.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type BetweenConditionFor<V> = V extends Date
+  ? BetweenFilter<V>
+  : V extends string | number | bigint | Uint8Array
+    ? BetweenFilter<V>
+    : never;
 
 /**
  * `$beginsWith`, offered only where the table stores the attribute in a form
@@ -225,8 +288,8 @@ export type ContainsConditionFor<V> = V extends Date
 export type FilterConditionFor<V> =
   | BeginsWithConditionFor<V>
   | ContainsConditionFor<V>
-  | ComparisonFilter<Exclude<V, null>>
-  | BetweenFilter<Exclude<V, null>>
+  | ComparisonConditionFor<V>
+  | BetweenConditionFor<V>
   | V
   | V[];
 

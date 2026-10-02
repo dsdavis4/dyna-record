@@ -3055,17 +3055,30 @@ describe("Query", () => {
         });
 
         describe("a boolean attribute", () => {
-          it("accepts a boolean operand and rejects a string", async () => {
+          it("offers no ordered comparison at all", async () => {
+            // DynamoDB orders String, Number and Binary. There is no ordering
+            // between two booleans, so the operator is absent from the type
+            // rather than present with a boolean operand
             await swallow(
-              // @ts-expect-no-error: boolAttribute is declared as a boolean
+              // @ts-expect-error: a boolean has no ordering for a comparison to use
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { boolAttribute: { $gte: true } }
               })
             );
             await swallow(
-              // @ts-expect-error: "true" is not a boolean
+              // @ts-expect-error: and a string is not a boolean either
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { boolAttribute: { $gte: "true" } }
+              })
+            );
+          });
+
+          it("still takes an equality and an IN list", async () => {
+            // Equality needs no ordering, so it is unaffected
+            // @ts-expect-no-error: boolAttribute is declared as a boolean
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: true, nullableBoolAttribute: [true] }
               })
             );
           });
@@ -3245,6 +3258,51 @@ describe("Query", () => {
               // @ts-expect-error: a nullable number still stores as a number
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { nullableNumberAttribute: { $beginsWith: "1" } }
+              })
+            );
+          });
+        });
+
+        describe("ordered operators and comparability", () => {
+          it("offers them on every comparable stored form", async () => {
+            // DynamoDB orders String, Number and Binary. A date, an enum and a
+            // foreign key all store as Strings, so all three keep their ranges
+            // @ts-expect-no-error: every operand here is comparable
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  numberAttribute: { $gt: 1 },
+                  dateAttribute: { $gte: new Date() },
+                  enumAttribute: { $lt: "val-1" },
+                  stringAttribute: { $between: ["A", "Z"] }
+                }
+              })
+            );
+          });
+
+          it("offers none on a Map attribute", async () => {
+            await swallow(
+              // @ts-expect-error: there is no ordering between two Maps
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { objectAttribute: { $gt: "x" } }
+              })
+            );
+          });
+
+          it("offers none on a List-typed nested field", async () => {
+            await swallow(
+              // @ts-expect-error: there is no ordering between two Lists
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.tags": { $between: ["a", "b"] } }
+              })
+            );
+          });
+
+          it("keeps them on a nested date field", async () => {
+            // @ts-expect-no-error: stored as an ISO string, which orders
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.createdDate": { $gt: new Date() } }
               })
             );
           });

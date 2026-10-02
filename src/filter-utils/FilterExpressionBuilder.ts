@@ -12,6 +12,8 @@ import {
 import {
   fragmentOperatorApplies,
   fragmentOperatorDomain,
+  orderedOperatorApplies,
+  orderedOperatorDomain,
   storedFormOfAttribute,
   storedFormOfField,
   type FragmentOperator,
@@ -19,7 +21,9 @@ import {
 } from "./storedForm.js";
 import type {
   AndFilter,
+  BetweenConditionFor,
   BetweenFilter,
+  ComparisonConditionFor,
   ComparisonFilter,
   FilterValue,
   OrderedFilterValue,
@@ -236,7 +240,7 @@ class FilterExpressionBuilder {
    * @returns The compiled expression and its values
    */
   private conjunction(
-    filter: FilterParams | KeyConditions,
+    filter: Record<string, FilterParams[string]>,
     capabilities: FilterCapabilities
   ): FilterExpression {
     // Checked here rather than only in filterParams, which is the one entry
@@ -405,6 +409,7 @@ class FilterExpressionBuilder {
         );
       }
       const operands = this.presentComparisons(value);
+      this.assertOrderedOperatorApplies(resolved, attr, operands.join(" and "));
       if (operands.length > 1 && !capabilities.composedComparisons) {
         throw new FilterError(
           `Composed comparisons are not supported in ${capabilities.context}. Attribute "${attr}" has ${String(operands.length)} comparison operands, and DynamoDB allows one condition on the sort key — use $between for a two-sided range`
@@ -430,6 +435,7 @@ class FilterExpressionBuilder {
           `$between conditions are not supported in ${capabilities.context}. Attribute "${attr}" has a $between condition`
         );
       }
+      this.assertOrderedOperatorApplies(resolved, attr, "$between");
       const [lower, upper] = this.betweenBounds(value, attr);
       const lowerRef = this.bindWholeValue(resolved, attr, lower, values);
       const upperRef = this.bindWholeValue(resolved, attr, upper, values);
@@ -648,6 +654,33 @@ class FilterExpressionBuilder {
         `Invalid filter value for attribute "${attr}": a condition combines ${families.join(" and ")}, and only comparison operators compose. Split it across separate conditions`
       );
     }
+  }
+
+  /**
+   * Rejects an ordered comparison on an attribute DynamoDB cannot order.
+   *
+   * `<`, `<=`, `>`, `>=` and `BETWEEN` need comparable operands. A boolean, a
+   * Map and a List are not comparable, so the condition holds for no row and
+   * DynamoDB reports nothing — the same silent-empty-answer shape the fragment
+   * gate closes, one operator family over.
+   *
+   * Decided by the stored form, which is why a date attribute keeps its ranges:
+   * an ISO string orders lexicographically exactly as the `Date` orders
+   * chronologically
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for the error message
+   * @param operator - The operator or operators being applied, for the message
+   */
+  private assertOrderedOperatorApplies(
+    resolved: ResolvedPath,
+    attr: string,
+    operator: string
+  ): void {
+    if (orderedOperatorApplies(resolved.storedForm)) return;
+
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": ${operator} does not apply to a value stored as a ${String(resolved.storedForm)}. ${orderedOperatorDomain}`
+    );
   }
 
   /**
@@ -921,7 +954,7 @@ class FilterExpressionBuilder {
    */
   private isComparisonFilter(
     filter: FilterParams[string]
-  ): filter is ComparisonFilter<OrderedFilterValue> {
+  ): filter is ComparisonConditionFor<OrderedFilterValue> {
     return (
       typeof filter === "object" &&
       filter !== null &&
@@ -936,7 +969,7 @@ class FilterExpressionBuilder {
    */
   private isBetweenFilter(
     filter: FilterParams[string]
-  ): filter is BetweenFilter<OrderedFilterValue> {
+  ): filter is BetweenConditionFor<OrderedFilterValue> {
     return (
       typeof filter === "object" && filter !== null && "$between" in filter
     );

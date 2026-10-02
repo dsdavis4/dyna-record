@@ -15,8 +15,8 @@ import type {
   FilterCapabilities,
   FilterParams,
   FilterTypes,
-  KeyConditions,
-  OrderedFilterValue
+  FilterValue,
+  KeyConditions
 } from "../../src/filter-utils/index.js";
 
 const attributes: Record<
@@ -687,22 +687,17 @@ describe("FilterExpressionBuilder", () => {
 
   describe("comparison and range operand boundaries", () => {
     it("treats a falsy operand as a value rather than a missing one", () => {
-      expect.assertions(3);
+      expect.assertions(2);
 
-      // 0, "" and false are the operands a definedness check written as a
-      // truthiness check would silently drop
+      // 0 and "" are the operands a definedness check written as a truthiness
+      // check would silently drop. `false` is not among them, because a
+      // boolean has no ordering for a comparison to use in the first place
       expect(
         queryBuilderInstance().filterParams({ price: { $gt: 0 } })
       ).toEqual({ expression: "#Price > :Price1", values: { Price1: 0 } });
       expect(
         queryBuilderInstance().filterParams({ name: { $gte: "" } })
       ).toEqual({ expression: "#Name >= :Name1", values: { Name1: "" } });
-      expect(
-        queryBuilderInstance().filterParams({ inStock: { $lte: false } })
-      ).toEqual({
-        expression: "#InStock <= :InStock1",
-        values: { InStock1: false }
-      });
     });
 
     it("compiles a $between whose bounds are both falsy", () => {
@@ -748,13 +743,13 @@ describe("FilterExpressionBuilder", () => {
       );
     });
 
-    it("leaves an unorderable pair unchecked rather than checking it wrongly", () => {
-      expect.assertions(2);
+    it("leaves an inverted binary pair unchecked rather than checking it wrongly", () => {
+      expect.assertions(1);
 
-      // JavaScript's > does not reproduce DynamoDB's unsigned-byte ordering of
-      // binary, and a boolean has no ordering at all, so neither is rejected
-      // for inversion. Compiling them is better than guessing which way round
-      // they belong
+      // DynamoDB orders Binary, so the range is representable — but
+      // JavaScript's > does not reproduce its unsigned-byte ordering, so the
+      // inversion check stays out of it. Compiling the pair is better than
+      // guessing which way round it belongs
       expect(
         queryBuilderInstance().filterParams({
           thumbnail: {
@@ -768,14 +763,23 @@ describe("FilterExpressionBuilder", () => {
           Thumbnail2: new Uint8Array([1])
         }
       });
-      expect(
+    });
+
+    it("rejects a range on a boolean attribute", () => {
+      expect.assertions(1);
+
+      // There is no ordering between two booleans, so the condition holds for
+      // no row and DynamoDB reports nothing about it
+      expect(() =>
         queryBuilderInstance().filterParams({
+          // @ts-expect-error a boolean range is a compile error too; this is the JavaScript backstop
           inStock: { $between: [true, false] }
         })
-      ).toEqual({
-        expression: "#InStock BETWEEN :InStock1 AND :InStock2",
-        values: { InStock1: true, InStock2: false }
-      });
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "inStock": $between does not apply to a value stored as a boolean. DynamoDB orders String, Number and Binary values; a Boolean, a Map and a List have no ordering, so the comparison can never hold'
+        )
+      );
     });
 
     it("rejects null as a comparison operand", () => {
@@ -968,17 +972,20 @@ describe("FilterExpressionBuilder", () => {
       });
     });
 
-    it("rejects a comparison on an array-typed nested field without validating it", () => {
+    it("rejects a comparison on an array-typed nested field", () => {
       expect.assertions(1);
 
-      // An array field's schema describes the list, not an element, so no
-      // validation runs and the operand compiles as supplied
-      expect(
+      // A List has no ordering, so there is nothing for a comparator to do
+      // here. Its schema would not have validated the operand either — it
+      // describes the list rather than an element — but the stored form is the
+      // reason the condition cannot work at all
+      expect(() =>
         queryBuilderInstance().filterParams({ "meta.tags": { $gt: "a" } })
-      ).toEqual({
-        expression: "#Meta.#tags > :Metatags1",
-        values: { Metatags1: "a" }
-      });
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.tags": $gt does not apply to a value stored as a list. DynamoDB orders String, Number and Binary values; a Boolean, a Map and a List have no ordering, so the comparison can never hold'
+        )
+      );
     });
   });
 
@@ -1695,16 +1702,16 @@ describe("FilterExpressionBuilder", () => {
       /** The stored form, as the attribute's kind or field type implies */
       storedForm: string;
       /** A whole value of the attribute, for the ordered operators */
-      sample: OrderedFilterValue;
+      sample: FilterValue;
       $beginsWith: "compiles" | "rejected";
       $contains: "compiles" | "rejected";
       /**
-       * What an ordered operator does with a whole value of the attribute:
-       * compiles correctly, compiles although DynamoDB cannot order the form
-       * (`"gap"`), or is rejected by the field's own schema before any gate
-       * sees it (`"validated"`).
+       * Whether an ordered comparison applies to the attribute's stored form.
+       * Gated for the same reason the fragment operators are, and checked
+       * before the operand is validated — "a comparison does not apply to a
+       * Map" says more than "the value does not match the type".
        */
-      ordered: "compiles" | "gap" | "validated";
+      ordered: "compiles" | "rejected";
     }> = [
       // Stored as Strings: comparable, with both a prefix and a substring
       {
@@ -1749,29 +1756,27 @@ describe("FilterExpressionBuilder", () => {
         sample: true,
         $beginsWith: "rejected",
         $contains: "rejected",
-        ordered: "gap"
+        ordered: "rejected"
       },
       // A Map is not comparable, is not a string, and is not a collection
-      // contains() tests. The top level attribute carries no schema through
-      // this resolver, so nothing rejects a scalar operand and the gap shows
+      // contains() tests
       {
         attribute: "meta",
         storedForm: "map",
         sample: "x",
         $beginsWith: "rejected",
         $contains: "rejected",
-        ordered: "gap"
+        ordered: "rejected"
       },
-      // The same stored form reached by a dot path, where the field's own
-      // schema does reject a scalar operand — which is why the gap is about
-      // the missing gate and not about every Map being unreachable
+      // The same stored form reached by a dot path, where the field resolves
+      // through its own definition
       {
         attribute: "meta.nested",
         storedForm: "map",
         sample: "x",
         $beginsWith: "rejected",
         $contains: "rejected",
-        ordered: "validated"
+        ordered: "rejected"
       },
       // Nested fields resolve to their own definition
       {
@@ -1806,7 +1811,7 @@ describe("FilterExpressionBuilder", () => {
         sample: "a",
         $beginsWith: "rejected",
         $contains: "compiles",
-        ordered: "gap"
+        ordered: "rejected"
       },
       // Not a judgement dyna-record can make: it cannot resolve the field, so
       // it constrains nothing — the behavior such a path has always had
@@ -1838,11 +1843,21 @@ describe("FilterExpressionBuilder", () => {
       }
     ];
 
-    /** Compiles one condition on one attribute, under the query vocabulary */
+    /**
+     * Compiles one condition on one attribute, under the query vocabulary.
+     *
+     * The second assertion in the matrix, and the same reason as the first:
+     * every row is fed every operand, including the operands its attribute's
+     * type refuses, so a row's condition type has to be looser than any one
+     * cell's. Asserting here keeps the rows honest about what they carry
+     * instead of weakening FilterTypes to accommodate the test
+     */
     const compileOn =
-      (attribute: string, condition: FilterTypes): (() => unknown) =>
+      (attribute: string, condition: unknown): (() => unknown) =>
       () =>
-        queryBuilderInstance().filterParams({ [attribute]: condition });
+        queryBuilderInstance().filterParams({
+          [attribute]: condition as FilterTypes
+        });
 
     it.each(
       matrix.flatMap(row =>
@@ -1872,7 +1887,7 @@ describe("FilterExpressionBuilder", () => {
     });
 
     it.each(matrix)(
-      "the ordered operators on $attribute ($storedForm) behave as recorded",
+      "the ordered operators on $attribute ($storedForm) match the matrix",
       row => {
         expect.assertions(2);
 
@@ -1881,30 +1896,29 @@ describe("FilterExpressionBuilder", () => {
           $between: [row.sample, row.sample]
         });
 
-        if (row.ordered === "validated") {
-          // The field's schema rejects a scalar where it declares a Map, so
-          // the operand never reaches a stored-form judgement
-          expect(comparison).toThrow("does not match the attribute's type");
-          expect(between).toThrow("does not match the attribute's type");
-        } else {
-          // Not gated on the stored form. Correct for a comparable form; for a
-          // row marked "gap" this pins the behavior rather than endorsing it
+        if (row.ordered === "compiles") {
           expect(comparison).not.toThrow();
           expect(between).not.toThrow();
+        } else {
+          const domain = `does not apply to a value stored as a ${row.storedForm}`;
+          expect(comparison).toThrow(domain);
+          expect(between).toThrow(domain);
         }
       }
     );
 
-    it("records which stored forms DynamoDB cannot order", () => {
+    it("names the stored forms DynamoDB cannot order", () => {
       expect.assertions(1);
 
-      // These compile and can never match: DynamoDB's comparators and BETWEEN
-      // require comparable operands, which are String, Number and Binary. The
-      // fragment operators are gated on the stored form and these are not —
-      // the same shape of gap, one operator family over
-      expect(
-        matrix.filter(row => row.ordered === "gap").map(row => row.attribute)
-      ).toEqual(["inStock", "meta", "meta.tags"]);
+      // The set the comparators and BETWEEN are gated against. A form added to
+      // ORDERED_FORMS without a reason shows up as a disagreement here
+      expect([
+        ...new Set(
+          matrix
+            .filter(row => row.ordered === "rejected")
+            .map(r => r.storedForm)
+        )
+      ]).toEqual(["boolean", "map", "list"]);
     });
 
     it("covers every stored form the maps can produce", () => {
