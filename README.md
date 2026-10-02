@@ -28,6 +28,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Create](#create)
   - [FindById](#findbyid)
   - [Query](#query)
+    - [Comparison and range conditions](#comparison-and-range-conditions)
     - [Filtering on Object Attributes](#filtering-on-object-attributes)
     - [Typed Query Filters](#typed-query-filters)
   - [Update](#update)
@@ -914,13 +915,86 @@ const result = await Course.query(
 );
 ```
 
+#### Comparison and range conditions
+
+Filters support `$gt`, `$gte`, `$lt` and `$lte`, plus `$between` for an inclusive range.
+
+```typescript
+// Everything created in January
+const result = await Order.query("123", {
+  filter: {
+    createdAt: { $gte: new Date("2026-01-01"), $lt: new Date("2026-02-01") }
+  }
+});
+
+// An inclusive range, as a single condition
+const result = await Store.query("123", {
+  filter: { "address.geo.lat": { $between: [40, 41] } }
+});
+```
+
+Several comparison operators on one attribute compose with **AND**, which is how a half-open range is written — the `$gte`/`$lt` pair above. `$between` is inclusive on both bounds and its pair is ordered: the lower bound comes first. DynamoDB accepts an inverted pair, matches nothing, and reports no error, so dyna-record rejects it with a `FilterError` instead.
+
+##### Whole values and fragments
+
+One rule explains why `$gte` takes a `Date` while `$beginsWith` takes a string. Every condition operand is one of two things:
+
+- A **whole value** of the attribute — an equality value, every `IN` element, every comparison operand, both `$between` bounds. These are named the way the entity declares the attribute, so a date attribute takes a `Date`. dyna-record validates the value against the attribute's schema and converts it to the form the table stores.
+- A **fragment** of the stored form — a `$beginsWith` prefix, a `$contains` substring. There is no "`Date` that starts with 2026", so these stay strings and scalars whatever the attribute declares, and are neither validated nor converted.
+
+```typescript
+// A whole value: createdAt is declared as a Date, so the operand is a Date
+await Order.query("123", {
+  filter: { createdAt: { $gte: new Date("2026-01-01") } }
+});
+
+// A fragment: a prefix of the ISO string the table stores
+await Order.query("123", {
+  filter: { createdAt: { $beginsWith: "2026" } }
+});
+```
+
+##### Which operators an attribute offers
+
+DynamoDB's condition functions each apply to particular stored types, and a condition outside that set is not an error — it simply matches nothing, which looks exactly like a query that legitimately found no rows. dyna-record leaves those conditions out of the type instead:
+
+| Operator                                 | Applies to a value stored as |
+| ---------------------------------------- | ---------------------------- |
+| `=`, `IN`                                | anything                     |
+| `$gt`, `$gte`, `$lt`, `$lte`, `$between` | String, Number, Binary       |
+| `$beginsWith`                            | String, Binary               |
+| `$contains`                              | String, List, Set            |
+
+The **stored** form decides, not the declared one. That is why a date attribute offers all of them: it is declared as a `Date` and stored as an ISO 8601 string, which orders lexicographically exactly as the date orders chronologically. A number attribute offers the comparators but not `$beginsWith`; a boolean offers neither. Binary is listed for completeness — dyna-record models no binary attribute kind, so no attribute stores as one.
+
+A dot-path key is judged by the field it names, so a nested string field offers `$beginsWith` and a nested number field does not. A path that names no single field — one descending through an array element or a discriminated union variant — cannot be judged, so it is left unconstrained.
+
+##### Ranges in key conditions
+
+A range is more valuable in a key condition than in a filter: a key condition narrows what DynamoDB **reads**, while a filter is applied after the read and only discards rows you have already paid for.
+
+```typescript
+// Reads only the Orders in this range
+const result = await Customer.query("123", {
+  skCondition: { $between: ["Order#100", "Order#200"] }
+});
+```
+
+DynamoDB's `KeyConditionExpression` is narrower than a filter:
+
+- The **partition key** takes an equality. Its value selects the partition to read, so there is nothing for another condition to narrow.
+- The **sort key** takes exactly one condition: `=`, a comparator, `$between`, or `$beginsWith`. The comparison operators therefore do not compose here — a two-sided key range is `$between`.
+- `$or`, `IN` arrays, `$contains` and dot-path keys are not available in a key condition at all.
+
+On an **index** query, `indexName` is a bare string, so dyna-record does not know the index's key schema and cannot tell which attribute plays the partition key role. The partition key equality is enforced for entity queries, where table metadata answers that question; on an index query DynamoDB reports the error itself.
+
 #### Filtering on Object Attributes
 
 When using `@ObjectAttribute`, you can filter on nested Map fields using **dot-path notation** and check List membership using the **`$contains`** operator.
 
 ##### Dot-path filtering on nested fields
 
-Use dot notation to filter on fields within an `@ObjectAttribute`. All standard filter operators work with dot-paths: equality, `$beginsWith`, and `IN` (array of values).
+Use dot notation to filter on fields within an `@ObjectAttribute`. The filter operators work with dot-paths as they do with top level attributes — equality, `IN`, the comparators, `$between`, `$beginsWith` and `$contains` — each offered where the field's stored form can carry it.
 
 ```typescript
 // Equality on a nested field
@@ -989,10 +1063,13 @@ The type system validates:
 - **SK-scoped filters**: When `skCondition` narrows to specific entities, the `filter` parameter is scoped to only those entities' attributes. For example, `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes — using `lastFour` (a PaymentMethod attribute) produces a compile error.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
-- **Filter values**: A filter value must be something DynamoDB can store — a string, number, bigint, boolean, `null`, or binary — or an array of those for an `IN` condition, or a `$beginsWith` / `$contains` operator object. A `Date`, a function, a class instance, or an unsupported operator such as `$gt` is a compile error. Dates are stored as ISO 8601 strings, so filter on the string: `filter: { createdAt: { $beginsWith: "2026-09" } }`.
-- **Key condition values**: When querying an index, each attribute takes a condition on that attribute — a value to match, or `$beginsWith`.
+- **Filter values**: A filter value is typed by the attribute it targets, and named the way the entity declares it — so a date attribute takes a `Date`, which dyna-record converts to the ISO string the table stores. An array of those values is an `IN` condition. A function, a class instance, `null`, or an operator that does not exist such as `$ne` is a compile error, as is an operator object that names none (`{}`) or that mixes families (`{ $gt, $between }`).
+- **Operator operands**: `$beginsWith` and `$contains` match against the _stored_ form, so their operands stay strings and scalars whatever the attribute's declared type. This is how a date is matched by partial value: `filter: { createdAt: { $beginsWith: "2026" } }` finds everything in that year. Every other operand is a whole value of the attribute — see [Whole values and fragments](#whole-values-and-fragments).
+- **Operators an attribute offers**: Each operator is available only where the attribute's stored form can carry it, so a comparator on a boolean and a `$beginsWith` on a number are compile errors rather than queries that match nothing — see [Which operators an attribute offers](#which-operators-an-attribute-offers).
+- **Key condition values**: A key condition takes a value to match, `$beginsWith`, a single comparator, or `$between`. The partition key takes an equality only, and the sort key takes one condition, so the comparators do not compose there — see [Ranges in key conditions](#ranges-in-key-conditions).
+- **Nested fields**: A dot-path key is typed by the field it names, so a nested date field takes a `Date` just as a top level one does, and offers the operators that field's stored form supports.
 
-Filter and key condition values are also checked at runtime against the attribute's schema, so a value that cannot match is reported as a `FilterError` naming the attribute rather than compiled into a query that returns nothing. Three things are not checked, because in each the value is not a value of the attribute being compared: an attribute stored differently from how it is declared (a date is declared as a `Date` and stored as an ISO string, so filter on the string), a nested field reached by dot path, and the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment. Each element of an `IN` array is checked.
+Filter and key condition values are also checked at runtime against the attribute's schema, in the form the entity declares them, before being converted to the form the table stores. A value that cannot match is reported as a `FilterError` naming the attribute rather than compiled into a query that returns nothing. Two things are not checked, because in each the value is not a value of the attribute being compared: a path that names no single field — one descending through an array element or a discriminated union variant — which must be written as stored, and the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment. Each element of an `IN` array is checked and converted.
 
 A filter condition set to `undefined` is dropped, so forwarding an optional input (`filter: { name: req.query.name }`) filters on it only when it has a value. A **key** condition set to `undefined` is an error instead: key conditions are what scope a query to a partition, so dropping one would silently widen the query to everything under it, where dropping a filter only widens the results within the partition already scoped. An operator given no value — `{ name: { $beginsWith: undefined } }` — is an error for the same reason it cannot be dropped: it asks for a comparison and supplies nothing to compare against.
 
@@ -1836,7 +1913,7 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Attribute Type Enforcement**: Ensures that the data types of attributes match their definitions in your entities.
 - **Method Parameter Checking**: Validates method parameters against entity definitions, preventing invalid operations.
 - **Relationship Integrity**: Automatically manages the consistency of relationships between entities, ensuring data integrity.
-- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names. Filter values are checked too: only values DynamoDB can store, and only supported operators, are accepted.
+- **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names. Filter values are checked too: each is typed by the attribute it targets, and each operator is offered only where that attribute's stored form can carry it.
 - **Return Type Narrowing**: When a query filter specifies a `type` value, the return type is automatically narrowed to only the matching entity types instead of the full partition union.
 - **`$or` Element Narrowing**: Each element in a `$or` filter array is independently type-checked based on its own `type` field, preventing attribute mismatches.
 - **Searchable Brands**: `@Searchable()` and `@SearchFilterable()` require the `Searchable`/`SearchFilterable` property brands, so the searchable and filterable sets are known at compile time — search `in:` values, filter keys, and result unions all derive from them. A second `@Searchable` attribute on one entity is a compile error at the `@Entity` decorator.

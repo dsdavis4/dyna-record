@@ -66,6 +66,12 @@ export function searchFilterAttributeResolver(
       return {
         ...acc,
         [name]: {
+          // No serializers: a search filterable's declared form is its stored
+          // form. FILTERABLE_ATTRIBUTE_KINDS admits only the kinds that store
+          // what they declare, so no serialized attribute reaches here — if it
+          // ever admits one, this resolver has to carry that attribute's
+          // serializers the way the query resolver does, or search filters will
+          // validate a declared value and then send it unconverted
           alias,
           type:
             otherTypes.length === 0

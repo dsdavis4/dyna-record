@@ -11,6 +11,7 @@ import {
 } from "../filter-utils/index.js";
 import type { QueryCommandProps } from "./types.js";
 import { consistentReadVal } from "../operations/utils/index.js";
+import { FilterError } from "../errors.js";
 
 /**
  * Constructs and formats a DynamoDB query command based on provided key conditions and query options. This class simplifies the creation of complex DynamoDB queries by abstracting the underlying AWS SDK query command structure, particularly handling the construction of key condition expressions, filter expressions, and expression attribute names and values.
@@ -67,10 +68,12 @@ class QueryBuilder {
         ? this.#expressionBuilder.filterParams(filter)
         : undefined;
 
-    const keyFilter = this.#expressionBuilder.andFilter(this.#props.key);
-
     const hasIndex = indexName !== undefined;
     const hasFilter = filterParams !== undefined;
+
+    this.assertPartitionKeyEquality(hasIndex);
+
+    const keyFilter = this.#expressionBuilder.keyConditions(this.#props.key);
 
     // Present only on tables with a vector index: the vector-excluding
     // inclusion projection. Reads on tables without one are untouched
@@ -118,6 +121,42 @@ class QueryBuilder {
   }
 
   /**
+   * Rejects a non-equality condition on the table's partition key.
+   *
+   * DynamoDB requires an equality on the partition key in every key condition:
+   * the value selects the partition to read, so there is nothing for a range to
+   * narrow. A range there is a `ValidationException` naming neither the
+   * attribute nor the reason.
+   *
+   * Enforced only for an entity query, where the partition key is known from
+   * table metadata. On an index query `indexName` is a bare string, so
+   * dyna-record does not know the index's key schema and cannot tell which
+   * attribute plays that role — the check is skipped rather than guessed at,
+   * and DynamoDB rejects a bad index key condition itself. Modeling secondary
+   * indexes is what would let this be enforced everywhere
+   * @param hasIndex - Whether the query targets a secondary index
+   */
+  private assertPartitionKeyEquality(hasIndex: boolean): void {
+    if (hasIndex) return;
+
+    const { name: attributeName } = this.#tableMetadata.partitionKeyAttribute;
+    const condition = this.#props.key[attributeName];
+
+    // A whole value is an equality. Anything else is an operator object, which
+    // the key condition vocabulary may accept on the sort key but never here
+    if (
+      typeof condition === "object" &&
+      condition !== null &&
+      !(condition instanceof Date) &&
+      !(condition instanceof Uint8Array)
+    ) {
+      throw new FilterError(
+        `Invalid key condition for attribute "${attributeName}": the partition key takes an equality. Its value selects the partition to read, so there is nothing for another condition to narrow`
+      );
+    }
+  }
+
+  /**
    * Resolves a filter attribute key to its table alias via the entity's
    * attribute metadata, which includes the attributes of related entities
    * @param attributeKey - The attribute key being filtered on. For dot-path keys this is the top level segment
@@ -135,17 +174,10 @@ class QueryBuilder {
       );
     }
 
-    const { alias, serializers, type } = this.#attributeMetadata[attributeKey];
-
-    // The validator describes the attribute as the entity declares it, while a
-    // filter names the value as the table stores it. Those agree only for
-    // attributes that round-trip unchanged — a date is declared as a Date and
-    // stored as an ISO string, so validating "2026-09" against z.date() would
-    // reject the documented way to filter on one
-    return {
-      alias,
-      ...(serializers === undefined && { type })
-    };
+    // AttributeMetadata already is a FilterAttribute: the alias, the validator
+    // and the serializers all describe the attribute as the entity declares it,
+    // which is how a filter names it
+    return this.#attributeMetadata[attributeKey];
   }
 }
 

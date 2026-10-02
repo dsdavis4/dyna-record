@@ -4,13 +4,26 @@ import type { FilterParams, KeyConditions } from "../filter-utils/index.js";
 // in filter-utils. Re-exported here so query consumers keep a single import
 // site for query building types
 export type {
+  BeginsWithConditionFor,
   BeginsWithFilter,
+  BetweenConditionFor,
+  BetweenFilter,
+  ComparisonFilter,
+  ContainsConditionFor,
+  ContainsFilter,
+  ComparisonConditionFor,
+  FilterConditionFor,
+  SingleComparisonConditionFor,
+  SingleComparisonFilter,
+  FilterValue,
   FilterExpression,
   FilterParams,
   FilterTypes,
   KeyConditions,
+  OrderedFilterValue,
   OrFilter,
-  SortKeyCondition
+  SortKeyCondition,
+  StoredFilterTypes
 } from "../filter-utils/index.js";
 
 /**

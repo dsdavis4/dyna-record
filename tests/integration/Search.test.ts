@@ -745,6 +745,45 @@ describe("Search", () => {
       expect(mockSend).not.toHaveBeenCalled();
     });
 
+    it("rejects comparison operators, naming the search context", async () => {
+      expect.assertions(3);
+
+      // SearchConditionExpression is an equality-only conjunction, so there is
+      // no comparator to compile these to. The type rejects them, and this is
+      // the backstop for a caller who is not typed
+      try {
+        await storeSearchIndex.search("123", "mugs", {
+          filter: {
+            rating: { $gte: 4 }
+          } as unknown as SearchFilter
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          'Comparison conditions are not supported in search filters. Attribute "rating" has a comparison condition'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("rejects $between conditions, naming the search context", async () => {
+      expect.assertions(3);
+
+      try {
+        await storeSearchIndex.search("123", "mugs", {
+          filter: {
+            rating: { $between: [4, 5] }
+          } as unknown as SearchFilter
+        });
+      } catch (e: any) {
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          '$between conditions are not supported in search filters. Attribute "rating" has a $between condition'
+        );
+      }
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
     it("rejects operator objects", async () => {
       expect.assertions(2);
 
@@ -1699,6 +1738,45 @@ describe("types", () => {
 
       // @ts-expect-error: a foreign key filterable is still a string
       await scopedFilterIndex.search("1", "q", { filter: { shopId: 5 } });
+    };
+
+    expect(_test).toBeDefined();
+  });
+
+  it("rejects every comparison and range operator at compile time", () => {
+    const _test = async (): Promise<void> => {
+      // A search filter condition is an equality, so an operator object cannot
+      // satisfy the value slot at all. The runtime rejections above are the
+      // backstop for callers this does not reach
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $gt is not representable in a search filter
+        filter: { rating: { $gt: 4 } }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $gte is not representable in a search filter
+        filter: { rating: { $gte: 4 } }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $lt is not representable in a search filter
+        filter: { rating: { $lt: 4 } }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $lte is not representable in a search filter
+        filter: { rating: { $lte: 4 } }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: $between is not representable in a search filter
+        filter: { rating: { $between: [4, 5] } }
+      });
+
+      await storeSearchIndex.search("1", "q", {
+        // @ts-expect-error: a range on a string filterable is rejected too
+        filter: { category: { $gte: "Mugs" } }
+      });
     };
 
     expect(_test).toBeDefined();
