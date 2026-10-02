@@ -239,6 +239,20 @@ class FilterExpressionBuilder {
     filter: FilterParams | KeyConditions,
     capabilities: FilterCapabilities
   ): FilterExpression {
+    // Checked here rather than only in filterParams, which is the one entry
+    // point that can route an $or block somewhere. Every other compilation
+    // reaches this method, and without the check a context declaring `or:
+    // false` relies on no attribute happening to be named "$or" — leaving the
+    // capability decorative and the rejection blaming an unknown attribute
+    // Object.hasOwn rather than `in`: the declared type is an object, but an
+    // untyped caller can pass a primitive, and `in` throws a TypeError on one
+    // where hasOwn coerces and answers false
+    if (!capabilities.or && Object.hasOwn(filter, "$or")) {
+      throw new FilterError(
+        `$or conditions are not supported in ${capabilities.context}`
+      );
+    }
+
     const params = Object.entries(filter).reduce<FilterExpression>(
       (obj, [attr, value]) => {
         const { expression, values } = this.andCondition(

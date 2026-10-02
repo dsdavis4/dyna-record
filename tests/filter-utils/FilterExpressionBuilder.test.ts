@@ -11,6 +11,13 @@ import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
 import type { Serializers } from "../../src/metadata/types.js";
 import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
 import type { AttributeKind } from "../../src/metadata/types.js";
+import type {
+  FilterCapabilities,
+  FilterParams,
+  FilterTypes,
+  KeyConditions,
+  OrderedFilterValue
+} from "../../src/filter-utils/index.js";
 
 const attributes: Record<
   string,
@@ -1454,6 +1461,465 @@ describe("FilterExpressionBuilder", () => {
         nestedPaths: false,
         singleConditionPerAttribute: false
       });
+    });
+  });
+
+  describe("surface matrix: context by operand kind", () => {
+    /**
+     * What DynamoDB allows each operand kind in each context, stated from the
+     * service's rules rather than read back from the capability sets — so this
+     * table can disagree with them, which is the whole point of it.
+     *
+     * Each cell is either "compiles" or the fragment of the rejection that
+     * names the reason. A cell is a claim about DynamoDB, and the two
+     * assertions below check that the capability declaration and the compiled
+     * behavior both match that claim.
+     */
+    const matrix: Array<{
+      operand: string;
+      condition: FilterParams;
+      /** The capability each context consults, or null when none gates it */
+      capability: keyof FilterCapabilities | null;
+      "query filters": string;
+      "key conditions": string;
+      "search filters": string;
+    }> = [
+      {
+        operand: "equality",
+        condition: { name: "Scale-A" },
+        capability: null,
+        "query filters": "compiles",
+        "key conditions": "compiles",
+        "search filters": "compiles"
+      },
+      {
+        operand: "IN array",
+        condition: { name: ["Scale-A", "Scale-B"] },
+        capability: "in",
+        "query filters": "compiles",
+        // A key condition compares one value per key; a filter is applied after
+        // the read, where a set membership test is fine
+        "key conditions": "IN conditions (array values) are not supported",
+        "search filters": "IN conditions (array values) are not supported"
+      },
+      {
+        operand: "single comparison",
+        condition: { name: { $gt: "Scale-A" } },
+        capability: "comparison",
+        "query filters": "compiles",
+        // The sort key takes a comparator, which is what makes a key range
+        // narrow the read rather than discard rows after it
+        "key conditions": "compiles",
+        "search filters": "Comparison conditions are not supported"
+      },
+      {
+        operand: "composed comparisons",
+        condition: { name: { $gt: "A", $lt: "Z" } },
+        capability: "composedComparisons",
+        "query filters": "compiles",
+        // One condition fits on the sort key, so a two-sided key range is
+        // $between
+        "key conditions": "Composed comparisons are not supported",
+        // Rejected one step earlier, by the comparison capability
+        "search filters": "Comparison conditions are not supported"
+      },
+      {
+        operand: "$between",
+        condition: { name: { $between: ["A", "Z"] } },
+        capability: "between",
+        "query filters": "compiles",
+        "key conditions": "compiles",
+        "search filters": "$between conditions are not supported"
+      },
+      {
+        operand: "$beginsWith",
+        condition: { name: { $beginsWith: "Scale" } },
+        capability: "beginsWith",
+        "query filters": "compiles",
+        "key conditions": "compiles",
+        "search filters": "$beginsWith conditions are not supported"
+      },
+      {
+        operand: "$contains",
+        condition: { name: { $contains: "cal" } },
+        capability: "contains",
+        "query filters": "compiles",
+        // contains is not among the key condition functions
+        "key conditions": "$contains conditions are not supported",
+        "search filters": "$contains conditions are not supported"
+      },
+      {
+        operand: "$or block",
+        condition: { $or: [{ name: "Scale-A" }] },
+        capability: "or",
+        "query filters": "compiles",
+        // A key condition is a single conjunction selecting what to read
+        "key conditions": "$or conditions are not supported",
+        "search filters": "$or conditions are not supported"
+      },
+      {
+        operand: "nested path",
+        condition: { "meta.label": "warehouse" },
+        capability: "nestedPaths",
+        "query filters": "compiles",
+        // A document path is not a key, and not a search schema attribute
+        "key conditions": "Nested attribute paths are not supported",
+        "search filters": "Nested attribute paths are not supported"
+      }
+    ];
+
+    const contexts = {
+      "query filters": {
+        capabilities: queryFilterCapabilities,
+        compile: (condition: FilterParams) =>
+          typedQueryBuilder().filterParams(condition)
+      },
+      "key conditions": {
+        capabilities: keyConditionCapabilities,
+        // The one assertion in the matrix. Every row is fed to all three
+        // contexts, including the contexts that must reject it, so a row's
+        // type has to be the loosest of the three — and KeyConditions is the
+        // narrowest, by design. Asserting here keeps the rows honest about
+        // what they are rather than widening keyConditions' parameter and
+        // giving up the type gate U5 added
+        compile: (condition: FilterParams) =>
+          typedQueryBuilder().keyConditions(condition as KeyConditions)
+      },
+      "search filters": {
+        capabilities: searchFilterCapabilities,
+        compile: (condition: FilterParams) =>
+          searchBuilderInstance().filterParams(condition)
+      }
+    } as const;
+
+    const contextNames = Object.keys(contexts) as Array<keyof typeof contexts>;
+
+    it.each(
+      matrix.flatMap(row =>
+        contextNames.map(context => ({
+          label: `${row.operand} in ${context}`,
+          row,
+          context
+        }))
+      )
+    )(
+      "the compiled behavior matches the matrix: $label",
+      ({ row, context }) => {
+        expect.assertions(1);
+
+        const expected = row[context];
+        const compile = (): unknown => contexts[context].compile(row.condition);
+
+        if (expected === "compiles") {
+          expect(compile).not.toThrow();
+        } else {
+          expect(compile).toThrow(expected);
+        }
+      }
+    );
+
+    it.each(
+      matrix
+        .filter(row => row.capability !== null)
+        .flatMap(row =>
+          contextNames.map(context => ({
+            label: `${row.operand} in ${context}`,
+            row,
+            context
+          }))
+        )
+    )(
+      "the capability declaration matches the matrix: $label",
+      ({ row, context }) => {
+        expect.assertions(1);
+
+        // The capability the context declares has to agree with what the
+        // matrix says DynamoDB allows. A declaration nothing enforces, or an
+        // enforcement no declaration describes, shows up as a disagreement
+        // between this assertion and the one above
+        const capability = row.capability as keyof FilterCapabilities;
+        const declared = contexts[context].capabilities[capability];
+
+        // Composed comparisons are gated twice in a context that has no
+        // comparisons at all, and the earlier gate is the one that fires
+        const gatedEarlier =
+          capability === "composedComparisons" &&
+          !contexts[context].capabilities.comparison;
+
+        expect(declared).toBe(
+          gatedEarlier ? false : row[context] === "compiles"
+        );
+      }
+    );
+
+    it("covers every operand kind the condition types offer", () => {
+      expect.assertions(1);
+
+      // A new operator added to the vocabulary has to be given a row here, or
+      // the matrix stops being a matrix
+      expect(matrix.map(row => row.operand).sort()).toEqual(
+        [
+          "$beginsWith",
+          "$between",
+          "$contains",
+          "$or block",
+          "IN array",
+          "composed comparisons",
+          "equality",
+          "nested path",
+          "single comparison"
+        ].sort()
+      );
+    });
+  });
+
+  describe("surface matrix: attribute kind by operand kind", () => {
+    /**
+     * Which operands apply to each attribute, by the form the table stores it
+     * in. Stated from DynamoDB's rules, so the stored-form maps and the gates
+     * can disagree with this table — which is what it is for.
+     *
+     * - `begins_with` applies to a String or a Binary attribute.
+     * - `contains` applies to a String (substring) or a List or Set
+     *   (membership).
+     * - The comparators and `BETWEEN` require *comparable* operands, which
+     *   DynamoDB defines as String, Number and Binary. A Boolean, a Map and a
+     *   List are not comparable.
+     *
+     * `ordered: "gap"` marks a cell where dyna-record currently compiles a
+     * condition DynamoDB cannot satisfy. Recorded rather than asserted as
+     * correct, so the gap is visible and an absent test is a decision.
+     */
+    const matrix: Array<{
+      attribute: string;
+      /** The stored form, as the attribute's kind or field type implies */
+      storedForm: string;
+      /** A whole value of the attribute, for the ordered operators */
+      sample: OrderedFilterValue;
+      $beginsWith: "compiles" | "rejected";
+      $contains: "compiles" | "rejected";
+      /**
+       * What an ordered operator does with a whole value of the attribute:
+       * compiles correctly, compiles although DynamoDB cannot order the form
+       * (`"gap"`), or is rejected by the field's own schema before any gate
+       * sees it (`"validated"`).
+       */
+      ordered: "compiles" | "gap" | "validated";
+    }> = [
+      // Stored as Strings: comparable, with both a prefix and a substring
+      {
+        attribute: "name",
+        storedForm: "string",
+        sample: "a",
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      // A date is declared a Date and stored an ISO string, which is why the
+      // fragment gate reads the stored form. The year-prefix query lives here
+      {
+        attribute: "createdAt",
+        storedForm: "string",
+        sample: new Date("2023-01-15T12:12:18.123Z"),
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      // Stored as Numbers: comparable, but with no prefix and no substring
+      {
+        attribute: "price",
+        storedForm: "number",
+        sample: 1,
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "compiles"
+      },
+      {
+        attribute: "serial",
+        storedForm: "number",
+        sample: 1n,
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "compiles"
+      },
+      // A Boolean is not comparable in DynamoDB, and has no prefix either
+      {
+        attribute: "inStock",
+        storedForm: "boolean",
+        sample: true,
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "gap"
+      },
+      // A Map is not comparable, is not a string, and is not a collection
+      // contains() tests. The top level attribute carries no schema through
+      // this resolver, so nothing rejects a scalar operand and the gap shows
+      {
+        attribute: "meta",
+        storedForm: "map",
+        sample: "x",
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "gap"
+      },
+      // The same stored form reached by a dot path, where the field's own
+      // schema does reject a scalar operand — which is why the gap is about
+      // the missing gate and not about every Map being unreachable
+      {
+        attribute: "meta.nested",
+        storedForm: "map",
+        sample: "x",
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "validated"
+      },
+      // Nested fields resolve to their own definition
+      {
+        attribute: "meta.label",
+        storedForm: "string",
+        sample: "a",
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      {
+        attribute: "meta.recordedAt",
+        storedForm: "string",
+        sample: new Date("2023-01-15T12:12:18.123Z"),
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      {
+        attribute: "meta.nested.count",
+        storedForm: "number",
+        sample: 1,
+        $beginsWith: "rejected",
+        $contains: "rejected",
+        ordered: "compiles"
+      },
+      // A List has no prefix and is not comparable; contains() is how its
+      // membership is tested
+      {
+        attribute: "meta.tags",
+        storedForm: "list",
+        sample: "a",
+        $beginsWith: "rejected",
+        $contains: "compiles",
+        ordered: "gap"
+      },
+      // Not a judgement dyna-record can make: it cannot resolve the field, so
+      // it constrains nothing — the behavior such a path has always had
+      {
+        attribute: "meta.unknown",
+        storedForm: "unresolved",
+        sample: "x",
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      {
+        attribute: "meta.history.at",
+        storedForm: "unresolved",
+        sample: "x",
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      },
+      // No binary attribute kind exists, so a binary value is reachable only
+      // where the kind was not supplied — also unresolved
+      {
+        attribute: "thumbnail",
+        storedForm: "unresolved",
+        sample: "x",
+        $beginsWith: "compiles",
+        $contains: "compiles",
+        ordered: "compiles"
+      }
+    ];
+
+    /** Compiles one condition on one attribute, under the query vocabulary */
+    const compileOn =
+      (attribute: string, condition: FilterTypes): (() => unknown) =>
+      () =>
+        queryBuilderInstance().filterParams({ [attribute]: condition });
+
+    it.each(
+      matrix.flatMap(row =>
+        (["$beginsWith", "$contains"] as const).map(operator => ({
+          label: `${operator} on ${row.attribute} (${row.storedForm})`,
+          row,
+          operator
+        }))
+      )
+    )("matches the matrix: $label", ({ row, operator }) => {
+      expect.assertions(1);
+
+      // Built explicitly rather than with a computed key, which would widen
+      // to an index signature and stop being a condition type
+      const compile = compileOn(
+        row.attribute,
+        operator === "$beginsWith" ? { $beginsWith: "x" } : { $contains: "x" }
+      );
+
+      if (row[operator] === "compiles") {
+        expect(compile).not.toThrow();
+      } else {
+        expect(compile).toThrow(
+          `${operator} does not apply to a value stored as a ${row.storedForm}`
+        );
+      }
+    });
+
+    it.each(matrix)(
+      "the ordered operators on $attribute ($storedForm) behave as recorded",
+      row => {
+        expect.assertions(2);
+
+        const comparison = compileOn(row.attribute, { $gt: row.sample });
+        const between = compileOn(row.attribute, {
+          $between: [row.sample, row.sample]
+        });
+
+        if (row.ordered === "validated") {
+          // The field's schema rejects a scalar where it declares a Map, so
+          // the operand never reaches a stored-form judgement
+          expect(comparison).toThrow("does not match the attribute's type");
+          expect(between).toThrow("does not match the attribute's type");
+        } else {
+          // Not gated on the stored form. Correct for a comparable form; for a
+          // row marked "gap" this pins the behavior rather than endorsing it
+          expect(comparison).not.toThrow();
+          expect(between).not.toThrow();
+        }
+      }
+    );
+
+    it("records which stored forms DynamoDB cannot order", () => {
+      expect.assertions(1);
+
+      // These compile and can never match: DynamoDB's comparators and BETWEEN
+      // require comparable operands, which are String, Number and Binary. The
+      // fragment operators are gated on the stored form and these are not —
+      // the same shape of gap, one operator family over
+      expect(
+        matrix.filter(row => row.ordered === "gap").map(row => row.attribute)
+      ).toEqual(["inStock", "meta", "meta.tags"]);
+    });
+
+    it("covers every stored form the maps can produce", () => {
+      expect.assertions(1);
+
+      // A new stored form has to appear here, or the matrix stops covering the
+      // space the maps describe
+      expect([...new Set(matrix.map(row => row.storedForm))].sort()).toEqual([
+        "boolean",
+        "list",
+        "map",
+        "number",
+        "string",
+        "unresolved"
+      ]);
     });
   });
 
