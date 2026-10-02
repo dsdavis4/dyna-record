@@ -2165,6 +2165,116 @@ describe("Query", () => {
           ]);
         });
 
+        it("takes a date range and converts both bounds", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // The query the feature exists for: a half-open month, written with
+          // Dates and compiled against the ISO strings the table stores
+          // @ts-expect-no-error: orderDate is declared as a Date
+          await Customer.query("123", {
+            filter: {
+              orderDate: {
+                $gte: new Date("2023-01-01T00:00:00.000Z"),
+                $lt: new Date("2023-02-01T00:00:00.000Z")
+              }
+            }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "#OrderDate >= :OrderDate1 AND #OrderDate < :OrderDate2",
+                KeyConditionExpression: "#PK = :PK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#OrderDate": "OrderDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK3": "Customer#123",
+                  ":OrderDate1": "2023-01-01T00:00:00.000Z",
+                  ":OrderDate2": "2023-02-01T00:00:00.000Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("takes a $between over an inclusive date range", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // @ts-expect-no-error: both bounds are whole values of the attribute
+          await Customer.query("123", {
+            filter: {
+              orderDate: {
+                $between: [
+                  new Date("2023-01-01T00:00:00.000Z"),
+                  new Date("2023-12-31T23:59:59.999Z")
+                ]
+              }
+            }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression:
+                  "#OrderDate BETWEEN :OrderDate1 AND :OrderDate2",
+                KeyConditionExpression: "#PK = :PK3",
+                ExpressionAttributeNames: {
+                  "#PK": "PK",
+                  "#OrderDate": "OrderDate"
+                },
+                ExpressionAttributeValues: {
+                  ":PK3": "Customer#123",
+                  ":OrderDate1": "2023-01-01T00:00:00.000Z",
+                  ":OrderDate2": "2023-12-31T23:59:59.999Z"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("rejects an inverted date range at runtime", async () => {
+          expect.assertions(1);
+
+          await expect(
+            Customer.query("123", {
+              filter: {
+                orderDate: {
+                  $between: [
+                    new Date("2023-12-31T00:00:00.000Z"),
+                    new Date("2023-01-01T00:00:00.000Z")
+                  ]
+                }
+              }
+            })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "orderDate": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+          );
+        });
+
+        it("rejects the stored string as a comparison operand", async () => {
+          expect.assertions(1);
+
+          await expect(
+            // @ts-expect-error: a comparison operand is a whole value, not the stored form
+            Customer.query("123", {
+              filter: { orderDate: { $gte: "2023-01-15" } }
+            })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "orderDate": the value does not match the attribute\'s type'
+          );
+        });
+
         it("rejects the stored string, in the type and at runtime", async () => {
           expect.assertions(1);
 
@@ -3237,6 +3347,54 @@ describe("Query", () => {
             ]
           }
         });
+      });
+
+      it("narrows a comparison operand when type is a single entity", async () => {
+        // @ts-expect-no-error: orderDate is a Date, and type narrows to Order
+        await Customer.query("123", {
+          filter: { type: "Order", orderDate: { $gte: new Date() } }
+        });
+      });
+
+      it("narrows a $between pair when type is a single entity", async () => {
+        // @ts-expect-no-error: both bounds are Dates
+        await Customer.query("123", {
+          filter: {
+            type: "Order",
+            orderDate: { $between: [new Date(), new Date()] }
+          }
+        });
+      });
+
+      it("rejects a mistyped comparison operand under a narrowed type", async () => {
+        // @ts-expect-error: narrowing does not widen the operand to the stored form
+        await Customer.query("123", {
+          filter: { type: "Order", orderDate: { $gte: "2023" } }
+        }).catch(() => {});
+      });
+
+      it("each $or element independently narrows a comparison", async () => {
+        // @ts-expect-no-error: each block's operand is typed by its own entity
+        await Customer.query("123", {
+          filter: {
+            $or: [
+              { type: "Order", orderDate: { $gte: new Date() } },
+              {
+                type: "PaymentMethod",
+                lastFour: { $between: ["0000", "4999"] }
+              }
+            ]
+          }
+        });
+      });
+
+      it("rejects a mistyped comparison operand inside an $or element", async () => {
+        // @ts-expect-error: orderDate is a Date, so a number is not an operand
+        await Customer.query("123", {
+          filter: {
+            $or: [{ type: "Order", orderDate: { $lt: 1672531200000 } }]
+          }
+        }).catch(() => {});
       });
 
       it("rejects invalid attrs in $or elements", async () => {
