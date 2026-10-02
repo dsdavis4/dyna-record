@@ -9,28 +9,34 @@ import { FilterError } from "../../src/errors.js";
 import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
 import type { Serializers } from "../../src/metadata/types.js";
 import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
+import type { AttributeKind } from "../../src/metadata/types.js";
 
 const attributes: Record<
   string,
   {
     alias: string;
     type: z.ZodType;
+    kind?: AttributeKind;
     serializers?: Serializers;
     objectSchema?: ObjectSchema;
   }
 > = {
-  pk: { alias: "PK", type: z.string() },
-  type: { alias: "Type", type: z.string() },
-  name: { alias: "Name", type: z.string() },
-  category: { alias: "Category", type: z.string() },
-  price: { alias: "Price", type: z.number() },
-  inStock: { alias: "InStock", type: z.boolean() },
-  serial: { alias: "Serial", type: z.bigint() },
+  pk: { alias: "PK", type: z.string(), kind: "string" },
+  type: { alias: "Type", type: z.string(), kind: "string" },
+  name: { alias: "Name", type: z.string(), kind: "string" },
+  category: { alias: "Category", type: z.string(), kind: "string" },
+  price: { alias: "Price", type: z.number(), kind: "number" },
+  inStock: { alias: "InStock", type: z.boolean(), kind: "boolean" },
+  // A bigint stores as a Number, so it takes the number kind
+  serial: { alias: "Serial", type: z.bigint(), kind: "number" },
+  // No kind: this library models no binary attribute kind, so a binary value
+  // is reachable only where the form could not be resolved
   thumbnail: { alias: "Thumbnail", type: z.instanceof(Uint8Array) },
-  discount: { alias: "Discount", type: z.number().nullable() },
+  discount: { alias: "Discount", type: z.number().nullable(), kind: "number" },
   meta: {
     alias: "Meta",
     type: z.object({}),
+    kind: "object",
     objectSchema: {
       label: { type: "string" },
       recordedAt: { type: "date" },
@@ -47,7 +53,12 @@ const attributes: Record<
   },
   // Declared as a Date, stored as an ISO string — the pairing the whole
   // declared-form/stored-form split exists for
-  createdAt: { alias: "CreatedAt", type: z.date(), serializers: dateSerializer }
+  createdAt: {
+    alias: "CreatedAt",
+    type: z.date(),
+    kind: "date",
+    serializers: dateSerializer
+  }
 };
 
 /**
@@ -58,8 +69,8 @@ const aliasResolver: FilterAttributeResolver = (attributeKey, filterKey) => {
   if (!(attributeKey in attributes)) {
     throw new FilterError(`Invalid filter key "${filterKey}"`);
   }
-  const { alias, serializers, objectSchema } = attributes[attributeKey];
-  return { alias, serializers, objectSchema };
+  const { alias, kind, serializers, objectSchema } = attributes[attributeKey];
+  return { alias, kind, serializers, objectSchema };
 };
 
 /**
@@ -1064,6 +1075,221 @@ describe("FilterExpressionBuilder", () => {
       ).toThrow(
         "a condition combines comparison and $between and $contains, and only comparison operators compose. Split it across separate conditions"
       );
+    });
+  });
+
+  describe("fragment operators and the stored form", () => {
+    it("keeps $beginsWith on an attribute stored as a string", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ name: { $beginsWith: "Scale" } })
+      ).toEqual({
+        expression: "begins_with(#Name, :Name1)",
+        values: { Name1: "Scale" }
+      });
+    });
+
+    it("keeps $beginsWith on a date attribute", () => {
+      expect.assertions(1);
+
+      // The case the whole distinction exists for: declared a Date, stored an
+      // ISO string, and matching by year prefix is what the operator is for.
+      // A rule written against the declared type would have taken this away
+      expect(
+        typedQueryBuilder().filterParams({ createdAt: { $beginsWith: "2023" } })
+      ).toEqual({
+        expression: "begins_with(#CreatedAt, :CreatedAt1)",
+        values: { CreatedAt1: "2023" }
+      });
+    });
+
+    it("rejects $beginsWith on an attribute stored as a number", () => {
+      expect.assertions(2);
+
+      // The builder's own FilterParams is not typed per attribute — that lives
+      // at the query surface — so the runtime gate is what rejects this here,
+      // and is also what answers for an untyped caller there
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $beginsWith: "1" } })
+      ).toThrow(FilterError);
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $beginsWith: "1" } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": $beginsWith does not apply to a value stored as a number. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("rejects $beginsWith on an attribute stored as a boolean", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ inStock: { $beginsWith: "t" } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "inStock": $beginsWith does not apply to a value stored as a boolean. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("rejects $beginsWith on an attribute stored as a map", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ meta: { $beginsWith: "x" } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta": $beginsWith does not apply to a value stored as a map. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("keeps $contains on an attribute stored as a string", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({ name: { $contains: "cale" } })
+      ).toEqual({
+        expression: "contains(#Name, :Name1)",
+        values: { Name1: "cale" }
+      });
+    });
+
+    it("rejects $contains on an attribute stored as a number", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $contains: 1 } })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "price": $contains does not apply to a value stored as a number. contains tests a substring of a String or membership of a List or Set'
+        )
+      );
+    });
+
+    it("keeps $contains on a nested array field, for List membership", () => {
+      expect.assertions(1);
+
+      // An array field resolves now, so its stored form is known to be a List
+      // — which is what keeps membership available while taking the prefix
+      // operator away
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.tags": { $contains: "home" }
+        })
+      ).toEqual({
+        expression: "contains(#Meta.#tags, :Metatags1)",
+        values: { Metatags1: "home" }
+      });
+    });
+
+    it("rejects $beginsWith on a nested array field", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.tags": { $beginsWith: "ho" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.tags": $beginsWith does not apply to a value stored as a list. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("keeps $beginsWith on a nested string field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.label": { $beginsWith: "wa" }
+        })
+      ).toEqual({
+        expression: "begins_with(#Meta.#label, :Metalabel1)",
+        values: { Metalabel1: "wa" }
+      });
+    });
+
+    it("keeps $beginsWith on a nested date field", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.recordedAt": { $beginsWith: "2023" }
+        })
+      ).toEqual({
+        expression: "begins_with(#Meta.#recordedAt, :MetarecordedAt1)",
+        values: { MetarecordedAt1: "2023" }
+      });
+    });
+
+    it("rejects $beginsWith on a nested number field", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.nested.count": { $beginsWith: "1" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.nested.count": $beginsWith does not apply to a value stored as a number. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("rejects $beginsWith on a nested object field", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.nested": { $beginsWith: "x" }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "meta.nested": $beginsWith does not apply to a value stored as a map. begins_with tests a prefix, which DynamoDB applies to String attributes'
+        )
+      );
+    });
+
+    it("leaves a path naming no field unconstrained", () => {
+      expect.assertions(2);
+
+      // dyna-record cannot resolve the field, so it cannot judge the operator
+      // — the same reason such a value is left unvalidated
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.unknown": { $beginsWith: "x" }
+        })
+      ).toEqual({
+        expression: "begins_with(#Meta.#unknown, :Metaunknown1)",
+        values: { Metaunknown1: "x" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $beginsWith: "2023" }
+        })
+      ).toEqual({
+        expression: "begins_with(#Meta.#history.#at, :Metahistoryat1)",
+        values: { Metahistoryat1: "2023" }
+      });
+    });
+
+    it("leaves an attribute whose kind the resolver omits unconstrained", () => {
+      expect.assertions(1);
+
+      // A context that supplies no kind gets today's behavior, so adding the
+      // gate cannot break a resolver that does not know about it
+      expect(
+        queryBuilderInstance().filterParams({
+          thumbnail: { $beginsWith: "x" }
+        })
+      ).toEqual({
+        expression: "begins_with(#Thumbnail, :Thumbnail1)",
+        values: { Thumbnail1: "x" }
+      });
     });
   });
 

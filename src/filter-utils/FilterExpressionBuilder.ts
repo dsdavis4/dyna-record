@@ -8,6 +8,14 @@ import {
   resolveFieldDef,
   toStoredFieldValue
 } from "./resolveFieldDef.js";
+import {
+  fragmentOperatorApplies,
+  fragmentOperatorDomain,
+  storedFormOfAttribute,
+  storedFormOfField,
+  type FragmentOperator,
+  type StoredForm
+} from "./storedForm.js";
 import type {
   AndFilter,
   BetweenFilter,
@@ -33,6 +41,7 @@ import type {
  * @property placeholderKey - A flat key for use in value placeholders (e.g., `Addresscity`)
  * @property valueSchema - Optional zod validator to run on condition values for the attribute
  * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
+ * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
  */
 interface ResolvedPath {
   expressionPath: string;
@@ -40,6 +49,7 @@ interface ResolvedPath {
   placeholderKey: string;
   valueSchema?: ZodType;
   toStored?: TableSerializer;
+  storedForm?: StoredForm;
 }
 
 /**
@@ -376,6 +386,7 @@ class FilterExpressionBuilder {
         );
       }
       this.assertOperandDefined(value.$beginsWith, attr, "$beginsWith");
+      this.assertFragmentOperatorApplies(resolved, attr, "$beginsWith");
       const reference = this.bindFragment(resolved, value.$beginsWith, values);
       condition = `begins_with(${resolved.expressionPath}, ${reference})`;
     } else if (this.isContainsFilter(value)) {
@@ -385,6 +396,7 @@ class FilterExpressionBuilder {
         );
       }
       this.assertOperandDefined(value.$contains, attr, "$contains");
+      this.assertFragmentOperatorApplies(resolved, attr, "$contains");
       const reference = this.bindFragment(resolved, value.$contains, values);
       condition = `contains(${resolved.expressionPath}, ${reference})`;
     } else {
@@ -583,6 +595,35 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Rejects a fragment operator on an attribute whose stored form cannot carry
+   * it.
+   *
+   * `begins_with` and `contains` are DynamoDB functions over the stored value,
+   * so what they apply to is decided by the form the table holds — not by the
+   * form the entity declares. A date attribute keeps both, stored as an ISO
+   * string; a number attribute has neither a prefix nor a substring, and
+   * DynamoDB answers such a condition with no rows and no error.
+   *
+   * The type rejects these too. This answers for the plain JavaScript caller,
+   * and for a dot path whose field the type could resolve more precisely than
+   * the condition's declared type suggests
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for the error message
+   * @param operator - The fragment operator being applied
+   */
+  private assertFragmentOperatorApplies(
+    resolved: ResolvedPath,
+    attr: string,
+    operator: FragmentOperator
+  ): void {
+    if (fragmentOperatorApplies(operator, resolved.storedForm)) return;
+
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": ${operator} does not apply to a value stored as a ${String(resolved.storedForm)}. ${fragmentOperatorDomain[operator]}`
+    );
+  }
+
+  /**
    * Rejects `null` as an operand of an ordered comparison.
    *
    * dyna-record removes a nulled attribute rather than storing DynamoDB's NULL,
@@ -698,7 +739,8 @@ class FilterExpressionBuilder {
       alias: tableKey,
       type: valueSchema,
       serializers,
-      objectSchema
+      objectSchema,
+      kind
     } = this.#resolveAttribute(topLevelKey, key);
 
     const names: StringObj = { [`#${tableKey}`]: tableKey };
@@ -709,7 +751,8 @@ class FilterExpressionBuilder {
         names,
         placeholderKey: tableKey,
         valueSchema,
-        toStored: serializers?.toTableAttribute
+        toStored: serializers?.toTableAttribute,
+        storedForm: storedFormOfAttribute(kind)
       };
     }
 
@@ -731,11 +774,18 @@ class FilterExpressionBuilder {
       names,
       placeholderKey,
       ...(fieldDef !== undefined && {
-        valueSchema: fieldDefToZod(fieldDef),
-        // Only when the field converts: toStored doubles as the signal that a
-        // rejected value's remedy should point at the declared form
-        ...(fieldConverts(fieldDef) && {
-          toStored: value => toStoredFieldValue(fieldDef, value)
+        storedForm: storedFormOfField(fieldDef),
+        // An array field's schema describes the list while a condition on it
+        // carries an element — an IN element, or a $contains operand — so
+        // validating against it would reject every one. Its stored form is
+        // still known, and is what decides which operators apply to it
+        ...(fieldDef.type !== "array" && {
+          valueSchema: fieldDefToZod(fieldDef),
+          // Only when the field converts: toStored doubles as the signal that a
+          // rejected value's remedy should point at the declared form
+          ...(fieldConverts(fieldDef) && {
+            toStored: value => toStoredFieldValue(fieldDef, value)
+          })
         })
       })
     };

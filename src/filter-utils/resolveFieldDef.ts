@@ -5,14 +5,18 @@ import type { DynamoNativeValue, Optional } from "../types.js";
 /**
  * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
  *
- * Returns `undefined` when the path cannot be resolved to a field whose schema
- * describes a condition value — the attribute is not an object, a segment names
- * no field, the path descends through an array or a discriminated union (whose
- * element and variant schemas a single path cannot identify), or it ends at an
- * array, whose schema describes the list rather than the element a condition
- * carries. A caller that gets `undefined` leaves the value unvalidated and
- * unconverted, which is how dot paths behaved everywhere before per-field
+ * Returns `undefined` when the path names no field at all — the attribute is
+ * not an object, a segment names nothing, or the path descends through an array
+ * or a discriminated union, whose element and variant schemas a single path
+ * cannot identify. A caller that gets `undefined` leaves the value unvalidated
+ * and unconverted, which is how dot paths behaved everywhere before per-field
  * resolution existed.
+ *
+ * A path ending *at* an array resolves: the field exists and its stored form is
+ * a List, which is what decides whether a fragment operator applies to it. What
+ * its schema cannot do is validate a condition value, because the schema
+ * describes the list while a condition carries an element — that judgement
+ * belongs to the caller, which has the condition in hand.
  * @param schema - The object schema of the attribute the path starts at
  * @param segments - The path segments below that attribute
  * @returns The field definition the path names, or undefined
@@ -35,10 +39,7 @@ export const resolveFieldDef = (
     fields = fieldDef.type === "object" ? fieldDef.fields : undefined;
   }
 
-  // An array field's schema describes the list, while a condition on it carries
-  // an element — an IN list of them, or a $contains operand — so validating a
-  // condition value against it would reject every one
-  return fieldDef?.type === "array" ? undefined : fieldDef;
+  return fieldDef;
 };
 
 /**

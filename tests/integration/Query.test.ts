@@ -2989,6 +2989,103 @@ describe("Query", () => {
           });
         });
 
+        describe("fragment operators and the stored form", () => {
+          it("keeps $beginsWith where the attribute is stored as a string", async () => {
+            // @ts-expect-no-error: a string, an enum and a foreign key all store as Strings
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  stringAttribute: { $beginsWith: "A" },
+                  enumAttribute: { $beginsWith: "val" },
+                  foreignKeyAttribute: { $beginsWith: "cust" }
+                }
+              })
+            );
+          });
+
+          it("keeps $beginsWith on a date attribute", async () => {
+            // Declared a Date, stored an ISO string. This is the year-prefix
+            // query the README documents, and the reason the gate reads the
+            // stored form rather than the declared one
+            // @ts-expect-no-error: a date stores as a String
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { dateAttribute: { $beginsWith: "2023" } }
+              })
+            );
+          });
+
+          it("rejects $beginsWith where the attribute is stored as a number", async () => {
+            await swallow(
+              // @ts-expect-error: a number has no prefix for begins_with to test
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $beginsWith: "1" } }
+              })
+            );
+          });
+
+          it("rejects $beginsWith where the attribute is stored as a boolean", async () => {
+            await swallow(
+              // @ts-expect-error: a boolean has no prefix for begins_with to test
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: { $beginsWith: "t" } }
+              })
+            );
+          });
+
+          it("rejects $contains where the attribute is stored as a number", async () => {
+            await swallow(
+              // @ts-expect-error: a number has no substring for contains to test
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { numberAttribute: { $contains: 1 } }
+              })
+            );
+          });
+
+          it("keeps $contains on a string attribute and a nested array field", async () => {
+            // @ts-expect-no-error: a substring of a String, and membership of a List
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  stringAttribute: { $contains: "x" },
+                  "objectAttribute.tags": { $contains: "home" }
+                }
+              })
+            );
+          });
+
+          it("rejects $beginsWith on a nested number field", async () => {
+            await swallow(
+              // @ts-expect-error: lat is declared as a number, so it stores as one
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo.lat": { $beginsWith: "1" } }
+              })
+            );
+          });
+
+          it("keeps $beginsWith on a nested string and a nested date field", async () => {
+            // @ts-expect-no-error: both store as Strings
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "addressAttribute.city": { $beginsWith: "Spring" },
+                  "objectAttribute.createdDate": { $beginsWith: "2023" }
+                }
+              })
+            );
+          });
+
+          it("rejects $beginsWith on a nullable number attribute too", async () => {
+            // Nullability does not change the stored form
+            await swallow(
+              // @ts-expect-error: a nullable number still stores as a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableNumberAttribute: { $beginsWith: "1" } }
+              })
+            );
+          });
+        });
+
         describe("nested fields", () => {
           it("types a nested date field's operand as a Date", async () => {
             await swallow(

@@ -1,5 +1,5 @@
 import { type ZodType } from "zod";
-import type { Serializers } from "../metadata/types.js";
+import type { AttributeKind, Serializers } from "../metadata/types.js";
 import type { ObjectSchema } from "../decorators/attributes/types.js";
 import type DynaRecord from "../DynaRecord.js";
 import type { EntityAttributesOnly } from "../operations/types.js";
@@ -127,6 +127,52 @@ export type ComparisonFilter<V> = AtLeastOne<{
 export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
 
 /**
+ * `$beginsWith`, offered only where the table stores the attribute in a form
+ * `begins_with` applies to.
+ *
+ * DynamoDB's `begins_with` takes a String or a Binary attribute. The **stored**
+ * form decides, not the declared one, which is why a date attribute keeps it:
+ * declared `Date`, stored as an ISO string, and matching a date by year prefix
+ * is what the operator is for there. A number, a boolean, a Map or a List has
+ * no prefix, so `begins_with` on one matches nothing and DynamoDB reports no
+ * error — the condition is better removed from the type than compiled.
+ *
+ * Each branch tests `V` directly so the conditional distributes. That matters
+ * for a value whose type is a union: an unresolved dot path takes the whole
+ * scalar union, which includes `string`, and stays unconstrained — the
+ * behavior such a path has always had. Testing a mapped form of `V` instead
+ * would compare the union as a whole and drop the operator from every one.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type BeginsWithConditionFor<V> = V extends Date
+  ? BeginsWithFilter
+  : V extends string | Uint8Array
+    ? BeginsWithFilter
+    : never;
+
+/**
+ * `$contains`, offered only where the table stores the attribute in a form
+ * `contains` applies to.
+ *
+ * DynamoDB's `contains` tests a substring of a String, or membership of a List
+ * or a Set. A String-stored attribute — including a date, an enum and a foreign
+ * key — takes the substring reading; an array-typed field takes the membership
+ * one. A number, a boolean and a Map take neither.
+ *
+ * Distributes for the same reason {@link BeginsWithConditionFor} does.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type ContainsConditionFor<V> = V extends Date
+  ? ContainsFilter
+  : V extends string
+    ? ContainsFilter
+    : V extends readonly unknown[]
+      ? ContainsFilter
+      : never;
+
+/**
  * The conditions a filter key accepts for a value of type `V`: the value
  * itself, a list of them for an `IN` condition, or an operator object.
  *
@@ -147,14 +193,16 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * - A **fragment** of the stored form — {@link BeginsWithFilter}'s prefix, and
  *   {@link ContainsFilter}'s substring. There is no "Date that starts with
  *   2026", so these stay strings and scalars whatever the attribute declares,
- *   and are neither validated nor converted.
+ *   and are neither validated nor converted. Being a piece of the stored form
+ *   also decides *whether* the operator is offered: see
+ *   {@link BeginsWithConditionFor} and {@link ContainsConditionFor}.
  *
  * An operator added here declares which kind it takes and gets both behaviors
  * from that, rather than each compilation branch deciding for itself.
  */
 export type FilterConditionFor<V> =
-  | BeginsWithFilter
-  | ContainsFilter
+  | BeginsWithConditionFor<V>
+  | ContainsConditionFor<V>
   | ComparisonFilter<Exclude<V, null>>
   | BetweenFilter<Exclude<V, null>>
   | V
@@ -256,6 +304,13 @@ export interface FilterCapabilities {
 export interface FilterAttribute {
   alias: string;
   type?: ZodType;
+  /**
+   * The attribute's kind, which decides the form the table stores it in and so
+   * which fragment operators apply to it. Optional because a context whose
+   * capability set rejects those operators outright — vector search — has no
+   * use for it.
+   */
+  kind?: AttributeKind;
   /**
    * The attribute's serializers, when its stored form differs from its declared
    * one. See `FilterExpressionBuilder.toStoredValue` for where they are applied
