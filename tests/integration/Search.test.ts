@@ -447,9 +447,16 @@ describe("Search", () => {
 
     expect(mockEmbeddingProviderCalls).toEqual([]);
     expect(mockSend.mock.calls).toEqual([[{ name: "SearchVectorsCommand" }]]);
-    expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ SearchVector: vector })
-    );
+    expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "search-table",
+          IndexName: "global-search-index",
+          SearchVector: vector,
+          TopK: 10
+        }
+      ]
+    ]);
   });
 
   it("rejects a precomputed vector with the wrong dimensions before any AWS call", async () => {
@@ -494,18 +501,6 @@ describe("Search", () => {
       expect(e.cause).toEqual(providerError);
     }
     expect(mockSend).not.toHaveBeenCalled();
-  });
-
-  it("defaults topK to 10 and passes an explicit topK through", async () => {
-    expect.assertions(1);
-
-    mockSearchVectors.mockResolvedValueOnce({ SearchResults: [] });
-
-    await globalSearchIndex.search("articles", { topK: 100 });
-
-    expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ TopK: 100 })
-    );
   });
 
   it.each([0, -1, 101, 1.5, NaN, Infinity, -Infinity])(
@@ -1117,12 +1112,28 @@ describe("Search", () => {
 
       await Listing.update("456", { category: "Ceramics" });
 
-      expect(mockedQueryCommand).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ProjectionExpression: expectedProjectionExpression,
-          ConsistentRead: true
-        })
-      );
+      // The whole command, not just the projection: the prefetch also scopes
+      // itself to the entity type with a filter, which is why its placeholder
+      // numbering starts at :Type1 and the key lands on :PK2. It also sends an
+      // explicit `ExclusiveStartKey: undefined`, which the plain query path
+      // does not — asserting the shape is how that stays visible
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "search-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression: "#Type IN (:Type1)",
+            ExpressionAttributeNames: { ...expectedProjectionNames },
+            ExpressionAttributeValues: {
+              ":PK2": "Listing#456",
+              ":Type1": "Listing"
+            },
+            ProjectionExpression: expectedProjectionExpression,
+            ExclusiveStartKey: undefined,
+            ConsistentRead: true
+          }
+        ]
+      ]);
     });
   });
 });
