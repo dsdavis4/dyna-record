@@ -981,6 +981,22 @@ describe("FilterExpressionBuilder", () => {
       });
     });
 
+    it("rejects a null $contains operand on a List", () => {
+      expect.assertions(1);
+
+      // On a String the operand is a substring, so the string check already
+      // catches null there. A List element may be any type the list holds, so
+      // the only shape ruled out is the absent one — and a null element is a
+      // condition DynamoDB accepts and matches nothing for
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.tags": { $contains: null }
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.tags": $contains takes a single value to look for, and null is not one'
+      );
+    });
+
     it("takes an object $contains operand on a List of objects", () => {
       expect.assertions(2);
 
