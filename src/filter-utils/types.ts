@@ -233,8 +233,9 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * excludes `null` and `boolean` without an explicit `Exclude` — neither extends
  * the comparable set, so both fall to the final branch.
  *
- * The set is spelled out here rather than reusing {@link OrderedFilterValue},
- * which names the same values. In the true branch TypeScript narrows the type
+ * The set is spelled out here rather than reusing `OrderedFilterValue`, which
+ * names the same values. (A code reference rather than a link: that type is
+ * internal, so it has no page on the docs site to point at.) In the true branch TypeScript narrows the type
  * parameter to `V & CheckedType`, so checking against the whole union gives
  * `ComparisonFilter<OrderedFilterValue & V>` — an intersection it cannot reduce
  * when `V` is still generic, as it is in `QueryKeyConditionValue`. Checking
