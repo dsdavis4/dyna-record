@@ -4568,20 +4568,18 @@ describe("Query", () => {
         // unknown-key, unknown-path and wrong-type error on this entity would
         // go quiet at once, with nothing failing to say so. Literal indexes are
         // what keep it closed, so these three are the alarm
-        await expect(async () => {
-          // @ts-expect-error: no such attribute
-          await MyClassWithAllAttributeTypes.query("123", {
-            filter: { nope: 1 }
-          });
-          // @ts-expect-error: no such field below objectAttribute
-          await MyClassWithAllAttributeTypes.query("123", {
-            filter: { "objectAttribute.nope": 1 }
-          });
-          // @ts-expect-error: stringType is a string
-          await MyClassWithAllAttributeTypes.query("123", {
-            filter: { stringType: 1 }
-          });
-        }).toBeDefined();
+        // @ts-expect-error: no such attribute
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { nope: 1 }
+        }).catch(() => {});
+        // @ts-expect-error: no such field below objectAttribute
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.nope": 1 }
+        }).catch(() => {});
+        // @ts-expect-error: stringType is a string
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { stringType: 1 }
+        }).catch(() => {});
       });
 
       it("rejects an index on a field that holds no List", async () => {
