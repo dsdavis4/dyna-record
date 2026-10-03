@@ -193,9 +193,9 @@ export type SingleComparisonFilter<V> = ExactlyOne<ComparisonOperands<V>>;
  * A condition matching values within an inclusive range, compiling to
  * DynamoDB's `BETWEEN`.
  *
- * The pair is ordered: the first bound is the lower one. DynamoDB accepts an
- * inverted pair and silently matches nothing, so the expression builder rejects
- * it instead.
+ * The pair is ordered: the first bound is the lower one. DynamoDB rejects an
+ * inverted pair itself; the expression builder rejects it earlier and names the
+ * attribute, which the service's message does not.
  *
  * Both bounds are operands of the same kind as an equality value — whole values
  * of the attribute, and never `null` — so both are validated and converted. A
@@ -221,9 +221,11 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * attribute's stored form.
  *
  * `<`, `<=`, `>`, `>=` take comparable operands — String, Number and Binary. A
- * boolean, a Map and a List have no ordering, so a comparison on one holds for
- * no row and DynamoDB reports nothing about it. A date keeps its comparisons
- * through its stored form, as an ISO string that orders chronologically.
+ * boolean, a Map and a List have no ordering, and DynamoDB rejects a comparison
+ * on one as an incorrect operand type. Absent from the type is better than
+ * either error: the mistake is caught before anything runs. A date keeps its
+ * comparisons through its stored form, as an ISO string that orders
+ * chronologically.
  *
  * Each branch tests `V` directly so the conditional distributes, for the same
  * reason {@link BeginsWithConditionFor} does: an unresolved dot path takes the
@@ -313,6 +315,12 @@ export type BeginsWithConditionFor<V> = V extends Date
  * key — takes the substring reading; an array-typed field takes the membership
  * one. A number, a boolean and a Map take neither.
  *
+ * The two readings take different operands, which is why an array field gets
+ * its own branch: a substring is a string, while an element is whatever the
+ * list holds — including a Map, for a list of objects. Typing it as the element
+ * is what lets the member test keep the field's own type instead of widening
+ * to any scalar.
+ *
  * Distributes for the same reason {@link BeginsWithConditionFor} does.
  *
  * @typeParam V - The attribute's declared type.
@@ -321,8 +329,8 @@ export type ContainsConditionFor<V> = V extends Date
   ? ContainsFilter
   : V extends string
     ? ContainsFilter
-    : V extends readonly unknown[]
-      ? ContainsFilter
+    : V extends readonly (infer Element)[]
+      ? Record<"$contains", Element>
       : never;
 
 /**
@@ -358,8 +366,24 @@ export type FilterConditionFor<V> =
   | ContainsConditionFor<V>
   | ComparisonConditionFor<V>
   | BetweenConditionFor<V>
-  | V
+  | EqualityConditionFor<V>
   | V[];
+
+/**
+ * The equality condition, which an array-typed field does not offer.
+ *
+ * `IN` owns the array syntax, so for a List-stored field a bare array is read
+ * as a list of values to compare against rather than as the list itself — the
+ * two are indistinguishable, and the builder resolves the ambiguity in `IN`'s
+ * favour. Offering `V` there would advertise a whole-list equality the
+ * compilation cannot express. The `IN` form for such a field is `V[]`, a list
+ * of lists.
+ *
+ * Distributes for the same reason the operator gates do.
+ *
+ * @typeParam V - The attribute's declared type.
+ */
+export type EqualityConditionFor<V> = V extends readonly unknown[] ? never : V;
 
 /**
  * Every condition a filter key accepts, over the values a caller may write.

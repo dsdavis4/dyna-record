@@ -882,7 +882,7 @@ describe("Search", () => {
       } catch (e: any) {
         expect(e).toBeInstanceOf(FilterError);
         expect(e.message).toEqual(
-          'Invalid filter value for attribute "category": the value does not match the attribute\'s type'
+          'Invalid filter value for attribute "category": a condition cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no item holds one to match'
         );
       }
       expect(mockSend).not.toHaveBeenCalled();

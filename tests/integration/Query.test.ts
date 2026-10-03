@@ -2293,6 +2293,123 @@ describe("Query", () => {
         });
       });
 
+      describe("filters that compile to nothing", () => {
+        it("omits FilterExpression when every condition was dropped", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // The documented way to forward an optional input. The condition was
+          // already dropped from the expression and its name already omitted,
+          // but the empty expression was still attached — which DynamoDB
+          // rejects with a ValidationException naming nothing useful
+          const name: string | undefined = undefined;
+          await Customer.query("123", { filter: { name } });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK1",
+                ExpressionAttributeNames: { "#PK": "PK" },
+                ExpressionAttributeValues: { ":PK1": "Customer#123" },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("omits FilterExpression for an $or whose blocks all dropped", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          await Customer.query("123", {
+            filter: { $or: [{ name: undefined }] }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                KeyConditionExpression: "#PK = :PK1",
+                ExpressionAttributeNames: { "#PK": "PK" },
+                ExpressionAttributeValues: { ":PK1": "Customer#123" },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+
+        it("drops only the emptied block of an $or, with no stray OR", async () => {
+          expect.assertions(1);
+
+          mockQuery.mockResolvedValueOnce({ Items: [] });
+
+          // Previously compiled to " OR #Name = :Name1" — a leading operator
+          // with nothing on its left
+          await Customer.query("123", {
+            filter: { $or: [{ name: undefined }, { name: "Jane" }] }
+          });
+
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            [
+              {
+                TableName: "mock-table",
+                FilterExpression: "#Name = :Name1",
+                KeyConditionExpression: "#PK = :PK2",
+                ExpressionAttributeNames: { "#PK": "PK", "#Name": "Name" },
+                ExpressionAttributeValues: {
+                  ":Name1": "Jane",
+                  ":PK2": "Customer#123"
+                },
+                ConsistentRead: false
+              }
+            ]
+          ]);
+        });
+      });
+
+      describe("dot paths in a multi-entity partition", () => {
+        it("resolves a nested field declared by one entity of the partition", async () => {
+          // Warehouse's partition is Warehouse | Shipment, and location is
+          // declared by Warehouse alone. EntityAttributesOnly is built on Omit,
+          // which does not distribute, so a derivation over the whole union
+          // sees only the keys every entity shares — the path resolved to
+          // nothing and fell back to the stored form, while the builder
+          // resolved the field exactly and validated in the declared form
+          // @ts-expect-no-error: zip is declared as a number
+          await Warehouse.query("123", {
+            filter: { "location.zip": 1 }
+          }).catch(() => {});
+        });
+
+        it("rejects a value the nested field cannot hold", async () => {
+          // The divergence this closes: the type accepted any stored scalar
+          // while the runtime validated against the field's own schema
+          await expect(
+            // @ts-expect-error: zip is a number, not a string
+            Warehouse.query("123", { filter: { "location.zip": "1" } })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "location.zip": the value does not match the attribute\'s type'
+          );
+        });
+
+        it("offers the operators the nested field's stored form carries", async () => {
+          // Unreachable before the fix: the stored-form fallback offered no
+          // per-field typing, so a comparison could not be written at all
+          // @ts-expect-no-error: a number field carries the comparators
+          await Warehouse.query("123", {
+            filter: { "location.zip": { $gte: 1, $lt: 100 } }
+          }).catch(() => {});
+
+          // @ts-expect-error: and not $beginsWith, which a number has no form for
+          await Warehouse.query("123", {
+            filter: { "location.zip": { $beginsWith: "1" } }
+          }).catch(() => {});
+        });
+      });
+
       describe("attributes declared by one entity of the partition", () => {
         it("takes the declared value without narrowing by type", async () => {
           expect.assertions(1);
@@ -2422,7 +2539,7 @@ describe("Query", () => {
               }
             })
           ).rejects.toThrow(
-            'Invalid filter value for attribute "orderDate": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+            'Invalid filter value for attribute "orderDate": the $between bounds are inverted. The lower bound comes first'
           );
         });
 
@@ -2452,43 +2569,22 @@ describe("Query", () => {
       });
 
       describe("nested array fields", () => {
-        it("takes an IN condition of elements", async () => {
+        it("points an IN of elements at $contains instead", async () => {
           expect.assertions(1);
 
-          mockQuery.mockResolvedValueOnce({ Items: [] });
-
-          // An array field's schema describes the list, while the condition
-          // carries an element, so the field is left unvalidated
-          // @ts-expect-no-error: tags is an array of strings
-          await MyClassWithAllAttributeTypes.query("123", {
-            filter: { "objectAttribute.tags": ["a", "b"] }
-          });
-
-          expect(mockedQueryCommand.mock.calls).toEqual([
-            [
-              {
-                TableName: "mock-table",
-                FilterExpression:
-                  "#objectAttribute.#tags IN (:objectAttributetags1,:objectAttributetags2)",
-                KeyConditionExpression: "#PK = :PK3",
-                ExpressionAttributeNames: {
-                  "#PK": "PK",
-                  "#objectAttribute": "objectAttribute",
-                  "#tags": "tags"
-                },
-                ExpressionAttributeValues: {
-                  ":PK3": "MyClassWithAllAttributeTypes#123",
-                  ":objectAttributetags1": "a",
-                  ":objectAttributetags2": "b"
-                },
-                ConsistentRead: false
-              }
-            ]
-          ]);
+          // This compiled to `#tags IN (:a,:b)` — which asks whether the whole
+          // List equals "a" or equals "b", and a List never equals a scalar.
+          // The membership reading the caller meant is $contains
+          await expect(
+            // @ts-expect-error IN owns the array syntax, so an element is a list here
+            MyClassWithAllAttributeTypes.query("123", {
+              filter: { "objectAttribute.tags": ["a", "b"] }
+            })
+          ).rejects.toThrow(
+            'Invalid filter value for attribute "objectAttribute.tags": the operand is not a value this attribute can hold, which is stored as a list. A comparison asks whether the whole list equals the operand, so a single value never matches — $contains is the membership test'
+          );
         });
-      });
 
-      describe("nested date fields", () => {
         it("takes a Date at a dot path, like a top level date attribute", async () => {
           expect.assertions(1);
 

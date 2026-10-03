@@ -305,13 +305,33 @@ type TypeAtDotPath<
  * to {@link StoredFilterTypes}, matching the expression builder, which leaves
  * such a value unvalidated and unconverted.
  *
+ * Distributed over `Entities`, which is what makes the first case reachable at
+ * all: `EntityAttributesOnly` is built on `Omit`, which does not distribute, so
+ * `keyof` over the whole union yields only the keys every partition entity
+ * shares — and a path into an attribute declared by one entity resolved to
+ * `never` and fell back to the stored form, while the builder resolved the
+ * field exactly and validated in the declared form. The two surfaces then
+ * accepted disjoint values.
+ *
+ * Distribution alone is not enough, which is why the head segment is tested
+ * separately. An entity that does not declare the attribute must contribute
+ * `never` rather than {@link StoredFilterTypes}: both have no type at the path,
+ * and only the head test separates "this entity has no such attribute" from
+ * "the path exists here but names no single field".
+ *
  * @typeParam Entities - The union of entities whose attributes are in scope.
  * @typeParam K - The dot-path key.
  */
 type QueryDotPathValueFor<Entities extends DynaRecord, K> = K extends string
-  ? [TypeAtDotPath<EntityAttributesOnly<Entities>, K>] extends [never]
-    ? StoredFilterTypes
-    : QueryFilterValue<TypeAtDotPath<EntityAttributesOnly<Entities>, K>>
+  ? Entities extends DynaRecord
+    ? K extends `${infer Head}.${string}`
+      ? Head extends keyof EntityAttributesOnly<Entities>
+        ? [TypeAtDotPath<EntityAttributesOnly<Entities>, K>] extends [never]
+          ? StoredFilterTypes
+          : QueryFilterValue<TypeAtDotPath<EntityAttributesOnly<Entities>, K>>
+        : never
+      : StoredFilterTypes
+    : never
   : StoredFilterTypes;
 
 /**

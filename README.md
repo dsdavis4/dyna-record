@@ -929,7 +929,9 @@ const result = await Store.query("123", {
 });
 ```
 
-Several comparison operators on one attribute compose with **AND**, which is how a half-open range is written — the `$gte`/`$lt` pair above. `$between` is inclusive on both bounds and its pair is ordered: the lower bound comes first. DynamoDB accepts an inverted pair, matches nothing, and reports no error, so dyna-record rejects it with a `FilterError` instead.
+Several comparison operators on one attribute compose with **AND**, which is how a half-open range is written — the `$gte`/`$lt` pair above. `$between` is inclusive on both bounds and its pair is ordered: the lower bound comes first. dyna-record rejects an inverted pair with a `FilterError` naming the attribute, before the request is sent.
+
+A range that cannot match is rejected either way, but the two spellings fail differently. DynamoDB validates `BETWEEN`'s bounds and rejects an inverted pair itself. It does **not** validate a composed range: `{ $gte: 100, $lt: 1 }` is applied as written and returns no rows with no error, which is indistinguishable from a query that legitimately matched nothing. dyna-record rejects both.
 
 ##### Whole values and fragments
 
@@ -990,7 +992,7 @@ When using `@ObjectAttribute`, you can filter on nested Map fields using **dot-p
 
 ##### Dot-path filtering on nested fields
 
-Use dot notation to filter on fields within an `@ObjectAttribute`. The filter operators work with dot-paths as they do with top level attributes — equality, `IN`, the comparators, `$between`, `$beginsWith` and `$contains` — each offered where the field's stored form can carry it.
+Use dot notation to filter on fields within an `@ObjectAttribute`. The filter operators work with dot-paths as they do with top level attributes — equality, `IN`, the comparators, `$between`, `$beginsWith` and `$contains` — each offered where the field's stored form can carry it. On an **array** field, use `$contains` to test membership: `IN` compares the whole list against each of its elements, so a list of scalars there matches nothing.
 
 ```typescript
 // Equality on a nested field

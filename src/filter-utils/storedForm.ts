@@ -137,7 +137,11 @@ export const isObjectValuedScalar = (value: object): boolean =>
  */
 export const isDynamoOrderable = (value: unknown): boolean =>
   typeof value === "string" ||
-  typeof value === "number" ||
+  // Finite, because DynamoDB has no Number for NaN or Infinity to be stored
+  // as — so a comparison against one orders against a value no row can hold.
+  // A typed attribute never reaches this, since zod's number() rejects both;
+  // a dot path naming no field has no schema and does
+  (typeof value === "number" && Number.isFinite(value)) ||
   typeof value === "bigint" ||
   value instanceof Uint8Array;
 

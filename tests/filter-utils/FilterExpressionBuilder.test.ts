@@ -46,6 +46,10 @@ const attributes: Record<
     type: z.object({}),
     kind: "object",
     objectSchema: {
+      // An ObjectSchema key is an unrestricted string, so a field name may
+      // contain characters an expression token cannot
+      "odd name": { type: "string" },
+      "odd-name": { type: "string" },
       label: { type: "string" },
       recordedAt: { type: "date" },
       tags: { type: "array", items: { type: "string" } },
@@ -534,6 +538,50 @@ describe("FilterExpressionBuilder", () => {
       });
     });
 
+    it("rejects composed comparisons that bound an empty range", () => {
+      expect.assertions(2);
+
+      // $between already refuses the inverted spelling of the same range, and
+      // the half-open form is the one the documentation presents as the way to
+      // write one — so this is consistency, not a new rule
+      const message =
+        "the comparison bounds an empty range. Its lower bound is not below its upper bound";
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $gte: 100, $lt: 1 } })
+      ).toThrow(message);
+      // An exclusive bound makes equal endpoints empty too
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $gt: 5, $lt: 5 } })
+      ).toThrow(message);
+    });
+
+    it("accepts a composed range that can match", () => {
+      expect.assertions(3);
+
+      // Two inclusive bounds on the same value match exactly that value, the
+      // same degenerate-but-satisfiable case an equal $between pair is
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gte: 5, $lte: 5 } })
+      ).toEqual({
+        expression: "#Price >= :Price1 AND #Price <= :Price2",
+        values: { Price1: 5, Price2: 5 }
+      });
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gte: 1, $lt: 100 } })
+      ).toEqual({
+        expression: "#Price >= :Price1 AND #Price < :Price2",
+        values: { Price1: 1, Price2: 100 }
+      });
+      // One-sided has no range to be empty
+      expect(
+        queryBuilderInstance().filterParams({ price: { $gte: 100 } })
+      ).toEqual({
+        expression: "#Price >= :Price1",
+        values: { Price1: 100 }
+      });
+    });
+
     it("rejects an inverted $between, naming the attribute", () => {
       expect.assertions(2);
 
@@ -544,7 +592,7 @@ describe("FilterExpressionBuilder", () => {
         queryBuilderInstance().filterParams({ price: { $between: [100, 10] } })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "price": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+          'Invalid filter value for attribute "price": the $between bounds are inverted. The lower bound comes first'
         )
       );
     });
@@ -565,7 +613,7 @@ describe("FilterExpressionBuilder", () => {
         })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "createdAt": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+          'Invalid filter value for attribute "createdAt": the $between bounds are inverted. The lower bound comes first'
         )
       );
     });
@@ -723,7 +771,7 @@ describe("FilterExpressionBuilder", () => {
         })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "serial": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error'
+          'Invalid filter value for attribute "serial": the $between bounds are inverted. The lower bound comes first'
         )
       );
     });
@@ -735,7 +783,7 @@ describe("FilterExpressionBuilder", () => {
         queryBuilderInstance().filterParams({ name: { $between: ["m", "a"] } })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "name": the $between bounds are inverted. The lower bound comes first, and DynamoDB matches nothing for an inverted range rather than reporting an error`'.replace(
+          'Invalid filter value for attribute "name": the $between bounds are inverted. The lower bound comes first`'.replace(
             "`",
             ""
           )
@@ -782,29 +830,57 @@ describe("FilterExpressionBuilder", () => {
       );
     });
 
-    it("rejects null as a comparison operand", () => {
-      expect.assertions(4);
+    it("rejects null as an operand of any whole-value condition", () => {
+      expect.assertions(6);
 
-      // Rejected by the value-side check, which asks what DynamoDB can order
-      // rather than testing for null specifically — so a boolean, a Map and a
-      // List are rejected by the same code on the same grounds
+      // No item holds NULL for an attribute, because dyna-record removes a
+      // nulled one rather than storing it — so this is true of every arm, not
+      // only the ordered ones, and belongs where every whole value passes
+      const message =
+        'Invalid filter value for attribute "price": a condition cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no item holds one to match';
+
       for (const operator of ["$gt", "$gte", "$lt", "$lte"]) {
         expect(() =>
           // @ts-expect-error a null operand is a plain JavaScript caller
           queryBuilderInstance().filterParams({ price: { [operator]: null } })
-        ).toThrow(
-          new FilterError(
-            `Invalid filter value for attribute "price": ${operator} cannot order this value. An ordered comparison takes a String, a Number or Binary value. A Boolean, a Map and a List have no ordering, and dyna-record removes a nulled attribute rather than storing NULL, so there is nothing for the comparison to match`
-          )
-        );
+        ).toThrow(new FilterError(message));
       }
+
+      // The two arms where it used to compile. The IN case hid best: the real
+      // values still matched, so the dead branch never announced itself
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: null })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: [1, null] })
+      ).toThrow(new FilterError(message));
+    });
+
+    it("rejects a non-finite number as an ordered operand", () => {
+      expect.assertions(2);
+
+      // DynamoDB has no Number for NaN or Infinity, so no row can hold one for
+      // a comparison to order against. An attribute with a schema never gets
+      // here (zod's number() rejects both); a path naming no field has none
+      const message = "cannot order this value";
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $gt: Number.NaN }
+        })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $between: [1, Number.POSITIVE_INFINITY] }
+        })
+      ).toThrow(message);
     });
 
     it("rejects null as either $between bound", () => {
       expect.assertions(2);
 
       const message =
-        'Invalid filter value for attribute "price": $between cannot order this value. An ordered comparison takes a String, a Number or Binary value. A Boolean, a Map and a List have no ordering, and dyna-record removes a nulled attribute rather than storing NULL, so there is nothing for the comparison to match';
+        'Invalid filter value for attribute "price": a condition cannot compare against null. dyna-record removes a nulled attribute rather than storing NULL, so no item holds one to match';
 
       expect(() =>
         queryBuilderInstance().filterParams({
@@ -835,6 +911,135 @@ describe("FilterExpressionBuilder", () => {
           'Invalid filter value for attribute "name": IN was given no value'
         )
       );
+    });
+
+    it("rejects an IN element that is an operator object", () => {
+      expect.assertions(2);
+
+      // The elements are where the condition-shape guard cannot reach: it
+      // exempts arrays wholesale, because there an array IS the condition. So
+      // a nested operator bound as a Map operand, which DynamoDB compares,
+      // matches nothing, and reports nothing
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.tags": [{ $beginsWith: "a" }]
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.tags": an IN element names $beginsWith'
+      );
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.history.at": [{ $gt: 1 }]
+        })
+      ).toThrow("an IN element names comparison");
+    });
+
+    it("shapes an IN element like the attribute's own value", () => {
+      expect.assertions(2);
+
+      // IN compares the whole attribute against each element, so on a
+      // List-stored field the element is a list. A scalar there asks whether
+      // the list equals that scalar, which it never does
+      expect(
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+          "meta.tags": [["a"], ["b"]]
+        })
+      ).toEqual({
+        expression: "#Meta.#tags IN (:Metatags1,:Metatags2)",
+        values: { Metatags1: ["a"], Metatags2: ["b"] }
+      });
+
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a list is not a value a string attribute can hold
+          name: [["a"]]
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "name": the operand is not a value this attribute can hold, which is stored as a string'
+      );
+    });
+
+    it("rejects an equality operand the attribute cannot hold", () => {
+      expect.assertions(2);
+
+      // The equality arm was the one whole-value arm with no shape check, so
+      // the mistake the IN arm reports was silent here. A List compared to a
+      // String matches nothing, and DynamoDB says nothing about it
+      expect(() =>
+        queryBuilderInstance().filterParams({ "meta.tags": "vip" })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.tags": the operand is not a value this attribute can hold, which is stored as a list. A comparison asks whether the whole list equals the operand, so a single value never matches — $contains is the membership test'
+      );
+
+      // A scalar attribute is unaffected
+      expect(
+        queryBuilderInstance().filterParams({ "meta.label": "warehouse" })
+      ).toEqual({
+        expression: "#Meta.#label = :Metalabel1",
+        values: { Metalabel1: "warehouse" }
+      });
+    });
+
+    it("takes an object $contains operand on a List of objects", () => {
+      expect.assertions(2);
+
+      // contains() compares a substring of a String but an *element* of a
+      // List, and an element may be a Map — which is what a List of objects
+      // holds. Requiring a scalar refused the membership test the library
+      // documents for exactly that schema
+      expect(
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
+          "meta.history": { $contains: { at: "2023" } }
+        })
+      ).toEqual({
+        expression: "contains(#Meta.#history, :Metahistory1)",
+        values: { Metahistory1: { at: "2023" } }
+      });
+
+      // Where the form is a String, a substring is still what it compares
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a Map is not a substring
+          "meta.label": { $contains: { a: 1 } }
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.label": $contains takes a substring of the stored value, which is a string'
+      );
+    });
+
+    it("points an IN of scalars on a List field at $contains", () => {
+      expect.assertions(2);
+
+      // The membership reading a caller almost certainly meant. DynamoDB
+      // compares the list to each scalar, matches nothing, and reports nothing
+      expect(() =>
+        queryBuilderInstance().filterParams({ "meta.tags": ["a", "b"] })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.tags": the operand is not a value this attribute can hold, which is stored as a list. A comparison asks whether the whole list equals the operand, so a single value never matches — $contains is the membership test'
+      );
+
+      expect(
+        queryBuilderInstance().filterParams({ "meta.tags": { $contains: "a" } })
+      ).toEqual({
+        expression: "contains(#Meta.#tags, :Metatags1)",
+        values: { Metatags1: "a" }
+      });
+    });
+
+    it("keeps an object IN element where the attribute stores a Map", () => {
+      expect.assertions(1);
+
+      // The equality case's rule applies per element too
+      expect(
+        queryBuilderInstance().filterParams({
+          meta: [{ label: "x" }]
+        })
+      ).toEqual({
+        expression: "#Meta IN (:Meta1)",
+        values: { Meta1: { label: "x" } }
+      });
     });
 
     it("rejects an empty IN condition", () => {
@@ -1038,27 +1243,60 @@ describe("FilterExpressionBuilder", () => {
     });
 
     it("rejects an object naming an operator that does not exist", () => {
-      expect.assertions(1);
+      expect.assertions(2);
 
+      // A `$`-prefixed key is this vocabulary's mark of an operator, so one
+      // that names none is a typo. Asked independently of what the attribute
+      // can hold — otherwise abstaining on an unresolved form lets it through
+      // as an equality against the operator object itself
       expect(() =>
         // @ts-expect-error $ne is not a supported operator
         queryBuilderInstance().filterParams({ price: { $ne: 5 } })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "price": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
+          'Invalid filter value for attribute "price": $ne is not a supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
         )
       );
+
+      // Including where the field cannot be resolved, which is where the
+      // abstention would otherwise apply
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error $ne is not a supported operator
+          "meta.history.at": { $ne: 5 }
+        })
+      ).toThrow("$ne is not a supported operator");
     });
 
-    it("rejects a plain object that is not an operator object at all", () => {
+    it("takes a plain object as a whole-value equality on a Map attribute", () => {
       expect.assertions(1);
 
+      // DynamoDB's `=` compares Maps, so on a Map-stored attribute an object
+      // naming no operator is the attribute's own value rather than a mistyped
+      // operator. The shape guard has to know the difference, or it rejects a
+      // legitimate equality — which it did until the stored form reached it
+      expect(
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+          meta: { label: "x" }
+        })
+      ).toEqual({
+        expression: "#Meta = :Meta1",
+        values: { Meta1: { label: "x" } }
+      });
+    });
+
+    it("still rejects a plain object on an attribute stored as a scalar", () => {
+      expect.assertions(1);
+
+      // Where the attribute is not a Map, an object naming no operator can
+      // only be a mistake
       expect(() =>
-        // @ts-expect-error a whole-object equality is not a supported condition
-        queryBuilderInstance().filterParams({ meta: { label: "x" } })
+        // @ts-expect-error an object is not a value a string attribute can hold
+        queryBuilderInstance().filterParams({ name: { label: "x" } })
       ).toThrow(
         new FilterError(
-          'Invalid filter value for attribute "meta": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
+          'Invalid filter value for attribute "name": the condition is an object naming no supported operator. The supported operators are $gt, $gte, $lt, $lte, $between, $beginsWith, $contains'
         )
       );
     });
@@ -1122,6 +1360,99 @@ describe("FilterExpressionBuilder", () => {
       ).toThrow(
         "a condition combines comparison and $between and $contains, and only comparison operators compose. Split it across separate conditions"
       );
+    });
+  });
+
+  describe("fragment operand shapes", () => {
+    it("rejects a $beginsWith operand that is not a string", () => {
+      expect.assertions(2);
+
+      // "Neither validated nor converted" is about the attribute's schema —
+      // there is no "Date that starts with 2026". It is not a reason to skip
+      // the weaker check that a prefix is a string
+      const message =
+        "$beginsWith takes a string prefix of the stored value, and this operand is neither";
+
+      expect(() =>
+        // @ts-expect-error a number is not a prefix
+        queryBuilderInstance().filterParams({ name: { $beginsWith: 5 } })
+      ).toThrow(message);
+      expect(() =>
+        // @ts-expect-error nor is an object
+        queryBuilderInstance().filterParams({ name: { $beginsWith: { a: 1 } } })
+      ).toThrow(message);
+    });
+
+    it("rejects a $contains operand that is not a substring of a String", () => {
+      expect.assertions(4);
+
+      // The operator-shaped and attribute-shaped checks each existed; nothing
+      // asked the joint question — this attribute is stored as a String, so
+      // must the operand be one? A number there compares a scalar against a
+      // String and answers nothing
+      const message =
+        "$contains takes a substring of the stored value, which is a string";
+
+      expect(() =>
+        // @ts-expect-error a Map is not a substring
+        queryBuilderInstance().filterParams({ name: { $contains: { a: 1 } } })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $contains: null } })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $contains: 2026 } })
+      ).toThrow(message);
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $contains: true } })
+      ).toThrow(message);
+    });
+
+    it("keeps the operands those operators do take", () => {
+      expect.assertions(2);
+
+      expect(
+        queryBuilderInstance().filterParams({ name: { $beginsWith: "Sc" } })
+      ).toEqual({
+        expression: "begins_with(#Name, :Name1)",
+        values: { Name1: "Sc" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({ name: { $contains: "cal" } })
+      ).toEqual({
+        expression: "contains(#Name, :Name1)",
+        values: { Name1: "cal" }
+      });
+    });
+  });
+
+  describe("expressionAttributeNames vocabulary", () => {
+    it("resolves key paths under the key condition vocabulary", () => {
+      expect.assertions(2);
+
+      // The compilation threads a per-compilation capability set; this call
+      // site did not, so a dotted key condition passed the nested-path gate
+      // here. Only the order of the two calls in QueryBuilder.build hid it
+      expect(() =>
+        queryBuilderInstance().expressionAttributeNames(["meta.label"])
+      ).toThrow(
+        'Nested attribute paths are not supported in key conditions. Received filter key "meta.label"'
+      );
+      expect(queryBuilderInstance().expressionAttributeNames(["name"])).toEqual(
+        { "#Name": "Name" }
+      );
+    });
+
+    it("still resolves filter paths under the filter vocabulary", () => {
+      expect.assertions(1);
+
+      // A dot path is a filter's to use, so the two halves of this call cannot
+      // share one set
+      expect(
+        queryBuilderInstance().expressionAttributeNames([], {
+          "meta.label": "x"
+        })
+      ).toEqual({ "#Meta": "Meta", "#label": "label" });
     });
   });
 
@@ -2011,6 +2342,212 @@ describe("FilterExpressionBuilder", () => {
         "string",
         "unresolved"
       ]);
+    });
+  });
+
+  describe("operand and key shapes that fail loudly rather than quietly", () => {
+    it("rejects an empty path segment", () => {
+      expect.assertions(2);
+
+      // What `{ [`${prefix}.${field}`]: value }` produces when either half is
+      // empty. No attribute is named, and there is nothing for a token to map
+      // to — the builder was emitting a name DynamoDB has no form for
+      expect(() =>
+        queryBuilderInstance().filterParams({ "meta.": "x" })
+      ).toThrow(
+        'Invalid filter key "meta.": it has an empty path segment, so one of its parts names no attribute'
+      );
+      expect(() =>
+        queryBuilderInstance().filterParams({ "meta..label": "x" })
+      ).toThrow("it has an empty path segment");
+    });
+
+    it("rejects an empty prefix or substring, which match everything", () => {
+      expect.assertions(3);
+
+      // The one case that fails by matching *everything*. `?? ""` on an
+      // optional input reaches it, and in a key condition it reads the whole
+      // partition while looking like a narrow
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $beginsWith: "" } })
+      ).toThrow(
+        'Invalid filter value for attribute "name": $beginsWith was given an empty string, which every value matches. Drop the condition rather than passing an empty operand'
+      );
+      expect(() =>
+        queryBuilderInstance().filterParams({ name: { $contains: "" } })
+      ).toThrow("which every value matches");
+      expect(() =>
+        queryBuilderInstance().keyConditions({ name: { $beginsWith: "" } })
+      ).toThrow("which every value matches");
+    });
+
+    it("names the missing operand rather than counting operands that are absent", () => {
+      expect.assertions(1);
+
+      // The composed-comparison count reads the operator keys, so a condition
+      // whose operands all resolved to undefined was told it "has 2 comparison
+      // operands" — a mistake the caller did not make. Definedness is a
+      // precondition of every guard that reads or counts an operand
+      expect(() =>
+        queryBuilderInstance().keyConditions({
+          // @ts-expect-error operands resolving to undefined are a plain JavaScript caller
+          type: { $gt: undefined, $lt: undefined }
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "type": $gt was given no value'
+      );
+    });
+
+    it("gives the attribute-side reason regardless of the operand's type", () => {
+      expect.assertions(2);
+
+      // The operand-shape check ran before the applicability check, so the
+      // message depended on whether the operand happened to be a string: the
+      // same attribute-level mistake told two different stories
+      const reason = "does not apply to a value stored as a number";
+
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $contains: 5 } })
+      ).toThrow(reason);
+      expect(() =>
+        queryBuilderInstance().filterParams({ price: { $beginsWith: "5" } })
+      ).toThrow(reason);
+    });
+
+    it("abstains from judging an object where the stored form is unknown", () => {
+      expect.assertions(2);
+
+      // This was the only guard that judged what it could not see. A path
+      // through an array element resolves to no field, and the field it names
+      // may well be a Map — on which a whole-object equality is legitimate, as
+      // the resolved case already allows
+      expect(
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+          "meta.history.nested": { a: 1 }
+        })
+      ).toEqual({
+        expression: "#Meta.#history.#nested = :Metahistorynested1",
+        values: { Metahistorynested1: { a: 1 } }
+      });
+
+      // Where the form IS resolved and cannot hold an object, it still judges
+      expect(() =>
+        // @ts-expect-error a string attribute holds no object
+        queryBuilderInstance().filterParams({ name: { label: "x" } })
+      ).toThrow("the condition is an object naming no supported operator");
+    });
+
+    it("rejects a value its serializer cannot convert", () => {
+      expect.assertions(1);
+
+      // A serializer answers undefined for a value it cannot convert, and
+      // binding that left the expression referencing a placeholder with
+      // nothing bound to it
+      expect(() =>
+        queryBuilderInstance().filterParams({ createdAt: "2026" })
+      ).toThrow(
+        'Invalid filter value for attribute "createdAt": the value could not be converted to the form the table stores'
+      );
+    });
+  });
+
+  describe("expression attribute name tokens", () => {
+    it("sanitizes a segment that cannot be a token, keeping the real name", () => {
+      expect.assertions(2);
+
+      // An attribute name can be almost anything — that is why expression
+      // attribute names exist — but the `#` token standing in for it cannot.
+      // Verified against DynamoDB: `#a_b` is accepted and `#a b` is rejected
+      // with a ValidationException, so using the segment verbatim made a field
+      // named "odd name" impossible to filter on
+      // The digest itself is an implementation detail; what has to hold is that
+      // the token is one DynamoDB accepts and that it round-trips to the real
+      // name, so the assertions are on those rather than on the hash
+      const { expression } = queryBuilderInstance().filterParams({
+        "meta.odd name": "x"
+      });
+      const names = queryBuilderInstance().expressionAttributeNames([], {
+        "meta.odd name": "x"
+      });
+
+      const [, token] = /#Meta\.#([^ ]+) =/.exec(expression) ?? [];
+
+      expect(token).toMatch(/^[A-Za-z0-9_]+$/);
+      expect(names[`#${String(token)}`]).toBe("odd name");
+    });
+
+    it("gives two names that sanitize alike distinct tokens", () => {
+      expect.assertions(1);
+
+      // "odd name" and "odd-name" both reduce to odd_name; the digest is what
+      // keeps them from colliding on one token and one value placeholder
+      const spaced = queryBuilderInstance().filterParams({
+        "meta.odd name": "x"
+      });
+      const hyphen = queryBuilderInstance().filterParams({
+        "meta.odd-name": "x"
+      });
+
+      expect(spaced.expression).not.toEqual(hyphen.expression);
+    });
+
+    it("leaves an ordinary segment untouched", () => {
+      expect.assertions(1);
+
+      // The condition pass and the attribute-name pass derive the token
+      // independently, so it has to be a pure function of the segment — and
+      // an ordinary name has to come out byte-for-byte unchanged
+      expect(
+        queryBuilderInstance().filterParams({ "meta.label": "warehouse" })
+      ).toEqual({
+        expression: "#Meta.#label = :Metalabel1",
+        values: { Metalabel1: "warehouse" }
+      });
+    });
+  });
+
+  describe("$or combined with sibling conditions", () => {
+    it("drops an $or that compiled to nothing rather than grouping it", () => {
+      expect.assertions(3);
+
+      // andOrFilter wrapped both halves in parentheses unconditionally, so an
+      // emptied $or produced `() AND (#Name = :Name1)` — which DynamoDB
+      // rejects, and which the empty-expression check at assembly cannot catch
+      // because the string is not empty
+      expect(
+        queryBuilderInstance().filterParams({ $or: [], name: "Scale-A" })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ name: undefined }],
+          name: "Scale-A"
+        })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      // Both halves empty leaves nothing, which assembly drops
+      expect(
+        queryBuilderInstance().filterParams({ $or: [], name: undefined })
+      ).toEqual({ expression: "", values: {} });
+    });
+
+    it("groups both halves when both carry conditions", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ category: "books" }],
+          name: "Scale-A"
+        })
+      ).toEqual({
+        expression: "(#Category = :Category1) AND (#Name = :Name2)",
+        values: { Category1: "books", Name2: "Scale-A" }
+      });
     });
   });
 

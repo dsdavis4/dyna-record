@@ -70,7 +70,13 @@ class QueryBuilder {
         : undefined;
 
     const hasIndex = indexName !== undefined;
-    const hasFilter = filterParams !== undefined;
+
+    // A filter whose every condition was dropped compiles to an empty
+    // expression — `filter: { name: req.query.name }` with nothing in it, which
+    // is the documented way to forward an optional input. Attaching the empty
+    // string is what DynamoDB rejects, so there has to be something to attach
+    const hasFilter =
+      filterParams !== undefined && filterParams.expression !== "";
 
     this.assertPartitionKeyEquality(hasIndex);
 
@@ -113,10 +119,9 @@ class QueryBuilder {
     keyParams: FilterExpression,
     filterParams?: FilterExpression
   ): QueryCommandInput["ExpressionAttributeValues"] {
-    const hasFilter = this.#props.options?.filter !== undefined;
-    const valueParams = hasFilter
-      ? { ...keyParams.values, ...filterParams?.values }
-      : keyParams.values;
+    // Keyed off the compiled values rather than the caller's input, so a filter
+    // that dropped every condition contributes none
+    const valueParams = { ...keyParams.values, ...filterParams?.values };
 
     return this.#expressionBuilder.expressionAttributeValues(valueParams);
   }
