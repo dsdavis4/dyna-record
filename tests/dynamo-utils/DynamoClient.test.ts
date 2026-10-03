@@ -70,7 +70,7 @@ describe("DynamoClient", () => {
     });
 
     it("drains every page by following LastEvaluatedKey and concatenates the items", async () => {
-      expect.assertions(4);
+      expect.assertions(2);
 
       mockSend
         .mockResolvedValueOnce({
@@ -86,20 +86,45 @@ describe("DynamoClient", () => {
       const res = await dynamoClient.query({ TableName: "mock-table" });
 
       expect(res).toEqual([{ id: "1" }, { id: "2" }, { id: "3" }]);
-      expect(mockSend).toHaveBeenCalledTimes(3);
-      // Each subsequent page is requested with the previous page's cursor
-      expect(mockedQueryCommand).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ ExclusiveStartKey: { PK: "a", SK: "b" } })
-      );
-      expect(mockedQueryCommand).toHaveBeenNthCalledWith(
-        3,
-        expect.objectContaining({ ExclusiveStartKey: { PK: "c", SK: "d" } })
-      );
+      // Every page, whole: each carries the previous page's cursor, the first
+      // carries none, and nothing else drifts between them. A per-field
+      // assertion would pass just as well if a later page quietly grew a Limit
+      // or dropped the TableName
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [{ TableName: "mock-table", ExclusiveStartKey: undefined }],
+        [{ TableName: "mock-table", ExclusiveStartKey: { PK: "a", SK: "b" } }],
+        [{ TableName: "mock-table", ExclusiveStartKey: { PK: "c", SK: "d" } }]
+      ]);
+    });
+
+    it("honours a caller-provided ExclusiveStartKey on the first page", async () => {
+      expect.assertions(2);
+
+      // Nothing covered the caller supplying their own cursor. The pagination
+      // loop owns that field on every page after the first, so the first page
+      // is where it could be overwritten with undefined without any test
+      // noticing
+      mockSend
+        .mockResolvedValueOnce({
+          Items: [{ id: "2" }],
+          LastEvaluatedKey: { PK: "c", SK: "d" }
+        })
+        .mockResolvedValueOnce({ Items: [{ id: "3" }] });
+
+      const res = await dynamoClient.query({
+        TableName: "mock-table",
+        ExclusiveStartKey: { PK: "a", SK: "b" }
+      });
+
+      expect(res).toEqual([{ id: "2" }, { id: "3" }]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [{ TableName: "mock-table", ExclusiveStartKey: { PK: "a", SK: "b" } }],
+        [{ TableName: "mock-table", ExclusiveStartKey: { PK: "c", SK: "d" } }]
+      ]);
     });
 
     it("stops paginating once a caller-provided Limit is reached, treating Limit as a total item cap", async () => {
-      expect.assertions(3);
+      expect.assertions(2);
 
       // Only one page is queued: if the implementation ignores Limit and tries
       // to fetch a second page, the send mock returns undefined and the test
@@ -115,12 +140,16 @@ describe("DynamoClient", () => {
       });
 
       expect(res).toEqual([{ id: "1" }, { id: "2" }]);
-      expect(mockSend).toHaveBeenCalledTimes(1);
-      // The single request asks for exactly the Limit
-      expect(mockedQueryCommand).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ Limit: 2 })
-      );
+      // One request, whole: it asks for exactly the Limit and no cursor
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            Limit: 2,
+            ExclusiveStartKey: undefined
+          }
+        ]
+      ]);
     });
   });
 
@@ -177,14 +206,21 @@ describe("DynamoClient", () => {
         TopK: 5
       });
 
-      expect(logSpy).toHaveBeenCalledWith("searchVectors", {
-        params: expect.objectContaining({
-          TableName: "mock-table",
-          IndexName: "mock-vector-index",
-          SearchVector: "[vector:4]",
-          TopK: 5
-        })
-      });
+      // The whole logged payload: redaction is only proven if nothing ELSE in
+      // what reaches the logger carries the vector
+      expect(logSpy.mock.calls).toEqual([
+        [
+          "searchVectors",
+          {
+            params: {
+              TableName: "mock-table",
+              IndexName: "mock-vector-index",
+              SearchVector: "[vector:4]",
+              TopK: 5
+            }
+          }
+        ]
+      ]);
       // The float array must never reach the logger in any argument
       const loggedText = JSON.stringify(logSpy.mock.calls);
       expect(loggedText).not.toContain("0.111");
@@ -207,10 +243,18 @@ describe("DynamoClient", () => {
       await dynamoClient.searchVectors(params);
 
       expect(params.SearchVector).toEqual([0.1, 0.2, 0.3]);
-      // The command itself must receive the real vector, not the placeholder
-      expect(mockedSearchVectorsCommand).toHaveBeenCalledWith(
-        expect.objectContaining({ SearchVector: [0.1, 0.2, 0.3] })
-      );
+      // The command itself must receive the real vector, not the placeholder,
+      // and must carry the caller's other params unchanged alongside it
+      expect(mockedSearchVectorsCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            IndexName: "mock-vector-index",
+            SearchVector: [0.1, 0.2, 0.3],
+            TopK: 2
+          }
+        ]
+      ]);
     });
   });
 

@@ -192,7 +192,10 @@ class DynamoClient {
     Logger.log("query", { params });
 
     const items: QueryItems = [];
-    let exclusiveStartKey: QueryCommandInput["ExclusiveStartKey"];
+    // Seeded from the caller's own cursor rather than left undefined: the loop
+    // owns this field on every page, so starting it empty silently discarded a
+    // supplied ExclusiveStartKey and re-read the partition from the beginning
+    let exclusiveStartKey = params.ExclusiveStartKey;
 
     do {
       const remaining =

@@ -216,24 +216,29 @@ describe("VectorIndex", () => {
     it("ships Titan V2 dimension variants sharing the model identity", () => {
       expect.assertions(3);
 
-      expect(TitanTextEmbedV2).toMatchObject({
+      expect(TitanTextEmbedV2).toEqual({
         name: "amazon.titan-embed-text-v2:0",
         dimensions: 1024,
-        distanceFunction: "COSINE"
+        distanceFunction: "COSINE",
+        scoreToSimilarity: expect.any(Function)
       });
-      expect(TitanTextEmbedV2Dim512).toMatchObject({
+      expect(TitanTextEmbedV2Dim512).toEqual({
         name: "amazon.titan-embed-text-v2:0",
         dimensions: 512,
-        distanceFunction: "COSINE"
+        distanceFunction: "COSINE",
+        scoreToSimilarity: expect.any(Function)
       });
-      expect(TitanTextEmbedV2Dim256).toMatchObject({
+      expect(TitanTextEmbedV2Dim256).toEqual({
         name: "amazon.titan-embed-text-v2:0",
         dimensions: 256,
-        distanceFunction: "COSINE"
+        distanceFunction: "COSINE",
+        scoreToSimilarity: expect.any(Function)
       });
     });
 
     it("emits a dimension variant's dimensions through the provisioning contract", async () => {
+      expect.assertions(1);
+
       const {
         default: DynaRecord,
         Table,
@@ -275,6 +280,8 @@ describe("VectorIndex", () => {
       });
 
       const [index] = FreshTable.metadata().vectorIndexes ?? [];
+      // Partial on purpose: the whole metadata carries a content fingerprint
+      // and the full search schema, neither of which this test is about
       expect(index).toMatchObject({
         name: "fresh-index",
         model: "amazon.titan-embed-text-v2:0",
