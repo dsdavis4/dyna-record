@@ -122,6 +122,11 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
  * string field accepts `$beginsWith`, and an array field accepts `$contains` for List
  * membership.
  *
+ * A path *through* an array names one element with DynamoDB's index syntax, `tags[0]`, and
+ * is typed by that element's own field. DynamoDB has no path meaning "every element", so a
+ * path omitting the index is rejected with a `FilterError` rather than compiled into a
+ * condition that matches nothing.
+ *
  * ```typescript
  * await MyEntity.query("123", {
  *   filter: { "address.city": "Springfield" }
@@ -134,6 +139,11 @@ export interface ObjectAttributeOptions<S extends ObjectSchema>
  * // A range on a nested number field
  * await MyEntity.query("123", {
  *   filter: { "address.geo.lat": { $between: [40, 41] } }
+ * });
+ *
+ * // One element of a List, and a field of it
+ * await MyEntity.query("123", {
+ *   filter: { "address.contacts[0].name": "Jane" }
  * });
  * ```
  */

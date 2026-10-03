@@ -4,6 +4,7 @@ import {
   ContactInformation,
   Course,
   Customer,
+  ArrayOfObjectsEntity,
   DeepNestedEntity,
   DiscriminatedUnionEntity,
   ArrayOfUnionsEntity,
@@ -312,6 +313,43 @@ describe("Query", () => {
             },
             ExpressionAttributeValues: {
               ":addressAttributegeolat1": 40.7128,
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter on one element of a nested List using a list index", async () => {
+      expect.assertions(5);
+
+      // A List index is DynamoDB's own document-path syntax, and it attaches to
+      // the path rather than to the name: `#tags[0]`, never `#tags_0`
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.tags[0]": "vip"
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "#objectAttribute.#tags[0] = :objectAttributetags01",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#tags": "tags"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributetags01": "vip",
               ":PK2": "MyClassWithAllAttributeTypes#123"
             },
             ConsistentRead: false
@@ -4477,6 +4515,86 @@ describe("Query", () => {
         await DeepNestedEntity.query("123", {
           filter: { "data.level1.level2.nonExistent": "value" }
         }).catch(() => {});
+      });
+    });
+
+    describe("list index dot-path keys", () => {
+      it("accepts an index into a List of scalars", async () => {
+        // @ts-expect-no-error: tags is a List of strings, so tags[0] is a string
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.tags[0]": "vip" }
+        });
+      });
+
+      it("accepts an index into a List of objects, and paths below it", async () => {
+        // @ts-expect-no-error: entries[0] is the element, entries[0].sku its field
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.entries[0].sku": "abc" }
+        });
+        // @ts-expect-no-error: the whole element is a Map, and equality takes one
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.entries[0]": { sku: "abc", price: 1 } }
+        });
+      });
+
+      it("narrows the element's own field type", async () => {
+        // @ts-expect-error: price is a number, not a string
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.entries[0].price": { $gt: "10" } }
+        }).catch(() => {});
+      });
+
+      it("rejects a path through a List that names no element", async () => {
+        expect.assertions(1);
+
+        // The type does not generate it, and the builder is the backstop for the
+        // ways it can still arrive: a JavaScript caller, or the untyped
+        // `FilterParams` the index overload takes
+        await expect(
+          // @ts-expect-error: sku lives on an element, which needs an index
+          ArrayOfObjectsEntity.query("123", {
+            filter: { "data.entries.sku": "abc" }
+          })
+        ).rejects.toThrow(
+          'Invalid filter key "data.entries.sku": "entries" is a list, and a condition below it has to name an element — write "entries[0]" for the first'
+        );
+      });
+
+      it("keeps the record closed on an entity that has indexed keys", async () => {
+        // The regression this pins: a `${number}` index key would make the
+        // filter record a pattern index signature, and `query` infers its
+        // filter as `const F extends TypedFilterParams<T>` — against a record
+        // with an index signature that constraint accepts ANY key. Every
+        // unknown-key, unknown-path and wrong-type error on this entity would
+        // go quiet at once, with nothing failing to say so. Literal indexes are
+        // what keep it closed, so these three are the alarm
+        await expect(async () => {
+          // @ts-expect-error: no such attribute
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { nope: 1 }
+          });
+          // @ts-expect-error: no such field below objectAttribute
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { "objectAttribute.nope": 1 }
+          });
+          // @ts-expect-error: stringType is a string
+          await MyClassWithAllAttributeTypes.query("123", {
+            filter: { stringType: 1 }
+          });
+        }).toBeDefined();
+      });
+
+      it("rejects an index on a field that holds no List", async () => {
+        expect.assertions(1);
+
+        await expect(
+          // @ts-expect-error: title is a string, so it has no element to index
+          ArrayOfObjectsEntity.query("123", {
+            filter: { "data.title[0]": "abc" }
+          })
+        ).rejects.toThrow(
+          'Invalid filter key "data.title[0]": "title[0]" indexes "title", which does not hold a list'
+        );
       });
     });
 

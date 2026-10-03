@@ -280,6 +280,10 @@ export type QueryFilterValueFor<
  * optional object still has fields, and a condition on one of them takes a
  * defined value.
  *
+ * A segment written `name[0]` names one element of a List, so the walk steps
+ * into the element type rather than looking for a field of that name. Several
+ * indexes nest, as a List of Lists needs.
+ *
  * @typeParam T - The type the path starts at.
  * @typeParam P - The remaining dot path.
  */
@@ -287,11 +291,26 @@ type TypeAtDotPath<
   T,
   P extends string
 > = P extends `${infer Head}.${infer Rest}`
-  ? Head extends keyof T
-    ? TypeAtDotPath<NonNullable<T[Head]>, Rest>
+  ? TypeAtSegment<T, Head> extends infer Next
+    ? [Next] extends [never]
+      ? never
+      : TypeAtDotPath<NonNullable<Next>, Rest>
     : never
-  : P extends keyof T
-    ? T[P]
+  : TypeAtSegment<T, P>;
+
+/**
+ * The type one path segment names: a field of `T`, or — where the segment
+ * carries indexes — the element that indexing that field reaches.
+ *
+ * @typeParam T - The type the segment is read against.
+ * @typeParam S - The segment, with any indexes still attached.
+ */
+type TypeAtSegment<T, S extends string> = S extends `${infer Name}[${number}]`
+  ? TypeAtSegment<T, Name> extends readonly (infer Element)[]
+    ? Element
+    : never
+  : S extends keyof T
+    ? T[S]
     : never;
 
 /**
@@ -300,10 +319,11 @@ type TypeAtDotPath<
  *
  * A nested field is resolved to its own definition and converted as that field,
  * so `"shippedAt.at"` on a nested date takes a `Date` just as a top level date
- * attribute does. A path that cannot be resolved — through an array element or
- * a discriminated union variant, which one path does not identify — falls back
- * to {@link StoredFilterTypes}, matching the expression builder, which leaves
- * such a value unvalidated and unconverted.
+ * attribute does, and `"items[0].sku"` takes the element's own field. A path
+ * that cannot be resolved — into a discriminated union variant, which one path
+ * does not identify, or naming a field only one entity of a partition declares
+ * — falls back to {@link StoredFilterTypes}, matching the expression builder,
+ * which leaves such a value unvalidated and unconverted.
  *
  * Distributed over `Entities`, which is what makes the first case reachable at
  * all: `EntityAttributesOnly` is built on `Omit`, which does not distribute, so

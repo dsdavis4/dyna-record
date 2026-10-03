@@ -2,6 +2,20 @@
 
 ### Added
 
+- **List elements in a dot path.** A path through an array names one element with DynamoDB's own index syntax, and may continue below it when the elements are objects. The index is typed, so the path is offered by typeahead and narrows to the element's own field.
+
+  ```typescript
+  // One element of a list of scalars
+  await Store.query("123", { filter: { "address.tags[0]": "home" } });
+
+  // A field of one element of a list of objects
+  await Store.query("123", { filter: { "address.contacts[0].name": "Jane" } });
+  ```
+
+  The key type offers indexes `0` through `9`. A higher index compiles and runs — the expression builder has no cap — but is not offered, because a condition on a specific element is in practice a condition on an early one.
+
+  DynamoDB has no document path meaning "every element", so a path _through_ an array that omits the index reaches nothing: the condition compiles, matches no row and reports no error. dyna-record rejects it with a `FilterError` naming the segment and the index to add. An index on a field that holds no list is rejected the same way, for the same reason. To ask about a list as a whole, use `$contains`.
+
 - **Comparison and range conditions.** `$gt`, `$gte`, `$lt`, `$lte` and `$between` are available on filters and on sort key conditions.
 
   ```typescript

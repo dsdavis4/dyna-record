@@ -313,8 +313,8 @@ describe("FilterExpressionBuilder", () => {
     it("leaves a nested value alone when the path cannot be resolved", () => {
       expect.assertions(1);
 
-      // An array element has no single field definition, so the value is
-      // written as stored
+      // A segment naming no declared field has no field definition, so the
+      // value is written as stored
       expect(
         queryBuilderInstance().filterParams({ "meta.missing.deeper": iso })
       ).toEqual({
@@ -866,12 +866,12 @@ describe("FilterExpressionBuilder", () => {
 
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.history.at": { $gt: Number.NaN }
+          "meta.unknown.at": { $gt: Number.NaN }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.history.at": { $between: [1, Number.POSITIVE_INFINITY] }
+          "meta.unknown.at": { $between: [1, Number.POSITIVE_INFINITY] }
         })
       ).toThrow(message);
     });
@@ -929,7 +929,7 @@ describe("FilterExpressionBuilder", () => {
       );
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.history.at": [{ $gt: 1 }]
+          "meta.unknown.at": [{ $gt: 1 }]
         })
       ).toThrow("an IN element names comparison");
     });
@@ -1178,22 +1178,48 @@ describe("FilterExpressionBuilder", () => {
       );
     });
 
-    it("leaves a comparison operand in the stored form on a path through an array", () => {
+    it("resolves a comparison through an indexed path to the element's field", () => {
       expect.assertions(1);
 
-      // A path cannot identify which element it means, so no field definition
-      // resolves and the operand is neither validated nor converted
+      // The index names one element, so the field definition below the list
+      // resolves and the operand is validated and converted as that field —
+      // here a Date declared on the element, stored as an ISO string
       expect(
         queryBuilderInstance().filterParams({
-          "meta.history.at": { $gte: "2023-01-01T00:00:00.000Z" }
+          "meta.history[0].at": { $gte: new Date("2023-01-01T00:00:00.000Z") }
         })
       ).toEqual({
-        expression: "#Meta.#history.#at >= :MetahistoryAt1".replace(
-          "At1",
-          "at1"
-        ),
-        values: { Metahistoryat1: "2023-01-01T00:00:00.000Z" }
+        expression: "#Meta.#history[0].#at >= :Metahistory0at1",
+        values: { Metahistory0at1: "2023-01-01T00:00:00.000Z" }
       });
+    });
+
+    it("rejects an index on a field that holds no list", () => {
+      expect.assertions(1);
+
+      // An index addresses a List element. On a String there is none, and
+      // DynamoDB answers the path with no rows rather than an error
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.label[0]": "a"
+        })
+      ).toThrow(
+        'Invalid filter key "meta.label[0]": "label[0]" indexes "label", which does not hold a list'
+      );
+    });
+
+    it("rejects a path that runs through a list without naming an element", () => {
+      expect.assertions(1);
+
+      // DynamoDB has no path to "every element", so such a condition compiles,
+      // matches nothing and reports nothing. The remedy is an index
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          "meta.history.at": { $gte: new Date("2023-01-01T00:00:00.000Z") }
+        })
+      ).toThrow(
+        'Invalid filter key "meta.history.at": "history" is a list, and a condition below it has to name an element — write "history[0]" for the first'
+      );
     });
 
     it("leaves a comparison operand in the stored form on a path naming no field", () => {
@@ -1263,7 +1289,7 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error $ne is not a supported operator
-          "meta.history.at": { $ne: 5 }
+          "meta.unknown.at": { $ne: 5 }
         })
       ).toThrow("$ne is not a supported operator");
     });
@@ -1635,9 +1661,9 @@ describe("FilterExpressionBuilder", () => {
     it("still rejects an unorderable operand where the field cannot be resolved", () => {
       expect.assertions(3);
 
-      // The attribute-side gate abstains here on purpose: a path through an
-      // array element names no field, so dyna-record cannot know the stored
-      // form. The value is then all there is to go on, and it is enough —
+      // The attribute-side gate abstains here on purpose: a path naming no
+      // declared field has no field definition, so dyna-record cannot know the
+      // stored form. The value is then all there is to go on, and it is enough —
       // without this the condition compiles and can never match
       const message =
         "cannot order this value. An ordered comparison takes a String, a Number or Binary value";
@@ -1645,19 +1671,19 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean operand is a plain JavaScript caller
-          "meta.history.at": { $gt: true }
+          "meta.unknown.at": { $gt: true }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean pair is a plain JavaScript caller
-          "meta.history.at": { $between: [true, false] }
+          "meta.unknown.at": { $between: [true, false] }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a Map operand is a plain JavaScript caller
-          "meta.history.at": { $gt: { a: 1 } }
+          "meta.unknown.at": { $gt: { a: 1 } }
         })
       ).toThrow(message);
     });
@@ -1669,11 +1695,11 @@ describe("FilterExpressionBuilder", () => {
       // beyond what DynamoDB can order
       expect(
         queryBuilderInstance().filterParams({
-          "meta.history.at": { $gte: "2023-01-01T00:00:00.000Z" }
+          "meta.unknown.at": { $gte: "2023-01-01T00:00:00.000Z" }
         })
       ).toEqual({
-        expression: "#Meta.#history.#at >= :Metahistoryat1",
-        values: { Metahistoryat1: "2023-01-01T00:00:00.000Z" }
+        expression: "#Meta.#unknown.#at >= :Metaunknownat1",
+        values: { Metaunknownat1: "2023-01-01T00:00:00.000Z" }
       });
     });
 
@@ -1692,11 +1718,11 @@ describe("FilterExpressionBuilder", () => {
       });
       expect(
         queryBuilderInstance().filterParams({
-          "meta.history.at": { $beginsWith: "2023" }
+          "meta.unknown.at": { $beginsWith: "2023" }
         })
       ).toEqual({
-        expression: "begins_with(#Meta.#history.#at, :Metahistoryat1)",
-        values: { Metahistoryat1: "2023" }
+        expression: "begins_with(#Meta.#unknown.#at, :Metaunknownat1)",
+        values: { Metaunknownat1: "2023" }
       });
     });
 
@@ -2231,10 +2257,12 @@ describe("FilterExpressionBuilder", () => {
         $contains: "compiles",
         ordered: "compiles"
       },
+      // An indexed path resolves to the *element's* field, so it carries that
+      // field's stored form rather than the list's
       {
-        attribute: "meta.history.at",
-        storedForm: "unresolved",
-        sample: "x",
+        attribute: "meta.history[0].at",
+        storedForm: "string",
+        sample: new Date("2023-01-15T12:12:18.123Z"),
         $beginsWith: "compiles",
         $contains: "compiles",
         ordered: "compiles"
@@ -2418,17 +2446,17 @@ describe("FilterExpressionBuilder", () => {
       expect.assertions(2);
 
       // This was the only guard that judged what it could not see. A path
-      // through an array element resolves to no field, and the field it names
-      // may well be a Map — on which a whole-object equality is legitimate, as
-      // the resolved case already allows
+      // naming no field resolves to no definition, and the field it names may
+      // well be a Map — on which a whole-object equality is legitimate, as the
+      // resolved case already allows
       expect(
         queryBuilderInstance().filterParams({
           // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
-          "meta.history.nested": { a: 1 }
+          "meta.unknown.nested": { a: 1 }
         })
       ).toEqual({
-        expression: "#Meta.#history.#nested = :Metahistorynested1",
-        values: { Metahistorynested1: { a: 1 } }
+        expression: "#Meta.#unknown.#nested = :Metaunknownnested1",
+        values: { Metaunknownnested1: { a: 1 } }
       });
 
       // Where the form IS resolved and cannot hold an object, it still judges

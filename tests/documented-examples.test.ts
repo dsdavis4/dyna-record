@@ -40,6 +40,13 @@ const addressSchema = {
   street: { type: "string" },
   city: { type: "string" },
   tags: { type: "array", items: { type: "string" } },
+  contacts: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: { name: { type: "string" }, phone: { type: "string" } }
+    }
+  },
   geo: { type: "object", fields: { lat: { type: "number" } } }
 } as const satisfies ObjectSchema;
 
@@ -250,6 +257,22 @@ describe("documented examples compile", () => {
     expect(examples).toBeDefined();
   });
 
+  it("README: list elements", () => {
+    const examples = async (): Promise<void> => {
+      // "One element of a list of scalars"
+      await Store.query("123", {
+        filter: { "address.tags[0]": "home" }
+      });
+
+      // "A field of one element of a list of objects"
+      await Store.query("123", {
+        filter: { "address.contacts[0].name": "Jane" }
+      });
+    };
+
+    expect(examples).toBeDefined();
+  });
+
   it("TSDoc: @ObjectAttribute filtering", () => {
     const examples = async (): Promise<void> => {
       await Store.query("123", { filter: { "address.city": "Springfield" } });
@@ -258,6 +281,9 @@ describe("documented examples compile", () => {
       });
       await Store.query("123", {
         filter: { "address.geo.lat": { $between: [40, 41] } }
+      });
+      await Store.query("123", {
+        filter: { "address.contacts[0].name": "Jane" }
       });
     };
 

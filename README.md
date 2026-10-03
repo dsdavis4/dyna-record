@@ -367,6 +367,13 @@ const addressSchema = {
   city: { type: "string" },
   zip: { type: "number", nullable: true },
   tags: { type: "array", items: { type: "string" } },
+  contacts: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: { name: { type: "string" }, phone: { type: "string" } }
+    }
+  },
   category: { type: "enum", values: ["home", "work", "other"] },
   createdDate: { type: "date" },
   geo: {
@@ -965,7 +972,7 @@ DynamoDB's condition functions each apply to particular stored types, and a cond
 
 The **stored** form decides, not the declared one. That is why a date attribute offers all of them: it is declared as a `Date` and stored as an ISO 8601 string, which orders lexicographically exactly as the date orders chronologically. A number attribute offers the comparators but not `$beginsWith`; a boolean offers neither. Binary is listed for completeness — dyna-record models no binary attribute kind, so no attribute stores as one.
 
-A dot-path key is judged by the field it names, so a nested string field offers `$beginsWith` and a nested number field does not. A path that names no single field — one descending through an array element or a discriminated union variant — cannot be judged, so it is left unconstrained.
+A dot-path key is judged by the field it names, so a nested string field offers `$beginsWith` and a nested number field does not. An indexed path is judged by the element's own field. A path that names no single field — one descending into a discriminated union variant, or naming a field the schema does not declare — cannot be judged, so it is left unconstrained.
 
 ##### Ranges in key conditions
 
@@ -1015,6 +1022,32 @@ const result = await Store.query("123", {
   filter: { "address.geo.lat": 40 }
 });
 ```
+
+##### List elements
+
+A path through an array has to say _which_ element it means, using DynamoDB's
+document-path index syntax. `tags[0]` is the first element of `tags`, and a path
+may continue below it when the elements are objects.
+
+```typescript
+// One element of a list of scalars
+const result = await Store.query("123", {
+  filter: { "address.tags[0]": "home" }
+});
+
+// A field of one element of a list of objects
+const result = await Store.query("123", {
+  filter: { "address.contacts[0].name": "Jane" }
+});
+```
+
+An indexed path is typed by the element's own field, so it offers that field's
+operators and takes that field's declared form. The type offers indexes `0`
+through `9`; a higher one compiles and runs but is not in the key type, because
+a condition on a specific element is in practice a condition on an early one. To
+ask about a list as a whole — "does any element equal this" — use `$contains`
+instead; DynamoDB has no path meaning "every element", so a path omitting the
+index matches nothing and is rejected with a `FilterError`.
 
 ##### `$contains` operator
 
@@ -1067,7 +1100,7 @@ The type system validates:
 - **Key condition values**: A key condition takes a value to match, `$beginsWith`, a single comparator, or `$between`. The partition key takes an equality only, and the sort key takes one condition, so the comparators do not compose there — see [Ranges in key conditions](#ranges-in-key-conditions).
 - **Nested fields**: A dot-path key is typed by the field it names, so a nested date field takes a `Date` just as a top level one does, and offers the operators that field's stored form supports.
 
-Filter and key condition values are also checked at runtime against the attribute's schema, in the form the entity declares them, before being converted to the form the table stores. A value that cannot match is reported as a `FilterError` naming the attribute rather than compiled into a query that returns nothing. Two things are not checked, because in each the value is not a value of the attribute being compared: a path that names no single field — one descending through an array element or a discriminated union variant — which must be written as stored, and the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment. Each element of an `IN` array is checked and converted.
+Filter and key condition values are also checked at runtime against the attribute's schema, in the form the entity declares them, before being converted to the form the table stores. A value that cannot match is reported as a `FilterError` naming the attribute rather than compiled into a query that returns nothing. Two things are not checked, because in each the value is not a value of the attribute being compared: a path that names no single field — one descending into a discriminated union variant, or naming a field the schema does not declare — which must be written as stored, and the operands of `$beginsWith` and `$contains`, which are a prefix and a fragment. Each element of an `IN` array is checked and converted.
 
 A filter condition set to `undefined` is dropped, so forwarding an optional input (`filter: { name: req.query.name }`) filters on it only when it has a value. A **key** condition set to `undefined` is an error instead: key conditions are what scope a query to a partition, so dropping one would silently widen the query to everything under it, where dropping a filter only widens the results within the partition already scoped. An operator given no value — `{ name: { $beginsWith: undefined } }` — is an error for the same reason it cannot be dropped: it asks for a comparison and supplies nothing to compare against.
 

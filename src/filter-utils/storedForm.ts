@@ -124,8 +124,8 @@ export const isObjectValuedScalar = (value: object): boolean =>
  *
  * The value-side counterpart of {@link ORDERED_FORMS}, which answers the same
  * question from an attribute's schema. This one is needed where the schema
- * could not answer — a dot path through an array element or a union variant
- * resolves to no field, so the value is all there is to go on.
+ * could not answer — a dot path into a union variant, or naming no declared
+ * field, resolves to no field, so the value is all there is to go on.
  *
  * Distinct from `isOrdered` in the expression builder, which asks the narrower
  * question of whether *JavaScript's* `>` reproduces DynamoDB's ordering.

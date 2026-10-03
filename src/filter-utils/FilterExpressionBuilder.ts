@@ -7,6 +7,7 @@ import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
 import {
   fieldConverts,
   fieldValidatesConditionValue,
+  parseSegment,
   resolveFieldDef,
   toStoredFieldValue
 } from "./resolveFieldDef.js";
@@ -859,9 +860,9 @@ class FilterExpressionBuilder {
     // object that names one is a condition, and mixing the two is still wrong.
     //
     // An unresolved form answers the same way, because this guard is the only
-    // one that would otherwise judge what it cannot see: a path through an
-    // array element or a union variant resolves to no field, and the field it
-    // names may well be a Map. Abstaining there is what every other guard does
+    // one that would otherwise judge what it cannot see: a path into a union
+    // variant, or naming no declared field, resolves to no field, and the field
+    // it names may well be a Map. Abstaining is what every other guard does
     const families = this.operatorFamilies(value);
 
     // A `$`-prefixed key is this vocabulary's mark of an operator, so one that
@@ -879,7 +880,7 @@ class FilterExpressionBuilder {
 
     // Whether a plain object is the attribute's own value does depend on the
     // form. An unresolved form abstains, as every other guard does — a path
-    // through an array element or a union variant may well name a Map
+    // into a union variant, or naming no declared field, may well name a Map
     const mayHoldAnObject =
       resolved.storedForm === "map" || resolved.storedForm === undefined;
 
@@ -1144,9 +1145,9 @@ class FilterExpressionBuilder {
    *
    * The attribute-side gate ({@link assertOrderedOperatorApplies}) answers the
    * same question from the schema, and abstains where the stored form could not
-   * be resolved — a dot path through an array element or a union variant. This
-   * is the check that still applies there, where the value is all there is to
-   * go on
+   * be resolved — a dot path into a union variant, or naming no declared field.
+   * This is the check that still applies there, where the value is all there is
+   * to go on
    * @param values - The value map the operand was bound into
    * @param reference - The operand's placeholder reference
    * @param attr - The attribute key, for the error message
@@ -1307,35 +1308,68 @@ class FilterExpressionBuilder {
       );
     }
 
-    const subTokens = subSegments.map(segment => nameToken(segment));
-    subSegments.forEach((segment, i) => {
-      names[`#${subTokens[i]}`] = segment;
+    // A segment may carry list indexes — `audit[0]`. The index is part of the
+    // path, not of the attribute's name, so it sits outside the `#` token
+    const parsed = subSegments.map(segment => parseSegment(segment));
+    const tokens = parsed.map(segment => nameToken(segment.name));
+
+    parsed.forEach((segment, i) => {
+      names[`#${tokens[i]}`] = segment.name;
     });
 
-    const expressionPath = `#${tableToken}.${subTokens.map(t => `#${t}`).join(".")}`;
-    const placeholderKey = `${tableToken}${subTokens.join("")}`;
+    /** `#audit[0]` — the token, then the indexes it was written with */
+    const reference = (i: number): string =>
+      `#${tokens[i]}${parsed[i].indexes.map(n => `[${String(n)}]`).join("")}`;
+
+    const expressionPath = `#${tableToken}.${parsed.map((_, i) => reference(i)).join(".")}`;
+
+    // A placeholder key has to stay a valid token, so the indexes join it as
+    // digits rather than as brackets
+    const placeholderKey = `${tableToken}${parsed
+      .map((segment, i) => `${tokens[i]}${segment.indexes.join("")}`)
+      .join("")}`;
 
     // The resolver answers for the top level attribute, so a nested value is
     // validated and converted as the field it names rather than as the object
     // that contains it
-    const fieldDef = resolveFieldDef(objectSchema, subSegments);
+    const resolution = resolveFieldDef(objectSchema, parsed);
+
+    // A path running *through* a list without naming an element reaches nothing
+    // DynamoDB can address: it compiles, matches no row, and reports no error
+    if (resolution.outcome === "listWithoutIndex") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.segment}" is a list, and a condition below it has to name an element — write "${resolution.segment}[0]" for the first. DynamoDB has no path to "every element", so the condition as written can match nothing`
+      );
+    }
+
+    // An index on anything but a List addresses an element of something that
+    // holds none — also accepted, also matching nothing
+    if (resolution.outcome === "indexOnNonList") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.segment}" indexes "${parseSegment(resolution.segment).name}", which does not hold a list. A list index addresses one element, and a condition on anything else names it without an index`
+      );
+    }
+
+    if (resolution.outcome === "unknown") {
+      return { expressionPath, names, placeholderKey };
+    }
+
+    const { fieldDef } = resolution;
 
     return {
       expressionPath,
       names,
       placeholderKey,
-      ...(fieldDef !== undefined && {
-        storedForm: storedFormOfField(fieldDef),
-        // Not every field's schema describes the value a condition carries;
-        // where it does not, the stored form is still known and is what decides
-        // which operators apply
-        ...(fieldValidatesConditionValue(fieldDef) && {
-          valueSchema: fieldDefToZod(fieldDef),
-          // Only when the field converts: toStored doubles as the signal that a
-          // rejected value's remedy should point at the declared form
-          ...(fieldConverts(fieldDef) && {
-            toStored: value => toStoredFieldValue(fieldDef, value)
-          })
+      storedForm: storedFormOfField(fieldDef),
+      // Not every field's schema describes the value a condition carries;
+      // where it does not, the stored form is still known and is what decides
+      // which operators apply
+      ...(fieldValidatesConditionValue(fieldDef) && {
+        valueSchema: fieldDefToZod(fieldDef),
+        // Only when the field converts: toStored doubles as the signal that a
+        // rejected value's remedy should point at the declared form
+        ...(fieldConverts(fieldDef) && {
+          toStored: value => toStoredFieldValue(fieldDef, value)
         })
       })
     };

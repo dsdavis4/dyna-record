@@ -6,43 +6,117 @@ import {
 import type { DynamoNativeValue, Optional } from "../types.js";
 
 /**
- * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
+ * One segment of a dot path: a field name, plus any list indexes applied to it.
  *
- * Returns `undefined` when the path names no field at all — the attribute is
- * not an object, a segment names nothing, or the path descends through an array
- * or a discriminated union, whose element and variant schemas a single path
- * cannot identify. A caller that gets `undefined` leaves the value unvalidated
- * and unconverted, which is how dot paths behaved everywhere before per-field
- * resolution existed.
+ * `audit[0]` names the first element of the `audit` list, and `grid[0][1]` the
+ * second element of that element. The index is DynamoDB's own document-path
+ * syntax, and it lives outside the attribute name — `#audit[0]`, never
+ * `#audit_0` — because an index is not part of what the attribute is called.
+ */
+export interface PathSegment {
+  /** The field name, with any indexes stripped. */
+  name: string;
+  /** The list indexes applied to it, outermost first. */
+  indexes: number[];
+  /** The segment as the caller wrote it, for error messages. */
+  raw: string;
+}
+
+/**
+ * Splits a path segment into the field it names and the indexes applied to it.
+ *
+ * An attribute name may itself contain brackets, which makes `a[0]` ambiguous
+ * in principle. It is read as an index, because that is what DynamoDB's path
+ * syntax means by it and what a caller writing it intends; a field genuinely
+ * named `a[0]` is reachable only by not being declared that way.
+ * @param raw - The segment as written
+ * @returns The name and indexes it carries
+ */
+export const parseSegment = (raw: string): PathSegment => {
+  const match = /^(.*?)((?:\[\d+\])*)$/.exec(raw);
+
+  // The pattern matches any string, so a miss is impossible; the guard exists
+  // because the compiler cannot know that
+  if (match === null) return { name: raw, indexes: [], raw };
+
+  const [, name, suffix] = match;
+  const indexes = [...suffix.matchAll(/\[(\d+)\]/g)].map(([, n]) => Number(n));
+
+  return { name, indexes, raw };
+};
+
+/**
+ * What walking a dot path through a schema found.
+ *
+ * Three outcomes rather than a field-or-undefined, because the two ways of
+ * failing call for different answers. `unknown` means dyna-record cannot see
+ * what the path names — a discriminated union variant, or a segment naming no
+ * declared field — and every guard abstains on it. `listWithoutIndex` means the
+ * path is definitely wrong: it descends *through* a list without saying which
+ * element, which DynamoDB answers with no rows and no error.
+ */
+export type FieldResolution =
+  | { outcome: "resolved"; fieldDef: FieldDef }
+  | { outcome: "unknown" }
+  | { outcome: "listWithoutIndex"; segment: string }
+  | { outcome: "indexOnNonList"; segment: string };
+
+/**
+ * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
  *
  * A path ending *at* an array resolves: the field exists and its stored form is
  * a List, which is what decides whether a fragment operator applies to it. What
  * its schema cannot do is validate a condition value, because the schema
  * describes the list while a condition carries an element — that judgement
  * belongs to the caller, which has the condition in hand.
+ *
+ * A path continuing *through* an array needs an index to say which element it
+ * means. Without one it names nothing DynamoDB can reach, so it is reported
+ * rather than left to return no rows.
  * @param schema - The object schema of the attribute the path starts at
- * @param segments - The path segments below that attribute
- * @returns The field definition the path names, or undefined
+ * @param segments - The parsed path segments below that attribute
+ * @returns What the walk found
  */
 export const resolveFieldDef = (
   schema: Optional<ObjectSchema>,
-  segments: string[]
-): Optional<FieldDef> => {
+  segments: PathSegment[]
+): FieldResolution => {
   let fields: Optional<ObjectSchema> = schema;
   let fieldDef: Optional<FieldDef>;
 
-  for (const segment of segments) {
-    if (fields === undefined) return undefined;
+  for (const [position, segment] of segments.entries()) {
+    if (fields === undefined) return { outcome: "unknown" };
 
     // Presence rather than an undefined check: ObjectSchema's index signature
     // types every key as present, so the compiler treats the miss as impossible
-    if (!Object.hasOwn(fields, segment)) return undefined;
+    if (!Object.hasOwn(fields, segment.name)) return { outcome: "unknown" };
 
-    fieldDef = fields[segment];
+    fieldDef = fields[segment.name];
+
+    // Each index steps into the list's element type
+    for (const _index of segment.indexes) {
+      // An index addresses a List element. On any other form there is no
+      // element to address, so the path reaches nothing
+      if (fieldDef.type !== "array") {
+        return { outcome: "indexOnNonList", segment: segment.raw };
+      }
+
+      fieldDef = fieldDef.items;
+    }
+
+    const isLast = position === segments.length - 1;
+
+    // Still a list, and the path continues: no index said which element
+    if (!isLast && fieldDef.type === "array") {
+      return { outcome: "listWithoutIndex", segment: segment.raw };
+    }
+
     fields = fieldDef.type === "object" ? fieldDef.fields : undefined;
   }
 
-  return fieldDef;
+  return fieldDef === undefined
+    ? { outcome: "unknown" }
+    : { outcome: "resolved", fieldDef };
 };
 
 /**
