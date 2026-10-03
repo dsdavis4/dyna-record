@@ -1,3 +1,19 @@
+## 3.3.2 - 2026-10-03
+
+### Fixed
+
+- **A caller-supplied `ExclusiveStartKey` was discarded.** `DynamoClient.query` drains every page itself, and it declared the cursor it follows without seeding it from the caller's parameters. The pagination loop owns that field on every request, so page one went out with `ExclusiveStartKey: undefined` and the read restarted from the beginning of the partition. Nothing in dyna-record sets the field today, so no public operation was affected — but the method's own documentation keeps the door open for a cursor-based read API, and that door was already broken behind it.
+
+### Changed
+
+- **Command assertions in the test suite are whole commands rather than single fields.** Eleven assertions matched one property of a `QueryCommand`, a `SearchVectorsCommand` or a logged payload with `objectContaining`, which passes however the rest of the command drifts. The `ExclusiveStartKey` bug above is what that costs: the pagination tests asserted the cursor on pages two and three and never looked at page one.
+
+  Asserting the shape also recorded two things no test had stated. The update prefetch on a vector-indexed table scopes itself with `FilterExpression: "#Type IN (:Type1)"`, which is why its key placeholder is `:PK2`; and it sends an explicit `ExclusiveStartKey: undefined`, which the plain query path does not.
+
+- **Three partial assertions were left partial, with the reason written down.** A vector index's metadata carries a content fingerprint and its full search schema, so pinning the whole object in a test about one variant's dimensions would fail on every unrelated change to the index. `getEntitiesForTable` is asserted with `arrayContaining` because the claim is that four inherited entities are present, not that they are the only entities the fixture file declares. Where the whole object is the right assertion, the embedding model constants now pin it — including the score converter, matched by its type the way the decorator suites match a zod schema.
+
+- **A redundant test is gone.** `defaults topK to 10 and passes an explicit topK through` asserted one field of a command that an adjacent `it.each([1, 100])` already asserts whole, and named a default that five other tests pin inside their own whole-command assertions.
+
 ## 3.3.0 - 2026-09-28
 
 ### Breaking (type-level only)

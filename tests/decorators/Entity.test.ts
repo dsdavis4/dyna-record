@@ -139,16 +139,24 @@ describe("Entity decorator", () => {
     });
 
     it("inherits relationship metadata from a parent entity", () => {
+      expect.assertions(1);
+
       const rels = Metadata.getEntity("Pickup").relationships;
-      expect(rels.garage).toMatchObject({
+      expect(rels.garage).toEqual({
         type: "BelongsTo",
         propertyName: "garage",
-        foreignKey: "garageId"
+        foreignKey: "garageId",
+        target: Garage
       });
     });
 
     it("includes entities registered through inheritance in getEntitiesForTable", () => {
+      expect.assertions(1);
+
       const entities = Metadata.getEntitiesForTable("TestTable");
+      // arrayContaining matches the claim: these four must be present. An
+      // exact list would couple this test to the unrelated fixture entities
+      // this file declares for other cases
       expect(Object.keys(entities)).toEqual(
         expect.arrayContaining(["Truck", "Pickup", "Car", "Garage"])
       );
