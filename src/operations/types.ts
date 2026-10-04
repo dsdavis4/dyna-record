@@ -137,9 +137,33 @@ export type NonRecursiveLeaf =
 type MaxDotPathDepth = 5;
 
 /**
+ * The list indexes a dot path may name.
+ *
+ * Literal indexes rather than `${number}`. A pattern template literal in the
+ * key union becomes a pattern index signature on the filter record, and a
+ * record with an index signature accepts any key when `query` infers its
+ * `const F extends TypedFilterParams<T>` — which silently costs every entity
+ * its unknown-key, wrong-key and wrong-type errors, not just the indexed ones.
+ * Literal keys keep the record closed.
+ *
+ * Ten is the cap, so a filter can name one of the first ten elements. A
+ * condition on a specific element is in practice a condition on an early one;
+ * beyond that the question is "does any element match", which is `$contains`.
+ * The expression builder itself has no cap — a higher index compiles and runs,
+ * it just is not offered by the type.
+ */
+type ListIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/**
  * Recursively generates dot-separated key paths for plain object types.
  * Stops recursion at {@link NonRecursiveLeaf} types and at {@link MaxDotPathDepth} levels
  * to prevent "Type instantiation is excessively deep" errors.
+ *
+ * An array-valued field yields `name[n]` paths into its elements, for each
+ * {@link ListIndex}, which is DynamoDB's document-path syntax for one element of
+ * a List. A path *through* an array with no index is deliberately absent:
+ * DynamoDB has no path meaning "every element", so such a condition can only
+ * match nothing.
  *
  * @template T - The object type to generate paths for.
  * @template Depth - Internal depth counter (tuple). Do not provide externally.
@@ -155,10 +179,19 @@ export type DotPathKeys<
       ? {
           [K in keyof T & string]:
             | K
-            | (DotPathKeys<T[K], [...Depth, unknown]> extends infer D extends
-                string
-                ? `${K}.${D}`
-                : never);
+            | (NonNullable<T[K]> extends readonly (infer Element)[]
+                ?
+                    | `${K}[${ListIndex}]`
+                    | (DotPathKeys<
+                        Element,
+                        [...Depth, unknown]
+                      > extends infer D extends string
+                        ? `${K}[${ListIndex}].${D}`
+                        : never)
+                : DotPathKeys<T[K], [...Depth, unknown]> extends infer D extends
+                      string
+                  ? `${K}.${D}`
+                  : never);
         }[keyof T & string]
       : never;
 

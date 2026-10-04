@@ -14,6 +14,13 @@ export class NotFoundError extends Error {
 
 /**
  * Represents an error indicating that a filter is not valid for the context in which it is used. This error is thrown when a filter uses a condition outside the context's capability set (EX: a `$beginsWith` condition in a vector search filter), references an attribute that is not filterable in the context, declares more than one condition for the same attribute where only one is allowed, or provides a value that does not match the attribute's schema.
+ *
+ * @remarks
+ * Most of these conditions are ones DynamoDB itself **accepts**. It applies them, matches no item, and reports nothing — so a mistake is indistinguishable from a query that legitimately found nothing. `begins_with` on a Number, `contains` with a Number operand, a comparison against a Map, an equality between a List and a scalar, a composed range whose bounds cross, and an equality against `null` all behave that way; `begins_with(attr, "")` is the inverse, matching every item while reading like a narrow. Each was confirmed against the service rather than inferred from the documentation. Rejecting them is the only way the mistake becomes visible.
+ *
+ * Two are rejected even though DynamoDB does report them, and for one reason: its message does not say which attribute. An inverted `$between` comes back as `The BETWEEN operator requires upper bound to be greater than or equal to lower bound; lower bound operand: AttributeValue: {N:200}, upper bound operand: AttributeValue: {N:100}` — the bounds, never the name. Send three `BETWEEN` conditions with only the second inverted and the message is identical, leaving the caller to work out which one it meant. A `FilterError` names the attribute.
+ *
+ * What this error deliberately does **not** cover is DynamoDB's quotas, such as the expression size limit. A quota is a number AWS can raise, and a library that encoded it would have to be republished to catch up; semantics are the library's to check, limits are the service's to enforce.
  */
 export class FilterError extends Error {
   public readonly code = "FilterError";

@@ -1,3 +1,125 @@
+## 3.4.0 - 2026-10-03
+
+### Added
+
+- **List elements in a dot path.** A path through an array names one element with DynamoDB's own index syntax, and may continue below it when the elements are objects. The index is typed, so the path is offered by typeahead and narrows to the element's own field.
+
+  ```typescript
+  // One element of a list of scalars
+  await Store.query("123", { filter: { "address.tags[0]": "home" } });
+
+  // A field of one element of a list of objects
+  await Store.query("123", { filter: { "address.contacts[0].name": "Jane" } });
+  ```
+
+  The key type offers indexes `0` through `9`. A higher index compiles and runs — the expression builder has no cap — but is not offered, because a condition on a specific element is in practice a condition on an early one.
+
+  DynamoDB has no document path meaning "every element", so a path _through_ an array that omits the index reaches nothing: the condition compiles, matches no row and reports no error. dyna-record rejects it with a `FilterError` naming the segment and the index to add. An index on a field that holds no list is rejected the same way, for the same reason. To ask about a list as a whole, use `$contains`.
+
+- **Comparison and range conditions.** `$gt`, `$gte`, `$lt`, `$lte` and `$between` are available on filters and on sort key conditions.
+
+  ```typescript
+  // Everything placed in January
+  await Order.query("123", {
+    filter: {
+      orderDate: { $gte: new Date("2026-01-01"), $lt: new Date("2026-02-01") }
+    }
+  });
+
+  // An inclusive range, as one condition
+  await Order.query("123", { filter: { total: { $between: [50, 100] } } });
+  ```
+
+  Several comparison operators on one attribute compose with AND, which is how a half-open range is written. `$between` is inclusive on both bounds, and its pair is ordered. dyna-record rejects an inverted pair before the request, naming the attribute; DynamoDB rejects it too, but its message names only the operator, which is less help in a filter with several conditions. A composed range is the case to watch — DynamoDB validates `BETWEEN`'s bounds but applies a `$gte`/`$lt` pair as written, so an empty one returns no rows and no error. dyna-record rejects that too.
+
+  Every operand is a **whole value** of the attribute, so it is named the way the entity declares it and converted to the stored form. A date attribute therefore takes `Date` operands. That is the same rule equality follows, and the opposite of `$beginsWith` and `$contains`, whose operands are a _fragment_ of the stored form.
+
+- **Sort key conditions take ranges too**, which is where they pay for themselves: a range in a key condition narrows what DynamoDB reads, where a range in a filter reads the partition and discards rows afterwards.
+
+  ```typescript
+  await Customer.query("123", {
+    skCondition: { $between: ["Order#100", "Order#200"] }
+  });
+  ```
+
+  A sort key takes **one** condition, so the comparison operators do not compose there — a two-sided key range is `$between`. The partition key takes an equality: its value selects the partition to read, so there is nothing for another condition to narrow.
+
+### Breaking (type-level only)
+
+- **A filter value is named the way the entity declares the attribute.** Filter _keys_ were always entity-side — the attribute names you declared — while filter _values_ were table-side, the form DynamoDB stores. Those coincide for every attribute except the ones with serializers, which is why 3.3.0 had to exclude `Date` from filter values, exempt serialized attributes from validation, and tell you to write the ISO string yourself.
+
+  A date attribute now takes a `Date`, and dyna-record converts it to the stored ISO string:
+
+  ```typescript
+  await Order.query("123", { filter: { orderDate: new Date("2026-01-15") } });
+  ```
+
+  Passing the stored string for equality no longer compiles or validates, because equality on a date means that date, not a fragment of how it is written. **Matching a date by partial value is unchanged** and is what `$beginsWith` has always been for — `filter: { orderDate: { $beginsWith: "2026" } }` still finds everything in that year. `$beginsWith` and `$contains` operands stay strings and scalars whatever the attribute's declared type, because each is a fragment of the stored form rather than a value of the attribute. Which attributes offer them at all is a separate question, answered below.
+
+  Each element of an `IN` array is converted the same way, so `filter: { orderDate: [d1, d2] }` takes Dates.
+
+- **Index key conditions take the declared form too.** `IndexKeyConditions` typed every attribute as a stored-form value, while the resolver that now converts and validates serves key conditions as well as filters — so a date attribute was typed as a string and validated as a `Date`. Both surfaces now agree: a key condition takes the declared value, a `$beginsWith` prefix, a comparison or a `$between` range. `PartitionKey` and `SortKey` still take plain strings; those brands mark the attribute's role, not a value you construct.
+
+- **Nested fields are named the way they are declared too.** A dot-path condition resolves through the attribute's object schema to the field it names, so `filter: { "shipment.dispatchedAt": someDate }` takes a `Date` exactly as a top level date attribute does — matching `update()`, which has always taken a `Date` at a nested path. The field's own schema validates the value and its own definition converts it.
+
+  A path that names no single field — one descending through an array element or a discriminated union variant, which a path alone does not identify — is left unvalidated and unconverted, and takes `StoredFilterTypes`. That is the one place a filter still speaks the stored form.
+
+- **`null` is no longer a filter value.** `filter: { someNullableAttribute: null }` compiled before and does not now. dyna-record removes a nulled attribute rather than storing `NULL`, so an equality on `null` could never match a row — the condition was always a way of asking for nothing. For the same reason `null` is not a comparison or `$between` operand: there is no stored null to order against.
+
+- **An operator is offered only where the attribute's stored form can carry it.** Each of DynamoDB's condition functions applies to particular types, and a condition outside that set is not an error — it simply matches nothing, which is indistinguishable from a query that legitimately found no rows. Those conditions are now absent from the type instead.
+
+  - `$beginsWith` and `$contains` need a String (and `$contains` also accepts a List or Set). They are no longer offered on an attribute stored as a Number, a Boolean or a Map. `filter: { total: { $beginsWith: "1" } }` compiled before and does not now.
+  - The comparison operators and `$between` need a value DynamoDB can order, which is a String, a Number or Binary. They are no longer offered on an attribute stored as a Boolean, a Map or a List.
+
+  The **stored** form decides, not the declared one. That is why a date attribute keeps all of them: it is declared as a `Date` and stored as an ISO 8601 string, which orders lexicographically exactly as the date orders chronologically — so `{ orderDate: { $beginsWith: "2026" } }` and `{ orderDate: { $gte: someDate } }` both still work.
+
+- **An `IN` element is shaped like the attribute's own value.** `IN` compares the whole attribute against each element, so on a List-stored field an element is a list. A list of scalars there — `filter: { "address.tags": ["home", "work"] }` — asks whether the list _equals_ `"home"` or `"work"`, which it never does. That now reports the mistake and points at the membership test it was reaching for:
+
+  ```typescript
+  // Membership
+  filter: { "address.tags": { $contains: "home" } }
+
+  // The whole list equals one of these
+  filter: { "address.tags": [["home"], ["work"]] }
+  ```
+
+  An element that names an operator (`[{ $gt: 1 }]`) is rejected for the same reason: `IN` takes values, and an operator cannot nest inside one.
+
+### Fixed
+
+- **A filter whose every condition was dropped no longer sends an empty `FilterExpression`.** Forwarding an optional input is the documented way to build a filter, and the condition _was_ dropped from the expression — but the empty expression was still attached, and DynamoDB rejects it. `filter: { name: req.query.name }` with nothing in it now sends no filter at all, as the documentation says it does. The same applies to `{}`, to `$or: []`, and to an `$or` whose blocks all emptied — the last of which previously produced a `FilterExpression` beginning with a bare `" OR "`.
+
+- **A nested field in a multi-entity partition is typed by the field, not by the stored form.** `EntityAttributesOnly` is built on `Omit`, which does not distribute, so a dot path into an attribute declared by only one entity of a partition resolved to nothing and fell back to the stored form — while the expression builder resolved the field exactly and validated in the declared form. The two surfaces accepted disjoint values: a nested date could not be filtered at all, because the type took only the stored string and the runtime took only a `Date`.
+
+- **Whole-value equality on an `@ObjectAttribute` works again.** The operator-object guard added in this release read a plain object as a mistyped operator, which broke `filter: { address: { street, city } }`. DynamoDB's `=` does compare Maps, so an object naming no operator is the attribute's own value where the attribute stores one.
+
+- **Conditions that could not match are reported rather than compiled.** Each produced a query DynamoDB accepts, answers with no rows, and reports nothing about — indistinguishable from an empty result:
+
+  - An `IN` condition with no values, or with an element that resolved to `undefined`, which left a placeholder with nothing bound to it.
+  - A comparison bounding an empty range — `{ $gte: 100, $lt: 1 }`, or an exclusive bound on equal endpoints. `$between` already rejected the inverted spelling of the same range.
+  - An ordered comparison against a value DynamoDB cannot order, where the attribute's own form was unknown — a dot path through an array element or a union variant. A boolean, a Map, a List, `null`, `NaN` and `Infinity` are all rejected there now.
+  - A `$beginsWith` operand that is not a string, or a `$contains` operand that is not a single value.
+
+- **Values are validated in their declared form**, which removes the carve-out 3.3.0 added where attributes with serializers skipped validation entirely. A date filter is now checked — as a `Date` — where before it was not checked at all.
+
+- **Key conditions are no longer compiled with the filter vocabulary.** A `KeyConditionExpression` accepted an `IN` array, a `$contains` and a nested Map path, none of which DynamoDB allows there — the condition compiled and the service rejected the request. Key conditions now compile under their own vocabulary and each unsupported construct is reported against the attribute that carries it. A `$or` block in a key condition was previously reported as an unknown attribute named `"$or"`.
+
+- **A condition that cannot match is reported rather than compiled, on every arm that carries an operand.** These were spread unevenly: a check one arm had, its siblings often lacked.
+
+  - An equality or `IN` operand that is not shaped like the attribute's value — a scalar compared against a List-stored field asks whether the list _equals_ that scalar. The error points at `$contains`, which is the membership test the caller wanted.
+  - `null` as an equality value or `IN` element. dyna-record removes a nulled attribute rather than storing `NULL`, so no item holds one. An `IN` list mixing `null` with real values hid this best, since the real values still matched.
+  - A `$contains` operand that is not a substring, where the attribute is stored as a String. A date attribute is stored as an ISO string, so a year is `"2026"` and not `2026`.
+  - An `IN` element that names an operator, or an `IN` condition with no values at all.
+  - A `$beginsWith` prefix or `$contains` substring that is the empty string. This is the one case that fails by matching _everything_ — `?? ""` on an optional input reaches it, and in a key condition it reads the whole partition while reading like a narrow.
+  - A filter key with an empty path segment, which `` `${prefix}.${field}` `` produces when either half is empty.
+  - A comparison bounding an empty range. Worth knowing: DynamoDB validates `BETWEEN`'s bounds itself but applies a composed `$gte`/`$lt` pair as written, so only the composed spelling fails silently.
+
+- **A filter and an `$or` block that both compile to nothing no longer produce a malformed expression.** `{ $or: [], name: "x" }` compiled to `() AND (#Name = :Name1)` — empty parentheses, which DynamoDB rejects.
+
+- **A nested field whose name is not a valid expression token can be filtered on.** An `@ObjectAttribute` schema key is an unrestricted string, so a field may legitimately be named `"order date"`. Its name was used verbatim as the `#` token, producing `#order date`, which DynamoDB rejects — the name is now mapped to a safe token, as expression attribute names exist to allow. Ordinary names are unchanged.
+
+- **An operator object that names no supported operator is rejected.** `filter: { total: { $ne: 5 } }` compiled to an equality against the object itself — a condition DynamoDB accepts, matches nothing for, and reports no error about, making a mistyped operator indistinguishable from an empty result. The error now names the attribute and lists the operators that exist. An operator object that mixes families, such as a comparison and a `$between`, is rejected for the same reason: one would have been compiled and the rest silently dropped.
+
 ## 3.3.2 - 2026-10-03
 
 ### Fixed
