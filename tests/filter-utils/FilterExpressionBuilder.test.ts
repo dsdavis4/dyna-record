@@ -4,7 +4,9 @@ import {
   keyConditionCapabilities,
   queryFilterCapabilities,
   searchFilterCapabilities,
-  type FilterAttributeResolver
+  writeConditionCapabilities,
+  type FilterAttributeResolver,
+  type FilterExpressionBuilderProps
 } from "../../src/filter-utils/index.js";
 import { FilterError } from "../../src/errors.js";
 import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
@@ -27,6 +29,7 @@ const attributes: Record<
     kind?: AttributeKind;
     serializers?: Serializers;
     objectSchema?: ObjectSchema;
+    nullable?: boolean;
   }
 > = {
   pk: { alias: "PK", type: z.string(), kind: "string" },
@@ -40,7 +43,33 @@ const attributes: Record<
   // No kind: this library models no binary attribute kind, so a binary value
   // is reachable only where the form could not be resolved
   thumbnail: { alias: "Thumbnail", type: z.instanceof(Uint8Array) },
-  discount: { alias: "Discount", type: z.number().nullable(), kind: "number" },
+  discount: {
+    alias: "Discount",
+    type: z.number().nullable(),
+    kind: "number",
+    nullable: true
+  },
+  status: { alias: "Status", type: z.string(), kind: "string" },
+  holder: {
+    alias: "Holder",
+    type: z.string().nullable(),
+    kind: "string",
+    nullable: true
+  },
+  // An alias that is not the attribute's name, so the name map shows which
+  // one an expression references
+  phone: {
+    alias: "phone_number",
+    type: z.string().nullable(),
+    kind: "string",
+    nullable: true
+  },
+  leaseExpiresAt: {
+    alias: "LeaseExpiresAt",
+    type: z.date(),
+    kind: "date",
+    serializers: dateSerializer
+  },
   meta: {
     alias: "Meta",
     type: z.object({}),
@@ -51,6 +80,7 @@ const attributes: Record<
       "odd name": { type: "string" },
       "odd-name": { type: "string" },
       label: { type: "string" },
+      note: { type: "string", nullable: true },
       recordedAt: { type: "date" },
       tags: { type: "array", items: { type: "string" } },
       nested: {
@@ -116,6 +146,19 @@ const typedQueryBuilder = (): FilterExpressionBuilder =>
   new FilterExpressionBuilder({
     capabilities: queryFilterCapabilities,
     resolveAttribute: typedResolver
+  });
+
+/**
+ * Write-condition builder over the typed resolver, so a condition is validated
+ * and converted as a query filter's is
+ */
+const writeConditionBuilder = (
+  props: Partial<FilterExpressionBuilderProps> = {}
+): FilterExpressionBuilder =>
+  new FilterExpressionBuilder({
+    capabilities: writeConditionCapabilities,
+    resolveAttribute: typedResolver,
+    ...props
   });
 
 describe("FilterExpressionBuilder", () => {
@@ -1916,7 +1959,10 @@ describe("FilterExpressionBuilder", () => {
         composedComparisons: false,
         between: true,
         nestedPaths: false,
-        singleConditionPerAttribute: false
+        singleConditionPerAttribute: false,
+        dropUndefinedConditions: false,
+        nullMeansNotSet: false,
+        dropEmptyOr: false
       });
     });
   });
@@ -1940,6 +1986,7 @@ describe("FilterExpressionBuilder", () => {
       "query filters": string;
       "key conditions": string;
       "search filters": string;
+      "write conditions": string;
     }> = [
       {
         operand: "equality",
@@ -1947,7 +1994,8 @@ describe("FilterExpressionBuilder", () => {
         capability: null,
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "compiles"
+        "search filters": "compiles",
+        "write conditions": "compiles"
       },
       {
         operand: "IN array",
@@ -1957,7 +2005,8 @@ describe("FilterExpressionBuilder", () => {
         // A key condition compares one value per key; a filter is applied after
         // the read, where a set membership test is fine
         "key conditions": "IN conditions (array values) are not supported",
-        "search filters": "IN conditions (array values) are not supported"
+        "search filters": "IN conditions (array values) are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "single comparison",
@@ -1967,7 +2016,8 @@ describe("FilterExpressionBuilder", () => {
         // The sort key takes a comparator, which is what makes a key range
         // narrow the read rather than discard rows after it
         "key conditions": "compiles",
-        "search filters": "Comparison conditions are not supported"
+        "search filters": "Comparison conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "composed comparisons",
@@ -1978,7 +2028,8 @@ describe("FilterExpressionBuilder", () => {
         // $between
         "key conditions": "Composed comparisons are not supported",
         // Rejected one step earlier, by the comparison capability
-        "search filters": "Comparison conditions are not supported"
+        "search filters": "Comparison conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$between",
@@ -1986,7 +2037,8 @@ describe("FilterExpressionBuilder", () => {
         capability: "between",
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "$between conditions are not supported"
+        "search filters": "$between conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$beginsWith",
@@ -1994,7 +2046,8 @@ describe("FilterExpressionBuilder", () => {
         capability: "beginsWith",
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "$beginsWith conditions are not supported"
+        "search filters": "$beginsWith conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$contains",
@@ -2003,7 +2056,8 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // contains is not among the key condition functions
         "key conditions": "$contains conditions are not supported",
-        "search filters": "$contains conditions are not supported"
+        "search filters": "$contains conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$or block",
@@ -2012,7 +2066,8 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // A key condition is a single conjunction selecting what to read
         "key conditions": "$or conditions are not supported",
-        "search filters": "$or conditions are not supported"
+        "search filters": "$or conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "nested path",
@@ -2021,7 +2076,46 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // A document path is not a key, and not a search schema attribute
         "key conditions": "Nested attribute paths are not supported",
-        "search filters": "Nested attribute paths are not supported"
+        "search filters": "Nested attribute paths are not supported",
+        "write conditions": "compiles"
+      },
+      {
+        operand: "null",
+        condition: { discount: null },
+        capability: "nullMeansNotSet",
+        // dyna-record removes a nulled attribute rather than storing NULL, so
+        // no row holds one for a read to match
+        "query filters": "a condition cannot compare against null",
+        "key conditions": "a condition cannot compare against null",
+        "search filters": "a condition cannot compare against null",
+        // The same removal is why a guard reads null as "not set":
+        // attribute_not_exists matches exactly the rows a nulled write leaves
+        "write conditions": "compiles"
+      },
+      {
+        operand: "undefined",
+        condition: { name: undefined },
+        capability: "dropUndefinedConditions",
+        // Dropping a filter condition widens the result set within the
+        // partition the key conditions already scoped
+        "query filters": "compiles",
+        // Dropping a key condition would widen the read to the whole partition
+        "key conditions": "the condition has no value",
+        "search filters": "compiles",
+        // Dropping a guard's condition would loosen what the write requires
+        "write conditions": "the condition has no value"
+      },
+      {
+        operand: "empty $or",
+        condition: { $or: [] },
+        capability: "dropEmptyOr",
+        "query filters": "compiles",
+        // Rejected by the or capability, which comes first
+        "key conditions": "$or conditions are not supported",
+        "search filters": "$or conditions are not supported",
+        // An $or of nothing asks for nothing, and dropping it from a guard
+        // would loosen it
+        "write conditions": "$or has no condition blocks"
       }
     ];
 
@@ -2046,6 +2140,11 @@ describe("FilterExpressionBuilder", () => {
         capabilities: searchFilterCapabilities,
         compile: (condition: FilterParams) =>
           searchBuilderInstance().filterParams(condition)
+      },
+      "write conditions": {
+        capabilities: writeConditionCapabilities,
+        compile: (condition: FilterParams) =>
+          writeConditionBuilder().filterParams(condition)
       }
     } as const;
 
@@ -2122,9 +2221,12 @@ describe("FilterExpressionBuilder", () => {
           "$or block",
           "IN array",
           "composed comparisons",
+          "empty $or",
           "equality",
           "nested path",
-          "single comparison"
+          "null",
+          "single comparison",
+          "undefined"
         ].sort()
       );
     });
@@ -2662,6 +2764,220 @@ describe("FilterExpressionBuilder", () => {
       ).toThrow(
         'Invalid key condition for attribute "name": the condition has no value'
       );
+    });
+  });
+
+  describe("write conditions", () => {
+    it.each<{ operand: string; condition: FilterParams }>([
+      { operand: "equality", condition: { name: "Scale-A" } },
+      { operand: "IN array", condition: { name: ["Scale-A", "Scale-B"] } },
+      { operand: "$beginsWith", condition: { name: { $beginsWith: "Scale" } } },
+      { operand: "$contains", condition: { name: { $contains: "cal" } } },
+      { operand: "$gt", condition: { price: { $gt: 10 } } },
+      { operand: "$gte", condition: { price: { $gte: 10 } } },
+      { operand: "$lt", condition: { price: { $lt: 10 } } },
+      { operand: "$lte", condition: { price: { $lte: 10 } } },
+      {
+        operand: "$between",
+        condition: {
+          createdAt: {
+            $between: [new Date("2026-01-01"), new Date("2026-12-31")]
+          }
+        }
+      },
+      {
+        operand: "$or",
+        condition: {
+          $or: [{ status: "pending" }, { price: { $gte: 5, $lt: 10 } }],
+          name: "Scale-A"
+        }
+      },
+      { operand: "dot path", condition: { "meta.label": "warehouse" } }
+    ])("compiles $operand exactly as a query filter does", ({ condition }) => {
+      expect.assertions(1);
+
+      expect(writeConditionBuilder().filterParams(condition)).toEqual(
+        typedQueryBuilder().filterParams(condition)
+      );
+    });
+
+    it("rejects a condition set to undefined rather than dropping it", () => {
+      expect.assertions(2);
+
+      // Dropping it would quietly loosen the guard
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          status: undefined,
+          name: "Scale-A"
+        })
+      ).toThrow(FilterError);
+      expect(() =>
+        writeConditionBuilder().filterParams({ status: undefined })
+      ).toThrow(
+        'Invalid filter value for attribute "status": the condition has no value'
+      );
+    });
+
+    it("rejects a condition set to undefined inside an $or block", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          $or: [{ name: "Scale-A" }, { status: undefined }]
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "status": the condition has no value'
+      );
+    });
+
+    it("compiles null on a nullable attribute to attribute_not_exists, binding no value", () => {
+      expect.assertions(2);
+
+      const builder = writeConditionBuilder();
+
+      // The alias, not the attribute's name, is what the expression references
+      expect(builder.filterParams({ phone: null })).toEqual({
+        expression: "attribute_not_exists(#phone_number)",
+        values: {}
+      });
+      expect(builder.expressionAttributeNames([], { phone: null })).toEqual({
+        "#phone_number": "phone_number"
+      });
+    });
+
+    it("rejects null on an attribute that is not nullable", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ status: null })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "status": null means "not set" in write conditions, which only an attribute declared nullable can be'
+        )
+      );
+    });
+
+    it("compiles null on a nullable nested field through its dot path", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({ "meta.note": null })
+      ).toEqual({
+        expression: "attribute_not_exists(#Meta.#note)",
+        values: {}
+      });
+    });
+
+    it("rejects null on a nested field that is not nullable", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ "meta.label": null })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.label": null means "not set" in write conditions, which only an attribute declared nullable can be'
+      );
+    });
+
+    it("compiles a not-set branch beside a converted comparison in an $or", () => {
+      expect.assertions(1);
+
+      const now = new Date("2026-10-04T12:00:00.000Z");
+
+      expect(
+        writeConditionBuilder().filterParams({
+          $or: [{ holder: null }, { leaseExpiresAt: { $lt: now } }]
+        })
+      ).toEqual({
+        expression:
+          "attribute_not_exists(#Holder) OR #LeaseExpiresAt < :LeaseExpiresAt1",
+        values: { LeaseExpiresAt1: "2026-10-04T12:00:00.000Z" }
+      });
+    });
+
+    it("compiles an $or whose only block is not-set conditions to an expression with no values", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({ $or: [{ holder: null }] })
+      ).toEqual({ expression: "attribute_not_exists(#Holder)", values: {} });
+    });
+
+    it("groups an $or block of several not-set conditions, which bind no values", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({
+          $or: [{ holder: null, phone: null }, { status: "open" }]
+        })
+      ).toEqual({
+        expression:
+          "(attribute_not_exists(#Holder) AND attribute_not_exists(#phone_number)) OR #Status = :Status1",
+        values: { Status1: "open" }
+      });
+    });
+
+    it("rejects an empty $or", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ $or: [], status: "open" })
+      ).toThrow(
+        new FilterError(
+          "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks"
+        )
+      );
+    });
+
+    it("rejects null inside an IN list", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ holder: ["worker-1", null] })
+      ).toThrow(
+        'Invalid filter value for attribute "holder": an IN list cannot carry null. null means "not set" in write conditions, which is its own condition — write it as an $or block'
+      );
+    });
+
+    it("prefixes value placeholders, leaving attribute names unchanged", () => {
+      expect.assertions(3);
+
+      const builder = writeConditionBuilder({
+        valuePlaceholderPrefix: "cond_"
+      });
+      const condition: FilterParams = {
+        $or: [{ holder: null }, { name: { $beginsWith: "Scale" } }],
+        price: { $between: [1, 5] }
+      };
+
+      const compiled = builder.filterParams(condition);
+
+      expect(compiled).toEqual({
+        expression:
+          "(attribute_not_exists(#Holder) OR begins_with(#Name, :cond_Name1)) AND (#Price BETWEEN :cond_Price2 AND :cond_Price3)",
+        values: { cond_Name1: "Scale", cond_Price2: 1, cond_Price3: 5 }
+      });
+      expect(builder.expressionAttributeValues(compiled.values)).toEqual({
+        ":cond_Name1": "Scale",
+        ":cond_Price2": 1,
+        ":cond_Price3": 5
+      });
+      expect(builder.expressionAttributeNames([], condition)).toEqual({
+        "#Holder": "Holder",
+        "#Name": "Name",
+        "#Price": "Price"
+      });
+    });
+
+    it("declares the query filter vocabulary with write semantics", () => {
+      expect.assertions(1);
+
+      expect(writeConditionCapabilities).toEqual({
+        ...queryFilterCapabilities,
+        context: "write conditions",
+        dropUndefinedConditions: false,
+        nullMeansNotSet: true,
+        dropEmptyOr: false
+      });
     });
   });
 

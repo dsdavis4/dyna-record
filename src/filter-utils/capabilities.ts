@@ -16,7 +16,10 @@ export const queryFilterCapabilities: FilterCapabilities = {
   composedComparisons: true,
   between: true,
   nestedPaths: true,
-  singleConditionPerAttribute: false
+  singleConditionPerAttribute: false,
+  dropUndefinedConditions: true,
+  nullMeansNotSet: false,
+  dropEmptyOr: true
 };
 
 /**
@@ -46,7 +49,12 @@ export const keyConditionCapabilities: FilterCapabilities = {
   composedComparisons: false,
   between: true,
   nestedPaths: false,
-  singleConditionPerAttribute: false
+  singleConditionPerAttribute: false,
+  // Dropping a key condition would widen the query to the whole partition
+  dropUndefinedConditions: false,
+  nullMeansNotSet: false,
+  // Moot: $or is not supported at all, and that rejection comes first
+  dropEmptyOr: false
 };
 
 /**
@@ -67,5 +75,30 @@ export const searchFilterCapabilities: FilterCapabilities = {
   composedComparisons: false,
   between: false,
   nestedPaths: false,
-  singleConditionPerAttribute: true
+  singleConditionPerAttribute: true,
+  dropUndefinedConditions: true,
+  nullMeansNotSet: false,
+  // Moot: $or is not supported at all, and that rejection comes first
+  dropEmptyOr: false
+};
+
+/**
+ * Capability set of the write condition context — the condition a write
+ * carries to guard the row it lands on.
+ *
+ * DynamoDB's `ConditionExpression` has the same grammar as a
+ * `FilterExpression`, so the vocabulary is the query filter's in full. What
+ * differs is what a condition means when it says nothing: a filter that drops
+ * one returns more rows, while a guard that drops one lets through a write it
+ * was meant to stop. So a condition set to `undefined` and an empty `$or` are
+ * rejected rather than dropped, and `null` means "not set" — the state
+ * dyna-record leaves an attribute in when it is nulled — on an attribute
+ * declared nullable.
+ */
+export const writeConditionCapabilities: FilterCapabilities = {
+  ...queryFilterCapabilities,
+  context: "write conditions",
+  dropUndefinedConditions: false,
+  nullMeansNotSet: true,
+  dropEmptyOr: false
 };

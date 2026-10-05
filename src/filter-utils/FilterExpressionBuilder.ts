@@ -52,6 +52,7 @@ import type {
  * @property valueSchema - Optional zod validator to run on condition values for the attribute
  * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
  * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
+ * @property nullable - Whether the attribute or nested field is declared nullable. Absent when that could not be resolved, which is read as not nullable
  */
 interface ResolvedPath {
   expressionPath: string;
@@ -60,6 +61,7 @@ interface ResolvedPath {
   valueSchema?: ZodType;
   toStored?: TableSerializer;
   storedForm?: StoredForm;
+  nullable?: boolean;
 }
 
 /**
@@ -180,6 +182,15 @@ const isOrdered = (
 export interface FilterExpressionBuilderProps {
   capabilities: FilterCapabilities;
   resolveAttribute: FilterAttributeResolver;
+  /**
+   * Prepended to every value placeholder the instance binds, leaving attribute
+   * names unchanged. Lets a compiled condition share an expression's value map
+   * with placeholders compiled elsewhere — an update expression's, or another
+   * condition's — without binding the same name twice. Must consist of the
+   * characters an expression token accepts. Defaults to none, which is the
+   * naming every query and search compiles with.
+   */
+  valuePlaceholderPrefix?: string;
 }
 
 /**
@@ -200,6 +211,7 @@ export interface FilterExpressionBuilderProps {
 class FilterExpressionBuilder {
   readonly #capabilities: FilterCapabilities;
   readonly #resolveAttribute: FilterAttributeResolver;
+  readonly #valuePlaceholderPrefix: string;
   #attrCounter: number;
   /**
    * Expression paths a condition has been compiled for, tracked when the
@@ -210,6 +222,7 @@ class FilterExpressionBuilder {
   constructor(props: FilterExpressionBuilderProps) {
     this.#capabilities = props.capabilities;
     this.#resolveAttribute = props.resolveAttribute;
+    this.#valuePlaceholderPrefix = props.valuePlaceholderPrefix ?? "";
     this.#attrCounter = 0;
     this.#conditionedPaths = new Set();
   }
@@ -234,7 +247,11 @@ class FilterExpressionBuilder {
     // an expression referencing a placeholder with nothing bound to it, which
     // DynamoDB rejects. `$or` blocks reach this method through orCondition, so
     // they are covered here too, and an undefined `$or` drops rather than being
-    // read as an attribute named "$or"
+    // read as an attribute named "$or". A context that does not drop one
+    // rejects it here instead, at every depth for the same reason
+    if (!this.#capabilities.dropUndefinedConditions) {
+      this.assertConditionsDefined(rawFilter);
+    }
     const filter = this.definedConditions(rawFilter);
     const isOrFilter = this.isOrFilter(filter);
 
@@ -242,6 +259,14 @@ class FilterExpressionBuilder {
       if (!this.#capabilities.or) {
         throw new FilterError(
           `$or conditions are not supported in ${this.#capabilities.context}`
+        );
+      }
+      // An $or of no blocks compiles to nothing, which a filter drops. A
+      // context that does not drop it rejects it, because nothing is what it
+      // asks for
+      if (filter.$or.length === 0 && !this.#capabilities.dropEmptyOr) {
+        throw new FilterError(
+          `Invalid condition: $or has no condition blocks, and ${this.#capabilities.context} reject an empty $or rather than dropping it — dropping it would loosen what the condition checks`
         );
       }
       const isAndOrFilter = this.isAndOrFilter(filter);
@@ -265,6 +290,26 @@ class FilterExpressionBuilder {
     return Object.fromEntries(
       Object.entries(conditions).filter(([, value]) => value !== undefined)
     );
+  }
+
+  /**
+   * Rejects a condition set to undefined, for a context that does not drop one.
+   *
+   * A write condition is the case: dropping one of its conditions lets through
+   * a write the caller meant to stop, where dropping a filter's only widens a
+   * read
+   * @param conditions - The conditions as the caller supplied them
+   */
+  private assertConditionsDefined(conditions: FilterParams): void {
+    const undefinedKey = Object.keys(conditions).find(
+      key => conditions[key] === undefined
+    );
+
+    if (undefinedKey !== undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${undefinedKey}": the condition has no value, and ${this.#capabilities.context} reject one rather than dropping it — dropping it would loosen what the condition checks`
+      );
+    }
   }
 
   /**
@@ -497,6 +542,13 @@ class FilterExpressionBuilder {
         );
       }
       const mappings = value.map(val => {
+        // Where null means "not set" it is a condition of its own rather than
+        // a value to compare against, so it has no place in a list of them
+        if (val === null && capabilities.nullMeansNotSet) {
+          throw new FilterError(
+            `Invalid filter value for attribute "${attr}": an IN list cannot carry null. null means "not set" in ${capabilities.context}, which is its own condition — write it as an $or block`
+          );
+        }
         // The same checks every other operand gets. Without the first, an
         // element that resolved to undefined still takes a placeholder and the
         // expression references one with no value bound to it
@@ -598,6 +650,11 @@ class FilterExpressionBuilder {
       );
       const reference = this.bindFragment(resolved, value.$contains, values);
       condition = `contains(${resolved.expressionPath}, ${reference})`;
+    } else if (value === null && capabilities.nullMeansNotSet) {
+      // dyna-record removes a nulled attribute rather than storing NULL, so
+      // "not set" is an absent attribute — a test of the path, binding no value
+      this.assertNullable(resolved, attr, capabilities);
+      condition = `attribute_not_exists(${resolved.expressionPath})`;
     } else {
       const reference = this.bindWholeValue(resolved, attr, value, values);
       condition = `${resolved.expressionPath} = ${reference}`;
@@ -640,6 +697,39 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Rejects `null` as "not set" on an attribute that is not declared nullable.
+   *
+   * Such an attribute is always set, so the condition could never hold. The
+   * nullability read is the attribute's, or for a dot path the nested field's;
+   * a path whose field could not be resolved is not known to be nullable and
+   * is rejected too
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for the error message
+   * @param capabilities - The vocabulary this compilation may use, for the message
+   */
+  private assertNullable(
+    resolved: ResolvedPath,
+    attr: string,
+    capabilities: FilterCapabilities
+  ): void {
+    if (resolved.nullable === true) return;
+
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": null means "not set" in ${capabilities.context}, which only an attribute declared nullable can be`
+    );
+  }
+
+  /**
+   * The next value placeholder for a path: the instance's prefix, the path's
+   * placeholder key and the instance's counter
+   * @param resolved - The resolved attribute path
+   * @returns The placeholder, without its `:`
+   */
+  private nextPlaceholder(resolved: ResolvedPath): string {
+    return `${this.#valuePlaceholderPrefix}${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+  }
+
+  /**
    * Binds a whole-value operand and returns the placeholder reference naming
    * it.
    *
@@ -664,7 +754,7 @@ class FilterExpressionBuilder {
   ): string {
     this.assertWholeValueShape(resolved, value, attr);
     this.validateConditionValue(resolved, attr, value);
-    const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+    const placeholder = this.nextPlaceholder(resolved);
     values[placeholder] = this.toStoredValue(resolved, value, attr);
     return `:${placeholder}`;
   }
@@ -687,7 +777,7 @@ class FilterExpressionBuilder {
     value: DynamoNativeValue,
     values: Record<string, DynamoNativeValue>
   ): string {
-    const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+    const placeholder = this.nextPlaceholder(resolved);
     values[placeholder] = value;
     return `:${placeholder}`;
   }
@@ -1278,7 +1368,8 @@ class FilterExpressionBuilder {
       type: valueSchema,
       serializers,
       objectSchema,
-      kind
+      kind,
+      nullable
     } = this.#resolveAttribute(topLevelKey, key);
 
     // The alias and each field name stand in an expression as a `#` token,
@@ -1293,7 +1384,8 @@ class FilterExpressionBuilder {
         placeholderKey: tableToken,
         valueSchema,
         toStored: serializers?.toTableAttribute,
-        storedForm: storedFormOfAttribute(kind)
+        storedForm: storedFormOfAttribute(kind),
+        nullable
       };
     }
 
@@ -1361,6 +1453,8 @@ class FilterExpressionBuilder {
       names,
       placeholderKey,
       storedForm: storedFormOfField(fieldDef),
+      // An object field is never nullable, so its definition has no flag
+      nullable: fieldDef.type !== "object" && fieldDef.nullable === true,
       // Not every field's schema describes the value a condition carries;
       // where it does not, the stored form is still known and is what decides
       // which operators apply
@@ -1418,13 +1512,21 @@ class FilterExpressionBuilder {
     // needed. It over-triggers harmlessly, grouping a single multi-value
     // condition such as a $between or a composed comparison.
     //
-    // An arm that bound no value, or reused a placeholder, would break the
-    // substitution and silently drop the grouping — which inside an $or
-    // changes precedence, since AND binds tighter than OR. Parenthesizing
+    // The one arm that binds no value is null read as "not set", so each of
+    // those is counted alongside the values. It is reachable only where null
+    // means "not set" — every other context rejects null before this — so the
+    // count is unchanged everywhere else.
+    //
+    // An arm that bound no value uncounted, or reused a placeholder, would
+    // break the substitution and silently drop the grouping. Parenthesizing
     // unconditionally would remove the proxy entirely and is always valid;
     // it is not done only because it would rewrite every expression a
     // single-condition block produces
-    const multipleVals = Object.keys(andParams.values).length > 1;
+    const notSetConditions = Object.values(andFilter).filter(
+      value => value === null
+    ).length;
+    const multipleVals =
+      Object.keys(andParams.values).length + notSetConditions > 1;
     const expression = multipleVals
       ? `(${andParams.expression}) OR `
       : `${andParams.expression} OR `;

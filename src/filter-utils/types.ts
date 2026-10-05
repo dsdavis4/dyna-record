@@ -469,7 +469,8 @@ export type AndOrFilter = FilterParams & OrFilter;
 export type FilterContext =
   | "query filters"
   | "search filters"
-  | "key conditions";
+  | "key conditions"
+  | "write conditions";
 
 /**
  * Declares the filter vocabulary a context supports. The
@@ -510,6 +511,34 @@ export interface FilterCapabilities {
   between: boolean;
   nestedPaths: boolean;
   singleConditionPerAttribute: boolean;
+  /**
+   * Whether a condition explicitly set to `undefined` is dropped rather than
+   * rejected.
+   *
+   * A filter may drop it: filter keys are optional, so forwarding an optional
+   * input is the ordinary way to build one, and dropping a condition only
+   * widens what a read returns. A write condition may not — dropping one would
+   * quietly loosen the guard on the write.
+   */
+  dropUndefinedConditions: boolean;
+  /**
+   * Whether `null` means "not set", compiling to `attribute_not_exists` on an
+   * attribute or nested field declared nullable.
+   *
+   * dyna-record removes a nulled attribute rather than storing DynamoDB's
+   * NULL, so no row holds one for an equality to match. A read rejects `null`
+   * for that reason; a write condition gives it the meaning the removal leaves
+   * behind — the attribute is absent. On an attribute that is not nullable it
+   * is still rejected, because such an attribute is always set.
+   */
+  nullMeansNotSet: boolean;
+  /**
+   * Whether an `$or` with no condition blocks is dropped rather than rejected.
+   *
+   * An empty `$or` asks for nothing. A filter drops it, which widens the read;
+   * a write condition rejects it, because dropping it would loosen the guard.
+   */
+  dropEmptyOr: boolean;
 }
 
 /**
@@ -540,6 +569,12 @@ export interface FilterAttribute {
    * validated and converted as that field rather than as the whole object.
    */
   objectSchema?: ObjectSchema;
+  /**
+   * Whether the attribute is declared nullable. Read where `null` means "not
+   * set" (see {@link FilterCapabilities.nullMeansNotSet}); a context that
+   * rejects `null` outright has no use for it.
+   */
+  nullable?: boolean;
 }
 
 /**
