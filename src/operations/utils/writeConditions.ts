@@ -886,9 +886,14 @@ const resolveTargetGuard = (
       }
 
       const notAssociated = `${guard.target.name} with ID '${childId}' is not associated with ${EntityClass.name} with ID '${id}' through '${guard.guard.name}'`;
+      // A self-referential child named by the entity's own id is the entity's
+      // own row, which is reported as not-found when it is missing
+      const isOwnRow = guard.target === EntityClass && childId === id;
       const childRow = {
         ...entityRowKey(guard.target, childId),
-        missingRowMessage: notAssociated
+        missingRowMessage: isOwnRow
+          ? `${EntityClass.name} with ID '${id}' does not exist`
+          : notAssociated
       };
       const { alias } = Metadata.getEntityAttributes(guard.target.name)[
         guard.foreignKey

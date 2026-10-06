@@ -17,6 +17,7 @@ import {
   type CreateOptions,
   Update,
   type UpdateOptions,
+  type UpdateOperationOptions,
   Delete,
   type EntityAttributesOnly,
   type EntityAttributesInstance,
@@ -369,7 +370,7 @@ abstract class DynaRecord implements DynaRecordBase {
    *   - Validation errors will be thrown if the attribute being removed is not nullable
    * @param id - The id of the entity to update
    * @param attributes - Attributes to update
-   * @param options - Optional operation options including referentialIntegrityCheck flag
+   * @param options - Optional operation options: the referentialIntegrityCheck flag, forceEmbed and a write condition. See {@link UpdateOperationOptions}
    *
    * @example Updating an entity.
    * ```typescript
@@ -404,7 +405,7 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     id: string,
     attributes: UpdateOptions<T>,
-    options?: { referentialIntegrityCheck?: boolean; forceEmbed?: boolean }
+    options?: UpdateOperationOptions<T>
   ): Promise<void> {
     const op = new Update<T>(this);
     await op.run(id, attributes, options);
@@ -444,7 +445,7 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public async update<T extends this>(
     attributes: UpdateOptions<T>,
-    options?: { referentialIntegrityCheck?: boolean; forceEmbed?: boolean }
+    options?: UpdateOperationOptions<T>
   ): Promise<EntityAttributesInstance<T>> {
     const InstanceClass = this.constructor as EntityClass<T>;
     const op = new Update<T>(InstanceClass);

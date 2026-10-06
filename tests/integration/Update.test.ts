@@ -39,12 +39,22 @@ import {
   Car,
   Vendor,
   type Discovery,
+  Category,
+  Accessory,
+  Author,
   mockEmbeddingProvider,
   mockEmbeddingProviderCalls,
   mockArticleEmbeddingProviderCalls
 } from "./mockModels.js";
-import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
+import {
+  TransactionCanceledException,
+  type CancellationReason
+} from "@aws-sdk/client-dynamodb";
+import {
+  ConditionalCheckFailedError,
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "../../src/dynamo-utils/index.js";
 import {
   ForeignKeyAttribute,
   BelongsTo,
@@ -67,7 +77,11 @@ import {
   type ForeignKey,
   type Searchable as SearchableText
 } from "../../src/types.js";
-import { NotFoundError, ValidationError } from "../../src/index.js";
+import {
+  FilterError,
+  NotFoundError,
+  ValidationError
+} from "../../src/index.js";
 import { createInstance } from "../../src/utils.js";
 import {
   type OtherTableEntityTableItem,
@@ -13764,5 +13778,2075 @@ describe("Update searchable entities (vector write path)", () => {
         }
       ]
     ]);
+  });
+});
+
+// Two attributes whose aliases collide with each other's numbered value
+// placeholders: the update binds `:Line` and `:Line1`, so a condition on `line`
+// must not bind `:Line1`
+@Entity
+class ShippingLabel extends MockTable {
+  declare readonly type: "ShippingLabel";
+
+  @StringAttribute({ alias: "Line" })
+  public readonly line: string;
+
+  @StringAttribute({ alias: "Line1" })
+  public readonly line1: string;
+}
+
+describe("Update with write conditions", () => {
+  const now = "2023-10-16T03:31:35.918Z";
+
+  /**
+   * Makes the transaction write fail with the given cancellation reasons. Every
+   * other command resolves as the shared mocks resolve it
+   */
+  const cancelTransactWrite = (reasons: CancellationReason[]): void => {
+    mockSend.mockImplementation((command: { name: string }) => {
+      if (command.name === "TransactWriteCommand") {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: reasons,
+          $metadata: {}
+        });
+      }
+    });
+  };
+
+  /**
+   * Runs an update expected to fail and returns its error
+   */
+  const failureOf = async (update: () => Promise<unknown>): Promise<any> => {
+    try {
+      await update();
+    } catch (e: unknown) {
+      return e;
+    }
+    throw new Error("Expected the update to fail");
+  };
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date(now));
+  });
+
+  afterEach(() => {
+    mockSend.mockReset();
+    mockQuery.mockReset();
+    mockTransactGetItems.mockReset();
+    vi.clearAllMocks();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  describe("a condition on the entity's own row", () => {
+    const guardedUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: { PK: "MockInformation#123", SK: "MockInformation" },
+        UpdateExpression: "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+        ConditionExpression: "attribute_exists(PK) AND (#State = :wc1_State1)",
+        ExpressionAttributeNames: {
+          "#Email": "Email",
+          "#State": "State",
+          "#UpdatedAt": "UpdatedAt"
+        },
+        ExpressionAttributeValues: {
+          ":Email": "new@example.com",
+          ":UpdatedAt": now,
+          ":wc1_State1": "CO"
+        },
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+      }
+    };
+
+    it("ANDs the condition onto the canonical update in parentheses", async () => {
+      expect.assertions(3);
+
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { state: "CO" } }
+      );
+
+      // An entity without relationships reads nothing for a self condition
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a failed condition as a WriteConditionFailedError naming the self row (AE1)", async () => {
+      expect.assertions(5);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "MockInformation#123" },
+            SK: { S: "MockInformation" },
+            Email: { S: "old@example.com" },
+            State: { S: "NY" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+          { entity: "MockInformation", id: "123", guards: [{ kind: "self" }] }
+        )
+      ]);
+      expect(e.errors[0]).toBeInstanceOf(WriteConditionFailedError);
+      expect({
+        entity: e.errors[0].entity,
+        id: e.errors[0].id,
+        guards: e.errors[0].guards
+      }).toEqual({
+        entity: "MockInformation",
+        id: "123",
+        guards: [{ kind: "self" }]
+      });
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("passes a TransactionConflict-only cancellation through unchanged (AE1)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([{ Code: "TransactionConflict" }]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionCanceledException);
+      expect(e.CancellationReasons).toEqual([{ Code: "TransactionConflict" }]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a missing row as not-found, not as a failed condition (AE10)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([{ Code: "ConditionalCheckFailed" }]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: MockInformation with ID '123' does not exist"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("keeps a $or inside its own parentheses after the existence check", async () => {
+      expect.assertions(1);
+
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { $or: [{ state: "CO" }, { phone: "555-0100" }] } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#State = :wc1_State1 OR #Phone = :wc1_Phone2)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#Phone": "Phone",
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": now,
+                    ":wc1_Phone2": "555-0100",
+                    ":wc1_State1": "CO"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    describe("a claim guarded by null as 'not set' or an expired date (AE11)", () => {
+      const claim = async (): Promise<void> => {
+        await MockInformation.update(
+          "123",
+          { state: "CO" },
+          {
+            condition: {
+              $or: [{ phone: null }, { someDate: { $lt: new Date(now) } }]
+            }
+          }
+        );
+      };
+
+      const claimCommand = [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                UpdateExpression:
+                  "SET #State = :State, #UpdatedAt = :UpdatedAt",
+                ConditionExpression:
+                  "attribute_exists(PK) AND (attribute_not_exists(#Phone) OR #someDate < :wc1_someDate1)",
+                ExpressionAttributeNames: {
+                  "#Phone": "Phone",
+                  "#State": "State",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":State": "CO",
+                  ":UpdatedAt": now,
+                  ":wc1_someDate1": now
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ];
+
+      it("compiles null and the date comparison into one guarded update", async () => {
+        expect.assertions(1);
+
+        await claim();
+
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [claimCommand[0]]
+        ]);
+      });
+
+      it("attributes a lost claim to the self condition", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "MockInformation#123" },
+              SK: { S: "MockInformation" },
+              Phone: { S: "555-0100" },
+              someDate: { S: "2023-10-17T00:00:00.000Z" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(claim);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+            {
+              entity: "MockInformation",
+              id: "123",
+              guards: [{ kind: "self" }]
+            }
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [claimCommand[0]]
+        ]);
+      });
+    });
+
+    it("sends a guarded touch that bumps updatedAt when the payload is empty", async () => {
+      expect.assertions(1);
+
+      await MockInformation.update(
+        "123",
+        {},
+        { condition: { email: "old@example.com" } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression: "SET #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Email = :wc1_Email1)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": now,
+                    ":wc1_Email1": "old@example.com"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("keeps update and condition placeholders distinct when aliases collide", async () => {
+      expect.assertions(1);
+
+      await ShippingLabel.update(
+        "123",
+        { line: "1 Main St", line1: "Suite 2" },
+        { condition: { line: "9 Old Rd" } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "ShippingLabel#123", SK: "ShippingLabel" },
+                  UpdateExpression:
+                    "SET #Line = :Line, #Line1 = :Line1, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Line = :wc1_Line1)",
+                  ExpressionAttributeNames: {
+                    "#Line": "Line",
+                    "#Line1": "Line1",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Line": "1 Main St",
+                    ":Line1": "Suite 2",
+                    ":UpdatedAt": now,
+                    ":wc1_Line1": "9 Old Rd"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    describe("instance method", () => {
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "old@example.com",
+        state: "CO",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      it("passes the condition through and returns the updated instance", async () => {
+        expect.assertions(2);
+
+        const updated = await instance.update(
+          { email: "new@example.com" },
+          { condition: { state: "CO" } }
+        );
+
+        expect(updated).toEqual({
+          ...instance,
+          email: "new@example.com",
+          updatedAt: new Date(now)
+        });
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [guardedUpdate] }]
+        ]);
+      });
+
+      it("leaves the instance unmodified when the condition fails", async () => {
+        expect.assertions(3);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "MockInformation#123" },
+              SK: { S: "MockInformation" },
+              State: { S: "NY" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(
+          async () =>
+            await instance.update(
+              { email: "new@example.com" },
+              { condition: { state: "CO" } }
+            )
+        );
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+            {
+              entity: "MockInformation",
+              id: "123",
+              guards: [{ kind: "self" }]
+            }
+          )
+        ]);
+        expect(instance).toEqual({
+          pk: "MockInformation#123",
+          sk: "MockInformation",
+          id: "123",
+          type: "MockInformation",
+          address: "11 Some St",
+          email: "old@example.com",
+          state: "CO",
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [guardedUpdate] }]
+        ]);
+      });
+
+      it("types the condition from the instance's class", async () => {
+        await instance
+          .update(
+            {},
+            {
+              condition: {
+                // @ts-expect-error not an attribute of MockInformation
+                notAnAttribute: "x"
+              }
+            }
+          )
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+
+        await MockInformation.update(
+          "123",
+          {},
+          {
+            condition: {
+              // @ts-expect-error email is not nullable, so null is not offered
+              email: null
+            }
+          }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+    });
+  });
+
+  describe("a BelongsTo guard", () => {
+    const petQuery = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK2",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: { ":PK2": "Pet#123", ":Type1": "Pet" },
+        FilterExpression: "#Type IN (:Type1)",
+        ConsistentRead: true
+      }
+    ];
+
+    const storedPet = (ownerId?: string): MockTableEntityTableItem<Pet> => ({
+      PK: "Pet#123",
+      SK: "Pet",
+      Id: "123",
+      Type: "Pet",
+      Name: "Mock Pet",
+      OwnerId: ownerId,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    });
+
+    describe("when the foreign key is unchanged (AE7)", () => {
+      const update = async (): Promise<void> => {
+        await Pet.update(
+          "123",
+          { name: "Fido" },
+          { condition: { owner: { name: "Jane" } } }
+        );
+      };
+
+      const sentItems = [
+        {
+          // The owner was resolved from the earlier read, so the foreign key
+          // is pinned to it
+          Update: {
+            TableName: "mock-table",
+            Key: { PK: "Pet#123", SK: "Pet" },
+            UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+            ConditionExpression:
+              "attribute_exists(PK) AND (#OwnerId = :wc2_OwnerId)",
+            ExpressionAttributeNames: {
+              "#Name": "Name",
+              "#OwnerId": "OwnerId",
+              "#UpdatedAt": "UpdatedAt"
+            },
+            ExpressionAttributeValues: {
+              ":Name": "Fido",
+              ":UpdatedAt": now,
+              ":wc2_OwnerId": "456"
+            },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+          }
+        },
+        {
+          Update: {
+            TableName: "mock-table",
+            Key: { PK: "Person#456", SK: "Pet#123" },
+            UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+            ConditionExpression: "attribute_exists(PK)",
+            ExpressionAttributeNames: {
+              "#Name": "Name",
+              "#UpdatedAt": "UpdatedAt"
+            },
+            ExpressionAttributeValues: { ":Name": "Fido", ":UpdatedAt": now }
+          }
+        },
+        {
+          ConditionCheck: {
+            TableName: "mock-table",
+            Key: { PK: "Person#456", SK: "Person" },
+            ConditionExpression:
+              "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+            ExpressionAttributeNames: { "#Name": "Name" },
+            ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+          }
+        }
+      ];
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedPet("456")] });
+      });
+
+      it("checks the stored parent and pins the foreign key on the entity's own row", async () => {
+        expect.assertions(4);
+
+        await update();
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([petQuery]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a failed guard as a WriteConditionFailedError naming the relationship", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Person#456" },
+              SK: { S: "Person" },
+              Name: { S: "Bob" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on Pet with ID '123': relationship 'owner'",
+            {
+              entity: "Pet",
+              id: "123",
+              guards: [{ kind: "relationship", name: "owner" }]
+            }
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a concurrent foreign key change, not the guard, even when the old parent also fails the guard", async () => {
+        expect.assertions(3);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Pet#123" },
+              SK: { S: "Pet" },
+              OwnerId: { S: "999" }
+            }
+          },
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Person#456" },
+              SK: { S: "Person" },
+              Name: { S: "Bob" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Pet with ID '123' no longer references Person with ID '456': its foreign key 'ownerId' was changed by a concurrent write"
+          )
+        ]);
+        expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a missing parent as a referential-integrity failure", async () => {
+        expect.assertions(1);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Person with ID '456' does not exist"
+          )
+        ]);
+      });
+    });
+
+    describe("when the update changes the foreign key", () => {
+      const update = async (
+        referentialIntegrityCheck: boolean
+      ): Promise<void> => {
+        await Pet.update(
+          "123",
+          { name: "Fido", ownerId: "789" },
+          { referentialIntegrityCheck, condition: { owner: { name: "Jane" } } }
+        );
+      };
+
+      const canonicalUpdate = {
+        // The new parent comes from the payload, so nothing is pinned
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Pet#123", SK: "Pet" },
+          UpdateExpression:
+            "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#OwnerId": "OwnerId",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: {
+            ":Name": "Fido",
+            ":OwnerId": "789",
+            ":UpdatedAt": now
+          }
+        }
+      };
+      const deleteOldLink = {
+        Delete: {
+          TableName: "mock-table",
+          Key: { PK: "Person#456", SK: "Pet#123" }
+        }
+      };
+      const guardedNewParentCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Person#789", SK: "Person" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+      const putNewLink = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Person#789",
+            SK: "Pet#123",
+            Id: "123",
+            Type: "Pet",
+            Name: "Fido",
+            OwnerId: "789",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: now
+          }
+        }
+      };
+      const putNewParentCopy = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_exists(PK)",
+          Item: {
+            PK: "Pet#123",
+            SK: "Person",
+            Id: "789",
+            Type: "Person",
+            Name: "Jane",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        }
+      };
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedPet("456")] });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [
+            {
+              Item: {
+                PK: "Person#789",
+                SK: "Person",
+                Id: "789",
+                Type: "Person",
+                Name: "Jane",
+                CreatedAt: "2023-01-01T00:00:00.000Z",
+                UpdatedAt: "2023-01-02T00:00:00.000Z"
+              }
+            }
+          ]
+        });
+      });
+
+      it("merges the guard into the new parent's integrity check", async () => {
+        expect.assertions(4);
+
+        await update(true);
+
+        expect(mockedQueryCommand.mock.calls).toEqual([petQuery]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#789", SK: "Person" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                canonicalUpdate,
+                deleteOldLink,
+                guardedNewParentCheck,
+                putNewLink,
+                putNewParentCopy
+              ]
+            }
+          ]
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      });
+
+      it("adds its own check on the new parent when integrity checks are off, which still fails on a missing parent (R18)", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" }
+        ]);
+
+        const e = await failureOf(async () => {
+          await update(false);
+        });
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Person with ID '789' does not exist"
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                canonicalUpdate,
+                deleteOldLink,
+                putNewLink,
+                putNewParentCopy,
+                guardedNewParentCheck
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    it("fails before sending when the stored foreign key is not set (AE8)", async () => {
+      expect.assertions(4);
+
+      mockQuery.mockResolvedValue({ Items: [storedPet()] });
+
+      const e = await failureOf(
+        async () =>
+          await Pet.update(
+            "123",
+            { name: "Fido" },
+            { condition: { owner: { name: "Jane" } } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "Write condition failed on Pet with ID '123': relationship 'owner' references no Person",
+          {
+            entity: "Pet",
+            id: "123",
+            guards: [{ kind: "relationship", name: "owner" }]
+          }
+        )
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("throws a FilterError before any read when the payload clears the foreign key (AE16)", async () => {
+      expect.assertions(2);
+
+      const e = await failureOf(
+        async () =>
+          await Pet.update(
+            "123",
+            { ownerId: null },
+            { condition: { owner: { name: "Jane" } } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(FilterError);
+      expect(mockSend.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a HasOne guard", () => {
+    const customer = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Type: "Customer",
+      Name: "Mock Customer",
+      Address: "11 Some St",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const contactInformationCopy = {
+      PK: "Customer#123",
+      SK: "ContactInformation",
+      Id: "ci1",
+      Type: "ContactInformation",
+      Email: "jane@example.com",
+      CustomerId: "123",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const customerQuery = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK5",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: {
+          ":PK5": "Customer#123",
+          ":Type1": "Customer",
+          ":Type2": "Order",
+          ":Type3": "PaymentMethod",
+          ":Type4": "ContactInformation"
+        },
+        FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)",
+        ConsistentRead: true
+      }
+    ];
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+    };
+
+    const update = async (): Promise<void> => {
+      await Customer.update(
+        "123",
+        { name: "New Name" },
+        { condition: { contactInformation: { email: "jane@example.com" } } }
+      );
+    };
+
+    const sentItems = [
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#123", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      },
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "ContactInformation#ci1", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      },
+      {
+        // The child found through the earlier read must still reference
+        // this Customer
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "ContactInformation#ci1", SK: "ContactInformation" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (#Email = :wc1_Email1))",
+          ExpressionAttributeNames: {
+            "#CustomerId": "CustomerId",
+            "#Email": "Email"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_Email1": "jane@example.com",
+            ":wc2_CustomerId": "123"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      }
+    ];
+
+    it("checks the child row with the child foreign key pinned", async () => {
+      expect.assertions(2);
+
+      mockQuery.mockResolvedValue({
+        Items: [customer, contactInformationCopy]
+      });
+
+      await update();
+
+      expect(mockedQueryCommand.mock.calls).toEqual([customerQuery]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a child that moved to another parent as not-associated", async () => {
+      expect.assertions(1);
+
+      mockQuery.mockResolvedValue({
+        Items: [customer, contactInformationCopy]
+      });
+      cancelTransactWrite([
+        { Code: "None" },
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "ContactInformation#ci1" },
+            SK: { S: "ContactInformation" },
+            Email: { S: "jane@example.com" },
+            CustomerId: { S: "456" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: ContactInformation with ID 'ci1' is not associated with Customer with ID '123' through 'contactInformation'"
+        )
+      ]);
+    });
+
+    it("fails before sending when the entity has no child", async () => {
+      expect.assertions(3);
+
+      mockQuery.mockResolvedValue({ Items: [customer] });
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "Write condition failed on Customer with ID '123': relationship 'contactInformation' references no ContactInformation",
+          {
+            entity: "Customer",
+            id: "123",
+            guards: [{ kind: "relationship", name: "contactInformation" }]
+          }
+        )
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a HasMany guard", () => {
+    const update = async (): Promise<void> => {
+      await Customer.update(
+        "123",
+        { name: "New Name" },
+        {
+          condition: {
+            orders: [
+              {
+                id: "o1",
+                condition: { orderDate: { $lt: new Date(now) } }
+              }
+            ]
+          }
+        }
+      );
+    };
+
+    const sentItems = [
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#123", SK: "Customer" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+        }
+      },
+      {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Order#o1", SK: "Order" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1))",
+          ExpressionAttributeNames: {
+            "#CustomerId": "CustomerId",
+            "#OrderDate": "OrderDate"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_OrderDate1": now,
+            ":wc2_CustomerId": "123"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      }
+    ];
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [
+          {
+            PK: "Customer#123",
+            SK: "Customer",
+            Id: "123",
+            Type: "Customer",
+            Name: "Mock Customer",
+            Address: "11 Some St",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+    });
+
+    it("checks the named child with its foreign key pinned to this entity", async () => {
+      expect.assertions(1);
+
+      await update();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports an id belonging to another parent as not-related, even when its row meets the guard (AE4)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Order#o1" },
+            SK: { S: "Order" },
+            CustomerId: { S: "456" },
+            OrderDate: { S: "2023-01-01T00:00:00.000Z" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Order with ID 'o1' is not associated with Customer with ID '123' through 'orders'"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a related child failing the guard with the relationship and id", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Order#o1" },
+            SK: { S: "Order" },
+            CustomerId: { S: "123" },
+            OrderDate: { S: "2023-10-17T00:00:00.000Z" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on Customer with ID '123': relationship 'orders' (ID 'o1')",
+          {
+            entity: "Customer",
+            id: "123",
+            guards: [{ kind: "relationship", name: "orders", id: "o1" }]
+          }
+        )
+      ]);
+    });
+  });
+
+  it("guards a uni-directional HasMany child that the earlier read does not return", async () => {
+    expect.assertions(3);
+
+    mockQuery.mockResolvedValue({
+      Items: [
+        {
+          PK: "Organization#123",
+          SK: "Organization",
+          Id: "123",
+          Type: "Organization",
+          Name: "Mock Organization",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        }
+      ]
+    });
+
+    await Organization.update(
+      "123",
+      { name: "New Name" },
+      { condition: { founders: [{ id: "f1", condition: { name: "Ada" } }] } }
+    );
+
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Uni-directional children are not read
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK3",
+          ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+          ExpressionAttributeValues: {
+            ":PK3": "Organization#123",
+            ":Type1": "Organization",
+            ":Type2": "User"
+          },
+          FilterExpression: "#Type IN (:Type1,:Type2)",
+          ConsistentRead: true
+        }
+      ]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Organization#123", SK: "Organization" },
+                UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#Name": "Name",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Name": "New Name",
+                  ":UpdatedAt": now
+                }
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "mock-table",
+                Key: { PK: "Founder#f1", SK: "Founder" },
+                ConditionExpression:
+                  "attribute_exists(PK) AND (#OrganizationId = :wc2_OrganizationId) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                ExpressionAttributeNames: {
+                  "#Name": "Name",
+                  "#OrganizationId": "OrganizationId"
+                },
+                ExpressionAttributeValues: {
+                  ":wc1_Name1": "Ada",
+                  ":wc2_OrganizationId": "123"
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  describe("a HasAndBelongsToMany guard", () => {
+    const author = {
+      PK: "Author#123",
+      SK: "Author",
+      Id: "123",
+      Type: "Author",
+      Name: "Mock Author",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const bookCopy = {
+      PK: "Author#123",
+      SK: "Book#b1",
+      Id: "b1",
+      Type: "Book",
+      Name: "Mock Book",
+      NumPages: 100,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+    };
+    const canonicalUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: { PK: "Author#123", SK: "Author" },
+        ConditionExpression: "attribute_exists(PK)",
+        ...expression
+      }
+    };
+
+    const update = async (bookId: string): Promise<void> => {
+      await Author.update(
+        "123",
+        { name: "New Name" },
+        { condition: { books: [{ id: bookId, condition: { numPages: 100 } }] } }
+      );
+    };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ Items: [author, bookCopy] });
+    });
+
+    it("merges membership into the link-row update and checks the partner row", async () => {
+      expect.assertions(2);
+
+      await update("b1");
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK3": "Author#123",
+              ":Type1": "Author",
+              ":Type2": "Book"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              canonicalUpdate,
+              {
+                // The link row in the partner's partition must still exist
+                // and hold this Author
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Author#123" },
+                  UpdateExpression: expression.UpdateExpression,
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                  ExpressionAttributeNames: {
+                    ...expression.ExpressionAttributeNames,
+                    "#Id": "Id"
+                  },
+                  ExpressionAttributeValues: {
+                    ...expression.ExpressionAttributeValues,
+                    ":wc2_Id": "123"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Book" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (attribute_exists(PK) AND (#NumPages = :wc1_NumPages1))",
+                  ExpressionAttributeNames: { "#NumPages": "NumPages" },
+                  ExpressionAttributeValues: { ":wc1_NumPages1": 100 },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("reports a partner without a link as not-related, not as the guard", async () => {
+      expect.assertions(2);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        { Code: "None" },
+        { Code: "ConditionalCheckFailed" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Book#b2" },
+            SK: { S: "Book" },
+            NumPages: { N: "50" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(async () => {
+        await update("b2");
+      });
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Book with ID 'b2' is not linked to Author with ID '123' through 'books'"
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              canonicalUpdate,
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Author#123" },
+                  ConditionExpression: "attribute_exists(PK)",
+                  ...expression
+                }
+              },
+              {
+                // No link row is queued for an unrelated id, so membership
+                // gets a check of its own
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b2", SK: "Author#123" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                  ExpressionAttributeNames: { "#Id": "Id" },
+                  ExpressionAttributeValues: { ":wc2_Id": "123" },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b2", SK: "Book" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (attribute_exists(PK) AND (#NumPages = :wc1_NumPages1))",
+                  ExpressionAttributeNames: { "#NumPages": "NumPages" },
+                  ExpressionAttributeValues: { ":wc1_NumPages1": 100 },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  it("guards a self-referential HasAndBelongsToMany partner through its link row", async () => {
+    expect.assertions(1);
+
+    mockQuery.mockResolvedValue({
+      Items: [
+        {
+          PK: "Accessory#a1",
+          SK: "Accessory",
+          Id: "a1",
+          Type: "Accessory",
+          Name: "Charger",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        },
+        {
+          PK: "Accessory#a1",
+          SK: "Accessory#a2",
+          Id: "a2",
+          Type: "Accessory",
+          Name: "Cable",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        }
+      ]
+    });
+
+    await Accessory.update(
+      "a1",
+      { name: "Fast Charger" },
+      {
+        condition: {
+          compatibleAccessories: [{ id: "a2", condition: { name: "Cable" } }]
+        }
+      }
+    );
+
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "Fast Charger", ":UpdatedAt": now }
+    };
+
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a1", SK: "Accessory" },
+                ConditionExpression: "attribute_exists(PK)",
+                ...expression
+              }
+            },
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a2", SK: "Accessory#a1" },
+                UpdateExpression: expression.UpdateExpression,
+                ConditionExpression: "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                ExpressionAttributeNames: {
+                  ...expression.ExpressionAttributeNames,
+                  "#Id": "Id"
+                },
+                ExpressionAttributeValues: {
+                  ...expression.ExpressionAttributeValues,
+                  ":wc2_Id": "a1"
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a2", SK: "Accessory" },
+                ConditionExpression:
+                  "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                ExpressionAttributeNames: { "#Name": "Name" },
+                ExpressionAttributeValues: { ":wc1_Name1": "Cable" },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  describe("a self-referential HasMany guard whose id is the entity's own", () => {
+    const update = async (): Promise<void> => {
+      await Category.update(
+        "c1",
+        { name: "Kitchen" },
+        {
+          condition: {
+            subcategories: [{ id: "c1", condition: { name: "Home" } }]
+          }
+        }
+      );
+    };
+
+    const sentItems = [
+      {
+        // The child row is the entity's own row, so the pin and the guard
+        // merge onto the canonical update
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Category#c1", SK: "Category" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression:
+            "attribute_exists(PK) AND (#ParentCategoryId = :wc2_ParentCategoryId) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#ParentCategoryId": "ParentCategoryId",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: {
+            ":Name": "Kitchen",
+            ":UpdatedAt": now,
+            ":wc1_Name1": "Home",
+            ":wc2_ParentCategoryId": "c1"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      },
+      {
+        // The Category is its own parent, so its link copy in the parent's
+        // partition is updated too
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Category#c1", SK: "Category#c1" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: { ":Name": "Kitchen", ":UpdatedAt": now }
+        }
+      }
+    ];
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [
+          {
+            PK: "Category#c1",
+            SK: "Category",
+            Id: "c1",
+            Type: "Category",
+            Name: "Home",
+            ParentCategoryId: "c1",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+    });
+
+    it("merges into the canonical update", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK2": "Category#c1",
+              ":Type1": "Category"
+            },
+            FilterExpression: "#Type IN (:Type1)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports its own missing row as not-found", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        { Code: "ConditionalCheckFailed" },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Category with ID 'c1' does not exist"
+        )
+      ]);
+    });
+  });
+
+  describe("a foreign key target guard on an entity without relationships (R24)", () => {
+    const storedEntity = {
+      PK: "MyClassWithAllAttributeTypes#123",
+      SK: "MyClassWithAllAttributeTypes",
+      Id: "123",
+      Type: "MyClassWithAllAttributeTypes",
+      stringAttribute: "old",
+      foreignKeyAttribute: "c1",
+      nullableForeignKeyAttribute: "c1",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const forcedRead = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK2",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: {
+          ":PK2": "MyClassWithAllAttributeTypes#123",
+          ":Type1": "MyClassWithAllAttributeTypes"
+        },
+        FilterExpression: "#Type IN (:Type1)",
+        ConsistentRead: true
+      }
+    ];
+
+    describe("when the payload does not set the foreign key", () => {
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedEntity] });
+      });
+
+      it("reads the entity's own row consistently, then checks the stored parent with the foreign key pinned", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update(
+          "123",
+          { stringAttribute: "new" },
+          { condition: { foreignKeyAttribute: { target: { name: "Jane" } } } }
+        );
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([forcedRead]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    UpdateExpression:
+                      "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#foreignKeyAttribute = :wc2_foreignKeyAttribute)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#foreignKeyAttribute": "foreignKeyAttribute",
+                      "#stringAttribute": "stringAttribute"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": now,
+                      ":stringAttribute": "new",
+                      ":wc2_foreignKeyAttribute": "c1"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Customer#c1", SK: "Customer" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      describe("two guards on the same parent row with the same attribute", () => {
+        const update = async (): Promise<void> => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                foreignKeyAttribute: { target: { name: "Jane" } },
+                nullableForeignKeyAttribute: { target: { name: "Janet" } }
+              }
+            }
+          );
+        };
+
+        const sentItems = [
+          {
+            Update: {
+              TableName: "mock-table",
+              Key: {
+                PK: "MyClassWithAllAttributeTypes#123",
+                SK: "MyClassWithAllAttributeTypes"
+              },
+              UpdateExpression:
+                "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+              ConditionExpression:
+                "attribute_exists(PK) AND (#foreignKeyAttribute = :wc3_foreignKeyAttribute) AND (#nullableForeignKeyAttribute = :wc4_nullableForeignKeyAttribute)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#foreignKeyAttribute": "foreignKeyAttribute",
+                "#nullableForeignKeyAttribute": "nullableForeignKeyAttribute",
+                "#stringAttribute": "stringAttribute"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": now,
+                ":stringAttribute": "new",
+                ":wc3_foreignKeyAttribute": "c1",
+                ":wc4_nullableForeignKeyAttribute": "c1"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            // Both guards merge into one check with distinct placeholders
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Customer#c1", SK: "Customer" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1)) AND (attribute_exists(PK) AND (#Name = :wc2_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "Jane",
+                ":wc2_Name1": "Janet"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ];
+
+        it("merges into one item with distinct placeholders", async () => {
+          expect.assertions(1);
+
+          await update();
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+
+        it("names both guards when the row's check fails", async () => {
+          expect.assertions(2);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            {
+              Code: "ConditionalCheckFailed",
+              Item: {
+                PK: { S: "Customer#c1" },
+                SK: { S: "Customer" },
+                Name: { S: "Jane" }
+              }
+            }
+          ]);
+
+          const e = await failureOf(update);
+
+          expect(e.errors).toEqual([
+            new WriteConditionFailedError(
+              "ConditionalCheckFailed: Write condition failed on MyClassWithAllAttributeTypes with ID '123': foreign key 'foreignKeyAttribute', foreign key 'nullableForeignKeyAttribute'",
+              {
+                entity: "MyClassWithAllAttributeTypes",
+                id: "123",
+                guards: [
+                  { kind: "foreignKey", name: "foreignKeyAttribute" },
+                  { kind: "foreignKey", name: "nullableForeignKeyAttribute" }
+                ]
+              }
+            )
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+      });
+    });
+
+    describe("when the payload sets the foreign key", () => {
+      const canonicalUpdate = {
+        Update: {
+          TableName: "mock-table",
+          Key: {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes"
+          },
+          UpdateExpression:
+            "SET #foreignKeyAttribute = :foreignKeyAttribute, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#UpdatedAt": "UpdatedAt",
+            "#foreignKeyAttribute": "foreignKeyAttribute"
+          },
+          ExpressionAttributeValues: {
+            ":UpdatedAt": now,
+            ":foreignKeyAttribute": "c2"
+          }
+        }
+      };
+      const guardedParentCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#c2", SK: "Customer" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+
+      it.each([true, false])(
+        "reads nothing and guards the new parent in one check (referentialIntegrityCheck: %s)",
+        async referentialIntegrityCheck => {
+          expect.assertions(2);
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { foreignKeyAttribute: "c2" },
+            {
+              referentialIntegrityCheck,
+              condition: { foreignKeyAttribute: { target: { name: "Jane" } } }
+            }
+          );
+
+          // With integrity checks on, the guard merges into the library's
+          // check on the parent; off, it adds the same check itself
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: [canonicalUpdate, guardedParentCheck] }]
+          ]);
+        }
+      );
+    });
+  });
+
+  describe("a searchable entity", () => {
+    const listingTableItem = {
+      PK: "Listing#123",
+      SK: "Listing",
+      Id: "123",
+      Type: "Listing",
+      Description: "The very same description",
+      Category: "Mugs",
+      StoreId: "456",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+    const expression = {
+      UpdateExpression:
+        "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: {
+        "#Description": "Description",
+        "#UpdatedAt": "UpdatedAt"
+      },
+      ExpressionAttributeValues: {
+        ":Description": "The very same description",
+        ":UpdatedAt": now
+      }
+    };
+    const sentItems = [
+      {
+        // The searchable-value pin is registered with the transaction, so a
+        // changed value is attributed as a concurrent change
+        Update: {
+          TableName: "search-table",
+          Key: { PK: "Listing#123", SK: "Listing" },
+          UpdateExpression: expression.UpdateExpression,
+          ConditionExpression:
+            "attribute_exists(PK) AND (#Description = :wc2_Description) AND (#Category = :wc1_Category1)",
+          ExpressionAttributeNames: {
+            ...expression.ExpressionAttributeNames,
+            "#Category": "Category"
+          },
+          ExpressionAttributeValues: {
+            ...expression.ExpressionAttributeValues,
+            ":wc1_Category1": "Mugs",
+            ":wc2_Description": "The very same description"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      },
+      {
+        Update: {
+          TableName: "search-table",
+          Key: { PK: "Store#456", SK: "Listing#123" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      }
+    ];
+
+    const update = async (): Promise<void> => {
+      await Listing.update(
+        "123",
+        { description: "The very same description" },
+        { condition: { category: "Mugs" } }
+      );
+    };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ Items: [listingTableItem] });
+    });
+
+    it("keeps the searchable-value pin alongside the consumer condition", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockEmbeddingProviderCalls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a changed searchable value with the pin's message, not the condition error", async () => {
+      expect.assertions(2);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Listing#123" },
+            SK: { S: "Listing" },
+            Description: { S: "A newer description" },
+            Category: { S: "Plates" }
+          }
+        },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Listing with ID '123' does not exist or its searchable value was changed by a concurrent write — retry the update"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+    });
+
+    it("reports a failed condition when the searchable value still holds", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Listing#123" },
+            SK: { S: "Listing" },
+            Description: { S: "The very same description" },
+            Category: { S: "Plates" }
+          }
+        },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on Listing with ID '123': its own row",
+          { entity: "Listing", id: "123", guards: [{ kind: "self" }] }
+        )
+      ]);
+    });
   });
 });
