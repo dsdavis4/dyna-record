@@ -227,29 +227,49 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * comparisons through its stored form, as an ISO string that orders
  * chronologically.
  *
- * Each branch tests `V` directly so the conditional distributes, for the same
- * reason {@link BeginsWithConditionFor} does: an unresolved dot path takes the
- * whole scalar union and stays unconstrained. Distribution is also what
- * excludes `null` and `boolean` without an explicit `Exclude` — neither extends
- * the comparable set, so both fall to the final branch.
+ * The operands are built per comparable kind, not per member of `V`. Composed
+ * comparisons may name different values, so an enum's literal union must stay
+ * whole: `{ $gte: "val-1", $lte: "val-2" }` is a range across two members,
+ * which DynamoDB orders as strings. Building one filter per member — what a
+ * conditional distributing over `V` does — would require every operand to be
+ * the same member. Each kind keeps its own filter, so a union spanning kinds,
+ * as an unresolved dot path's whole scalar union does, never pairs a string
+ * operand with a number one. `null` and `boolean` are in no comparable kind,
+ * so they are excluded without an explicit `Exclude`.
  *
- * The set is spelled out here rather than reusing `OrderedFilterValue`, which
- * names the same values. (A code reference rather than a link: that type is
- * internal, so it has no page on the docs site to point at.) In the true branch TypeScript narrows the type
- * parameter to `V & CheckedType`, so checking against the whole union gives
- * `ComparisonFilter<OrderedFilterValue & V>` — an intersection it cannot reduce
- * when `V` is still generic, as it is in `QueryKeyConditionValue`. Checking
- * against one narrow type per branch keeps that intersection meaningful. The
- * difference is invisible at concrete instantiations and only appears through a
- * generic, so a reviewer who tries the collapse should test it there.
+ * Each kind is drawn out with `Extract` rather than by testing `V` against the
+ * whole comparable set. (`OrderedFilterValue` names the same values; a code
+ * reference rather than a link because that type is internal, so it has no
+ * page on the docs site to point at.) A test against the whole set narrows the
+ * type parameter to `V & CheckedType` in the true branch — an intersection
+ * TypeScript cannot reduce while `V` is still generic, as it is in
+ * `QueryKeyConditionValue`. One narrow type per kind keeps the operands
+ * meaningful there. The difference is invisible at concrete instantiations and
+ * only appears through a generic, so a reviewer who tries the collapse should
+ * test it there.
  *
  * @typeParam V - The attribute's declared type.
  */
-export type ComparisonConditionFor<V> = V extends Date
-  ? ComparisonFilter<V>
-  : V extends string | number | bigint | Uint8Array
-    ? ComparisonFilter<V>
-    : never;
+export type ComparisonConditionFor<V> =
+  | ComparisonOfKind<Extract<V, Date>>
+  | ComparisonOfKind<Extract<V, string>>
+  | ComparisonOfKind<Extract<V, number>>
+  | ComparisonOfKind<Extract<V, bigint>>
+  | ComparisonOfKind<Extract<V, Uint8Array>>;
+
+/**
+ * The {@link ComparisonFilter} over every value of one comparable kind, or
+ * `never` when `V` declares none of that kind.
+ *
+ * The test is wrapped in a tuple so it does not distribute: the operands are
+ * the kind's whole union, which is what lets composed comparisons name two
+ * different members of an enum.
+ *
+ * @typeParam Operand - The values of `V` of one comparable kind.
+ */
+type ComparisonOfKind<Operand> = [Operand] extends [never]
+  ? never
+  : ComparisonFilter<Operand>;
 
 /**
  * A single comparison, offered only where DynamoDB can order the attribute's
@@ -272,15 +292,29 @@ export type SingleComparisonConditionFor<V> = V extends Date
  * form.
  *
  * `BETWEEN` is a pair of comparisons, so it takes exactly the operands
- * {@link ComparisonConditionFor} does.
+ * {@link ComparisonConditionFor} does, built the same way: per comparable
+ * kind, so both bounds may be any two members of an enum while a string bound
+ * never pairs with a number one. DynamoDB requires both bounds to share a type.
  *
  * @typeParam V - The attribute's declared type.
  */
-export type BetweenConditionFor<V> = V extends Date
-  ? BetweenFilter<V>
-  : V extends string | number | bigint | Uint8Array
-    ? BetweenFilter<V>
-    : never;
+export type BetweenConditionFor<V> =
+  | BetweenOfKind<Extract<V, Date>>
+  | BetweenOfKind<Extract<V, string>>
+  | BetweenOfKind<Extract<V, number>>
+  | BetweenOfKind<Extract<V, bigint>>
+  | BetweenOfKind<Extract<V, Uint8Array>>;
+
+/**
+ * The {@link BetweenFilter} over every value of one comparable kind, or `never`
+ * when `V` declares none of that kind. Non-distributive for the reason
+ * `ComparisonOfKind` is.
+ *
+ * @typeParam Operand - The values of `V` of one comparable kind.
+ */
+type BetweenOfKind<Operand> = [Operand] extends [never]
+  ? never
+  : BetweenFilter<Operand>;
 
 /**
  * `$beginsWith`, offered only where the table stores the attribute in a form

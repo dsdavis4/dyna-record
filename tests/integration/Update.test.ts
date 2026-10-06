@@ -13563,6 +13563,137 @@ describe("Update", () => {
           });
         });
 
+        it("accepts an enum range across two of its members", async () => {
+          // An enum is stored as a string, which DynamoDB orders
+          // lexicographically, so any two members bound a range
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: both bounds are members of the enum
+                enumAttribute: { $between: ["val-1", "val-2"] },
+                // @ts-expect-no-error: a nullable enum ranges across its members
+                nullableEnumAttribute: { $between: ["val-1", "val-2"] },
+                // @ts-expect-no-error: a nested enum ranges across its members
+                "objectAttribute.status": { $between: ["active", "inactive"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: composed comparisons may name different members
+                enumAttribute: { $gte: "val-1", $lte: "val-2" },
+                // @ts-expect-no-error: and composes across them
+                nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" },
+                // @ts-expect-no-error: a nullable nested enum composes across its members
+                "addressAttribute.category": { $gte: "home", $lte: "work" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: both bounds may be the same member
+                enumAttribute: { $between: ["val-1", "val-1"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an enum range bound the enum cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: val-3 is not one of the enum's values, composed or not
+                enumAttribute: { $gte: "val-1", $lte: "val-3" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: archived is not one of the nested enum's values
+                "objectAttribute.status": { $between: ["active", "archived"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an enum is ranged by its values, not a number
+                enumAttribute: { $between: ["val-1", 2] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a range bound is never null, nullable enum or not
+                nullableEnumAttribute: { $between: [null, "val-2"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: null means not set, which no ordering can compare
+                nullableEnumAttribute: { $gte: "val-1", $lte: null }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean is not one of the enum's values
+                enumAttribute: { $between: ["val-1", true] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
         it("refuses each operator and operand a foreign key attribute cannot take", async () => {
           await MyClassWithAllAttributeTypes.update(
             "123",
@@ -16060,6 +16191,150 @@ describe("Update", () => {
                 condition: {
                   // @ts-expect-error: a prefix is a string
                   enumAttribute: { $beginsWith: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts an enum range across two of its members", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          // An enum is stored as a string, which DynamoDB orders
+          // lexicographically, so any two members bound a range
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: both bounds are members of the enum
+                  enumAttribute: { $between: ["val-1", "val-2"] },
+                  // @ts-expect-no-error: a nullable enum ranges across its members
+                  nullableEnumAttribute: { $between: ["val-1", "val-2"] },
+                  // @ts-expect-no-error: a nested enum ranges across its members
+                  "objectAttribute.status": { $between: ["active", "inactive"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: composed comparisons may name different members
+                  enumAttribute: { $gte: "val-1", $lte: "val-2" },
+                  // @ts-expect-no-error: and composes across them
+                  nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" },
+                  // @ts-expect-no-error: a nullable nested enum composes across its members
+                  "addressAttribute.category": { $gte: "home", $lte: "work" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: both bounds may be the same member
+                  enumAttribute: { $between: ["val-1", "val-1"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an enum range bound the enum cannot hold", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: val-3 is not one of the enum's values, composed or not
+                  enumAttribute: { $gte: "val-1", $lte: "val-3" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: archived is not one of the nested enum's values
+                  "objectAttribute.status": { $between: ["active", "archived"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an enum is ranged by its values, not a number
+                  enumAttribute: { $between: ["val-1", 2] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a range bound is never null, nullable enum or not
+                  nullableEnumAttribute: { $between: [null, "val-2"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: null means not set, which no ordering can compare
+                  nullableEnumAttribute: { $gte: "val-1", $lte: null }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean is not one of the enum's values
+                  enumAttribute: { $between: ["val-1", true] }
                 }
               }
             )

@@ -2155,6 +2155,22 @@ describe("Query", () => {
           ).catch(() => {});
         });
 
+        it("accepts a $between across two members of an enum index attribute", async () => {
+          // @ts-expect-no-error: both bounds are declared members
+          await MyClassWithAllAttributeTypes.query(
+            { enumAttribute: { $between: ["val-1", "val-2"] } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("rejects a $between bound an enum index attribute does not declare", async () => {
+          // @ts-expect-error: "val-3" is not a declared member
+          await MyClassWithAllAttributeTypes.query(
+            { enumAttribute: { $between: ["val-1", "val-3"] } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
         it("rejects a nested key-conditions record as an attribute's condition", async () => {
           // Before 3.3.0 every index attribute was typed as a whole
           // KeyConditions record rather than a condition on that attribute,
@@ -3161,6 +3177,15 @@ describe("Query", () => {
             );
           });
 
+          it("accepts a string pair for $between", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds are strings
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableStringAttribute: { $between: ["A", "M"] } }
+              })
+            );
+          });
+
           it("rejects a number operand", async () => {
             await swallow(
               // @ts-expect-error: a number is not a string
@@ -3186,6 +3211,114 @@ describe("Query", () => {
               })
             );
           });
+
+          it("accepts a range whose bounds are two different members", async () => {
+            // An enum is stored as a string, which DynamoDB orders
+            // lexicographically, so any two members bound a range
+            await swallow(
+              // @ts-expect-no-error: both bounds are declared members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-2"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: composed comparisons may name different members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-1", $lte: "val-2" } }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nullable enum's range takes its members too
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  nullableEnumAttribute: { $between: ["val-1", "val-2"] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: and composes across them
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nested enum field ranges across its members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.status": { $between: ["active", "inactive"] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nullable nested enum composes across its members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "addressAttribute.category": { $gte: "home", $lte: "work" }
+                }
+              })
+            );
+          });
+
+          it("still accepts a range on a single member", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds may be the same member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-1"] } }
+              })
+            );
+          });
+
+          it("rejects a range bound the enum does not declare", async () => {
+            await swallow(
+              // @ts-expect-error: "val-3" is not a declared member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-3"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "val-3" is not a declared member, composed or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-1", $lte: "val-3" } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "archived" is not a declared member of the nested enum
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.status": { $between: ["active", "archived"] }
+                }
+              })
+            );
+          });
+
+          it("rejects a numeric, null or boolean range bound", async () => {
+            await swallow(
+              // @ts-expect-error: an enum is ranged by its members, not a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", 2] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: a range bound is never null, nullable enum or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableEnumAttribute: { $between: [null, "val-2"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: null is not a comparison operand, composed or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableEnumAttribute: { $gte: "val-1", $lte: null } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: a boolean is not a member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", true] } }
+              })
+            );
+          });
         });
 
         describe("a boolean attribute", () => {
@@ -3203,6 +3336,21 @@ describe("Query", () => {
               // @ts-expect-error: and a string is not a boolean either
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { boolAttribute: { $gte: "true" } }
+              })
+            );
+          });
+
+          it("offers no range across its two values", async () => {
+            await swallow(
+              // @ts-expect-error: a boolean has no ordering for a range to use
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: { $between: [false, true] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: nor for composed comparisons
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableBoolAttribute: { $gte: false, $lte: true } }
               })
             );
           });
@@ -3236,6 +3384,41 @@ describe("Query", () => {
               MyClassWithAllAttributeTypes.query("123", {
                 filter: {
                   nullableDateAttribute: { $between: [null, new Date()] }
+                }
+              })
+            );
+          });
+        });
+
+        describe("a path whose field the type cannot resolve", () => {
+          // A dot path into a discriminated union variant takes the stored
+          // form, which spans several kinds. A range is formed within one
+          // kind: DynamoDB requires both BETWEEN bounds to share a type
+          it("accepts a range whose bounds share a kind", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds are strings
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $between: ["4000", "4999"] }
+                }
+              })
+            );
+          });
+
+          it("rejects a range whose bounds are different kinds", async () => {
+            await swallow(
+              // @ts-expect-error: a string and a number bound no range
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $between: ["4000", 4999] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: nor do composed comparisons across kinds
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $gte: "4000", $lte: 4999 }
                 }
               })
             );

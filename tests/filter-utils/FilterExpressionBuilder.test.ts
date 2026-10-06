@@ -50,6 +50,12 @@ const attributes: Record<
     nullable: true
   },
   status: { alias: "Status", type: z.string(), kind: "string" },
+  // An enum is stored as a string, so its members order lexicographically
+  tier: {
+    alias: "Tier",
+    type: z.enum(["bronze", "gold", "silver"]),
+    kind: "enum"
+  },
   holder: {
     alias: "Holder",
     type: z.string().nullable(),
@@ -548,6 +554,37 @@ describe("FilterExpressionBuilder", () => {
           CreatedAt2: "2023-12-31T23:59:59.999Z"
         }
       });
+    });
+
+    it("compiles an enum $between across two members, validating each bound", () => {
+      expect.assertions(3);
+
+      expect(
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["bronze", "gold"] }
+        })
+      ).toEqual({
+        expression: "#Tier BETWEEN :Tier1 AND :Tier2",
+        values: { Tier1: "bronze", Tier2: "gold" }
+      });
+      expect(() =>
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["bronze", "platinum"] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "tier": the value does not match the attribute\'s type'
+        )
+      );
+      expect(() =>
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["copper", "gold"] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "tier": the value does not match the attribute\'s type'
+        )
+      );
     });
 
     it("parenthesizes a multi-operand condition inside an $or block", () => {
