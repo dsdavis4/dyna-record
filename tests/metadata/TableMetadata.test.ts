@@ -2881,6 +2881,183 @@ describe("TableMetadata", () => {
               }
             }
           },
+          Category: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                kind: "string",
+                nullable: false
+              },
+              parentCategoryId: {
+                name: "parentCategoryId",
+                alias: "ParentCategoryId",
+                kind: "foreignKey",
+                nullable: true,
+                foreignKeyTarget: "Category"
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                kind: "string",
+                nullable: false
+              },
+              ParentCategoryId: {
+                name: "parentCategoryId",
+                alias: "ParentCategoryId",
+                kind: "foreignKey",
+                nullable: true,
+                foreignKeyTarget: "Category"
+              }
+            },
+            relationships: {
+              parentCategoryId: {
+                type: "OwnedBy",
+                propertyName: "parentCategoryId",
+                target: "Category",
+                foreignKey: "parentCategoryId"
+              },
+              subcategories: {
+                type: "HasMany",
+                propertyName: "subcategories",
+                target: "Category",
+                foreignKey: "parentCategoryId",
+                uniDirectional: true
+              }
+            }
+          },
+          Accessory: {
+            tableClassName: "MockTable",
+            attributes: {
+              id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              createdAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              updatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              name: {
+                name: "name",
+                alias: "Name",
+                kind: "string",
+                nullable: false
+              }
+            },
+            tableAttributes: {
+              Id: {
+                name: "id",
+                alias: "Id",
+                kind: "string",
+                nullable: false
+              },
+              Type: {
+                name: "type",
+                alias: "Type",
+                kind: "string",
+                nullable: false
+              },
+              CreatedAt: {
+                name: "createdAt",
+                alias: "CreatedAt",
+                kind: "date",
+                nullable: false
+              },
+              UpdatedAt: {
+                name: "updatedAt",
+                alias: "UpdatedAt",
+                kind: "date",
+                nullable: false
+              },
+              Name: {
+                name: "name",
+                alias: "Name",
+                kind: "string",
+                nullable: false
+              }
+            },
+            relationships: {
+              compatibleAccessories: {
+                type: "HasAndBelongsToMany",
+                propertyName: "compatibleAccessories",
+                target: "Accessory",
+                joinTableName: "CompatibleAccessory"
+              },
+              compatibleWith: {
+                type: "HasAndBelongsToMany",
+                propertyName: "compatibleWith",
+                target: "Accessory",
+                joinTableName: "CompatibleAccessory"
+              }
+            }
+          },
           DiscriminatedUnionEntity: {
             attributes: {
               id: {
