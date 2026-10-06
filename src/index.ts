@@ -22,6 +22,24 @@ export type {
   IntersectTypeWithOr
 } from "./operations/index.js";
 export type {
+  WriteCondition,
+  CreateCondition,
+  TargetCondition,
+  RelatedEntityCondition,
+  ForeignKeyTargetGuard,
+  UntypedForeignKeyTargetError,
+  BelongsToForeignKeyTargetError,
+  CreateRelationshipConditionError,
+  CreateOperationOptions,
+  UpdateOperationOptions,
+  DeleteOperationOptions
+} from "./operations/index.js";
+export type {
+  JoinTableCondition,
+  JoinTableCreateOptions,
+  JoinTableDeleteOptions
+} from "./relationships/JoinTable.js";
+export type {
   Brand,
   DynamoNativeValue,
   DynamoScalarValue,

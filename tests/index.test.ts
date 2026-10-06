@@ -1,5 +1,22 @@
 import * as publicEntry from "../index.js";
 import DynaRecord from "../index.js";
+import type {
+  BelongsToForeignKeyTargetError,
+  CreateCondition,
+  CreateOperationOptions,
+  CreateRelationshipConditionError,
+  DeleteOperationOptions,
+  ForeignKeyTargetGuard,
+  JoinTable,
+  JoinTableCondition,
+  JoinTableCreateOptions,
+  JoinTableDeleteOptions,
+  RelatedEntityCondition,
+  TargetCondition,
+  UntypedForeignKeyTargetError,
+  UpdateOperationOptions,
+  WriteCondition
+} from "../index.js";
 
 /**
  * Every name the entry point resolves at run time, in sort order.
@@ -53,6 +70,31 @@ const publicRuntimeExports = [
   "TransactionWriteFailedError"
 ];
 
+/**
+ * The type-only exports of conditional writes, which a consumer names in their
+ * own signatures.
+ *
+ * They leave nothing at run time, so the list above cannot hold them. Naming
+ * each one here is the deliberate decision instead: if one stops being
+ * exported from the entry point, this file stops compiling.
+ */
+type PublicWriteConditionTypes = [
+  WriteCondition<DynaRecord>,
+  CreateCondition<DynaRecord>,
+  TargetCondition<DynaRecord>,
+  RelatedEntityCondition<DynaRecord>,
+  ForeignKeyTargetGuard<DynaRecord>,
+  UntypedForeignKeyTargetError,
+  BelongsToForeignKeyTargetError<string>,
+  CreateRelationshipConditionError,
+  CreateOperationOptions<DynaRecord>,
+  UpdateOperationOptions<DynaRecord>,
+  DeleteOperationOptions<DynaRecord>,
+  JoinTableCondition<JoinTable<DynaRecord, DynaRecord>>,
+  JoinTableCreateOptions<JoinTable<DynaRecord, DynaRecord>>,
+  JoinTableDeleteOptions<JoinTable<DynaRecord, DynaRecord>>
+];
+
 describe("the public entry point", () => {
   it("resolves exactly the pinned set of runtime exports", () => {
     expect.assertions(1);
@@ -60,6 +102,14 @@ describe("the public entry point", () => {
     expect(Object.keys(publicEntry).sort()).toStrictEqual(
       [...publicRuntimeExports].sort()
     );
+  });
+
+  it("exports the write-condition types", () => {
+    expect.assertions(1);
+
+    const types: PublicWriteConditionTypes | undefined = undefined;
+
+    expect(types).toBeUndefined();
   });
 
   it("exports the base class as the default", () => {

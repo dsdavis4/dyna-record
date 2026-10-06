@@ -48,6 +48,27 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
   Brand<string, { kind: "NullableForeignKey"; entity: T }>
 >;
 
+type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
+  NullableForeignKey<T>
+>;
+
+type NormalizedForeignKey<Value> = NonNullable<Value>;
+
+/**
+ * The entity a {@link ForeignKey} or {@link NullableForeignKey} attribute
+ * references, read from its declared type: `Customer` for
+ * `ForeignKey<Customer>`, and {@link DynaRecord} for a bare `ForeignKey`.
+ * Resolves to `never` for a value that is not a foreign key.
+ *
+ * @typeParam Value - The attribute's declared type.
+ */
+export type ExtractForeignKeyTarget<Value> =
+  NormalizedForeignKey<Value> extends ForeignKey<infer Target>
+    ? Target
+    : NormalizedForeignKey<Value> extends NullableForeignKeyBrand<infer Target>
+      ? Target
+      : never;
+
 /**
  * Represents a foreign key property on an entity within a DynaRecord model
  */

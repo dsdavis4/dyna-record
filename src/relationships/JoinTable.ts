@@ -10,7 +10,14 @@ import Metadata, {
   type TableMetadata,
   type JoinTableMetadata
 } from "../metadata/index.js";
-import type { ForeignKey, EntityClass, DynamoTableItem } from "../types.js";
+import type { AssertDynaRecord } from "../operations/Query/index.js";
+import type { ForeignKeyTargetGuardFor } from "../operations/WriteCondition/index.js";
+import type {
+  ForeignKey,
+  EntityClass,
+  DynamoTableItem,
+  ExtractForeignKeyTarget
+} from "../types.js";
 
 /**
  * Exclude the type1 type2 instance keys
@@ -52,6 +59,79 @@ interface JoinTableOptions {
    * @default true
    */
   referentialIntegrityCheck?: boolean;
+}
+
+/**
+ * The foreign key properties of a join table: those whose declared type is a
+ * `ForeignKey` or `NullableForeignKey`, typed or bare.
+ */
+type JoinTableForeignKeys<J> = {
+  [P in Exclude<keyof J, ExcludeKeys>]: [
+    ExtractForeignKeyTarget<J[P]>
+  ] extends [never]
+    ? never
+    : P;
+}[Exclude<keyof J, ExcludeKeys>];
+
+/**
+ * The condition `JoinTable.create` and `JoinTable.delete` accept, keyed by the
+ * join table's foreign key properties.
+ *
+ * A join table has no row of its own, so each key guards the entity its
+ * foreign key references, wrapped in `target` to make clear that the condition
+ * applies to that entity's row rather than to the key's value. Each target is
+ * typed from the foreign key's own type parameter, so the key must be declared
+ * `ForeignKey<Target>`: on a bare `ForeignKey` the guard is a compile error
+ * naming the missing type parameter.
+ *
+ * @typeParam J - The join table class.
+ *
+ * @example
+ * ```typescript
+ * class CustomerStore extends JoinTable<Customer, Store> {
+ *   public readonly customerId: ForeignKey<Customer>;
+ *   public readonly storeId: ForeignKey<Store>;
+ * }
+ *
+ * // Link a Customer to a Store only if the Store is in Springfield
+ * const condition: JoinTableCondition<CustomerStore> = {
+ *   storeId: { target: { "address.city": "Springfield" } }
+ * };
+ * ```
+ */
+export type JoinTableCondition<J> = {
+  [P in JoinTableForeignKeys<J>]?: ForeignKeyTargetGuardFor<
+    AssertDynaRecord<ExtractForeignKeyTarget<J[P]>>
+  >;
+};
+
+/**
+ * Options for `JoinTable.create`
+ *
+ * @typeParam J - The join table class.
+ */
+export interface JoinTableCreateOptions<J> extends JoinTableOptions {
+  /**
+   * Guards on the entities being linked, checked in the same transaction as
+   * the link: the link is created only if every guard holds. A guard still
+   * requires its row to exist when `referentialIntegrityCheck` is `false`.
+   * See {@link JoinTableCondition}.
+   */
+  condition?: JoinTableCondition<J>;
+}
+
+/**
+ * Options for `JoinTable.delete`
+ *
+ * @typeParam J - The join table class.
+ */
+export interface JoinTableDeleteOptions<J> {
+  /**
+   * Guards on the entities being unlinked, checked in the same transaction as
+   * the unlink: the link is deleted only if every guard holds. See
+   * {@link JoinTableCondition}.
+   */
+  condition?: JoinTableCondition<J>;
 }
 
 /**

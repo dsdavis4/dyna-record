@@ -17,6 +17,15 @@ import type {
   InferObjectSchema
 } from "../src/decorators/index.js";
 import type { PartitionKey, SortKey, ForeignKey } from "../src/types.js";
+import { JoinTable } from "../src/relationships/index.js";
+import type { JoinTableCondition } from "../src/relationships/JoinTable.js";
+import type {
+  CreateCondition,
+  ForeignKeyTargetGuard,
+  RelatedEntityCondition,
+  TargetCondition,
+  WriteCondition
+} from "../src/operations/WriteCondition/index.js";
 
 /**
  * The examples in the README and in the public TSDoc, compiled against the real
@@ -104,6 +113,23 @@ class Store extends DocsTable {
 
   @ObjectAttribute({ alias: "Address", schema: addressSchema })
   public readonly address: InferObjectSchema<typeof addressSchema>;
+}
+
+@Entity
+class PaymentMethod extends DocsTable {
+  declare readonly type: "PaymentMethod";
+
+  @StringAttribute({ alias: "LastFour" })
+  public readonly lastFour: string;
+
+  // References its Customer without a BelongsTo
+  @ForeignKeyAttribute(() => Customer, { alias: "CustomerId" })
+  public readonly customerId: ForeignKey<Customer>;
+}
+
+class CustomerStore extends JoinTable<Customer, Store> {
+  public readonly customerId: ForeignKey<Customer>;
+  public readonly storeId: ForeignKey<Store>;
 }
 
 describe("documented examples compile", () => {
@@ -288,5 +314,57 @@ describe("documented examples compile", () => {
     };
 
     expect(examples).toBeDefined();
+  });
+
+  it("TSDoc: the write-condition types", () => {
+    // TargetCondition
+    const customer: TargetCondition<Customer> = {
+      $or: [{ name: "Jane" }, { name: { $beginsWith: "J" } }]
+    };
+
+    // RelatedEntityCondition
+    const order: RelatedEntityCondition<Order> = {
+      id: "order-1",
+      condition: { total: { $lt: 100 } }
+    };
+
+    // ForeignKeyTargetGuard
+    const paymentMethod: WriteCondition<PaymentMethod> = {
+      customerId: { target: { name: "Jane" } }
+    };
+    const guard: ForeignKeyTargetGuard<Customer> = { target: { name: "Jane" } };
+
+    // WriteCondition
+    const update: WriteCondition<Order> = {
+      total: { $lt: 100 },
+      customer: { name: "Jane" }
+    };
+    const remove: WriteCondition<Customer> = {
+      orders: [
+        {
+          id: "order-1",
+          condition: { orderDate: { $lt: new Date("2026-01-01") } }
+        }
+      ]
+    };
+
+    // CreateCondition
+    const create: CreateCondition<Order> = { customer: { name: "Jane" } };
+
+    // JoinTableCondition
+    const link: JoinTableCondition<CustomerStore> = {
+      storeId: { target: { "address.city": "Springfield" } }
+    };
+
+    expect([
+      customer,
+      order,
+      paymentMethod,
+      guard,
+      update,
+      remove,
+      create,
+      link
+    ]).toHaveLength(8);
   });
 });

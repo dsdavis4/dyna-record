@@ -1,5 +1,6 @@
 import type DynaRecord from "../../DynaRecord.js";
 import type { EntityDefinedAttributes } from "../types.js";
+import type { WriteCondition } from "../WriteCondition/index.js";
 
 /**
  * Extracts the keys of properties in type `T` that are explicitly allowed to be `undefined`.
@@ -75,8 +76,10 @@ export type UpdateOptions<T extends DynaRecord> = Partial<
 
 /**
  * Options for update operations
+ *
+ * @typeParam T - The entity being updated.
  */
-export interface UpdateOperationOptions {
+export interface UpdateOperationOptions<T extends DynaRecord = DynaRecord> {
   /**
    * Whether to perform referential integrity checks for foreign key references.
    * When `true` (default), condition checks are added to verify that referenced entities exist.
@@ -93,6 +96,13 @@ export interface UpdateOperationOptions {
    * @default false
    */
   forceEmbed?: boolean;
+  /**
+   * A guard on the entity's own row and on its related rows, checked in the
+   * same transaction as the update: the entity is updated only if every part
+   * holds. A relationship guard still requires its row to exist when
+   * `referentialIntegrityCheck` is `false`. See {@link WriteCondition}.
+   */
+  condition?: WriteCondition<T>;
 }
 
 /**

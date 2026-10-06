@@ -287,7 +287,7 @@ export type QueryFilterValueFor<
  * @typeParam T - The type the path starts at.
  * @typeParam P - The remaining dot path.
  */
-type TypeAtDotPath<
+export type TypeAtDotPath<
   T,
   P extends string
 > = P extends `${infer Head}.${infer Rest}`
