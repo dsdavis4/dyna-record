@@ -3,6 +3,10 @@ import type { WriteCondition } from "../WriteCondition/index.js";
 
 export interface DeleteOptions {
   errorMessage: string;
+  /**
+   * A condition the item's row must meet for the delete to commit
+   */
+  conditionExpression?: string;
 }
 
 /**

@@ -20,10 +20,13 @@ import OperationBase from "../OperationBase.js";
 import type { QueryResults, QueryResult } from "../Query/index.js";
 import { UpdateDryRun } from "../Update/index.js";
 import {
+  type CompiledWriteCondition,
+  attachWriteCondition,
   buildBelongsToLinkKey,
-  buildEntityRelationshipMetaObj
+  buildEntityRelationshipMetaObj,
+  compileWriteCondition
 } from "../utils/index.js";
-import type { DeleteOptions } from "./types.js";
+import type { DeleteOperationOptions, DeleteOptions } from "./types.js";
 
 type Entity = QueryResult<DynaRecord>;
 
@@ -62,6 +65,13 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
   readonly #belongsToRelationships: BelongsToRelationship[];
   readonly #validationErrors: Error[] = [];
 
+  /**
+   * The caller's compiled write condition, when the delete carries one. A
+   * condition that guards anything also requires the entity's own row to still
+   * exist when the delete commits
+   */
+  #writeCondition?: CompiledWriteCondition;
+
   constructor(Entity: EntityClass<T>) {
     super(Entity);
     this.#transactionBuilder = new TransactWriteBuilder(
@@ -87,9 +97,27 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    *   - Deletes each item in the entity's partition
    *   - For each item in the entity's partition which is a denormalized record it:
    *     - Will nullify the associated relationship's ForeignKey attribute if the attribute is nullable
+   *   - When a write condition is given, deletes only if every part of it holds and the entity's own row still exists, in the same transaction
    * @param id
+   * @param options - Optional operation options: a write condition
+   * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
    */
-  public async run(id: string): Promise<void> {
+  public async run(
+    id: string,
+    options?: DeleteOperationOptions<T>
+  ): Promise<void> {
+    // Validated and compiled before the earlier read, so an invalid condition
+    // costs nothing
+    this.#writeCondition =
+      options?.condition === undefined
+        ? undefined
+        : compileWriteCondition({
+            EntityClass: this.EntityClass,
+            operation: "delete",
+            condition: options.condition,
+            transactionBuilder: this.#transactionBuilder
+          });
+
     const preFetchRes = await this.preFetch(id);
 
     this.buildDeleteSelfTransactions(preFetchRes.self);
@@ -111,14 +139,30 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
       })
     );
 
-    if (this.#validationErrors.length === 0) {
-      await this.#transactionBuilder.executeTransaction();
-    } else {
+    if (this.#validationErrors.length > 0) {
       throw new TransactionWriteFailedError(
         this.#validationErrors,
         "Failed Validations"
       );
     }
+
+    // Guards and pins merge only once every library item is queued, including
+    // the child-nullify updates queued by the awaited dry runs above. A failed
+    // validation has already aborted the delete, so no condition is resolved
+    if (this.#writeCondition !== undefined) {
+      attachWriteCondition({
+        compiled: this.#writeCondition,
+        id,
+        transactionBuilder: this.#transactionBuilder,
+        stored: preFetchRes.self,
+        related: [
+          ...preFetchRes.linkedEntities,
+          ...preFetchRes.linkedEntitiesWithFkRef
+        ]
+      });
+    }
+
+    await this.#transactionBuilder.executeTransaction();
   }
 
   /**
@@ -178,10 +222,41 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param self
    */
   private buildDeleteSelfTransactions(self: Entity): void {
-    this.buildDeleteEntityTransaction(self, {
-      errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${self.id}`
-    });
+    if (this.guardsAnything()) {
+      // A delete carrying a write condition deletes the row only if it still
+      // exists, so a row deleted after the earlier read is reported as
+      // not-found rather than as a failed condition. The key is the one the
+      // condition's guards and pins on this row are merged onto
+      this.buildDeleteItemTransaction(
+        {
+          [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(self.id),
+          [this.sortKeyAlias]: this.EntityClass.name
+        },
+        {
+          errorMessage: `${this.EntityClass.name} with ID '${self.id}' does not exist`,
+          conditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+        }
+      );
+    } else {
+      this.buildDeleteEntityTransaction(self, {
+        errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${self.id}`
+      });
+    }
     this.buildDeleteAssociatedBelongsTransaction(self.id, self);
+  }
+
+  /**
+   * Whether the delete carries a write condition that guards anything. An
+   * empty condition, or one holding only empty HasMany or
+   * HasAndBelongsToMany arrays, adds nothing to the delete
+   * @returns Whether a guard will be merged onto the transaction
+   */
+  private guardsAnything(): boolean {
+    return (
+      this.#writeCondition !== undefined &&
+      (this.#writeCondition.self !== undefined ||
+        this.#writeCondition.guards.length > 0)
+    );
   }
 
   /**
@@ -195,7 +270,10 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
     this.#transactionBuilder.addDelete(
       {
         TableName: this.#tableName,
-        Key: keys
+        Key: keys,
+        ...(options.conditionExpression !== undefined && {
+          ConditionExpression: options.conditionExpression
+        })
       },
       options.errorMessage
     );

@@ -19,6 +19,7 @@ import {
   type UpdateOptions,
   type UpdateOperationOptions,
   Delete,
+  type DeleteOperationOptions,
   type EntityAttributesOnly,
   type EntityAttributesInstance,
   type IncludedAssociations,
@@ -474,6 +475,7 @@ abstract class DynaRecord implements DynaRecordBase {
    *   - Delete all denormalized records
    *   - Disassociate all foreign keys of linked models
    * @param id - The id of the entity to update
+   * @param options - Optional operation options: a write condition, checked in the same transaction as the delete. The entity is deleted only if every part of the condition holds and its own row still exists. See {@link DeleteOperationOptions}
    *
    * @example Delete an entity
    * ```typescript
@@ -482,10 +484,11 @@ abstract class DynaRecord implements DynaRecordBase {
    */
   public static async delete<T extends DynaRecord>(
     this: EntityClass<T>,
-    id: string
+    id: string,
+    options?: DeleteOperationOptions<T>
   ): Promise<void> {
     const op = new Delete<T>(this);
-    await op.run(id);
+    await op.run(id, options);
   }
 
   /**
