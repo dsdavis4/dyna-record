@@ -15,7 +15,9 @@ import type {
   TargetCondition,
   UntypedForeignKeyTargetError,
   UpdateOperationOptions,
-  WriteCondition
+  WriteCondition,
+  WriteConditionFailure,
+  WriteConditionGuard
 } from "../index.js";
 
 /**
@@ -67,6 +69,7 @@ const publicRuntimeExports = [
   "EmbeddingError",
   "NullConstraintViolationError",
   "ConditionalCheckFailedError",
+  "WriteConditionFailedError",
   "TransactionWriteFailedError"
 ];
 
@@ -92,7 +95,9 @@ type PublicWriteConditionTypes = [
   DeleteOperationOptions<DynaRecord>,
   JoinTableCondition<JoinTable<DynaRecord, DynaRecord>>,
   JoinTableCreateOptions<JoinTable<DynaRecord, DynaRecord>>,
-  JoinTableDeleteOptions<JoinTable<DynaRecord, DynaRecord>>
+  JoinTableDeleteOptions<JoinTable<DynaRecord, DynaRecord>>,
+  WriteConditionGuard,
+  WriteConditionFailure
 ];
 
 describe("the public entry point", () => {
