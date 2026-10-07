@@ -1,3 +1,61 @@
+## 3.5.0 - 2026-10-06
+
+### Added
+
+- **Write conditions.** `update` (static and instance), `delete`, `create`, and a join table's `create` and `delete` accept a `condition` option. The write happens only if the condition holds, and DynamoDB checks it in the same transaction as the write, so the check and the write are one atomic step. Before this, a guarded write meant reading, deciding and then writing, where two processes could read the same state and both write; or dropping to the raw SDK, whose writes skip the denormalized copies and foreign key links dyna-record maintains.
+
+  ```typescript
+  // Cancel an Order only while it is still pending
+  await Order.update(
+    "order-1",
+    { status: "cancelled" },
+    { condition: { status: "pending" } }
+  );
+  ```
+
+  A condition only decides whether the write happens. It never changes which items are written, it is never checked against an earlier read, and when it fails nothing is written: not the entity, not its copies, not its links. A write without a `condition` sends exactly the commands it did before.
+
+- **A condition can guard the entity's own row and the rows around it.** One object holds three kinds of key, mirroring the entity's own shape:
+
+  - **Its own attributes**, in the full query-filter vocabulary: equality, `IN`, `$beginsWith`, `$contains`, the comparison operators, `$between`, `$or` and dot paths, typed and validated as filters are. In a write condition `null` on a nullable attribute means "not set", since dyna-record removes a nulled attribute rather than storing it. An `undefined` operand is a `FilterError` rather than a dropped condition, because dropping part of a guard would loosen it.
+  - **Its relationships**, by property name. A BelongsTo or HasOne takes a condition on the related row, which the library finds. A HasMany or HasAndBelongsToMany takes `{ id, condition }` entries, and the same transaction verifies that each id is actually related.
+  - **Foreign keys with no relationship property** — a join table's keys, the child side of a uni-directional HasMany, a standalone foreign key — guard the row they reference through a `target` wrapper.
+
+  ```typescript
+  await Order.update(
+    "order-1",
+    { status: "shipped", trackingNumber: "1Z999" },
+    {
+      condition: {
+        trackingNumber: null,
+        customer: { status: "active" },
+        storeId: { target: { status: "open" } }
+      }
+    }
+  );
+
+  await CustomerStore.create(
+    { customerId: "customer-1", storeId: "store-1" },
+    { condition: { storeId: { target: { status: "open" } } } }
+  );
+  ```
+
+  `$or` applies within one row and never across rows: DynamoDB evaluates a condition against exactly one item, so a relationship inside `$or` is a compile error. `create` takes no condition on the new row's own attributes, which must not exist yet, and guards only its BelongsTo relationships and typed foreign keys. `target` guards and create's relationship guards need the foreign key declared with its target type, `ForeignKey<Target>`; a bare `ForeignKey` keeps compiling everywhere else.
+
+- **`WriteConditionFailedError`**, a subclass of `ConditionalCheckFailedError`, delivered inside the usual `TransactionWriteFailedError` so existing catch blocks keep working. Its `entity`, `id` and `guards` fields name the write and every guard on the row whose check failed. A missing row, a failed referential-integrity check, a relationship changed by a concurrent write, and an id that is not related stay plain `ConditionalCheckFailedError`s with their own messages, so a lost race can be told apart from a broken one with `instanceof`.
+
+- **New exported types:** `WriteCondition`, `CreateCondition`, `TargetCondition`, `RelatedEntityCondition`, `ForeignKeyTargetGuard`, `JoinTableCondition`, the options types `CreateOperationOptions`, `UpdateOperationOptions`, `DeleteOperationOptions`, `JoinTableCreateOptions` and `JoinTableDeleteOptions`, and the error surfaces `UntypedForeignKeyTargetError`, `BelongsToForeignKeyTargetError` and `CreateRelationshipConditionError`, which name the fix when a guard is written where it cannot apply. `delete` and `JoinTable.delete` gain an optional options argument to carry the condition.
+
+### Breaking (type-level only)
+
+- **`ConditionalCheckFailedError.code` is typed as `"ConditionalCheckFailedError" | "WriteConditionFailedError"`.** It was the single literal, which left no room for the subclass's own code. An instance of the base class still carries `"ConditionalCheckFailedError"`, and equality checks on `code` and `instanceof` behave as before. Only code that assigns `code` to a variable typed as the single literal notices.
+
+### Fixed
+
+- **A range on an enum attribute takes any two of its members as bounds.** `$between` and composed comparisons were typed one member at a time, so both bounds had to be the same member: `{ $between: ["bronze", "gold"] }` and `{ $gte: "bronze", $lte: "gold" }` failed to compile, while `{ $between: ["gold", "gold"] }` compiled. An enum is stored as a string, which DynamoDB orders lexicographically, so a range across any two members is valid, and the expression builder already compiled it. This applies to filters, index key conditions and nested enum fields. A bound outside the enum, a number, `null` and a boolean are still rejected, and ranges on every other attribute kind are unchanged.
+
+- **Deleting an entity that is its own parent deletes everything it wrote.** An entity in a uni-directional HasMany with itself, whose foreign key holds its own id, has a link copy in its own partition alongside its own row. `delete` took the copy for the entity itself, so it sent the copy's delete twice and left the entity's own row behind. The entity's row is now identified by its sort key, and the row and the copy are each deleted once.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added

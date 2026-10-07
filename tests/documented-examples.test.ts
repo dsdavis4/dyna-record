@@ -8,9 +8,11 @@ import {
   NumberAttribute,
   DateAttribute,
   ObjectAttribute,
+  EnumAttribute,
   ForeignKeyAttribute,
   HasMany,
-  BelongsTo
+  BelongsTo,
+  HasAndBelongsToMany
 } from "../src/decorators/index.js";
 import type {
   ObjectSchema,
@@ -18,6 +20,10 @@ import type {
 } from "../src/decorators/index.js";
 import type { PartitionKey, SortKey, ForeignKey } from "../src/types.js";
 import { JoinTable } from "../src/relationships/index.js";
+import {
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "../src/dynamo-utils/errors.js";
 import type { JoinTableCondition } from "../src/relationships/JoinTable.js";
 import type {
   CreateCondition,
@@ -91,6 +97,19 @@ class Order extends DocsTable {
 
   @BelongsTo(() => Customer, { foreignKey: "customerId" })
   public readonly customer: Customer;
+
+  // The README's write-condition schema additions
+  @EnumAttribute({
+    alias: "Status",
+    values: ["pending", "shipped", "cancelled"]
+  })
+  public readonly status: "pending" | "shipped" | "cancelled";
+
+  @StringAttribute({ alias: "TrackingNumber", nullable: true })
+  public readonly trackingNumber?: string;
+
+  @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
+  public readonly storeId: ForeignKey<Store>;
 }
 
 @Entity
@@ -100,8 +119,21 @@ class Customer extends DocsTable {
   @StringAttribute({ alias: "Name" })
   public readonly name: string;
 
+  @StringAttribute({ alias: "Phone", nullable: true })
+  public readonly phone?: string;
+
   @HasMany(() => Order, { foreignKey: "customerId" })
   public readonly orders: Order[];
+
+  // The README's write-condition schema additions
+  @EnumAttribute({ alias: "Status", values: ["active", "suspended"] })
+  public readonly status: "active" | "suspended";
+
+  @HasAndBelongsToMany(() => Store, {
+    targetKey: "customers",
+    through: () => ({ joinTable: CustomerStore, foreignKey: "customerId" })
+  })
+  public readonly stores: Store[];
 }
 
 @Entity
@@ -113,6 +145,16 @@ class Store extends DocsTable {
 
   @ObjectAttribute({ alias: "Address", schema: addressSchema })
   public readonly address: InferObjectSchema<typeof addressSchema>;
+
+  // The README's write-condition schema additions
+  @EnumAttribute({ alias: "Status", values: ["open", "closed"] })
+  public readonly status: "open" | "closed";
+
+  @HasAndBelongsToMany(() => Customer, {
+    targetKey: "stores",
+    through: () => ({ joinTable: CustomerStore, foreignKey: "storeId" })
+  })
+  public readonly customers: Customer[];
 }
 
 @Entity
@@ -311,6 +353,305 @@ describe("documented examples compile", () => {
       await Store.query("123", {
         filter: { "address.contacts[0].name": "Jane" }
       });
+    };
+
+    expect(examples).toBeDefined();
+  });
+
+  it("README: write conditions", () => {
+    const examples = async (): Promise<void> => {
+      // "Cancel an Order only while it is still pending"
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        { condition: { status: "pending" } }
+      );
+
+      // "Update only if nothing has written the Order since it was read"
+      const order = await Order.findById("order-1");
+      if (order !== undefined) {
+        await Order.update(
+          "order-1",
+          { total: 90 },
+          { condition: { updatedAt: order.updatedAt } }
+        );
+      }
+
+      // "Ship an Order only if it has no tracking number yet"
+      await Order.update(
+        "order-1",
+        { status: "shipped", trackingNumber: "1Z999" },
+        { condition: { trackingNumber: null } }
+      );
+
+      // "Cancel an Order that is pending or has no tracking number yet"
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        {
+          condition: { $or: [{ status: "pending" }, { trackingNumber: null }] }
+        }
+      );
+
+      // "null is offered only on a nullable attribute"
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        // @ts-expect-error total is not nullable, so it is never "not set"
+        { condition: { total: null } }
+      );
+
+      // "Change an Order only while its Customer is active"
+      await Order.update(
+        "order-1",
+        { total: 90 },
+        { condition: { total: { $lt: 100 }, customer: { status: "active" } } }
+      );
+
+      // "Guard two of a Customer's related rows by id"
+      await Customer.update(
+        "customer-1",
+        { name: "Jane Doe" },
+        {
+          condition: {
+            orders: [{ id: "order-1", condition: { status: "pending" } }],
+            stores: [{ id: "store-1", condition: { status: "open" } }]
+          }
+        }
+      );
+
+      // "Move an Order to another Customer only if that Customer is active"
+      await Order.update(
+        "order-1",
+        { customerId: "customer-2" },
+        { condition: { customer: { status: "active" } } }
+      );
+
+      // "An existence-only guard"
+      await Order.update(
+        "order-1",
+        { total: 90 },
+        { condition: { customer: {} } }
+      );
+
+      // "$or stays within one row"
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        {
+          condition: {
+            $or: [{ status: "pending" }, { total: { $lt: 50 } }],
+            customer: {
+              $or: [{ status: "active" }, { name: { $beginsWith: "VIP" } }]
+            }
+          }
+        }
+      );
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        {
+          condition: {
+            // @ts-expect-error a $or branch names the Order's own attributes only
+            $or: [{ status: "pending" }, { customer: { status: "active" } }]
+          }
+        }
+      );
+
+      // "A standalone foreign key guards its row through target"
+      await Order.update(
+        "order-1",
+        { total: 90 },
+        { condition: { storeId: { target: { status: "open" } } } }
+      );
+
+      // "A value condition on the key goes in a $or branch"
+      await Order.update(
+        "order-1",
+        { total: 90 },
+        {
+          condition: {
+            storeId: { target: { status: "open" } },
+            $or: [{ storeId: "store-1" }, { storeId: "store-2" }]
+          }
+        }
+      );
+
+      // "A foreign key that backs a BelongsTo is guarded under the relationship"
+      await Order.update(
+        "order-1",
+        { total: 90 },
+        // @ts-expect-error customerId backs the customer relationship
+        { condition: { customerId: { target: { status: "active" } } } }
+      );
+
+      // "Catching a failed write condition"
+      try {
+        await Order.update(
+          "order-1",
+          { status: "cancelled" },
+          { condition: { status: "pending" } }
+        );
+      } catch (error) {
+        if (error instanceof TransactionWriteFailedError) {
+          for (const cause of error.errors) {
+            if (cause instanceof WriteConditionFailedError) {
+              // cause.entity === "Order", cause.id === "order-1",
+              // cause.guards is [{ kind: "self" }]
+              console.log(cause.entity, cause.id, cause.guards);
+            }
+          }
+        }
+        throw error;
+      }
+
+      // Create: "Place an Order only for an active Customer at an open Store"
+      // (the README's Order declares orderDate as a string; this mirror's
+      // declares a Date)
+      await Order.create(
+        {
+          orderDate: new Date("2026-10-06"),
+          total: 40,
+          status: "pending",
+          customerId: "customer-1",
+          storeId: "store-1"
+        },
+        {
+          condition: {
+            customer: { status: "active" },
+            storeId: { target: { status: "open" } }
+          }
+        }
+      );
+
+      // Create: "no condition on the new row's own attributes"
+      await Order.create(
+        {
+          orderDate: new Date("2026-10-06"),
+          total: 40,
+          status: "pending",
+          customerId: "customer-1",
+          storeId: "store-1"
+        },
+        // @ts-expect-error a create takes no condition on its own row
+        { condition: { status: "pending" } }
+      );
+
+      // Update: "A guarded touch"
+      await Order.update("order-1", {}, { condition: { status: "pending" } });
+
+      // Update: the instance method
+      if (order !== undefined) {
+        await order.update(
+          { status: "cancelled" },
+          { condition: { status: "pending" } }
+        );
+      }
+
+      // Delete: "Delete an Order only while it is pending and its Customer is active"
+      await Order.delete("order-1", {
+        condition: { status: "pending", customer: { status: "active" } }
+      });
+
+      // Join tables: link and unlink, guarded
+      await CustomerStore.create(
+        { customerId: "customer-1", storeId: "store-1" },
+        {
+          condition: {
+            customerId: { target: { status: "active" } },
+            storeId: { target: { status: "open" } }
+          }
+        }
+      );
+      await CustomerStore.delete(
+        { customerId: "customer-1", storeId: "store-1" },
+        { condition: { storeId: { target: { status: "open" } } } }
+      );
+    };
+
+    expect(examples).toBeDefined();
+  });
+
+  it("README: typed foreign keys on a join table", () => {
+    class UntypedCustomerStore extends JoinTable<Customer, Store> {
+      public readonly customerId: ForeignKey;
+      public readonly storeId: ForeignKey;
+    }
+
+    const examples = async (): Promise<void> => {
+      await UntypedCustomerStore.create(
+        { customerId: "customer-1", storeId: "store-1" },
+        // @ts-expect-error a bare ForeignKey carries no target to guard
+        { condition: { storeId: { target: { status: "open" } } } }
+      );
+    };
+
+    expect(examples).toBeDefined();
+  });
+
+  it("TSDoc: write conditions on the write methods", () => {
+    const examples = async (orderDate: Date): Promise<void> => {
+      // DynaRecord.create
+      await Order.create(
+        {
+          orderDate,
+          total: 40,
+          status: "pending",
+          customerId: "customer-1",
+          storeId: "store-1"
+        },
+        {
+          condition: {
+            customer: { status: "active" },
+            storeId: { target: { status: "open" } }
+          }
+        }
+      );
+
+      // static DynaRecord.update
+      await Order.update(
+        "order-1",
+        { status: "cancelled" },
+        { condition: { status: "pending", customer: { status: "active" } } }
+      );
+
+      // instance DynaRecord.update
+      const order = await Order.findById("order-1");
+      if (order !== undefined) {
+        const cancelled = await order.update(
+          { status: "cancelled" },
+          { condition: { status: "pending" } }
+        );
+        expect(cancelled).toBeDefined();
+      }
+
+      // DynaRecord.delete
+      await Order.delete("order-1", { condition: { status: "pending" } });
+
+      // JoinTable.create
+      await CustomerStore.create({
+        customerId: "customer-1",
+        storeId: "store-1"
+      });
+      await CustomerStore.create(
+        { customerId: "customer-1", storeId: "store-1" },
+        {
+          condition: {
+            customerId: { target: { status: "active" } },
+            storeId: { target: { status: "open" } }
+          }
+        }
+      );
+
+      // JoinTable.delete
+      await CustomerStore.delete({
+        customerId: "customer-1",
+        storeId: "store-1"
+      });
+      await CustomerStore.delete(
+        { customerId: "customer-1", storeId: "store-1" },
+        { condition: { storeId: { target: { status: "open" } } } }
+      );
     };
 
     expect(examples).toBeDefined();

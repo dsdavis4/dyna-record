@@ -354,6 +354,20 @@ abstract class DynaRecord implements DynaRecordBase {
    *   { referentialIntegrityCheck: false }
    * );
    * ```
+   *
+   * @example With a write condition on the rows the new entity references
+   * ```typescript
+   * // Place an Order only for an active Customer at an open Store
+   * const order = await Order.create(
+   *   { orderDate, total: 40, status: "pending", customerId: "customer-1", storeId: "store-1" },
+   *   {
+   *     condition: {
+   *       customer: { status: "active" },
+   *       storeId: { target: { status: "open" } }
+   *     }
+   *   }
+   * );
+   * ```
    */
   public static async create<T extends DynaRecord>(
     this: EntityClass<T>,
@@ -402,6 +416,16 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * await Product.update("productId", { description }, { forceEmbed: true });
    * ```
+   *
+   * @example With a write condition: the update happens only if it holds, checked in the same transaction
+   * ```typescript
+   * // Cancel an Order only while it is still pending and its Customer is active
+   * await Order.update(
+   *   "order-1",
+   *   { status: "cancelled" },
+   *   { condition: { status: "pending", customer: { status: "active" } } }
+   * );
+   * ```
    */
   public static async update<T extends DynaRecord>(
     this: EntityClass<T>,
@@ -444,6 +468,14 @@ abstract class DynaRecord implements DynaRecordBase {
    *   { referentialIntegrityCheck: false }
    * );
    * ```
+   *
+   * @example With a write condition: the update happens only if it holds, checked in the same transaction
+   * ```typescript
+   * const cancelled = await order.update(
+   *   { status: "cancelled" },
+   *   { condition: { status: "pending" } }
+   * );
+   * ```
    */
   public async update<T extends this>(
     attributes: UpdateOptions<T>,
@@ -481,6 +513,12 @@ abstract class DynaRecord implements DynaRecordBase {
    * @example Delete an entity
    * ```typescript
    * await User.delete("userId");
+   * ```
+   *
+   * @example With a write condition: the delete happens only if it holds, checked in the same transaction
+   * ```typescript
+   * // Delete an Order only while it is still pending
+   * await Order.delete("order-1", { condition: { status: "pending" } });
    * ```
    */
   public static async delete<T extends DynaRecord>(

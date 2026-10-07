@@ -28,7 +28,7 @@ import type { ForeignEntityAttribute } from "../types.js";
  * ```typescript
  * class Order extends TableClass {
  *   @ForeignKeyProperty({ alias: "UserId" })
- *   public readonly userId: ForeignKey;
+ *   public readonly userId: ForeignKey<User>;
  *
  *   @BelongsTo(() => User, { foreignKey: 'userId' })
  *   public user: User;

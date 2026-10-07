@@ -34,6 +34,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
   - [Update](#update)
     - [Updating Object Attributes](#updating-object-attributes)
   - [Delete](#delete)
+  - [Write conditions](#write-conditions)
 - [Vector Search](#vector-search)
   - [Declaring searchable entities](#declaring-searchable-entities)
   - [Defining vector indexes](#defining-vector-indexes)
@@ -666,8 +667,8 @@ import {
 } from "dyna-record";
 
 class StudentCourse extends JoinTable<Student, Course> {
-  public readonly studentId: ForeignKey;
-  public readonly courseId: ForeignKey;
+  public readonly studentId: ForeignKey<Student>;
+  public readonly courseId: ForeignKey<Course>;
 }
 
 @Entity
@@ -692,6 +693,43 @@ class Student extends OtherTable {
   public readonly courses: Course[];
 }
 ```
+
+Declare each foreign key on the join table with the entity it references (`ForeignKey<Student>`, not a bare `ForeignKey`). A bare key still works for linking, but a [write condition](#write-conditions) can only guard an entity whose foreign key carries its type.
+
+#### Linking and unlinking
+
+Entities are linked and unlinked through the join table. Each call writes or deletes the denormalized link records in both entities' partitions, in one transaction:
+
+```typescript
+await StudentCourse.create({ studentId: "student-1", courseId: "course-1" });
+
+await StudentCourse.delete({ studentId: "student-1", courseId: "course-1" });
+```
+
+#### Conditional writes
+
+`create` and `delete` on a join table accept a `condition` that guards the entities being linked or unlinked. A join table has no row of its own, so the condition is keyed by its foreign keys, and each value wraps a condition on the referenced entity in `target`. Using the `CustomerStore` join table from [Write conditions](#write-conditions):
+
+```typescript
+// Link a Customer to a Store only while the Customer is active and the Store is open
+await CustomerStore.create(
+  { customerId: "customer-1", storeId: "store-1" },
+  {
+    condition: {
+      customerId: { target: { status: "active" } },
+      storeId: { target: { status: "open" } }
+    }
+  }
+);
+
+// Unlink only while the Store is open
+await CustomerStore.delete(
+  { customerId: "customer-1", storeId: "store-1" },
+  { condition: { storeId: { target: { status: "open" } } } }
+);
+```
+
+Neither link record is written or deleted unless every guard holds. A guard also requires its entity to exist, even with `referentialIntegrityCheck: false`. A `target` guard on a bare `ForeignKey` is a compile error that points at the missing type parameter.
 
 ## CRUD Operations
 
@@ -802,6 +840,38 @@ const grade: Grade = await Grade.create(
 ```
 
 **Note:** When `referentialIntegrityCheck` is set to `false`, the condition checks that verify foreign key references exist are skipped. This means you can create entities even if the referenced entities don't exist, which may lead to data integrity issues. Use this option with caution.
+
+#### Conditional writes
+
+`create` accepts a `condition` that guards the rows the new entity references, checked in the same transaction as the create. Using the schema from [Write conditions](#write-conditions):
+
+```typescript
+// Place an Order only for an active Customer at an open Store
+const order = await Order.create(
+  {
+    orderDate: "2026-10-06",
+    total: 40,
+    status: "pending",
+    customerId: "customer-1",
+    storeId: "store-1"
+  },
+  {
+    condition: {
+      customer: { status: "active" },
+      storeId: { target: { status: "open" } }
+    }
+  }
+);
+```
+
+The keys are limited to what a new entity can reference:
+
+- Its **BelongsTo relationships**, by property name (`customer`), each taking a condition on the parent row.
+- Its other **typed foreign keys**, such as the standalone `storeId`, each taking a `target` guard on the row it references.
+
+A create takes **no condition on the new row's own attributes**. Create already requires that row not to exist, so a condition on its values could never hold. The only useful one would be "absent, or …", which turns the create into an overwrite of an existing row and orphans that row's relationship links. To take over a row that may already exist, create it once and change it afterwards with a conditional [`update`](#update). A new entity also has no HasOne child, HasMany children or link partners yet, so those relationships are not offered.
+
+Both kinds of key need the foreign key declared with its target type (`ForeignKey<Customer>`), and the guarded foreign key must be set in the attributes being created; a guard on a key the create leaves unset is a `FilterError`. A guard merges into the referential integrity check on the same row, and it still requires that row to exist when `referentialIntegrityCheck` is `false`.
 
 #### Error handling
 
@@ -1476,6 +1546,44 @@ const updatedInstance = await paymentMethodInstance.update(
 
 **Note:** When `referentialIntegrityCheck` is set to `false`, the condition checks that verify foreign key references exist are skipped. This means you can update entities even if the referenced entities don't exist, which may lead to data integrity issues. Use this option with caution.
 
+#### Conditional writes
+
+`update` accepts a `condition` in its options. The entity, its denormalized copies and its relationship links are updated only if every part of the condition holds, checked in the same transaction. The condition can guard the entity's own row, its related entities by relationship name, and the rows its other foreign keys reference — see [Write conditions](#write-conditions) for the full language.
+
+```typescript
+// Cancel an Order only while it is still pending
+await Order.update(
+  "order-1",
+  { status: "cancelled" },
+  { condition: { status: "pending" } }
+);
+
+// The same on an instance
+const cancelled = await orderInstance.update(
+  { status: "cancelled" },
+  { condition: { status: "pending" } }
+);
+```
+
+When the update changes a BelongsTo foreign key, a guard on that relationship checks the **new** parent:
+
+```typescript
+// Move an Order to another Customer only if that Customer is active
+await Order.update(
+  "order-1",
+  { customerId: "customer-2" },
+  { condition: { customer: { status: "active" } } }
+);
+```
+
+A guard on a relationship whose foreign key the same update sets to `null` could never be checked, so it is a `FilterError` before anything is read or written.
+
+An update with an **empty payload** and a condition is a guarded touch: it changes no attribute of yours, but it still sets `updatedAt`, and only if the condition holds. That makes it a way to record that a row was checked, and it invalidates any other writer guarding on the previous `updatedAt`.
+
+```typescript
+await Order.update("order-1", {}, { condition: { status: "pending" } });
+```
+
 ### Delete
 
 [Docs](https://docs.dyna-record.com/classes/default.html#delete)
@@ -1511,9 +1619,286 @@ await Book.delete("123");
 
 This deletes a Book entity and its association links with Author entities.
 
+#### Conditional writes
+
+`delete` takes an optional second argument whose `condition` guards the delete, in the same language as [update's](#write-conditions). The entity, its denormalized records and its relationship links are deleted, and its children's foreign keys cleared, only if every part of the condition holds:
+
+```typescript
+// Delete an Order only while it is pending and its Customer is active
+await Order.delete("order-1", {
+  condition: { status: "pending", customer: { status: "active" } }
+});
+```
+
+A delete with a condition also requires the entity's own row to still exist when the transaction commits, so a delete that races another delete fails as not-found rather than reporting success for a row that is already gone. A delete without a condition behaves exactly as before.
+
+A guard on a HasMany child or a HasOne child lands on the child's row, which the delete is already updating to clear its foreign key. It can only come into play when that foreign key is nullable: if it is not, deleting the parent fails with a `NullConstraintViolationError` before anything is sent, guard or no guard.
+
 #### Error Handling
 
-If deleting an entity or its relationships fails due to database constraints or errors during transaction execution, a TransactionWriteFailedError is thrown, possibly with details such as ConditionalCheckFailedError or NullConstraintViolationError for more specific issues related to relationship constraints or nullability violations.
+If deleting an entity or its relationships fails due to database constraints or errors during transaction execution, a TransactionWriteFailedError is thrown, possibly with details such as ConditionalCheckFailedError or NullConstraintViolationError for more specific issues related to relationship constraints or nullability violations. A failed [write condition](#write-conditions) is reported as a `WriteConditionFailedError`.
+
+### Write conditions
+
+A write condition makes a write depend on what is stored when it commits. `create`, `update` (static and instance), `delete`, and a join table's `create` and `delete` all accept one as `condition` in their options. DynamoDB checks it in the same transaction as the write. If any part of it does not hold, nothing is written: not the entity, not its denormalized copies, not its relationship links. A condition only decides whether the write happens. It never changes which items are written, and it is never checked against an earlier read. A write without a `condition` sends exactly the commands it did before.
+
+This closes the gap between reading a row and writing it. Two processes that read the same pending Order and both decide to cancel it cannot both succeed when each cancel is guarded on `status: "pending"`.
+
+The examples in this section extend the [CRUD schema](#crud-operations) with a few attributes and a HasAndBelongsToMany relationship between customers and stores:
+
+```typescript
+import {
+  Entity,
+  EnumAttribute,
+  NumberAttribute,
+  StringAttribute,
+  ForeignKeyAttribute,
+  HasAndBelongsToMany,
+  JoinTable,
+  ForeignKey
+} from "dyna-record";
+
+class CustomerStore extends JoinTable<Customer, Store> {
+  public readonly customerId: ForeignKey<Customer>;
+  public readonly storeId: ForeignKey<Store>;
+}
+
+@Entity
+class Customer extends MyTable {
+  // ...the attributes and relationships above, plus:
+
+  @EnumAttribute({ alias: "Status", values: ["active", "suspended"] })
+  public readonly status: "active" | "suspended";
+
+  @HasAndBelongsToMany(() => Store, {
+    targetKey: "customers",
+    through: () => ({ joinTable: CustomerStore, foreignKey: "customerId" })
+  })
+  public readonly stores: Store[];
+}
+
+@Entity
+class Order extends MyTable {
+  // ...the attributes and relationships above, plus:
+
+  @EnumAttribute({
+    alias: "Status",
+    values: ["pending", "shipped", "cancelled"]
+  })
+  public readonly status: "pending" | "shipped" | "cancelled";
+
+  @NumberAttribute({ alias: "Total" })
+  public readonly total: number;
+
+  @StringAttribute({ alias: "TrackingNumber", nullable: true })
+  public readonly trackingNumber?: string;
+
+  // A standalone foreign key: Order declares no relationship to Store
+  @ForeignKeyAttribute(() => Store, { alias: "StoreId" })
+  public readonly storeId: ForeignKey<Store>;
+}
+
+@Entity
+class Store extends MyTable {
+  // ...the address attribute from @ObjectAttribute, plus:
+
+  @EnumAttribute({ alias: "Status", values: ["open", "closed"] })
+  public readonly status: "open" | "closed";
+
+  @HasAndBelongsToMany(() => Customer, {
+    targetKey: "stores",
+    through: () => ({ joinTable: CustomerStore, foreignKey: "storeId" })
+  })
+  public readonly customers: Customer[];
+}
+```
+
+#### The entity's own row
+
+Keys that name the entity's own attributes guard its own row. They take everything a [query filter](#typed-query-filters) takes: equality, `IN` arrays, `$beginsWith`, `$contains`, [comparisons and `$between`](#comparison-and-range-conditions), `$or`, and [dot paths](#filtering-on-object-attributes) into object attributes. Operands are typed, validated and converted to the stored form exactly as they are in a filter (see [Whole values and fragments](#whole-values-and-fragments)), and an operator an attribute cannot carry is a compile error there too (see [Which operators an attribute offers](#which-operators-an-attribute-offers)). `type`, the partition key and the sort key are not condition keys, because the write already fixes them.
+
+```typescript
+// Cancel an Order only while it is still pending
+await Order.update(
+  "order-1",
+  { status: "cancelled" },
+  { condition: { status: "pending" } }
+);
+
+// Update only if nothing has written the Order since it was read
+const order = await Order.findById("order-1");
+if (order !== undefined) {
+  await Order.update(
+    "order-1",
+    { total: 90 },
+    { condition: { updatedAt: order.updatedAt } }
+  );
+}
+```
+
+Two rules differ from a query filter:
+
+- **`null` means "not set".** dyna-record removes a nulled attribute rather than storing it, so in a write condition `null` on a nullable attribute matches a row where that attribute is absent, including inside `$or` branches. On an attribute that is not nullable, `null` could never match, so it is a compile error.
+- **`undefined` is an error, not a dropped condition.** A filter drops an `undefined` condition so that optional inputs can be forwarded. Dropping part of a guard would quietly loosen it, so a write condition with an `undefined` operand throws a `FilterError`. An empty `$or` and a `null` inside an `IN` array are `FilterError`s too.
+
+```typescript
+// Ship an Order only if it has no tracking number yet
+await Order.update(
+  "order-1",
+  { status: "shipped", trackingNumber: "1Z999" },
+  { condition: { trackingNumber: null } }
+);
+
+// Cancel an Order that is pending or has no tracking number yet
+await Order.update(
+  "order-1",
+  { status: "cancelled" },
+  { condition: { $or: [{ status: "pending" }, { trackingNumber: null }] } }
+);
+```
+
+#### Related entities
+
+A related entity's row is guarded under the relationship's property name, beside the entity's own attributes. The value depends on the kind of relationship:
+
+| Relationship                 | Value                                   | Which row is checked                                                                                                                                    |
+| ---------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BelongsTo, HasOne            | a condition on the related entity       | The one the library finds: the parent the foreign key references, or the HasOne child                                                                   |
+| HasMany, HasAndBelongsToMany | an array of `{ id, condition }` entries | Each id you name. The same transaction verifies that the id is actually related: the child's foreign key points at this entity, or the join link exists |
+
+A related entity's condition uses the same language as the entity's own row, `null` and `$or` included. Every guard on another row also requires that row to exist, so `customer: {}` is a guard that the Customer exists. This holds even with `referentialIntegrityCheck: false`.
+
+```typescript
+// Change an Order only while its total is under 100 and its Customer is active
+await Order.update(
+  "order-1",
+  { total: 90 },
+  { condition: { total: { $lt: 100 }, customer: { status: "active" } } }
+);
+
+// Rename a Customer only while order-1 is theirs and still pending,
+// and store-1 is linked to them and open
+await Customer.update(
+  "customer-1",
+  { name: "Jane Doe" },
+  {
+    condition: {
+      orders: [{ id: "order-1", condition: { status: "pending" } }],
+      stores: [{ id: "store-1", condition: { status: "open" } }]
+    }
+  }
+);
+```
+
+`create` accepts only BelongsTo relationships and typed foreign keys, because a new entity has no children or link partners yet (see [Create](#create)). A guard whose row cannot be found fails the write rather than being skipped: a BelongsTo whose foreign key is `null`, or a HasOne with no child, fails before anything is sent (see [When a condition fails](#when-a-condition-fails)). Naming the same id twice in one relationship is a `FilterError`.
+
+##### `$or` stays within one row
+
+DynamoDB evaluates a condition against exactly one item, and a transaction requires every item's condition to hold, so no condition can say "this row **or** that row". A `$or` branch therefore names the entity's own attributes only. A relationship inside `$or` is a compile error, and a `FilterError` in plain JavaScript. A related row's condition can carry its own `$or` over that row's attributes.
+
+```typescript
+await Order.update(
+  "order-1",
+  { status: "cancelled" },
+  {
+    condition: {
+      $or: [{ status: "pending" }, { total: { $lt: 50 } }],
+      customer: {
+        $or: [{ status: "active" }, { name: { $beginsWith: "VIP" } }]
+      }
+    }
+  }
+);
+
+// Compile error: a $or branch cannot name the customer relationship
+await Order.update(
+  "order-1",
+  { status: "cancelled" },
+  {
+    condition: {
+      $or: [{ status: "pending" }, { customer: { status: "active" } }]
+    }
+  }
+);
+```
+
+Emulating an OR across rows with separate requests would not be atomic, so dyna-record does not offer it.
+
+#### Foreign keys and `target`
+
+Some foreign keys back no relationship property: a join table's keys, the child side of a [uni-directional HasMany](#hasmany), and a standalone foreign key such as `Order.storeId`. Each of these guards the row it references under its own property name, with the condition wrapped in `target`. The wrapper makes it clear that the condition applies to the referenced entity's row, not to the foreign key's value.
+
+```typescript
+// Change an Order only while its Store is open
+await Order.update(
+  "order-1",
+  { total: 90 },
+  { condition: { storeId: { target: { status: "open" } } } }
+);
+```
+
+- A foreign key that backs a BelongsTo is guarded under the relationship instead: `customer: {...}`, not `customerId: { target: {...} }`. The `target` form there is a compile error, so one parent row is never reachable by two keys.
+- A foreign key holds either a condition on its own value or a `target` guard, never both. Put the value condition in a `$or` branch:
+
+  ```typescript
+  await Order.update(
+    "order-1",
+    { total: 90 },
+    {
+      condition: {
+        storeId: { target: { status: "open" } },
+        $or: [{ storeId: "store-1" }, { storeId: "store-2" }]
+      }
+    }
+  );
+  ```
+
+`target` guards, and the relationship guards `create` accepts, need the foreign key declared with its target type: `ForeignKey<Store>` or `NullableForeignKey<Store>`. A bare `ForeignKey` carries no compile-time link to the entity it references, so a guard on it is a compile error that points at the missing type parameter. Adding the type parameter changes nothing else.
+
+#### When a condition fails
+
+A condition that does not hold fails the write with a [TransactionWriteFailedError](https://docs.dyna-record.com/classes/TransactionWriteFailedError.html), as any failed transaction does. Among its `errors` is a `WriteConditionFailedError`, a subclass of `ConditionalCheckFailedError`, so existing catch blocks keep working. Identify it with `instanceof`:
+
+```typescript
+import {
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "dyna-record";
+
+try {
+  await Order.update(
+    "order-1",
+    { status: "cancelled" },
+    { condition: { status: "pending" } }
+  );
+} catch (error) {
+  if (error instanceof TransactionWriteFailedError) {
+    for (const cause of error.errors) {
+      if (cause instanceof WriteConditionFailedError) {
+        // cause.entity === "Order", cause.id === "order-1",
+        // cause.guards is [{ kind: "self" }]
+        console.log(cause.entity, cause.id, cause.guards);
+      }
+    }
+  }
+  throw error;
+}
+```
+
+`entity` and `id` name the entity being written. `guards` names each guard on the row whose check failed: `{ kind: "self" }` for the entity's own row, `{ kind: "relationship", name }` for a relationship (with `id` for a HasMany or HasAndBelongsToMany entry), and `{ kind: "foreignKey", name }` for a `target` guard. DynamoDB reports only that a row's combined check failed, so when several guards land on one row, all of them are named. The message names them too: `ConditionalCheckFailed: Write condition failed on Order with ID 'order-1': its own row`.
+
+Failures that are not your condition are reported as a plain `ConditionalCheckFailedError` inside the same `TransactionWriteFailedError`, never as a `WriteConditionFailedError`, even when they land on a guarded row. Each message starts with `ConditionalCheckFailed: `:
+
+- **Not found.** The entity's own row does not exist: `Order with ID 'order-1' does not exist`.
+- **Referential integrity.** A guarded related row does not exist: `Customer with ID 'customer-9' does not exist`.
+- **Concurrent change.** The library resolved a guard's target from its own earlier read, and another write changed that relationship before the transaction committed. The write fails rather than checking a stale target: `Order with ID 'order-1' no longer references Customer with ID 'customer-1': its foreign key 'customerId' was changed by a concurrent write`.
+- **Not related.** A HasMany or HasAndBelongsToMany id is not related to this entity: `Order with ID 'order-9' is not associated with Customer with ID 'customer-1' through 'orders'`, or `Store with ID 'store-9' is not linked to Customer with ID 'customer-1' through 'stores'`.
+
+A guard whose target cannot be found in what is stored, such as a BelongsTo whose foreign key is `null` or a HasOne with no child, is reported before anything is sent, as a `WriteConditionFailedError` naming that guard inside a `TransactionWriteFailedError`.
+
+When two writers race for the same row, DynamoDB may cancel the loser with a `TransactionConflict` instead of evaluating its condition. That `TransactionCanceledException` is passed through unchanged, not wrapped in a `TransactionWriteFailedError`, and nothing is written. It is safe to retry: the retry evaluates the condition against the winner's write.
+
+An invalid condition (an unknown key, a relationship inside `$or`, a guard the payload rules out) is a `FilterError` thrown before anything is read or written. Each relationship guard adds at most one item to the write's transaction, two for a HasAndBelongsToMany entry, and those count toward DynamoDB's limit of 100 items per transaction.
 
 ## Vector Search
 

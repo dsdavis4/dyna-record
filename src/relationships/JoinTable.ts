@@ -153,11 +153,14 @@ interface TransactionProps {
  * It is virtual and not persisted to the database but manages the denormalized records
  * in each related entity's partition.
  *
+ * Declare each foreign key with the entity it references, `ForeignKey<Target>`,
+ * so a write condition on `create` or `delete` can guard that entity's row.
+ *
  * Example:
  * ```
- * class ExampleJoinTable extends JoinTable {
- *   public exampleId1: ForeignKey;
- *   public exampleId2: ForeignKey;
+ * class CustomerStore extends JoinTable<Customer, Store> {
+ *   public readonly customerId: ForeignKey<Customer>;
+ *   public readonly storeId: ForeignKey<Store>;
  * }
  * ```
  */
@@ -178,6 +181,25 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition on the entities being linked, checked in the same transaction as the link. See {@link JoinTableCreateOptions}
    * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
    * @throws {NotFoundError} Before anything is written, when either entity does not exist.
+   *
+   * @example
+   * ```typescript
+   * await CustomerStore.create({ customerId: "customer-1", storeId: "store-1" });
+   * ```
+   *
+   * @example With a write condition on the entities being linked
+   * ```typescript
+   * // Link only while the Customer is active and the Store is open
+   * await CustomerStore.create(
+   *   { customerId: "customer-1", storeId: "store-1" },
+   *   {
+   *     condition: {
+   *       customerId: { target: { status: "active" } },
+   *       storeId: { target: { status: "open" } }
+   *     }
+   *   }
+   * );
+   * ```
    */
   public static async create<
     ThisClass extends JoinTable<T, K>,
@@ -250,6 +272,20 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param keys - The foreign key values of the entities to unlink
    * @param options - Optional operation options: a write condition on the entities being unlinked, checked in the same transaction as the unlink. See {@link JoinTableDeleteOptions}
    * @throws {FilterError} Before anything is written, when the write condition is invalid.
+   *
+   * @example
+   * ```typescript
+   * await CustomerStore.delete({ customerId: "customer-1", storeId: "store-1" });
+   * ```
+   *
+   * @example With a write condition on the entities being unlinked
+   * ```typescript
+   * // Unlink only while the Store is open
+   * await CustomerStore.delete(
+   *   { customerId: "customer-1", storeId: "store-1" },
+   *   { condition: { storeId: { target: { status: "open" } } } }
+   * );
+   * ```
    */
   public static async delete<
     ThisClass extends JoinTable<T, K>,

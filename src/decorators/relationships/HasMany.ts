@@ -33,7 +33,7 @@ interface HasManyProps<T extends DynaRecord> {
  *
  * class Post extends TableClass {
  *   @ForeignKeyProperty()
- *   public readonly userId: ForeignKey;
+ *   public readonly userId: ForeignKey<User>;
  *
  *   @BelongsTo(() => User, { foreignKey: "userId" })
  *   public readonly user: User;

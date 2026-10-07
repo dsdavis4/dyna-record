@@ -80,8 +80,8 @@ interface HasAndBelongsToManyProps<
  * }
  *
  * class UserGroup extends JoinTable<User, Group> {
- *    public readonly userId: ForeignKey;
- *    public readonly groupId: ForeignKey;
+ *    public readonly userId: ForeignKey<User>;
+ *    public readonly groupId: ForeignKey<Group>;
  * }
  * ```
  * In this example, `User` entities are related to `Group` entities through a many-to-many relationship, with `UserGroup` serving as the join table. The decorator indicates this relationship, allowing for efficient querying and manipulation of related entities.
