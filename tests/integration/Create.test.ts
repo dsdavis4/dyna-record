@@ -58,6 +58,7 @@ import {
   ForeignKeyAttribute,
   HasMany,
   HasOne,
+  IdAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
@@ -142,6 +143,56 @@ class WarehouseInspection extends MockTable {
 
   @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
   public readonly warehouseId: ForeignKey<Warehouse>;
+}
+
+// A SKU names its own code, and references other SKUs two ways: the SKU it
+// replaces (a standalone foreign key) and the SKU it is a variant of (the
+// child side of a one-way HasMany)
+@Entity
+class Sku extends MockTable {
+  declare readonly type: "Sku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "ReplacesSkuId", nullable: true })
+  public readonly replacesSkuId?: NullableForeignKey<Sku>;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "BaseSkuId", nullable: true })
+  public readonly baseSkuId?: NullableForeignKey<Sku>;
+
+  @HasMany(() => Sku, { foreignKey: "baseSkuId", uniDirectional: true })
+  public readonly variants: Sku[];
+}
+
+// A SKU sold inside a bundle that is itself a SKU of the same type: a
+// BelongsTo to its own type, with its HasMany inverse
+@Entity
+class BundledSku extends MockTable {
+  declare readonly type: "BundledSku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => BundledSku, {
+    alias: "BundleSkuId",
+    nullable: true
+  })
+  public readonly bundleSkuId?: NullableForeignKey<BundledSku>;
+
+  @BelongsTo(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundle?: BundledSku;
+
+  @HasMany(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundledSkus: BundledSku[];
 }
 
 @Entity
@@ -7667,6 +7718,152 @@ describe("Create with write conditions", () => {
             )
           ]);
         });
+      });
+    });
+  });
+
+  describe("a guard on the entity's own new row (R2)", () => {
+    it.each([
+      [
+        "a BelongsTo to its own type",
+        async (referentialIntegrityCheck: boolean) => {
+          await BundledSku.create(
+            { code: "sku1", name: "Widget", bundleSkuId: "sku1" },
+            {
+              referentialIntegrityCheck,
+              condition: { bundle: { name: "Widget" } }
+            }
+          );
+        },
+        `Invalid write condition for "bundle": the create sets "bundleSkuId" to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
+      ],
+      [
+        "a standalone foreign key to its own type",
+        async (referentialIntegrityCheck: boolean) => {
+          await Sku.create(
+            { code: "sku1", name: "Widget", replacesSkuId: "sku1" },
+            {
+              referentialIntegrityCheck,
+              condition: { replacesSkuId: { target: { name: "Widget" } } }
+            }
+          );
+        },
+        `Invalid write condition for "replacesSkuId": the create sets "replacesSkuId" to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
+      ],
+      [
+        "the child side of a one-way HasMany to its own type (OwnedBy)",
+        async (referentialIntegrityCheck: boolean) => {
+          await Sku.create(
+            { code: "sku1", name: "Widget", baseSkuId: "sku1" },
+            {
+              referentialIntegrityCheck,
+              condition: { baseSkuId: { target: {} } }
+            }
+          );
+        },
+        `Invalid write condition for "baseSkuId": the create sets "baseSkuId" to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
+      ]
+    ])(
+      "throws a FilterError before anything is sent for %s whose key is the id the create supplies",
+      async (_, create, message) => {
+        expect.assertions(5);
+
+        const unchecked = await failureOf(async () => {
+          await create(false);
+        });
+        const checked = await failureOf(async () => {
+          await create(true);
+        });
+
+        expect(unchecked).toBeInstanceOf(FilterError);
+        expect(unchecked.message).toEqual(message);
+        expect(checked).toBeInstanceOf(FilterError);
+        expect(checked.message).toEqual(message);
+        expect(mockSend.mock.calls).toEqual([]);
+      }
+    );
+
+    describe("a guard on another row of its own type", () => {
+      const create = async (): Promise<void> => {
+        await Sku.create(
+          { code: "sku1", name: "Gadget", replacesSkuId: "sku0" },
+          { condition: { replacesSkuId: { target: { name: "Widget" } } } }
+        );
+      };
+
+      it("merges into that row's integrity check", async () => {
+        expect.assertions(2);
+
+        await create();
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Put: {
+                    TableName: "mock-table",
+                    ConditionExpression: "attribute_not_exists(PK)",
+                    Item: {
+                      PK: "Sku#sku1",
+                      SK: "Sku",
+                      Id: "sku1",
+                      Type: "Sku",
+                      Code: "sku1",
+                      Name: "Gadget",
+                      ReplacesSkuId: "sku0",
+                      CreatedAt: now,
+                      UpdatedAt: now
+                    }
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Sku#sku0", SK: "Sku" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "Widget" },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("reports a failed guard as a WriteConditionFailedError", async () => {
+        expect.assertions(1);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Sku#sku0" },
+              SK: { S: "Sku" },
+              Name: { S: "Gizmo" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(create);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on Sku with ID 'sku1': foreign key 'replacesSkuId'",
+            {
+              entity: "Sku",
+              id: "sku1",
+              guards: [{ kind: "foreignKey", name: "replacesSkuId" }]
+            }
+          )
+        ]);
       });
     });
   });

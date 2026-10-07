@@ -474,26 +474,41 @@ const relatedEntriesOf = (
 
 /**
  * Validates the foreign key a parent guard targets against the payload: a
- * create must set it, and an update may not clear it, or the guard could
- * never hold
+ * create must set it, to a row other than its own new one, and an update may
+ * not clear it, or the guard could never hold
  * @param props - The compile props
+ * @param target - The entity the foreign key references
  * @param key - The condition key, for the error
  * @param foreignKey - The foreign key attribute
  * @returns The foreign key value the payload sets, if any
  */
 const payloadForeignKeyOf = (
   props: CompileWriteConditionProps,
+  target: EntityClass<DynaRecord>,
   key: string,
   foreignKey: string
 ): string | undefined => {
+  const { EntityClass, payload } = props;
   const value =
-    props.payload === undefined
-      ? undefined
-      : readAttribute(props.payload, foreignKey);
+    payload === undefined ? undefined : readAttribute(payload, foreignKey);
 
   if (props.operation === "create" && !isString(value)) {
     throw new FilterError(
       `Invalid write condition for "${key}": the create does not set "${foreignKey}", so there is no row for the guard to check`
+    );
+  }
+
+  // Only an id the caller supplies can name the new row: a generated one is new
+  const { idField } = Metadata.getEntity(EntityClass.name);
+  if (
+    props.operation === "create" &&
+    target === EntityClass &&
+    idField !== undefined &&
+    payload !== undefined &&
+    value === readAttribute(payload, idField)
+  ) {
+    throw new FilterError(
+      `Invalid write condition for "${key}": the create sets "${foreignKey}" to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
     );
   }
 
@@ -532,7 +547,12 @@ const compileRelationshipGuards = (
   if (isBelongsToRelationship(relationship)) {
     const condition = targetConditionOf(key, value);
     const foreignKey = relationship.foreignKey;
-    const payloadForeignKey = payloadForeignKeyOf(props, key, foreignKey);
+    const payloadForeignKey = payloadForeignKeyOf(
+      props,
+      target,
+      key,
+      foreignKey
+    );
     return [
       {
         kind: "parent",
@@ -609,7 +629,7 @@ const compileForeignKeyGuard = (
     );
   }
 
-  const payloadForeignKey = payloadForeignKeyOf(props, key, key);
+  const payloadForeignKey = payloadForeignKeyOf(props, target, key, key);
   return {
     kind: "parent",
     guard: { kind: "foreignKey", name: key },

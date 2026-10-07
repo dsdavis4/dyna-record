@@ -6,8 +6,12 @@ import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import { marshall } from "@aws-sdk/util-dynamodb";
 import DynaRecord from "../../../index.js";
 import {
+  BelongsTo,
   Entity,
+  ForeignKeyAttribute,
   HasAndBelongsToMany,
+  HasMany,
+  IdAttribute,
   PartitionKeyAttribute,
   SortKeyAttribute,
   StringAttribute,
@@ -29,9 +33,15 @@ import {
   type CompileWriteConditionProps
 } from "../../../src/operations/utils/index.js";
 import { JoinTable } from "../../../src/relationships/index.js";
-import type { ForeignKey, PartitionKey, SortKey } from "../../../src/types.js";
+import type {
+  ForeignKey,
+  NullableForeignKey,
+  PartitionKey,
+  SortKey
+} from "../../../src/types.js";
 import { tableItemToEntity } from "../../../src/utils.js";
 import {
+  Category,
   ContactInformation,
   Customer,
   DiscriminatedUnionEntity,
@@ -118,6 +128,56 @@ class ShopperFavoriteShop extends JoinTable<Shopper, Shop> {
 class ShopperVisitedShop extends JoinTable<Shopper, Shop> {
   public readonly shopperId: ForeignKey<Shopper>;
   public readonly shopId: ForeignKey<Shop>;
+}
+
+// A SKU names its own code, and references other SKUs two ways: the SKU it
+// replaces (a standalone foreign key) and the SKU it is a variant of (the
+// child side of a one-way HasMany)
+@Entity
+class Sku extends StorefrontTable {
+  declare readonly type: "Sku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "ReplacesSkuId", nullable: true })
+  public readonly replacesSkuId?: NullableForeignKey<Sku>;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "BaseSkuId", nullable: true })
+  public readonly baseSkuId?: NullableForeignKey<Sku>;
+
+  @HasMany(() => Sku, { foreignKey: "baseSkuId", uniDirectional: true })
+  public readonly variants: Sku[];
+}
+
+// A SKU sold inside a bundle that is itself a SKU of the same type: a
+// BelongsTo to its own type, with its HasMany inverse
+@Entity
+class BundledSku extends StorefrontTable {
+  declare readonly type: "BundledSku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => BundledSku, {
+    alias: "BundleSkuId",
+    nullable: true
+  })
+  public readonly bundleSkuId?: NullableForeignKey<BundledSku>;
+
+  @BelongsTo(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundle?: BundledSku;
+
+  @HasMany(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundledSkus: BundledSku[];
 }
 
 const newBuilder = (): TransactWriteBuilder =>
@@ -1109,6 +1169,114 @@ describe("writeConditions", () => {
           },
           '"organizationId"'
         );
+      });
+
+      describe("a guard on the entity's own new row (R2)", () => {
+        it.each([
+          [
+            "a BelongsTo to its own type",
+            BundledSku,
+            { bundle: { name: "Widget" } },
+            { bundleSkuId: "sku1" },
+            '"bundle"',
+            '"bundleSkuId"'
+          ],
+          [
+            "a standalone foreign key to its own type",
+            Sku,
+            { replacesSkuId: { target: { name: "Widget" } } },
+            { replacesSkuId: "sku1" },
+            '"replacesSkuId"',
+            '"replacesSkuId"'
+          ],
+          [
+            "the child side of a one-way HasMany to its own type (OwnedBy)",
+            Sku,
+            { baseSkuId: { target: {} } },
+            { baseSkuId: "sku1" },
+            '"baseSkuId"',
+            '"baseSkuId"'
+          ]
+        ])(
+          "rejects %s whose key is the id the create supplies",
+          (_, EntityClass, condition, foreignKeys, key, foreignKey) => {
+            expect.assertions(2);
+
+            expectFilterError(
+              {
+                EntityClass,
+                operation: "create",
+                condition,
+                payload: { code: "sku1", name: "Widget", ...foreignKeys }
+              },
+              `Invalid write condition for ${key}: the create sets ${foreignKey} to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
+            );
+          }
+        );
+
+        it.each([
+          [
+            "a BelongsTo to its own type",
+            BundledSku,
+            { bundle: { name: "Widget" } },
+            { bundleSkuId: "sku0" },
+            "bundleSkuId",
+            { kind: "relationship", name: "bundle" }
+          ],
+          [
+            "a standalone foreign key to its own type",
+            Sku,
+            { replacesSkuId: { target: { name: "Widget" } } },
+            { replacesSkuId: "sku0" },
+            "replacesSkuId",
+            { kind: "foreignKey", name: "replacesSkuId" }
+          ]
+        ])(
+          "compiles %s whose key is another row of its type",
+          (_, EntityClass, condition, foreignKeys, foreignKey, guard) => {
+            expect.assertions(1);
+
+            expect(
+              compile({
+                EntityClass,
+                operation: "create",
+                condition,
+                payload: { code: "sku1", name: "Widget", ...foreignKeys }
+              })
+            ).toEqual({
+              EntityClass,
+              guards: [
+                {
+                  kind: "parent",
+                  guard,
+                  target: EntityClass,
+                  foreignKey,
+                  payloadForeignKey: "sku0",
+                  condition: {
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#Name = :wc1_Name1)",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "Widget" }
+                  }
+                }
+              ],
+              needsStoredRow: false
+            });
+          }
+        );
+
+        it("compiles a guard on its own type when the id is generated: a new id names no existing row", () => {
+          expect.assertions(1);
+
+          expect(
+            compile({
+              EntityClass: Category,
+              operation: "create",
+              condition: { parentCategoryId: { target: {} } },
+              payload: { name: "Mugs", parentCategoryId: "cat1" }
+            }).guards
+          ).toHaveLength(1);
+        });
       });
     });
 
