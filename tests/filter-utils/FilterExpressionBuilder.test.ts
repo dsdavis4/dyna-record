@@ -1692,7 +1692,9 @@ describe("FilterExpressionBuilder", () => {
         ["a boolean on a list of strings", "meta.tags", true, "string"],
         ["a string on a list of numbers", "meta.scores", "1", "number"],
         ["a boolean on a list of numbers", "meta.scores", true, "number"],
-        ["a string on a list of objects", "meta.history", "x", "map"]
+        ["a string on a list of objects", "meta.history", "x", "map"],
+        ["a number on a list of dates", "meta.seenAt", 1, "string"],
+        ["a boolean on a list of dates", "meta.seenAt", true, "string"]
       ])("rejects %s", (_, key, operand, form) => {
         expect.assertions(1);
 
@@ -1705,17 +1707,51 @@ describe("FilterExpressionBuilder", () => {
         );
       });
 
-      it("points a Date on a list of dates at the stored ISO string", () => {
+      it("converts a Date on a list of dates to the stored ISO string", () => {
+        expect.assertions(1);
+
+        // The operand is a whole element, so it is named as the field declares
+        // its elements and converted as an element is stored
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers a Date on a list of dates
+            "meta.seenAt": { $contains: new Date("2023-01-01T00:00:00.000Z") }
+          })
+        ).toEqual({
+          expression: "contains(#Meta.#seenAt, :MetaseenAt1)",
+          values: { MetaseenAt1: "2023-01-01T00:00:00.000Z" }
+        });
+      });
+
+      it("rejects an invalid Date on a list of dates", () => {
         expect.assertions(1);
 
         expect(() =>
           builder().filterParams({
-            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass a Date
-            "meta.seenAt": { $contains: new Date("2023-01-01T00:00:00.000Z") }
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers a Date on a list of dates
+            "meta.seenAt": { $contains: new Date("not a date") }
           })
         ).toThrow(
           new FilterError(
-            'Invalid filter value for attribute "meta.seenAt": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not. A date is stored as an ISO string, so an element of a list of dates is written as one'
+            'Invalid filter value for attribute "meta.seenAt": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        ["a list of strings", "meta.tags", "string"],
+        ["a list of numbers", "meta.scores", "number"]
+      ])("rejects a Date on %s", (_, key, form) => {
+        expect.assertions(1);
+
+        expect(() =>
+          // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass a Date
+          builder().filterParams({
+            [key]: { $contains: new Date("2023-01-01T00:00:00.000Z") }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${key}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${form}, which this operand is not`
           )
         );
       });

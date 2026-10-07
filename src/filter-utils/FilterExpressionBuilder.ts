@@ -2,7 +2,12 @@ import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import { keyConditionCapabilities } from "./capabilities.js";
 import { parenthesize } from "../dynamo-utils/conditionExpression.js";
-import type { DynamoNativeValue, Optional, StringObj } from "../types.js";
+import type {
+  DynamoNativeValue,
+  DynamoScalarValue,
+  Optional,
+  StringObj
+} from "../types.js";
 import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
 import {
@@ -57,6 +62,8 @@ import type {
  * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
  * @property nullable - Whether the attribute or nested field is declared nullable. Absent when that could not be resolved, which is read as not nullable
  * @property elementForm - For a field stored as a list, the form its elements are stored in. Decides what a `$contains` operand on it must be
+ * @property elementValueSchema - For a list of dates, the zod validator for one element in the form the entity declares it
+ * @property elementToStored - For a list of dates, the conversion of one element to the form the table stores, applied by {@link FilterExpressionBuilder.toStoredElement}
  */
 interface ResolvedPath {
   expressionPath: string;
@@ -67,6 +74,8 @@ interface ResolvedPath {
   storedForm?: StoredForm;
   nullable?: boolean;
   elementForm?: StoredForm;
+  elementValueSchema?: ZodType;
+  elementToStored?: TableSerializer;
 }
 
 /**
@@ -650,13 +659,11 @@ class FilterExpressionBuilder {
       );
       this.assertOperandDefined(value.$contains, attr, "$contains");
       this.assertFragmentOperatorApplies(resolved, attr, "$contains");
-      this.assertFragmentOperandShape(
-        resolved,
-        value.$contains,
-        attr,
-        "$contains"
-      );
-      const reference = this.bindFragment(resolved, value.$contains, values);
+      // Converted before the shape check, so a list element named the way the
+      // entity declares it is judged in the form it will be sent in
+      const operand = this.toStoredElement(resolved, value.$contains, attr);
+      this.assertFragmentOperandShape(resolved, operand, attr, "$contains");
+      const reference = this.bindFragment(resolved, operand, values);
       condition = `contains(${resolved.expressionPath}, ${reference})`;
     } else if (value === null && capabilities.nullMeansNotSet) {
       // dyna-record removes a nulled attribute rather than storing NULL, so
@@ -1094,20 +1101,16 @@ class FilterExpressionBuilder {
     // On a List whose elements' form is known, the operand is one of them, so
     // it has to be stored in that form — a number in a list of strings is never
     // a member, and DynamoDB answers the test with nothing. Judged by stored
-    // form, as the String reading above is: the operand is sent as written
+    // form, as the String reading above is: the operand arrives here already
+    // converted, so this is the form it is sent in
     const { elementForm } = resolved;
 
     if (
       elementForm !== undefined &&
       storedFormOfOperand(operand) !== elementForm
     ) {
-      const remedy =
-        operand instanceof Date
-          ? ". A date is stored as an ISO string, so an element of a list of dates is written as one"
-          : "";
-
       throw new FilterError(
-        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${elementForm}, which this operand is not${remedy}`
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${elementForm}, which this operand is not`
       );
     }
   }
@@ -1326,6 +1329,53 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Converts a `$contains` operand on a list of dates from the form the entity
+   * declares an element in to the form the table stores it.
+   *
+   * On a List the operand is not a fragment but a whole element, so the
+   * operand rule's first half applies to it: a `Date` is validated and
+   * converted to the ISO string the element is stored as, through the same
+   * conversion that writes the field. An operand already in the stored form —
+   * the ISO string itself — is sent as written, as it always was.
+   *
+   * Only a list of dates carries a conversion, because a date is the one
+   * element whose declared form is a value the table cannot store. Every other
+   * operand passes through to {@link assertFragmentOperandShape}, which judges
+   * it by the form it is sent in
+   * @param resolved - The resolved attribute path
+   * @param operand - The operand as the caller supplied it
+   * @param attr - The attribute key, for the error message
+   * @returns The operand as the table stores it
+   */
+  private toStoredElement(
+    resolved: ResolvedPath,
+    operand: DynamoScalarValue,
+    attr: string
+  ): DynamoNativeValue {
+    const { elementValueSchema, elementToStored } = resolved;
+
+    if (
+      elementValueSchema === undefined ||
+      elementToStored === undefined ||
+      !(operand instanceof Date)
+    ) {
+      return operand;
+    }
+
+    // An invalid Date is still a Date, and converting one throws a RangeError
+    // from toISOString rather than reporting the attribute
+    const parsed = elementValueSchema.safeParse(operand);
+    if (!parsed.success) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this operand is not a value the list's elements can hold`,
+        { cause: parsed.error.issues }
+      );
+    }
+
+    return elementToStored(operand);
+  }
+
+  /**
    * The remedy to append to a rejected value's error, for an attribute whose
    * stored form differs from its declared one.
    *
@@ -1511,7 +1561,13 @@ class FilterExpressionBuilder {
       // An object field is never nullable, so its definition has no flag
       nullable: fieldDef.type !== "object" && fieldDef.nullable === true,
       ...(fieldDef.type === "array" && {
-        elementForm: storedFormOfField(fieldDef.items)
+        elementForm: storedFormOfField(fieldDef.items),
+        // A `$contains` operand is an element, and a date element is the one
+        // whose declared form the table cannot store — see toStoredElement
+        ...(fieldDef.items.type === "date" && {
+          elementValueSchema: fieldDefToZod(fieldDef.items),
+          elementToStored: value => toStoredFieldValue(fieldDef.items, value)
+        })
       }),
       // Not every field's schema describes the value a condition carries;
       // where it does not, the stored form is still known and is what decides

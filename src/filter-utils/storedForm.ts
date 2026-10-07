@@ -185,8 +185,9 @@ export const storedFormOfField = (fieldDef: FieldDef): StoredForm =>
  * For an operand sent as written — a `$contains` element — where the schema
  * says what the element must be and the value is all there is to compare it
  * with. A `Date` and a `Uint8Array` answer undefined: neither is one of the
- * forms the stored-form map knows, and a `Date` is not sendable at all, which
- * leaves it to the caller's own message to say what to write instead.
+ * forms the stored-form map knows. A `Date` element of a list of dates is
+ * converted to its ISO string before it is judged here, so one that reaches
+ * this is on a list whose elements it cannot be.
  * @param value - The operand as the caller supplied it
  * @returns The form it would be stored as, or undefined when it is none of them
  */

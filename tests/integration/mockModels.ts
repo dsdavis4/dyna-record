@@ -55,7 +55,8 @@ export const contactSchema = {
   tags: { type: "array", items: { type: "string" } },
   status: { type: "enum", values: ["active", "inactive"] },
   createdDate: { type: "date" },
-  deletedAt: { type: "date", nullable: true }
+  deletedAt: { type: "date", nullable: true },
+  contactedAt: { type: "array", items: { type: "date" }, nullable: true }
 } as const satisfies ObjectSchema;
 
 @Table({

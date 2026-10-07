@@ -1701,6 +1701,10 @@ describe("Delete", () => {
             "objectAttribute.name": { $contains: "Jane" },
             // @ts-expect-no-error: an array field takes $contains on its items
             "objectAttribute.tags": { $contains: "vip" },
+            // @ts-expect-no-error: a list of dates takes a Date element, converted to the ISO string it is stored as
+            "objectAttribute.contactedAt": {
+              $contains: new Date("2026-01-01")
+            },
             // @ts-expect-no-error: dot paths reach nested objects at any depth
             "addressAttribute.geo.lat": { $lt: 41 },
             // @ts-expect-no-error: a list-index path names one array item
@@ -5872,6 +5876,54 @@ describe("Delete with write conditions", () => {
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("converts a Date $contains operand on a list of dates to the ISO string its elements are stored as", async () => {
+      expect.assertions(3);
+
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.contactedAt": {
+            $contains: new Date("2023-01-01T00:00:00.000Z")
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#contactedAt, :wc1_objectAttributecontactedAt1))",
+                  ExpressionAttributeNames: {
+                    "#objectAttribute": "objectAttribute",
+                    "#contactedAt": "contactedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_objectAttributecontactedAt1":
+                      "2023-01-01T00:00:00.000Z"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 

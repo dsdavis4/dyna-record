@@ -11985,6 +11985,10 @@ describe("Update", () => {
                 "objectAttribute.name": { $contains: "Jane" },
                 // @ts-expect-no-error: an array field takes $contains on its items
                 "objectAttribute.tags": { $contains: "vip" },
+                // @ts-expect-no-error: a list of dates takes a Date element, converted to the ISO string it is stored as
+                "objectAttribute.contactedAt": {
+                  $contains: new Date("2026-01-01")
+                },
                 // @ts-expect-no-error: dot paths reach nested objects at any depth
                 "addressAttribute.geo.lat": { $lt: 41 },
                 // @ts-expect-no-error: a list-index path names one array item
@@ -14366,6 +14370,10 @@ describe("Update", () => {
                   "objectAttribute.name": { $contains: "Jane" },
                   // @ts-expect-no-error: an array field takes $contains on its items
                   "objectAttribute.tags": { $contains: "vip" },
+                  // @ts-expect-no-error: a list of dates takes a Date element, converted to the ISO string it is stored as
+                  "objectAttribute.contactedAt": {
+                    $contains: new Date("2026-01-01")
+                  },
                   // @ts-expect-no-error: dot paths reach nested objects at any depth
                   "addressAttribute.geo.lat": { $lt: 41 },
                   // @ts-expect-no-error: a list-index path names one array item
@@ -19572,6 +19580,58 @@ describe("Update with write conditions", () => {
       );
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("converts a Date $contains operand on a list of dates to the ISO string its elements are stored as", async () => {
+      expect.assertions(2);
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.contactedAt": {
+              $contains: new Date("2023-01-01T00:00:00.000Z")
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#contactedAt, :wc1_objectAttributecontactedAt1))",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#contactedAt": "contactedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributecontactedAt1":
+                      "2023-01-01T00:00:00.000Z"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
     });
   });
 

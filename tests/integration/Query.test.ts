@@ -430,6 +430,43 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
+    it("can filter using $contains with a Date on a nested List of dates", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.contactedAt": {
+            $contains: new Date("2023-01-01T00:00:00.000Z")
+          }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "contains(#objectAttribute.#contactedAt, :objectAttributecontactedAt1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#contactedAt": "contactedAt"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributecontactedAt1": "2023-01-01T00:00:00.000Z",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
     it("can filter using $contains on a top-level string attribute", async () => {
       expect.assertions(5);
 
@@ -3546,6 +3583,19 @@ describe("Query", () => {
                 filter: {
                   stringAttribute: { $contains: "x" },
                   "objectAttribute.tags": { $contains: "home" }
+                }
+              })
+            );
+          });
+
+          it("takes a Date as the $contains element of a nested list of dates", async () => {
+            // @ts-expect-no-error: an element of a list of dates is a whole value, named as declared
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.contactedAt": {
+                    $contains: new Date("2026-01-01")
+                  }
                 }
               })
             );
