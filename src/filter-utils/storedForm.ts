@@ -93,8 +93,8 @@ const ORDERED_FORMS: readonly StoredForm[] = ["string", "number"];
  * Whether an ordered comparison applies to a value stored in the given form.
  *
  * An unknown form answers `true`, for the same reason
- * {@link fragmentOperatorApplies} does: a dot path naming no single field is
- * something dyna-record cannot resolve and therefore cannot judge.
+ * {@link fragmentOperatorApplies} does: a dot path into a union variant names
+ * no single field, which dyna-record cannot resolve and therefore cannot judge.
  * @param storedForm - The stored form, or undefined when it could not be resolved
  * @returns Whether the comparators and `BETWEEN` can apply
  */
@@ -124,8 +124,8 @@ export const isObjectValuedScalar = (value: object): boolean =>
  *
  * The value-side counterpart of {@link ORDERED_FORMS}, which answers the same
  * question from an attribute's schema. This one is needed where the schema
- * could not answer — a dot path into a union variant, or naming no declared
- * field, resolves to no field, so the value is all there is to go on.
+ * could not answer — a dot path into a union variant resolves to no field, so
+ * the value is all there is to go on.
  *
  * Distinct from `isOrdered` in the expression builder, which asks the narrower
  * question of whether *JavaScript's* `>` reproduces DynamoDB's ordering.
@@ -140,7 +140,7 @@ export const isDynamoOrderable = (value: unknown): boolean =>
   // Finite, because DynamoDB has no Number for NaN or Infinity to be stored
   // as — so a comparison against one orders against a value no row can hold.
   // A typed attribute never reaches this, since zod's number() rejects both;
-  // a dot path naming no field has no schema and does
+  // a dot path into a union variant has no schema and does
   (typeof value === "number" && Number.isFinite(value)) ||
   typeof value === "bigint" ||
   value instanceof Uint8Array;
@@ -180,10 +180,34 @@ export const storedFormOfField = (fieldDef: FieldDef): StoredForm =>
   STORED_FORM_BY_KIND[fieldDef.type];
 
 /**
+ * The stored form an operand is sent as, judged from the value itself.
+ *
+ * For an operand sent as written — a `$contains` element — where the schema
+ * says what the element must be and the value is all there is to compare it
+ * with. A `Date` and a `Uint8Array` answer undefined: neither is one of the
+ * forms the stored-form map knows, and a `Date` is not sendable at all, which
+ * leaves it to the caller's own message to say what to write instead.
+ * @param value - The operand as the caller supplied it
+ * @returns The form it would be stored as, or undefined when it is none of them
+ */
+export const storedFormOfOperand = (value: unknown): Optional<StoredForm> => {
+  if (typeof value === "string") return "string";
+  if (typeof value === "number" || typeof value === "bigint") return "number";
+  if (typeof value === "boolean") return "boolean";
+  if (Array.isArray(value)) return "list";
+
+  return typeof value === "object" &&
+    value !== null &&
+    !isObjectValuedScalar(value)
+    ? "map"
+    : undefined;
+};
+
+/**
  * Whether a fragment operator applies to a value stored in the given form.
  *
- * An unknown form answers `true`. That is the case of a dot path naming no
- * single field, which dyna-record cannot resolve and therefore cannot judge —
+ * An unknown form answers `true`. That is the case of a dot path into a union
+ * variant, which names no single field dyna-record can resolve and judge —
  * the same reason such a path's value is left unvalidated.
  * @param operator - The fragment operator
  * @param storedForm - The stored form, or undefined when it could not be resolved

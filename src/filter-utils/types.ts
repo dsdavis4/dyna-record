@@ -446,7 +446,7 @@ export type FilterTypes = FilterConditionFor<FilterValue>;
 /**
  * The conditions a key accepts when it names no single declared field — a dot
  * path descending into a discriminated union variant, which one path does not
- * identify, or naming a field the schema does not declare.
+ * identify.
  *
  * The expression builder neither validates nor converts such a value, so it has
  * to be written the way the table stores it.

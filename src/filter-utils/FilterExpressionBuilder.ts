@@ -10,7 +10,8 @@ import {
   fieldValidatesConditionValue,
   parseSegment,
   resolveFieldDef,
-  toStoredFieldValue
+  toStoredFieldValue,
+  type FieldResolution
 } from "./resolveFieldDef.js";
 import {
   fragmentOperatorApplies,
@@ -22,6 +23,7 @@ import {
   orderedOperatorDomain,
   storedFormOfAttribute,
   storedFormOfField,
+  storedFormOfOperand,
   type FragmentOperator,
   type StoredForm
 } from "./storedForm.js";
@@ -54,6 +56,7 @@ import type {
  * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
  * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
  * @property nullable - Whether the attribute or nested field is declared nullable. Absent when that could not be resolved, which is read as not nullable
+ * @property elementForm - For a field stored as a list, the form its elements are stored in. Decides what a `$contains` operand on it must be
  */
 interface ResolvedPath {
   expressionPath: string;
@@ -63,6 +66,7 @@ interface ResolvedPath {
   toStored?: TableSerializer;
   storedForm?: StoredForm;
   nullable?: boolean;
+  elementForm?: StoredForm;
 }
 
 /**
@@ -955,8 +959,8 @@ class FilterExpressionBuilder {
     //
     // An unresolved form answers the same way, because this guard is the only
     // one that would otherwise judge what it cannot see: a path into a union
-    // variant, or naming no declared field, resolves to no field, and the field
-    // it names may well be a Map. Abstaining is what every other guard does
+    // variant resolves to no field, and the field it names may well be a Map.
+    // Abstaining is what every other guard does
     const families = this.operatorFamilies(value);
 
     // A `$`-prefixed key is this vocabulary's mark of an operator, so one that
@@ -974,7 +978,7 @@ class FilterExpressionBuilder {
 
     // Whether a plain object is the attribute's own value does depend on the
     // form. An unresolved form abstains, as every other guard does — a path
-    // into a union variant, or naming no declared field, may well name a Map
+    // into a union variant may well name a Map
     const mayHoldAnObject =
       resolved.storedForm === "map" || resolved.storedForm === undefined;
 
@@ -1086,6 +1090,26 @@ class FilterExpressionBuilder {
         `Invalid filter value for attribute "${attr}": $contains takes a single value to look for, and null is not one`
       );
     }
+
+    // On a List whose elements' form is known, the operand is one of them, so
+    // it has to be stored in that form — a number in a list of strings is never
+    // a member, and DynamoDB answers the test with nothing. Judged by stored
+    // form, as the String reading above is: the operand is sent as written
+    const { elementForm } = resolved;
+
+    if (
+      elementForm !== undefined &&
+      storedFormOfOperand(operand) !== elementForm
+    ) {
+      const remedy =
+        operand instanceof Date
+          ? ". A date is stored as an ISO string, so an element of a list of dates is written as one"
+          : "";
+
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${elementForm}, which this operand is not${remedy}`
+      );
+    }
   }
 
   /**
@@ -1178,7 +1202,7 @@ class FilterExpressionBuilder {
     const { storedForm } = resolved;
 
     // Where the stored form is unknown, dyna-record cannot judge the element —
-    // the same abstention a dot path naming no field gets everywhere else
+    // the same abstention a dot path into a union variant gets everywhere else
     if (storedForm === undefined) return;
 
     const isList = Array.isArray(element);
@@ -1239,7 +1263,7 @@ class FilterExpressionBuilder {
    *
    * The attribute-side gate ({@link assertOrderedOperatorApplies}) answers the
    * same question from the schema, and abstains where the stored form could not
-   * be resolved — a dot path into a union variant, or naming no declared field.
+   * be resolved — a dot path into a union variant.
    * This is the check that still applies there, where the value is all there is
    * to go on
    * @param values - The value map the operand was bound into
@@ -1427,8 +1451,17 @@ class FilterExpressionBuilder {
 
     // The resolver answers for the top level attribute, so a nested value is
     // validated and converted as the field it names rather than as the object
-    // that contains it
-    const resolution = resolveFieldDef(objectSchema, parsed);
+    // that contains it. An attribute of a known kind without an object schema
+    // is a scalar, which no path continues below; one of an unknown kind is
+    // left to the walk, which abstains on it
+    const resolution: FieldResolution =
+      objectSchema === undefined && kind !== undefined
+        ? {
+            outcome: "pathPastScalar",
+            segment: topLevelKey,
+            field: parsed[0].name
+          }
+        : resolveFieldDef(objectSchema, parsed);
 
     // A path running *through* a list without naming an element reaches nothing
     // DynamoDB can address: it compiles, matches no row, and reports no error
@@ -1446,6 +1479,24 @@ class FilterExpressionBuilder {
       );
     }
 
+    // A field a declared object does not have names nothing a row can hold —
+    // a typo the types refuse, and one the service would answer with no rows,
+    // or with a failed guard indistinguishable from a real one
+    if (resolution.outcome === "undeclaredField") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.field}" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${resolution.declared.join(", ")}`
+      );
+    }
+
+    // Below a scalar there are no fields at all, declared or otherwise
+    if (resolution.outcome === "pathPastScalar") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.segment}" is not an object, so it has no field "${resolution.field}" and the condition can match nothing`
+      );
+    }
+
+    // A union variant the path does not name: the field may exist, so nothing
+    // here can judge it
     if (resolution.outcome === "unknown") {
       return { expressionPath, names, placeholderKey };
     }
@@ -1459,6 +1510,9 @@ class FilterExpressionBuilder {
       storedForm: storedFormOfField(fieldDef),
       // An object field is never nullable, so its definition has no flag
       nullable: fieldDef.type !== "object" && fieldDef.nullable === true,
+      ...(fieldDef.type === "array" && {
+        elementForm: storedFormOfField(fieldDef.items)
+      }),
       // Not every field's schema describes the value a condition carries;
       // where it does not, the stored form is still known and is what decides
       // which operators apply

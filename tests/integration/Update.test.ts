@@ -19521,6 +19521,58 @@ describe("Update with write conditions", () => {
         [{ TransactItems: [guardedUpdate] }]
       ]);
     });
+
+    it("rejects a path the schema does not declare before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error country is not a field of the address schema
+                "addressAttribute.country": "US"
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: street, city, zip, geo, scores, category'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects a $contains operand that is not an element of the list before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error tags holds strings
+                "objectAttribute.tags": { $contains: 1 }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.tags": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
   });
 
   describe("a BelongsTo guard", () => {

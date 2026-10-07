@@ -34,11 +34,13 @@ import { tableItemToEntity } from "../../../src/utils.js";
 import {
   ContactInformation,
   Customer,
+  DiscriminatedUnionEntity,
   Employee,
   MyClassWithAllAttributeTypes,
   Order,
   Organization,
   Profile,
+  Shipment,
   StudentCourse,
   User,
   Website
@@ -551,26 +553,21 @@ describe("writeConditions", () => {
         });
       });
 
-      it("compiles a field the schema does not declare exactly as a $or branch does, leaving it unvalidated", () => {
-        expect.assertions(1);
+      it("rejects a field the schema does not declare exactly as a $or branch does, sending nothing", () => {
+        expect.assertions(3);
 
-        const compiled = compile({
-          EntityClass: MyClassWithAllAttributeTypes,
-          operation: "update",
-          condition: { "addressAttribute.country": "US" }
-        });
+        const message =
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: street, city, zip, geo, scores, category';
 
-        expect(compiled.self).toEqual({
-          ConditionExpression:
-            "#addressAttribute.#country = :wc1_addressAttributecountry1",
-          ExpressionAttributeNames: {
-            "#addressAttribute": "addressAttribute",
-            "#country": "country"
+        expectFilterError(
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "update",
+            condition: { "addressAttribute.country": "US" }
           },
-          ExpressionAttributeValues: {
-            ":wc1_addressAttributecountry1": "US"
-          }
-        });
+          message
+        );
+        expect(mockSend.mock.calls).toEqual([]);
       });
 
       it.each([
@@ -582,7 +579,32 @@ describe("writeConditions", () => {
         [
           "null on a field the schema does not declare",
           { "addressAttribute.country": null },
-          'Invalid filter value for attribute "addressAttribute.country": null means "not set" in write conditions, which only an attribute declared nullable can be'
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares'
+        ],
+        [
+          "a field undeclared inside a nested object",
+          { "addressAttribute.geo.nope": 1 },
+          'Invalid filter key "addressAttribute.geo.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: lat, lng, accuracy'
+        ],
+        [
+          "a path continuing past a scalar attribute",
+          { "stringAttribute.x": "a" },
+          'Invalid filter key "stringAttribute.x": "stringAttribute" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a path continuing past a nested scalar field",
+          { "addressAttribute.zip.nope": 1 },
+          'Invalid filter key "addressAttribute.zip.nope": "zip" is not an object, so it has no field "nope" and the condition can match nothing'
+        ],
+        [
+          "a $contains operand of the wrong type for a list of strings",
+          { "objectAttribute.tags": { $contains: 1 } },
+          'Invalid filter value for attribute "objectAttribute.tags": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not'
+        ],
+        [
+          "a $contains operand of the wrong type for a list of numbers",
+          { "addressAttribute.scores": { $contains: "5" } },
+          'Invalid filter value for attribute "addressAttribute.scores": $contains on a list looks for one of its elements, and this list\'s elements are stored as a number, which this operand is not'
         ],
         [
           "a value of the wrong type for a nested field",
@@ -614,6 +636,41 @@ describe("writeConditions", () => {
           );
         }
       );
+
+      it("rejects an undeclared path on a relationship's target as it does on the entity's own row", () => {
+        expect.assertions(3);
+
+        expectFilterError(
+          {
+            EntityClass: Shipment,
+            operation: "update",
+            condition: { warehouse: { "location.nope": "x" } }
+          },
+          'Invalid filter key "location.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: city, state, zip'
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it("still compiles a path into a discriminated union variant without judging it", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: DiscriminatedUnionEntity,
+          operation: "update",
+          condition: { "payment.method.nope": "x" }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression:
+            "#Payment.#method.#nope = :wc1_Paymentmethodnope1",
+          ExpressionAttributeNames: {
+            "#Payment": "Payment",
+            "#method": "method",
+            "#nope": "nope"
+          },
+          ExpressionAttributeValues: { ":wc1_Paymentmethodnope1": "x" }
+        });
+      });
 
       it("rejects a dot path whose first segment is a relationship as an unknown key", () => {
         expect.assertions(2);

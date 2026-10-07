@@ -48,18 +48,23 @@ export const parseSegment = (raw: string): PathSegment => {
 /**
  * What walking a dot path through a schema found.
  *
- * Three outcomes rather than a field-or-undefined, because the two ways of
+ * Several outcomes rather than a field-or-undefined, because the ways of
  * failing call for different answers. `unknown` means dyna-record cannot see
- * what the path names — a discriminated union variant, or a segment naming no
- * declared field — and every guard abstains on it. `listWithoutIndex` means the
- * path is definitely wrong: it descends *through* a list without saying which
- * element, which DynamoDB answers with no rows and no error.
+ * what the path names — a discriminated union variant, whose fields the walk
+ * does not follow — and every guard abstains on it. The rest mean the path is
+ * definitely wrong, each in a way DynamoDB answers with no rows and no error:
+ * `listWithoutIndex` descends *through* a list without saying which element,
+ * `indexOnNonList` indexes a field that holds no list, `undeclaredField` names
+ * a field a declared object does not have, and `pathPastScalar` continues below
+ * a value that has no fields at all.
  */
 export type FieldResolution =
   | { outcome: "resolved"; fieldDef: FieldDef }
   | { outcome: "unknown" }
   | { outcome: "listWithoutIndex"; segment: string }
-  | { outcome: "indexOnNonList"; segment: string };
+  | { outcome: "indexOnNonList"; segment: string }
+  | { outcome: "undeclaredField"; field: string; declared: string[] }
+  | { outcome: "pathPastScalar"; segment: string; field: string };
 
 /**
  * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
@@ -72,7 +77,9 @@ export type FieldResolution =
  *
  * A path continuing *through* an array needs an index to say which element it
  * means. Without one it names nothing DynamoDB can reach, so it is reported
- * rather than left to return no rows.
+ * rather than left to return no rows — as is a segment a declared object does
+ * not have, and one continuing below a scalar. Only a discriminated union stops
+ * the walk short of a judgement: its variants' fields are not followed.
  * @param schema - The object schema of the attribute the path starts at
  * @param segments - The parsed path segments below that attribute
  * @returns What the walk found
@@ -83,13 +90,39 @@ export const resolveFieldDef = (
 ): FieldResolution => {
   let fields: Optional<ObjectSchema> = schema;
   let fieldDef: Optional<FieldDef>;
+  let previous: Optional<PathSegment>;
 
   for (const [position, segment] of segments.entries()) {
-    if (fields === undefined) return { outcome: "unknown" };
+    if (fields === undefined) {
+      // No schema to walk, or a union whose variant the path does not say:
+      // the field may exist, so the walk cannot judge it
+      if (
+        previous === undefined ||
+        fieldDef === undefined ||
+        fieldDef.type === "discriminatedUnion"
+      ) {
+        return { outcome: "unknown" };
+      }
+
+      // Anything else without fields is a scalar — an object has fields, and a
+      // list with the path continuing was reported below — so nothing lies
+      // under it for the segment to name
+      return {
+        outcome: "pathPastScalar",
+        segment: previous.raw,
+        field: segment.name
+      };
+    }
 
     // Presence rather than an undefined check: ObjectSchema's index signature
     // types every key as present, so the compiler treats the miss as impossible
-    if (!Object.hasOwn(fields, segment.name)) return { outcome: "unknown" };
+    if (!Object.hasOwn(fields, segment.name)) {
+      return {
+        outcome: "undeclaredField",
+        field: segment.name,
+        declared: Object.keys(fields)
+      };
+    }
 
     fieldDef = fields[segment.name];
 
@@ -112,6 +145,7 @@ export const resolveFieldDef = (
     }
 
     fields = fieldDef.type === "object" ? fieldDef.fields : undefined;
+    previous = segment;
   }
 
   return fieldDef === undefined

@@ -5827,6 +5827,52 @@ describe("Delete with write conditions", () => {
         [{ TransactItems: guardedItems }]
       ]);
     });
+
+    it("rejects a path continuing past a scalar before any read", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error zip is a number, which has no fields
+              "addressAttribute.zip.nope": 1
+            }
+          })
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter key "addressAttribute.zip.nope": "zip" is not an object, so it has no field "nope" and the condition can match nothing'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects a $contains operand that is not an element of the list before any read", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error scores holds numbers
+              "addressAttribute.scores": { $contains: "5" }
+            }
+          })
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "addressAttribute.scores": $contains on a list looks for one of its elements, and this list\'s elements are stored as a number, which this operand is not'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
   });
 
   describe("an invalid condition", () => {

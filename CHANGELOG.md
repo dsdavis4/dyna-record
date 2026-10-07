@@ -58,6 +58,10 @@
 
 - **A filter whose `$or` has one block no longer fails at DynamoDB.** When that block binds several values (two conditions, a `$between`, or a composed range) and the filter has other conditions beside the `$or`, the block was wrapped in a second pair of parentheses, `((#Name = :Name1 AND #Category = :Category2)) AND (#Price = :Price3)`, which DynamoDB rejects with "The expression has redundant parentheses". Such a block is now grouped once. A filter that is only the `$or` was already accepted and is unchanged.
 
+- **A dot path naming nothing the schema declares is a `FilterError`.** A path naming a field its object does not declare (`"address.nope"`, `"entries[0].nope"`), or continuing below a field that is not an object (`"name.x"`, `"address.zip.nope"`), was compiled unjudged: a filter returned no rows, and a write condition failed as a `WriteConditionFailedError` indistinguishable from a real guard failure. Both are now rejected before anything is sent, in filters and write conditions alike, naming the path. The types already refused them. A path into a discriminated union variant is still left unjudged, because its fields depend on the variant.
+
+- **`$contains` on a list checks its operand against the list's elements.** `{ "details.tags": { $contains: 1 } }` on a list of strings was sent and matched nothing. The operand must now be stored in the form the list's elements are (a string for a list of strings, dates and enums, a number for a list of numbers, an object for a list of objects), or the condition is a `FilterError`. `$contains` on a string attribute is unchanged.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added

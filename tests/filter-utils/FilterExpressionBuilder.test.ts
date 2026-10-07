@@ -86,9 +86,22 @@ const attributes: Record<
       "odd name": { type: "string" },
       "odd-name": { type: "string" },
       label: { type: "string" },
+      location: { type: "string" },
       note: { type: "string", nullable: true },
       recordedAt: { type: "date" },
       tags: { type: "array", items: { type: "string" } },
+      scores: { type: "array", items: { type: "number" } },
+      seenAt: { type: "array", items: { type: "date" } },
+      // A union variant's fields are not visible to the schema walker, so a
+      // path below this field is one dyna-record cannot judge
+      channel: {
+        type: "discriminatedUnion",
+        discriminator: "kind",
+        variants: {
+          email: { address: { type: "string" } },
+          sms: { phone: { type: "string" } }
+        }
+      },
       nested: {
         type: "object",
         fields: { deepAt: { type: "date" }, count: { type: "number" } }
@@ -362,13 +375,14 @@ describe("FilterExpressionBuilder", () => {
     it("leaves a nested value alone when the path cannot be resolved", () => {
       expect.assertions(1);
 
-      // A segment naming no declared field has no field definition, so the
-      // value is written as stored
+      // A segment below a discriminated union names a field of a variant the
+      // walk does not follow, so it has no field definition and the value is
+      // written as stored
       expect(
-        queryBuilderInstance().filterParams({ "meta.missing.deeper": iso })
+        queryBuilderInstance().filterParams({ "meta.channel.deeper": iso })
       ).toEqual({
-        expression: "#Meta.#missing.#deeper = :Metamissingdeeper1",
-        values: { Metamissingdeeper1: iso }
+        expression: "#Meta.#channel.#deeper = :Metachanneldeeper1",
+        values: { Metachanneldeeper1: iso }
       });
     });
   });
@@ -941,17 +955,17 @@ describe("FilterExpressionBuilder", () => {
 
       // DynamoDB has no Number for NaN or Infinity, so no row can hold one for
       // a comparison to order against. An attribute with a schema never gets
-      // here (zod's number() rejects both); a path naming no field has none
+      // here (zod's number() rejects both); a path into a union variant has none
       const message = "cannot order this value";
 
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $gt: Number.NaN }
+          "meta.channel.unknown.at": { $gt: Number.NaN }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $between: [1, Number.POSITIVE_INFINITY] }
+          "meta.channel.unknown.at": { $between: [1, Number.POSITIVE_INFINITY] }
         })
       ).toThrow(message);
     });
@@ -1009,7 +1023,7 @@ describe("FilterExpressionBuilder", () => {
       );
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": [{ $gt: 1 }]
+          "meta.channel.unknown.at": [{ $gt: 1 }]
         })
       ).toThrow("an IN element names comparison");
     });
@@ -1323,11 +1337,11 @@ describe("FilterExpressionBuilder", () => {
 
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown": { $gt: "x" }
+          "meta.channel.unknown": { $gt: "x" }
         })
       ).toEqual({
-        expression: "#Meta.#unknown > :Metaunknown1",
-        values: { Metaunknown1: "x" }
+        expression: "#Meta.#channel.#unknown > :Metachannelunknown1",
+        values: { Metachannelunknown1: "x" }
       });
     });
 
@@ -1385,7 +1399,7 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error $ne is not a supported operator
-          "meta.unknown.at": { $ne: 5 }
+          "meta.channel.unknown.at": { $ne: 5 }
         })
       ).toThrow("$ne is not a supported operator");
     });
@@ -1544,6 +1558,201 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({
         expression: "contains(#Name, :Name1)",
         values: { Name1: "cal" }
+      });
+    });
+  });
+
+  describe("dot paths naming nothing the schema declares", () => {
+    const metaFields =
+      "odd name, odd-name, label, location, note, recordedAt, tags, scores, seenAt, channel, nested, history";
+
+    // The same paths are rejected wherever a dot path is accepted: a query
+    // filter answers them with no rows, and a write condition with a failed
+    // guard indistinguishable from a real one
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it.each([
+        [
+          "below the attribute",
+          "meta.nope",
+          `Invalid filter key "meta.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${metaFields}`
+        ],
+        [
+          "inside a nested object",
+          "meta.nested.nope",
+          'Invalid filter key "meta.nested.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: deepAt, count'
+        ],
+        [
+          "inside an element of a list of objects",
+          "meta.history[0].nope",
+          'Invalid filter key "meta.history[0].nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: at'
+        ],
+        [
+          "with an index of its own",
+          "meta.nope[0]",
+          `Invalid filter key "meta.nope[0]": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${metaFields}`
+        ]
+      ])("rejects a field undeclared %s", (_, key, message) => {
+        expect.assertions(1);
+
+        expect(() => builder().filterParams({ [key]: "x" })).toThrow(
+          new FilterError(message)
+        );
+      });
+
+      it.each([
+        [
+          "a top level attribute",
+          "name.x",
+          'Invalid filter key "name.x": "name" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a nested field",
+          "meta.label.x",
+          'Invalid filter key "meta.label.x": "label" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a field inside a nested object",
+          "meta.nested.count.x",
+          'Invalid filter key "meta.nested.count.x": "count" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "an element of a list of scalars",
+          "meta.tags[0].x",
+          'Invalid filter key "meta.tags[0].x": "tags[0]" is not an object, so it has no field "x" and the condition can match nothing'
+        ]
+      ])("rejects a path continuing past %s", (_, key, message) => {
+        expect.assertions(1);
+
+        expect(() => builder().filterParams({ [key]: "x" })).toThrow(
+          new FilterError(message)
+        );
+      });
+
+      it("rejects the path before judging its operator or operand", () => {
+        expect.assertions(2);
+
+        expect(() =>
+          builder().filterParams({ "meta.nope": { $contains: "x" } })
+        ).toThrow('Invalid filter key "meta.nope": "nope" is not a field');
+        expect(() =>
+          builder().filterParams({ $or: [{ "name.x": { $gt: 1 } }] })
+        ).toThrow('Invalid filter key "name.x": "name" is not an object');
+      });
+
+      it("still abstains on a path into a discriminated union variant", () => {
+        expect.assertions(2);
+
+        // The variants' fields are invisible to the schema walker, so a field
+        // it cannot find there may well exist: the value is written as stored
+        // and no guard judges it
+        expect(
+          builder().filterParams({ "meta.channel.address": { $gt: 1 } })
+        ).toEqual({
+          expression: "#Meta.#channel.#address > :Metachanneladdress1",
+          values: { Metachanneladdress1: 1 }
+        });
+        expect(
+          builder().filterParams({ "meta.channel.nope.deeper": "x" })
+        ).toEqual({
+          expression: "#Meta.#channel.#nope.#deeper = :Metachannelnopedeeper1",
+          values: { Metachannelnopedeeper1: "x" }
+        });
+      });
+
+      it("keeps compiling the declared paths", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            "meta.nested.count": 1,
+            "meta.history[0].at": new Date("2023-01-01T00:00:00.000Z")
+          })
+        ).toEqual({
+          expression:
+            "#Meta.#nested.#count = :Metanestedcount1 AND #Meta.#history[0].#at = :Metahistory0at2",
+          values: {
+            Metanestedcount1: 1,
+            Metahistory0at2: "2023-01-01T00:00:00.000Z"
+          }
+        });
+      });
+    });
+  });
+
+  describe("$contains on a list takes one of its elements", () => {
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it.each([
+        ["a number on a list of strings", "meta.tags", 1, "string"],
+        ["a boolean on a list of strings", "meta.tags", true, "string"],
+        ["a string on a list of numbers", "meta.scores", "1", "number"],
+        ["a boolean on a list of numbers", "meta.scores", true, "number"],
+        ["a string on a list of objects", "meta.history", "x", "map"]
+      ])("rejects %s", (_, key, operand, form) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({ [key]: { $contains: operand } })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${key}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${form}, which this operand is not`
+          )
+        );
+      });
+
+      it("points a Date on a list of dates at the stored ISO string", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass a Date
+            "meta.seenAt": { $contains: new Date("2023-01-01T00:00:00.000Z") }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "meta.seenAt": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not. A date is stored as an ISO string, so an element of a list of dates is written as one'
+          )
+        );
+      });
+
+      it("keeps an operand of the list's element type", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            "meta.tags": { $contains: "vip" },
+            "meta.scores": { $contains: 5 },
+            "meta.seenAt": { $contains: "2023-01-01T00:00:00.000Z" },
+            // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
+            "meta.history": { $contains: { at: "2023" } }
+          })
+        ).toEqual({
+          expression:
+            "contains(#Meta.#tags, :Metatags1) AND contains(#Meta.#scores, :Metascores2) AND contains(#Meta.#seenAt, :MetaseenAt3) AND contains(#Meta.#history, :Metahistory4)",
+          values: {
+            Metatags1: "vip",
+            Metascores2: 5,
+            MetaseenAt3: "2023-01-01T00:00:00.000Z",
+            Metahistory4: { at: "2023" }
+          }
+        });
+      });
+
+      it("keeps any scalar operand's String rule unchanged", () => {
+        expect.assertions(1);
+
+        // A String-stored attribute takes a substring, judged as before
+        expect(
+          builder().filterParams({ "meta.label": { $contains: "ware" } })
+        ).toEqual({
+          expression: "contains(#Meta.#label, :Metalabel1)",
+          values: { Metalabel1: "ware" }
+        });
       });
     });
   });
@@ -1757,8 +1966,8 @@ describe("FilterExpressionBuilder", () => {
     it("still rejects an unorderable operand where the field cannot be resolved", () => {
       expect.assertions(3);
 
-      // The attribute-side gate abstains here on purpose: a path naming no
-      // declared field has no field definition, so dyna-record cannot know the
+      // The attribute-side gate abstains here on purpose: a path into a union
+      // variant has no field definition, so dyna-record cannot know the
       // stored form. The value is then all there is to go on, and it is enough —
       // without this the condition compiles and can never match
       const message =
@@ -1767,19 +1976,19 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean operand is a plain JavaScript caller
-          "meta.unknown.at": { $gt: true }
+          "meta.channel.unknown.at": { $gt: true }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean pair is a plain JavaScript caller
-          "meta.unknown.at": { $between: [true, false] }
+          "meta.channel.unknown.at": { $between: [true, false] }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a Map operand is a plain JavaScript caller
-          "meta.unknown.at": { $gt: { a: 1 } }
+          "meta.channel.unknown.at": { $gt: { a: 1 } }
         })
       ).toThrow(message);
     });
@@ -1791,11 +2000,11 @@ describe("FilterExpressionBuilder", () => {
       // beyond what DynamoDB can order
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $gte: "2023-01-01T00:00:00.000Z" }
+          "meta.channel.unknown.at": { $gte: "2023-01-01T00:00:00.000Z" }
         })
       ).toEqual({
-        expression: "#Meta.#unknown.#at >= :Metaunknownat1",
-        values: { Metaunknownat1: "2023-01-01T00:00:00.000Z" }
+        expression: "#Meta.#channel.#unknown.#at >= :Metachannelunknownat1",
+        values: { Metachannelunknownat1: "2023-01-01T00:00:00.000Z" }
       });
     });
 
@@ -1806,19 +2015,21 @@ describe("FilterExpressionBuilder", () => {
       // — the same reason such a value is left unvalidated
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown": { $beginsWith: "x" }
+          "meta.channel.unknown": { $beginsWith: "x" }
         })
       ).toEqual({
-        expression: "begins_with(#Meta.#unknown, :Metaunknown1)",
-        values: { Metaunknown1: "x" }
+        expression:
+          "begins_with(#Meta.#channel.#unknown, :Metachannelunknown1)",
+        values: { Metachannelunknown1: "x" }
       });
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $beginsWith: "2023" }
+          "meta.channel.unknown.at": { $beginsWith: "2023" }
         })
       ).toEqual({
-        expression: "begins_with(#Meta.#unknown.#at, :Metaunknownat1)",
-        values: { Metaunknownat1: "2023" }
+        expression:
+          "begins_with(#Meta.#channel.#unknown.#at, :Metachannelunknownat1)",
+        values: { Metachannelunknownat1: "2023" }
       });
     });
 
@@ -2405,7 +2616,7 @@ describe("FilterExpressionBuilder", () => {
       // Not a judgement dyna-record can make: it cannot resolve the field, so
       // it constrains nothing — the behavior such a path has always had
       {
-        attribute: "meta.unknown",
+        attribute: "meta.channel.unknown",
         storedForm: "unresolved",
         sample: "x",
         $beginsWith: "compiles",
@@ -2601,17 +2812,18 @@ describe("FilterExpressionBuilder", () => {
       expect.assertions(2);
 
       // This was the only guard that judged what it could not see. A path
-      // naming no field resolves to no definition, and the field it names may
+      // into a union variant resolves to no definition, and the field it names may
       // well be a Map — on which a whole-object equality is legitimate, as the
       // resolved case already allows
       expect(
         queryBuilderInstance().filterParams({
           // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
-          "meta.unknown.nested": { a: 1 }
+          "meta.channel.unknown.nested": { a: 1 }
         })
       ).toEqual({
-        expression: "#Meta.#unknown.#nested = :Metaunknownnested1",
-        values: { Metaunknownnested1: { a: 1 } }
+        expression:
+          "#Meta.#channel.#unknown.#nested = :Metachannelunknownnested1",
+        values: { Metachannelunknownnested1: { a: 1 } }
       });
 
       // Where the form IS resolved and cannot hold an object, it still judges

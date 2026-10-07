@@ -31,6 +31,7 @@ import {
   type EntityAttributesInstance
 } from "../../src/operations/index.js";
 import Logger from "../../src/Logger.js";
+import { FilterError } from "../../src/errors.js";
 
 const mockSend = vi.fn();
 const mockQuery = vi.fn();
@@ -3901,10 +3902,21 @@ describe("Query", () => {
       });
 
       it("rejects invalid dot-paths", async () => {
-        // @ts-expect-error: location.nonExistent is not a valid dot-path
-        await Warehouse.query("123", {
-          filter: { "location.nonExistent": "value" }
-        });
+        expect.assertions(2);
+
+        // The type refuses it, and so does the runtime: the path names nothing
+        // a row can hold, so the filter would silently return no rows
+        await expect(
+          // @ts-expect-error: location.nonExistent is not a valid dot-path
+          Warehouse.query("123", {
+            filter: { "location.nonExistent": "value" }
+          })
+        ).rejects.toEqual(
+          new FilterError(
+            'Invalid filter key "location.nonExistent": "nonExistent" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: city, state, zip'
+          )
+        );
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
       });
 
       it("works for entities with no relationships", async () => {
