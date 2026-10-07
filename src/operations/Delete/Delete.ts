@@ -177,10 +177,13 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
 
     const prefetchResult = items.reduce<PreFetchResult>(
       (acc, item) => {
-        const isItemSelf = item.id === id && item instanceof this.EntityClass;
-
-        if (isItemSelf) {
+        if (this.isOwnRow(item)) {
           acc.self = item;
+        } else if (item.id === id && item instanceof this.EntityClass) {
+          // The entity's link copy as its own one-way HasMany parent. It is
+          // deleted with the entity's other owned-by links, and its foreign
+          // key is not nullified because its row is the one being deleted
+          return acc;
         } else if (this.doesEntityNeedForeignKeyNullified(item)) {
           acc.linkedEntitiesWithFkRef.push(item);
         } else {
@@ -204,6 +207,19 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
   }
 
   /**
+   * Whether an item from the entity's partition is the entity's own row, which
+   * is the only item there whose sort key is the entity's name
+   * @param item - An item from the entity's partition
+   * @returns Whether the item is the entity's own row
+   */
+  private isOwnRow(item: Entity): boolean {
+    return (
+      isKeyOfObject(item, this.#sortKeyField) &&
+      item[this.#sortKeyField] === this.EntityClass.name
+    );
+  }
+
+  /**
    * Returns true if the linked entity needs to have a foreign key nullified
    * @param relMeta
    * @returns
@@ -222,26 +238,20 @@ class Delete<T extends DynaRecord> extends OperationBase<T> {
    * @param self
    */
   private buildDeleteSelfTransactions(self: Entity): void {
-    if (this.guardsAnything()) {
-      // A delete carrying a write condition deletes the row only if it still
-      // exists, so a row deleted after the earlier read is reported as
-      // not-found rather than as a failed condition. The key is the one the
-      // condition's guards and pins on this row are merged onto
-      this.buildDeleteItemTransaction(
-        {
-          [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(self.id),
-          [this.sortKeyAlias]: this.EntityClass.name
-        },
-        {
-          errorMessage: `${this.EntityClass.name} with ID '${self.id}' does not exist`,
-          conditionExpression: `attribute_exists(${this.partitionKeyAlias})`
-        }
-      );
-    } else {
-      this.buildDeleteEntityTransaction(self, {
-        errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${self.id}`
-      });
-    }
+    // A delete carrying a write condition deletes the row only if it still
+    // exists, so a row deleted after the earlier read is reported as not-found
+    // rather than as a failed condition
+    this.buildDeleteEntityTransaction(
+      self,
+      this.guardsAnything()
+        ? {
+            errorMessage: `${this.EntityClass.name} with ID '${self.id}' does not exist`,
+            conditionExpression: `attribute_exists(${this.partitionKeyAlias})`
+          }
+        : {
+            errorMessage: `Failed to delete ${this.EntityClass.name} with Id: ${self.id}`
+          }
+    );
     this.buildDeleteAssociatedBelongsTransaction(self.id, self);
   }
 

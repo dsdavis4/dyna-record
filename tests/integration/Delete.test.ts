@@ -5357,6 +5357,282 @@ describe("Delete with write conditions", () => {
     });
   });
 
+  describe("on an entity whose partition holds another entity's copy with the same id", () => {
+    // Pet 123 belongs to Person 123: the copy of its owner in its partition
+    // shares its id, but is not its own row
+    const pet = {
+      PK: "Pet#123",
+      SK: "Pet",
+      Id: "123",
+      Type: "Pet",
+      Name: "Fido",
+      OwnerId: "123",
+      CreatedAt: "2022-09-02T23:31:21.148Z",
+      UpdatedAt: "2022-09-03T23:31:21.148Z"
+    };
+    const ownerCopy = {
+      PK: "Pet#123",
+      SK: "Person",
+      Id: "123",
+      Type: "Person",
+      Name: "Jane",
+      CreatedAt: "2022-09-02T23:31:21.148Z",
+      UpdatedAt: "2022-09-03T23:31:21.148Z"
+    };
+
+    describe.each([
+      { order: "its own row first", items: [pet, ownerCopy] },
+      { order: "the copy first", items: [ownerCopy, pet] }
+    ])("read with $order", ({ items }) => {
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: items });
+      });
+
+      it("deletes its own row and treats the same-id copy as a linked copy", async () => {
+        expect.assertions(3);
+
+        await Pet.delete("123");
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          partitionQuery("Pet#123")
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Pet#123", SK: "Pet" }
+                  }
+                },
+                {
+                  // The BelongsTo link in the owner's partition
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#123", SK: "Pet#123" }
+                  }
+                },
+                {
+                  // The owner's copy in the Pet's partition
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Pet#123", SK: "Person" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+  });
+
+  describe("on a self-referential entity whose own link copy is in its partition", () => {
+    const category = {
+      PK: "Category#c1",
+      SK: "Category",
+      Id: "c1",
+      Type: "Category",
+      Name: "Home",
+      ParentCategoryId: "c1",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    // The Category is its own parent, so the read of its partition also
+    // returns its own link copy, with the same id and type as its own row
+    const selfCopy = { ...category, SK: "Category#c1" };
+    const deleteOwnRow = {
+      Delete: {
+        TableName: "mock-table",
+        Key: { PK: "Category#c1", SK: "Category" }
+      }
+    };
+    const deleteSelfCopy = {
+      Delete: {
+        TableName: "mock-table",
+        Key: { PK: "Category#c1", SK: "Category#c1" }
+      }
+    };
+
+    describe.each([
+      { order: "its own row first", items: [category, selfCopy] },
+      { order: "its link copy first", items: [selfCopy, category] }
+    ])("read with $order", ({ items }) => {
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: items });
+      });
+
+      it("an unconditioned delete deletes both its own row and its link copy", async () => {
+        expect.assertions(3);
+
+        await Category.delete("c1");
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          partitionQuery("Category#c1")
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [deleteOwnRow, deleteSelfCopy] }]
+        ]);
+      });
+
+      describe("a self condition", () => {
+        const remove = async (): Promise<void> => {
+          await Category.delete("c1", { condition: { name: "Home" } });
+        };
+
+        it("guards the own row's Delete and still deletes the link copy", async () => {
+          expect.assertions(3);
+
+          await remove();
+
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "QueryCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockedQueryCommand.mock.calls).toEqual([
+            partitionQuery("Category#c1")
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    Delete: {
+                      TableName: "mock-table",
+                      Key: { PK: "Category#c1", SK: "Category" },
+                      ConditionExpression:
+                        "attribute_exists(PK) AND (#Name = :wc1_Name1)",
+                      ExpressionAttributeNames: { "#Name": "Name" },
+                      ExpressionAttributeValues: { ":wc1_Name1": "Home" },
+                      ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                    }
+                  },
+                  deleteSelfCopy
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("names its own row when the condition fails", async () => {
+          expect.assertions(1);
+
+          cancelTransactWrite([
+            {
+              Code: "ConditionalCheckFailed",
+              Item: {
+                PK: { S: "Category#c1" },
+                SK: { S: "Category" },
+                Name: { S: "Garden" }
+              }
+            },
+            { Code: "None" }
+          ]);
+
+          const e = await failureOf(remove);
+
+          expect(e.errors).toEqual([
+            new WriteConditionFailedError(
+              "ConditionalCheckFailed: Write condition failed on Category with ID 'c1': its own row",
+              { entity: "Category", id: "c1", guards: [{ kind: "self" }] }
+            )
+          ]);
+        });
+      });
+    });
+
+    describe("beside the link copy of another subcategory", () => {
+      const childCopy = {
+        PK: "Category#c1",
+        SK: "Category#c2",
+        Id: "c2",
+        Type: "Category",
+        Name: "Garden",
+        ParentCategoryId: "c1",
+        CreatedAt: "2023-01-01T00:00:00.000Z",
+        UpdatedAt: "2023-01-02T00:00:00.000Z"
+      };
+
+      beforeEach(() => {
+        mockQuery
+          .mockResolvedValueOnce({ Items: [category, selfCopy, childCopy] })
+          // The other subcategory's partition, read to nullify its foreign key
+          .mockResolvedValueOnce({
+            Items: [{ ...childCopy, PK: "Category#c2", SK: "Category" }]
+          });
+      });
+
+      it("nullifies the other subcategory's foreign key but deletes its own link copy only once, without updating its own row", async () => {
+        expect.assertions(3);
+
+        await Category.delete("c1");
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([
+          partitionQuery("Category#c1"),
+          [
+            {
+              TableName: "mock-table",
+              KeyConditionExpression: "#PK = :PK2",
+              FilterExpression: "#Type IN (:Type1)",
+              ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+              ExpressionAttributeValues: {
+                ":PK2": "Category#c2",
+                ":Type1": "Category"
+              },
+              ConsistentRead: true
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                deleteOwnRow,
+                deleteSelfCopy,
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: { PK: "Category#c2", SK: "Category" },
+                    ConditionExpression: "attribute_exists(PK)",
+                    ExpressionAttributeNames: {
+                      "#ParentCategoryId": "ParentCategoryId",
+                      "#UpdatedAt": "UpdatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": "2023-10-16T03:31:35.918Z"
+                    },
+                    UpdateExpression:
+                      "SET #UpdatedAt = :UpdatedAt REMOVE #ParentCategoryId"
+                  }
+                },
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Category#c1", SK: "Category#c2" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+  });
+
   describe("an invalid condition", () => {
     it("throws a FilterError before any read when a HasMany id is guarded twice (R25)", async () => {
       expect.assertions(3);
