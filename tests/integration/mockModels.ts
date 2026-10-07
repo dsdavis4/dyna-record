@@ -56,7 +56,24 @@ export const contactSchema = {
   status: { type: "enum", values: ["active", "inactive"] },
   createdDate: { type: "date" },
   deletedAt: { type: "date", nullable: true },
-  contactedAt: { type: "array", items: { type: "date" }, nullable: true }
+  contactedAt: { type: "array", items: { type: "date" }, nullable: true },
+  roles: {
+    type: "array",
+    items: { type: "enum", values: ["owner", "viewer"] },
+    nullable: true
+  },
+  history: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        at: { type: "date" },
+        actor: { type: "string" },
+        note: { type: "string", nullable: true }
+      }
+    },
+    nullable: true
+  }
 } as const satisfies ObjectSchema;
 
 @Table({

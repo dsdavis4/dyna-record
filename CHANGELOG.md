@@ -60,7 +60,15 @@
 
 - **A dot path naming nothing the schema declares is a `FilterError`.** A path naming a field its object does not declare (`"address.nope"`, `"entries[0].nope"`), or continuing below a field that is not an object (`"name.x"`, `"address.zip.nope"`), was compiled unjudged: a filter returned no rows, and a write condition failed as a `WriteConditionFailedError` indistinguishable from a real guard failure. Both are now rejected before anything is sent, in filters and write conditions alike, naming the path. The types already refused them. A path into a discriminated union variant is still left unjudged, because its fields depend on the variant.
 
-- **`$contains` on a list checks its operand against the list's elements.** `{ "details.tags": { $contains: 1 } }` on a list of strings was sent and matched nothing. The operand must now be stored in the form the list's elements are (a string for a list of strings and enums, a number for a list of numbers, an object for a list of objects), or the condition is a `FilterError`. On a list of dates the operand is a whole element, so it takes a `Date`, as the types already offered, and is converted to the ISO string the elements are stored as. A `Date` there previously failed when the request was sent. The ISO string itself is still accepted. `$contains` on a string attribute is unchanged.
+- **`$contains` on a list checks its operand as one of the list's elements.** `{ "details.tags": { $contains: 1 } }` on a list of strings was sent and matched nothing. On a list the operand is one whole element, so it is now validated against the element's schema and converted to the form the element is stored in, as the types already described it, and a value no element can hold is a `FilterError`:
+
+  - The operand must be stored in the form the elements are (a string for a list of strings and enums, a number for a list of numbers, an object for a list of objects).
+  - On a list of enums it must be a member. A string outside the enum was sent and matched nothing.
+  - On a list of objects each field must have its declared type, and a `Date` field is converted to its ISO string at any depth. A field of the wrong type was sent and matched nothing, and a `Date` field failed when the request was sent. A field the element does not declare is rejected rather than dropped, since DynamoDB compares the elements whole and no element could equal the operand. A nullable field may be omitted. A list of discriminated unions is checked against the variant its discriminator names.
+  - On a list of dates the operand takes a `Date`, converted to the ISO string the elements are stored as. A `Date` there previously failed when the request was sent. The ISO string itself is still accepted.
+  - On a list of numbers, `NaN`, `Infinity` and a `bigint` are rejected, as a write of the field rejects them.
+
+  `$contains` on a string attribute is unchanged.
 
 ## 3.4.0 - 2026-10-03
 

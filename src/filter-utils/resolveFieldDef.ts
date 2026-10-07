@@ -187,6 +187,87 @@ export const fieldValidatesConditionValue = (fieldDef: FieldDef): boolean =>
   VALIDATES_CONDITION_VALUE[fieldDef.type];
 
 /**
+ * Joins a field to the path of an undeclared field found below it, so a list
+ * index reads as one (`entries[0].sku`) and a field as one (`source.by`).
+ * @param head - The field or index the walk descended through
+ * @param rest - The path found below it
+ * @returns The joined path
+ */
+const joinPath = (head: string, rest: string): string =>
+  rest.startsWith("[") ? `${head}${rest}` : `${head}.${rest}`;
+
+/**
+ * The first field a value carries that its definition does not declare, as a
+ * path from the value's top.
+ *
+ * Zod's object schemas strip an undeclared key rather than rejecting it, which
+ * is right for a value about to be written — the write stores only what the
+ * schema declares — and wrong for a value that is compared whole, because the
+ * stripped value is not the one the caller described. Walks objects at any
+ * depth, each element of a list, and the variant a discriminated union's
+ * discriminator names; the discriminator itself is declared by the union.
+ *
+ * Expects a value its definition's zod schema has accepted, so a shape this
+ * walk does not follow — a variant the union does not declare — has already
+ * been rejected and is not judged again here
+ * @param fieldDef - The definition the value was validated against
+ * @param value - The value, in the form the entity declares it
+ * @returns The undeclared field's path, or undefined when every field is declared
+ */
+export const undeclaredFieldIn = (
+  fieldDef: FieldDef,
+  value: unknown
+): Optional<string> => {
+  if (fieldDef.type === "array") {
+    if (!Array.isArray(value)) return undefined;
+
+    for (const [index, item] of value.entries()) {
+      const found = undeclaredFieldIn(fieldDef.items, item);
+      if (found !== undefined) return joinPath(`[${String(index)}]`, found);
+    }
+    return undefined;
+  }
+
+  if (fieldDef.type !== "object" && fieldDef.type !== "discriminatedUnion") {
+    return undefined;
+  }
+
+  if (typeof value !== "object" || value === null) return undefined;
+
+  // Annotated rather than inferred: `Object.entries` on an `object` types each
+  // value as `any`, and the walk only ever hands a value on as `unknown`
+  const entries: Array<[string, unknown]> = Object.entries(value);
+  let fields: Optional<ObjectSchema>;
+
+  if (fieldDef.type === "object") {
+    fields = fieldDef.fields;
+  } else {
+    const variant = entries.find(([key]) => key === fieldDef.discriminator);
+    const name = variant?.[1];
+    fields =
+      typeof name === "string" && Object.hasOwn(fieldDef.variants, name)
+        ? fieldDef.variants[name]
+        : undefined;
+  }
+
+  if (fields === undefined) return undefined;
+
+  for (const [key, field] of entries) {
+    // The union declares its discriminator, not the variant
+    const isDiscriminator =
+      fieldDef.type === "discriminatedUnion" && key === fieldDef.discriminator;
+    if (isDiscriminator) continue;
+
+    if (!Object.hasOwn(fields, key)) return key;
+
+    const found = undeclaredFieldIn(fields[key], field);
+    if (found !== undefined) return joinPath(key, found);
+  }
+
+  return undefined;
+};
+
+/**
  * Converts a nested field's condition value to the form the table stores.
  *
  * The one assertion on this path. `convertFieldToTableItem` walks a schema whose

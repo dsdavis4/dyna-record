@@ -467,6 +467,49 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
+    it("can filter using $contains with a whole element on a nested List of objects", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.history": {
+            $contains: {
+              at: new Date("2023-01-01T00:00:00.000Z"),
+              actor: "ann"
+            }
+          }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "contains(#objectAttribute.#history, :objectAttributehistory1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#history": "history"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributehistory1": {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "ann"
+              },
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
     it("can filter using $contains on a top-level string attribute", async () => {
       expect.assertions(5);
 
@@ -802,6 +845,25 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+  });
+
+  describe("a filter rejected before sending", () => {
+    it("rejects a $contains element outside the enum of a nested List of enums before sending anything", async () => {
+      expect.assertions(3);
+
+      await expect(
+        // @ts-expect-error: admin is not a member of the roles enum
+        MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.roles": { $contains: "admin" } }
+        })
+      ).rejects.toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
     });
   });
 
@@ -3595,6 +3657,50 @@ describe("Query", () => {
                 filter: {
                   "objectAttribute.contactedAt": {
                     $contains: new Date("2026-01-01")
+                  }
+                }
+              })
+            );
+          });
+
+          it("takes a member as the $contains element of a nested list of enums", async () => {
+            // @ts-expect-no-error: an element of a list of enums is one of its members
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.roles": { $contains: "owner" } }
+              })
+            );
+          });
+
+          it("rejects a $contains element outside the enum of a nested list of enums", async () => {
+            await swallow(
+              // @ts-expect-error: admin is not a member of the roles enum
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.roles": { $contains: "admin" } }
+              })
+            );
+          });
+
+          it("takes a whole element as the $contains element of a nested list of objects", async () => {
+            // @ts-expect-no-error: an element of a list of objects is a whole value, named as declared
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: "ann" }
+                  }
+                }
+              })
+            );
+          });
+
+          it("rejects a $contains element of a nested list of objects with a field of the wrong type", async () => {
+            await swallow(
+              // @ts-expect-error: actor is declared as a string
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: 1 }
                   }
                 }
               })

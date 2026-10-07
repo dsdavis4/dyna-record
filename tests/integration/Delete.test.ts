@@ -1705,10 +1705,46 @@ describe("Delete", () => {
             "objectAttribute.contactedAt": {
               $contains: new Date("2026-01-01")
             },
+            // @ts-expect-no-error: a list of enums takes one of its members
+            "objectAttribute.roles": { $contains: "owner" },
+            // @ts-expect-no-error: a list of objects takes a whole element, named as declared
+            "objectAttribute.history": {
+              $contains: { at: new Date("2026-01-01"), actor: "ann" }
+            },
             // @ts-expect-no-error: dot paths reach nested objects at any depth
             "addressAttribute.geo.lat": { $lt: 41 },
             // @ts-expect-no-error: a list-index path names one array item
             "addressAttribute.scores[0]": 5
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses a $contains element the list cannot hold", async () => {
+        await MyClassWithAllAttributeTypes.delete("123", {
+          condition: {
+            // @ts-expect-error: admin is not a member of the roles enum
+            "objectAttribute.roles": { $contains: "admin" },
+            // @ts-expect-error: actor is declared as a string
+            "objectAttribute.history": {
+              $contains: { at: new Date("2026-01-01"), actor: 1 }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await MyClassWithAllAttributeTypes.delete("123", {
+          condition: {
+            "objectAttribute.history": {
+              $contains: {
+                at: new Date("2026-01-01"),
+                actor: "ann",
+                // @ts-expect-error: an element has no actorId, so no element can equal this one
+                actorId: "a-1"
+              }
+            }
           }
         }).catch(() => {
           Logger.log("Testing types");
@@ -5924,6 +5960,82 @@ describe("Delete with write conditions", () => {
           }
         ]
       ]);
+    });
+
+    it("converts a whole $contains element of a list of objects to its stored form, nested dates included", async () => {
+      expect.assertions(3);
+
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.history": {
+            $contains: {
+              at: new Date("2023-01-01T00:00:00.000Z"),
+              actor: "ann"
+            }
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#history, :wc1_objectAttributehistory1))",
+                  ExpressionAttributeNames: {
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_objectAttributehistory1": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("rejects a $contains element outside the enum of a list of enums before any read", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error admin is not a member of the roles enum
+              "objectAttribute.roles": { $contains: "admin" }
+            }
+          })
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     });
   });
 

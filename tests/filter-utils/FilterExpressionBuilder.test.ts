@@ -112,6 +112,57 @@ const attributes: Record<
       }
     } as const satisfies ObjectSchema
   },
+  // Lists whose elements are validated and converted as whole values when a
+  // $contains operand names one: an enum, a scalar, an object carrying a
+  // nested date, a nullable field and a nested object, and a union
+  lists: {
+    alias: "Lists",
+    type: z.object({}),
+    kind: "object",
+    objectSchema: {
+      roles: {
+        type: "array",
+        items: { type: "enum", values: ["owner", "viewer"] }
+      },
+      scores: { type: "array", items: { type: "number" } },
+      flags: { type: "array", items: { type: "boolean" } },
+      audit: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            at: { type: "date" },
+            actor: { type: "string" },
+            note: { type: "string", nullable: true },
+            source: { type: "object", fields: { seenAt: { type: "date" } } }
+          }
+        }
+      },
+      batches: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            lines: {
+              type: "array",
+              items: { type: "object", fields: { sku: { type: "string" } } }
+            }
+          }
+        }
+      },
+      widgets: {
+        type: "array",
+        items: {
+          type: "discriminatedUnion",
+          discriminator: "kind",
+          variants: {
+            marker: { at: { type: "date" } },
+            text: { body: { type: "string" } }
+          }
+        }
+      }
+    } as const satisfies ObjectSchema
+  },
   // Declared as a Date, stored as an ISO string — the pairing the whole
   // declared-form/stored-form split exists for
   createdAt: {
@@ -1101,11 +1152,13 @@ describe("FilterExpressionBuilder", () => {
       expect(
         queryBuilderInstance().filterParams({
           // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
-          "meta.history": { $contains: { at: "2023" } }
+          "meta.history": {
+            $contains: { at: new Date("2023-01-01T00:00:00.000Z") }
+          }
         })
       ).toEqual({
         expression: "contains(#Meta.#history, :Metahistory1)",
-        values: { Metahistory1: { at: "2023" } }
+        values: { Metahistory1: { at: "2023-01-01T00:00:00.000Z" } }
       });
 
       // Where the form is a String, a substring is still what it compares
@@ -1765,7 +1818,9 @@ describe("FilterExpressionBuilder", () => {
             "meta.scores": { $contains: 5 },
             "meta.seenAt": { $contains: "2023-01-01T00:00:00.000Z" },
             // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
-            "meta.history": { $contains: { at: "2023" } }
+            "meta.history": {
+              $contains: { at: new Date("2023-01-01T00:00:00.000Z") }
+            }
           })
         ).toEqual({
           expression:
@@ -1774,9 +1829,316 @@ describe("FilterExpressionBuilder", () => {
             Metatags1: "vip",
             Metascores2: 5,
             MetaseenAt3: "2023-01-01T00:00:00.000Z",
-            Metahistory4: { at: "2023" }
+            Metahistory4: { at: "2023-01-01T00:00:00.000Z" }
           }
         });
+      });
+
+      it("takes a member on a list of enums", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({ "lists.roles": { $contains: "owner" } })
+        ).toEqual({
+          expression: "contains(#Lists.#roles, :Listsroles1)",
+          values: { Listsroles1: "owner" }
+        });
+      });
+
+      it("rejects a string outside the enum on a list of enums", () => {
+        expect.assertions(1);
+
+        // Stored as a string, so the form check passes it — but no element can
+        // hold it, and DynamoDB answers the test with nothing
+        expect(() =>
+          builder().filterParams({ "lists.roles": { $contains: "admin" } })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it("validates an element of a list of scalars against the element's schema", () => {
+        expect.assertions(4);
+
+        expect(
+          builder().filterParams({
+            "lists.scores": { $contains: 5 },
+            "lists.flags": { $contains: false }
+          })
+        ).toEqual({
+          expression:
+            "contains(#Lists.#scores, :Listsscores1) AND contains(#Lists.#flags, :Listsflags2)",
+          values: { Listsscores1: 5, Listsflags2: false }
+        });
+
+        // A number no element can hold: the element schema rejects what a
+        // write of the field rejects
+        const rejection = new FilterError(
+          'Invalid filter value for attribute "lists.scores": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        );
+
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: NaN } })
+        ).toThrow(rejection);
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: Infinity } })
+        ).toThrow(rejection);
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: 5n } })
+        ).toThrow(rejection);
+      });
+
+      it("converts an element of a list of objects to its stored form, nested dates included", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.audit": {
+              $contains: {
+                at: new Date("2023-01-01T00:00:00.000Z"),
+                actor: "ann",
+                note: "restocked",
+                source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+              }
+            }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#audit, :Listsaudit1)",
+          values: {
+            Listsaudit1: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "ann",
+              note: "restocked",
+              source: { seenAt: "2023-01-02T00:00:00.000Z" }
+            }
+          }
+        });
+      });
+
+      it("leaves a nullable field the element omits, nulls or leaves undefined absent from it", () => {
+        expect.assertions(1);
+
+        // The write removes a nulled field rather than storing NULL, so the
+        // element looked for lacks it in all three spellings, as the stored
+        // one does
+        const element = (note?: null): Record<string, unknown> => ({
+          at: new Date("2023-01-01T00:00:00.000Z"),
+          actor: "ann",
+          ...(note !== undefined && { note }),
+          source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+        });
+        const stored = {
+          at: "2023-01-01T00:00:00.000Z",
+          actor: "ann",
+          source: { seenAt: "2023-01-02T00:00:00.000Z" }
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.audit": { $contains: element() },
+            $or: [
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.audit": { $contains: element(null) } },
+              {
+                // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+                "lists.audit": { $contains: { ...element(), note: undefined } }
+              }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "(contains(#Lists.#audit, :Listsaudit1) OR contains(#Lists.#audit, :Listsaudit2)) AND (contains(#Lists.#audit, :Listsaudit3))",
+          values: {
+            Listsaudit1: stored,
+            Listsaudit2: stored,
+            Listsaudit3: stored
+          }
+        });
+      });
+
+      it.each([
+        [
+          "a field of the wrong type",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: 1,
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a date field written as its stored string",
+          {
+            at: "2023-01-01T00:00:00.000Z",
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a nested date that is not a valid Date",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("not a date") }
+          }
+        ],
+        [
+          "a required field it omits",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a required field it leaves undefined",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: undefined,
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ]
+      ])("rejects an element of a list of objects with %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.audit": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.audit": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        [
+          "at the top of the element",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") },
+            actorId: "a-1"
+          },
+          "actorId"
+        ],
+        [
+          "inside a nested object",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z"), by: "x" }
+          },
+          "source.by"
+        ]
+      ])(
+        "rejects a field the element does not declare %s",
+        (_, operand, path) => {
+          expect.assertions(1);
+
+          // contains() compares a list of maps element by element, whole, so an
+          // operand carrying a field no element has can never equal one.
+          // Stripping it instead would look for an element the caller did not
+          // describe
+          expect(() =>
+            builder().filterParams({
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              "lists.audit": { $contains: operand }
+            })
+          ).toThrow(
+            new FilterError(
+              `Invalid filter value for attribute "lists.audit": $contains on a list looks for one of its elements, and "${path}" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+            )
+          );
+        }
+      );
+
+      it("names an undeclared field inside a list an element holds by its index", () => {
+        expect.assertions(2);
+
+        expect(
+          builder().filterParams({
+            "lists.batches": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              $contains: { lines: [{ sku: "a" }, { sku: "b" }] }
+            }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#batches, :Listsbatches1)",
+          values: { Listsbatches1: { lines: [{ sku: "a" }, { sku: "b" }] } }
+        });
+
+        expect(() =>
+          builder().filterParams({
+            "lists.batches": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              $contains: { lines: [{ sku: "a" }, { sku: "b", qty: 1 }] }
+            }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "lists.batches": $contains on a list looks for one of its elements, and "lines[1].qty" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+          )
+        );
+      });
+
+      it("validates and converts an element of a list of discriminated unions", () => {
+        expect.assertions(4);
+
+        const marker = {
+          kind: "marker",
+          at: new Date("2023-01-01T00:00:00.000Z")
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.widgets": { $contains: marker }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#widgets, :Listswidgets1)",
+          values: {
+            Listswidgets1: { kind: "marker", at: "2023-01-01T00:00:00.000Z" }
+          }
+        });
+
+        const cannotHold = new FilterError(
+          'Invalid filter value for attribute "lists.widgets": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        );
+
+        // A variant the union does not declare
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.widgets": { $contains: { kind: "chart", body: "x" } }
+          })
+        ).toThrow(cannotHold);
+
+        // A field of another variant's type
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.widgets": { $contains: { kind: "text", body: 1 } }
+          })
+        ).toThrow(cannotHold);
+
+        // A field the named variant does not declare, though another does
+        expect(() =>
+          builder().filterParams({
+            "lists.widgets": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              $contains: { kind: "text", body: "x", at: new Date(0) }
+            }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "lists.widgets": $contains on a list looks for one of its elements, and "at" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+          )
+        );
       });
 
       it("keeps any scalar operand's String rule unchanged", () => {
