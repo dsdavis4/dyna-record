@@ -9,6 +9,7 @@ import {
   type TransactWriteBuilder,
   type WriteConditionGuard
 } from "../../dynamo-utils/index.js";
+import { parenthesize } from "../../dynamo-utils/conditionExpression.js";
 import { FilterError } from "../../errors.js";
 import {
   FilterExpressionBuilder,
@@ -376,7 +377,7 @@ const compileTargetFragment = (
   const fragment = compileFragment(Target, conditions, prefix);
   return {
     ...fragment,
-    ConditionExpression: `${exists} AND (${fragment.ConditionExpression})`
+    ConditionExpression: `${exists} AND ${parenthesize(fragment.ConditionExpression)}`
   };
 };
 

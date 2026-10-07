@@ -1,6 +1,7 @@
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import { keyConditionCapabilities } from "./capabilities.js";
+import { parenthesize } from "../dynamo-utils/conditionExpression.js";
 import type { DynamoNativeValue, Optional, StringObj } from "../types.js";
 import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
@@ -477,11 +478,14 @@ class FilterExpressionBuilder {
       ({ expression }) => expression !== ""
     );
 
-    // One part needs no grouping; it is the whole expression
+    // One part needs no grouping; it is the whole expression. Of two, each is
+    // isolated in one pair of parentheses: an $or of one block that binds
+    // several values is already one group, and a second pair around it is
+    // rejected by DynamoDB as redundant
     const expression =
       parts.length === 1
         ? parts[0].expression
-        : parts.map(({ expression }) => `(${expression})`).join(" AND ");
+        : parts.map(({ expression }) => parenthesize(expression)).join(" AND ");
 
     const values = { ...orFilterParams.values, ...andFilterParams.values };
     return { expression, values };
@@ -1527,8 +1531,11 @@ class FilterExpressionBuilder {
     ).length;
     const multipleVals =
       Object.keys(andParams.values).length + notSetConditions > 1;
+    // parenthesize leaves a block that is already one group as it is: an
+    // untyped caller's $or nested directly in this block compiles to one, and
+    // DynamoDB rejects a second pair around it
     const expression = multipleVals
-      ? `(${andParams.expression}) OR `
+      ? `${parenthesize(andParams.expression)} OR `
       : `${andParams.expression} OR `;
 
     return { expression, values: andParams.values };

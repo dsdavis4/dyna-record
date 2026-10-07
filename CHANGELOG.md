@@ -56,6 +56,8 @@
 
 - **Deleting an entity that is its own parent deletes everything it wrote.** An entity in a uni-directional HasMany with itself, whose foreign key holds its own id, has a link copy in its own partition alongside its own row. `delete` took the copy for the entity itself, so it sent the copy's delete twice and left the entity's own row behind. The entity's row is now identified by its sort key, and the row and the copy are each deleted once.
 
+- **A filter whose `$or` has one block no longer fails at DynamoDB.** When that block binds several values (two conditions, a `$between`, or a composed range) and the filter has other conditions beside the `$or`, the block was wrapped in a second pair of parentheses, `((#Name = :Name1 AND #Category = :Category2)) AND (#Price = :Price3)`, which DynamoDB rejects with "The expression has redundant parentheses". Such a block is now grouped once. A filter that is only the `$or` was already accepted and is unchanged.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added

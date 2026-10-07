@@ -11,6 +11,7 @@ import {
   type WriteConditionGuard
 } from "./errors.js";
 import Logger from "../Logger.js";
+import { parenthesize } from "./conditionExpression.js";
 import type {
   TransactWriteItems,
   ConditionCheck,
@@ -475,7 +476,7 @@ class TransactionBuilder {
       fragment.ExpressionAttributeValues
     );
 
-    const expression = `(${fragment.ConditionExpression})`;
+    const expression = parenthesize(fragment.ConditionExpression);
     operation.ConditionExpression =
       operation.ConditionExpression === undefined
         ? expression

@@ -19116,6 +19116,51 @@ describe("Update with write conditions", () => {
       ]);
     });
 
+    it("sends a $or of one block naming two attributes in one pair of parentheses", async () => {
+      expect.assertions(2);
+
+      // A second pair, `attribute_exists(PK) AND ((… AND …))`, is rejected by
+      // DynamoDB: "The expression has redundant parentheses"
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { $or: [{ state: "CO", phone: "555-0100" }] } }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#State = :wc1_State1 AND #Phone = :wc1_Phone2)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#Phone": "Phone",
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": now,
+                    ":wc1_Phone2": "555-0100",
+                    ":wc1_State1": "CO"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
     describe("a claim guarded by null as 'not set' or an expired date (AE11)", () => {
       const claim = async (): Promise<void> => {
         await MockInformation.update(
@@ -19663,6 +19708,61 @@ describe("Update with write conditions", () => {
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Person with ID '456' does not exist"
           )
+        ]);
+      });
+
+      it("sends a $or of one block naming two attributes in one pair of parentheses on the parent check", async () => {
+        expect.assertions(2);
+
+        // A second pair, `… AND (attribute_exists(PK) AND ((… AND …)))`, is
+        // rejected by DynamoDB: "The expression has redundant parentheses"
+        await Pet.update(
+          "123",
+          { name: "Fido" },
+          {
+            condition: {
+              owner: {
+                $or: [
+                  {
+                    name: "Jane",
+                    createdAt: { $lt: new Date("2024-01-01T00:00:00.000Z") }
+                  }
+                ]
+              }
+            }
+          }
+        );
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                sentItems[0],
+                sentItems[1],
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#456", SK: "Person" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1 AND #CreatedAt < :wc1_CreatedAt2))",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#CreatedAt": "CreatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_Name1": "Jane",
+                      ":wc1_CreatedAt2": "2024-01-01T00:00:00.000Z"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
         ]);
       });
     });

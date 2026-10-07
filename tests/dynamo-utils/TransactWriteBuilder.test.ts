@@ -420,6 +420,117 @@ describe("TransactWriteBuilder", () => {
       ]);
     });
 
+    describe("a fragment that is already one parenthesized group", () => {
+      it("is ANDed on without a second pair, which DynamoDB rejects as redundant", async () => {
+        expect.assertions(1);
+
+        const builder = newBuilder();
+        builder.addGuard(
+          {
+            TableName: tableName,
+            Key: orderKey,
+            missingRowMessage: orderNotFound
+          },
+          {
+            entity: "Order",
+            id: "o1",
+            guard: { kind: "self" },
+            // What a one-block $or that binds two values compiles to
+            condition: {
+              ConditionExpression:
+                "(#Status = :wc1_Status1 AND #Tier = :wc1_Tier2)",
+              ExpressionAttributeNames: {
+                "#Status": "Status",
+                "#Tier": "Tier"
+              },
+              ExpressionAttributeValues: {
+                ":wc1_Status1": "active",
+                ":wc1_Tier2": "gold"
+              }
+            }
+          }
+        );
+
+        await builder.executeTransaction();
+
+        expect(mockedTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  ConditionCheck: {
+                    TableName: tableName,
+                    Key: orderKey,
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#Status = :wc1_Status1 AND #Tier = :wc1_Tier2)",
+                    ExpressionAttributeNames: {
+                      "#Status": "Status",
+                      "#Tier": "Tier"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_Status1": "active",
+                      ":wc1_Tier2": "gold"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it.each([
+        [
+          "groups joined by OR",
+          "(#Status = :wc1_Status1 AND #Tier = :wc1_Tier2) OR (#Status = :wc1_Status3 AND #Tier = :wc1_Tier4)"
+        ],
+        [
+          "a group followed by a function call",
+          "(#Status = :wc1_Status1) AND begins_with(#Tier, :wc1_Tier2)"
+        ]
+      ])(
+        "still parenthesizes %s, which opens and closes with a parenthesis but is not one group",
+        async (_, fragment) => {
+          expect.assertions(1);
+
+          const builder = newBuilder();
+          builder.addGuard(
+            {
+              TableName: tableName,
+              Key: orderKey,
+              missingRowMessage: orderNotFound
+            },
+            {
+              entity: "Order",
+              id: "o1",
+              guard: { kind: "self" },
+              condition: { ConditionExpression: fragment }
+            }
+          );
+
+          await builder.executeTransaction();
+
+          expect(mockedTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  {
+                    ConditionCheck: {
+                      TableName: tableName,
+                      Key: orderKey,
+                      ConditionExpression: `attribute_exists(PK) AND (${fragment})`,
+                      ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                    }
+                  }
+                ]
+              }
+            ]
+          ]);
+        }
+      );
+    });
+
     it("merges a library pin as an equality on a fresh placeholder", async () => {
       expect.assertions(1);
 

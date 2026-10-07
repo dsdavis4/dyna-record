@@ -1302,8 +1302,10 @@ describe("Query", () => {
               ":Type5": "PaymentMethod",
               ":CreatedAt3": "2021-09-15T"
             },
+            // The one $or block is one group already; a second pair around it
+            // is rejected by DynamoDB as redundant parentheses
             FilterExpression:
-              "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)",
+              "(#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3)) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)",
             ConsistentRead: false
           }
         ]

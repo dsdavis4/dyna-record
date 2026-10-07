@@ -396,6 +396,98 @@ describe("writeConditions", () => {
       });
     });
 
+    describe("a $or of one block that binds several values", () => {
+      it("compiles the self fragment as that block's one group", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            $or: [{ orderDate: { $lt: cutoff }, customerId: "c1" }]
+          }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression:
+            "(#OrderDate < :wc1_OrderDate1 AND #CustomerId = :wc1_CustomerId2)",
+          ExpressionAttributeNames: {
+            "#OrderDate": "OrderDate",
+            "#CustomerId": "CustomerId"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_OrderDate1": cutoff.toISOString(),
+            ":wc1_CustomerId2": "c1"
+          }
+        });
+      });
+
+      it("ANDs the block onto the target's existence check without redundant parentheses", () => {
+        expect.assertions(1);
+
+        // `attribute_exists(PK) AND ((#Name = … AND #Address = …))` is rejected
+        // by DynamoDB: "The expression has redundant parentheses"
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            customer: { $or: [{ name: "Jane", address: "1 Main St" }] }
+          }
+        });
+
+        expect(compiled.guards).toEqual([
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "customer" },
+            target: Customer,
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name = :wc1_Name1 AND #Address = :wc1_Address2)",
+              ExpressionAttributeNames: {
+                "#Name": "Name",
+                "#Address": "Address"
+              },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "Jane",
+                ":wc1_Address2": "1 Main St"
+              }
+            }
+          }
+        ]);
+      });
+
+      it("ANDs a block of one condition that binds two values, such as a $between, onto the target the same way", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            customer: { $or: [{ name: { $between: ["A", "M"] } }] }
+          }
+        });
+
+        expect(compiled.guards).toEqual([
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "customer" },
+            target: Customer,
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name BETWEEN :wc1_Name1 AND :wc1_Name2)",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "A",
+                ":wc1_Name2": "M"
+              }
+            }
+          }
+        ]);
+      });
+    });
+
     describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
       it("compiles dot paths and list-index paths into the self fragment, beside a plain attribute", () => {
         expect.assertions(1);
@@ -1069,6 +1161,53 @@ describe("writeConditions", () => {
               ExpressionAttributeValues: {
                 ":UpdatedAt": "2026-10-05T00:00:00.000Z",
                 ":wc1_OrderDate1": cutoff.toISOString()
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("merges a self $or of one block that binds several values without redundant parentheses", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            $or: [{ orderDate: { $lt: cutoff }, customerId: "c1" }]
+          }
+        },
+        builder
+      );
+      queueOrderUpdate(builder);
+
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Update: {
+              ...orderUpdate.Update,
+              ConditionExpression:
+                "attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1 AND #CustomerId = :wc1_CustomerId2)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#OrderDate": "OrderDate",
+                "#CustomerId": "CustomerId"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": "2026-10-05T00:00:00.000Z",
+                ":wc1_OrderDate1": cutoff.toISOString(),
+                ":wc1_CustomerId2": "c1"
               },
               ReturnValuesOnConditionCheckFailure: "ALL_OLD"
             }

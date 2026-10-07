@@ -3762,6 +3762,54 @@ describe("Delete with write conditions", () => {
           [{ TransactItems: guardedItems }]
         ]);
       });
+
+      it("sends a $or of one block naming two attributes in one pair of parentheses", async () => {
+        expect.assertions(2);
+
+        // A second pair, `attribute_exists(PK) AND ((… AND …))`, is rejected
+        // by DynamoDB: "The expression has redundant parentheses"
+        await Order.delete("123", {
+          condition: {
+            $or: [
+              {
+                orderDate: { $lt: new Date("2023-10-10T00:00:00.000Z") },
+                paymentMethodId: "pm1"
+              }
+            ]
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: "mock-table",
+                    Key: { PK: "Order#123", SK: "Order" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1 AND #PaymentMethodId = :wc1_PaymentMethodId2)",
+                    ExpressionAttributeNames: {
+                      "#OrderDate": "OrderDate",
+                      "#PaymentMethodId": "PaymentMethodId"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_OrderDate1": "2023-10-10T00:00:00.000Z",
+                      ":wc1_PaymentMethodId2": "pm1"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                },
+                ...linkDeletes
+              ]
+            }
+          ]
+        ]);
+      });
     });
 
     describe("a BelongsTo guard", () => {
@@ -3939,6 +3987,50 @@ describe("Delete with write conditions", () => {
           new ConditionalCheckFailedError(
             "ConditionalCheckFailed: Customer with ID 'c1' does not exist"
           )
+        ]);
+      });
+
+      it("sends a $or of one block naming two attributes in one pair of parentheses on the parent check", async () => {
+        expect.assertions(2);
+
+        // A second pair, `… AND (attribute_exists(PK) AND ((… AND …)))`, is
+        // rejected by DynamoDB: "The expression has redundant parentheses"
+        await Order.delete("123", {
+          condition: {
+            customer: { $or: [{ name: "Jane", address: "1 Main St" }] }
+          }
+        });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                sentItems[0],
+                ...linkDeletes,
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Customer#c1", SK: "Customer" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1 AND #Address = :wc1_Address2))",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#Address": "Address"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_Name1": "Jane",
+                      ":wc1_Address2": "1 Main St"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
         ]);
       });
     });

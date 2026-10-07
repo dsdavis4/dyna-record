@@ -2732,6 +2732,124 @@ describe("FilterExpressionBuilder", () => {
         values: { Category1: "books", Name2: "Scale-A" }
       });
     });
+
+    describe("an $or of one block that binds several values", () => {
+      it("is not wrapped again when it is itself the whole block of an enclosing $or", () => {
+        expect.assertions(1);
+
+        // Only an untyped caller can nest an $or directly in an $or block. The
+        // inner block is already one group, so the enclosing block must not
+        // wrap it again: `((…))` is rejected by DynamoDB
+        expect(
+          queryBuilderInstance().filterParams({
+            // @ts-expect-error: an $or block cannot hold an $or; this is the untyped caller's shape
+            $or: [{ $or: [{ name: "Scale-A", category: "books" }] }]
+          })
+        ).toEqual({
+          expression: "(#Name = :Name1 AND #Category = :Category2)",
+          values: { Name1: "Scale-A", Category2: "books" }
+        });
+      });
+
+      it("is one group as the whole filter, as before", () => {
+        expect.assertions(2);
+
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ name: "Scale-A", category: "books" }]
+          })
+        ).toEqual({
+          expression: "(#Name = :Name1 AND #Category = :Category2)",
+          values: { Name1: "Scale-A", Category2: "books" }
+        });
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ price: { $between: [1, 20] } }]
+          })
+        ).toEqual({
+          expression: "(#Price BETWEEN :Price1 AND :Price2)",
+          values: { Price1: 1, Price2: 20 }
+        });
+      });
+
+      it("keeps that one group beside sibling conditions, with no redundant parentheses", () => {
+        expect.assertions(3);
+
+        // The block's own grouping already isolates it. Wrapping it again sent
+        // `((#Name = :Name1 AND #Category = :Category2)) AND (#Price = :Price3)`,
+        // which DynamoDB rejects: "The expression has redundant parentheses"
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ name: "Scale-A", category: "books" }],
+            price: 5
+          })
+        ).toEqual({
+          expression:
+            "(#Name = :Name1 AND #Category = :Category2) AND (#Price = :Price3)",
+          values: { Name1: "Scale-A", Category2: "books", Price3: 5 }
+        });
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ price: { $between: [1, 20] } }],
+            name: "Scale-A"
+          })
+        ).toEqual({
+          expression:
+            "(#Price BETWEEN :Price1 AND :Price2) AND (#Name = :Name3)",
+          values: { Price1: 1, Price2: 20, Name3: "Scale-A" }
+        });
+        // A block emptied by dropped conditions leaves one block, so the same
+        // holds
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [
+              { name: "Scale-A", category: "books" },
+              { status: undefined }
+            ],
+            price: 5
+          })
+        ).toEqual({
+          expression:
+            "(#Name = :Name1 AND #Category = :Category2) AND (#Price = :Price3)",
+          values: { Name1: "Scale-A", Category2: "books", Price3: 5 }
+        });
+      });
+
+      it("keeps the same group beside sibling conditions in write conditions", () => {
+        expect.assertions(1);
+
+        expect(
+          writeConditionBuilder().filterParams({
+            $or: [{ holder: null, phone: null }],
+            status: "open"
+          })
+        ).toEqual({
+          expression:
+            "(attribute_not_exists(#Holder) AND attribute_not_exists(#phone_number)) AND (#Status = :Status1)",
+          values: { Status1: "open" }
+        });
+      });
+    });
+
+    it("groups an $or of several blocks as a whole beside sibling conditions", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ name: "Scale-A", category: "books" }, { status: "open" }],
+          price: 5
+        })
+      ).toEqual({
+        expression:
+          "((#Name = :Name1 AND #Category = :Category2) OR #Status = :Status3) AND (#Price = :Price4)",
+        values: {
+          Name1: "Scale-A",
+          Category2: "books",
+          Status3: "open",
+          Price4: 5
+        }
+      });
+    });
   });
 
   describe("conditions with no value", () => {
