@@ -11,6 +11,10 @@ import Metadata, {
   type JoinTableMetadata
 } from "../metadata/index.js";
 import type { AssertDynaRecord } from "../operations/Query/index.js";
+import {
+  attachJoinTableCondition,
+  compileJoinTableCondition
+} from "../operations/utils/index.js";
 import type { ForeignKeyTargetGuardFor } from "../operations/WriteCondition/index.js";
 import type {
   ForeignKey,
@@ -166,9 +170,14 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
   /**
    * Create a JoinTable entry
    * Adds denormalized copy of the related entity to each associated Entity's partition
+   *
+   * When a write condition is given, links only if every guard on the entities
+   * being linked holds, in the same transaction.
    * @param this
-   * @param keys
-   * @param options - Optional operation options including referentialIntegrityCheck flag
+   * @param keys - The foreign key values of the entities to link
+   * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition on the entities being linked, checked in the same transaction as the link. See {@link JoinTableCreateOptions}
+   * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
+   * @throws {NotFoundError} Before anything is written, when either entity does not exist.
    */
   public static async create<
     ThisClass extends JoinTable<T, K>,
@@ -177,7 +186,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
     keys: ForeignKeyProperties<ThisClass>,
-    options?: JoinTableOptions
+    options?: JoinTableCreateOptions<ThisClass>
   ): Promise<void> {
     const referentialIntegrityCheck =
       options?.referentialIntegrityCheck ?? true;
@@ -186,6 +195,18 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     const transactionBuilder = new TransactionBuilder(
       transactionProps.tableProps.dynamo
     );
+
+    // Validated and compiled before the pre-read, so an invalid condition
+    // costs nothing
+    const writeCondition =
+      options?.condition === undefined
+        ? undefined
+        : compileJoinTableCondition({
+            joinTableName: this.name,
+            condition: options.condition,
+            transactionBuilder
+          });
+
     const lookupTableItem = await JoinTable.preFetch(transactionProps);
 
     JoinTable.denormalizeLinkRecord(
@@ -205,14 +226,30 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       referentialIntegrityCheck
     );
 
+    // Guards merge only once every library item is queued: each lands on its
+    // entity's referential-integrity check, or adds its own check when
+    // integrity checks are off
+    if (writeCondition !== undefined) {
+      attachJoinTableCondition({
+        compiled: writeCondition,
+        keys,
+        transactionBuilder
+      });
+    }
+
     await transactionBuilder.executeTransaction();
   }
 
   /**
    * Delete a JoinTable entry
    * Deletes denormalized records from each associated Entity's partition
+   *
+   * When a write condition is given, unlinks only if every guard on the
+   * entities being unlinked holds, in the same transaction.
    * @param this
-   * @param keys
+   * @param keys - The foreign key values of the entities to unlink
+   * @param options - Optional operation options: a write condition on the entities being unlinked, checked in the same transaction as the unlink. See {@link JoinTableDeleteOptions}
+   * @throws {FilterError} Before anything is written, when the write condition is invalid.
    */
   public static async delete<
     ThisClass extends JoinTable<T, K>,
@@ -220,7 +257,8 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     K extends DynaRecord
   >(
     this: new (type1: EntityClass<T>, type2: EntityClass<K>) => ThisClass,
-    keys: ForeignKeyProperties<ThisClass>
+    keys: ForeignKeyProperties<ThisClass>,
+    options?: JoinTableDeleteOptions<ThisClass>
   ): Promise<void> {
     const [rel1, rel2] = Metadata.getJoinTable(this.name);
     const transactionProps = JoinTable.transactionProps(keys, rel2, rel1);
@@ -228,8 +266,28 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       transactionProps.tableProps.dynamo
     );
 
+    // Validated and compiled before anything is queued
+    const writeCondition =
+      options?.condition === undefined
+        ? undefined
+        : compileJoinTableCondition({
+            joinTableName: this.name,
+            condition: options.condition,
+            transactionBuilder
+          });
+
     JoinTable.deleteLink(transactionBuilder, keys, rel1, rel2);
     JoinTable.deleteLink(transactionBuilder, keys, rel2, rel1);
+
+    // No library item is queued on either entity's row, so each guard adds
+    // its own check
+    if (writeCondition !== undefined) {
+      attachJoinTableCondition({
+        compiled: writeCondition,
+        keys,
+        transactionBuilder
+      });
+    }
 
     await transactionBuilder.executeTransaction();
   }
