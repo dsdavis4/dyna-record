@@ -15,6 +15,7 @@ import {
   type QueryResults,
   Create,
   type CreateOptions,
+  type CreateOperationOptions,
   Update,
   type UpdateOptions,
   type UpdateOperationOptions,
@@ -338,7 +339,7 @@ abstract class DynaRecord implements DynaRecordBase {
   /**
    * Create an entity. If foreign keys are included in the attributes then links will be denormalized accordingly
    * @param attributes - Attributes of the model to create
-   * @param options - Optional operation options including referentialIntegrityCheck flag
+   * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition on the rows the new entity references, checked in the same transaction as the create. See {@link CreateOperationOptions}
    * @returns The new Entity
    *
    * @example Basic usage
@@ -357,7 +358,7 @@ abstract class DynaRecord implements DynaRecordBase {
   public static async create<T extends DynaRecord>(
     this: EntityClass<T>,
     attributes: CreateOptions<T>,
-    options?: { referentialIntegrityCheck?: boolean }
+    options?: CreateOperationOptions<T>
   ): Promise<ReturnType<Create<T>["run"]>> {
     const op = new Create<T>(this);
     return await op.run(attributes, options);
