@@ -49,7 +49,9 @@ export type QueryOptions = QueryBuilderOptions & {
  * The query overload also re-declares `filter` with a `const F` generic parameter to
  * enable literal type inference for return type narrowing. Both declarations are required:
  * this one provides excess property checking on object literals, while the generic
- * provides literal type capture for return type inference.
+ * provides literal type capture for return type inference. The generic is inferred
+ * through {@link InferableFilterParams}, which keeps it from making an undeclared key
+ * in an object operand known to the intersection.
  *
  * @template T - The entity type being queried. Defaults to `DynaRecord` for backward
  * compatibility in generic contexts.
@@ -554,6 +556,53 @@ export type SKScopedFilterParams<T extends DynaRecord, SK> =
       ? FilterParamsForEntities<ResolveEntityByName<T, Names & string>>
       : TypedFilterParams<T>
     : TypedFilterParams<T>;
+
+/**
+ * The condition a filter key accepts in any of the filter shapes `Allowed`
+ * offers, unioned across them.
+ *
+ * Distributes because `Allowed` is a union — one shape per partition entity and
+ * per form of `type` — and a key only some of them declare would otherwise
+ * index to nothing.
+ *
+ * @template Allowed - The filter shapes the query accepts.
+ * @template K - The filter key.
+ */
+type AllowedConditionAt<Allowed, K> = Allowed extends unknown
+  ? K extends keyof Allowed
+    ? Allowed[K]
+    : never
+  : never;
+
+/**
+ * The type a query's `filter` option is inferred through: the filter's own keys,
+ * with the `type` and `$or` values that narrow the results kept as written, and
+ * every other key given the condition `Allowed` declares for it.
+ *
+ * The query overloads infer the filter as a `const F` to narrow their results
+ * by it, and that inferred type is intersected with the declared filter shape.
+ * Were the filter typed as `F` itself, every key's value would be its own
+ * literal type intersected with the declared condition — so a key an object
+ * operand carries that the attribute does not declare would be known to the
+ * intersection, and the object literal would compile with it. Inferring
+ * through this mapping keeps the keys and the narrowing values, while each
+ * operand is checked against the declared condition alone, so an undeclared
+ * key in an object operand is an excess property at any depth.
+ *
+ * A filter typed with an index signature rather than written as a literal —
+ * a `FilterParams` variable — names no key the mapping could look up, so its
+ * index signature keeps the filter's own type, as it did before.
+ *
+ * @template F - The filter as the caller wrote it, inferred through this type.
+ * @template Allowed - The filter shapes the query accepts.
+ */
+export type InferableFilterParams<F, Allowed> = {
+  [K in keyof F]: K extends "type" | "$or"
+    ? F[K]
+    : string extends K
+      ? F[K]
+      : AllowedConditionAt<Allowed, K>;
+};
 
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 

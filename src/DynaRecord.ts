@@ -31,7 +31,8 @@ import {
   type TypedFilterParams,
   type TypedSortKeyCondition,
   type InferQueryResults,
-  type SKScopedFilterParams
+  type SKScopedFilterParams,
+  type InferableFilterParams
 } from "./operations/index.js";
 import { mergePartialObjectAttributes } from "./operations/utils/index.js";
 import type { DynamoTableItem, EntityClass, Optional } from "./types.js";
@@ -290,7 +291,7 @@ abstract class DynaRecord implements DynaRecordBase {
     this: EntityClass<T>,
     key: string,
     options?: OptionsWithoutIndex<T, SK> & {
-      filter?: F;
+      filter?: InferableFilterParams<F, SKScopedFilterParams<T, SK>>;
       skCondition?: SK;
     }
   ): Promise<InferQueryResults<T, F, SK>>;
@@ -302,7 +303,9 @@ abstract class DynaRecord implements DynaRecordBase {
   >(
     this: EntityClass<T>,
     key: EntityKeyConditions<T>,
-    options?: Omit<OptionsWithoutIndex<T>, "skCondition"> & { filter?: F }
+    options?: Omit<OptionsWithoutIndex<T>, "skCondition"> & {
+      filter?: InferableFilterParams<F, TypedFilterParams<T>>;
+    }
   ): Promise<InferQueryResults<T, F>>;
 
   /**

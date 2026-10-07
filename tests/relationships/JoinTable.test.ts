@@ -38,7 +38,12 @@ import {
   EnumAttribute,
   HasAndBelongsToMany,
   NumberAttribute,
+  ObjectAttribute,
   StringAttribute
+} from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
 } from "../../src/decorators/index.js";
 import { JoinTable } from "../../src/relationships/index.js";
 import type { ForeignKey } from "../../src/types.js";
@@ -130,6 +135,46 @@ class Supplier extends MockTable {
 class ProductSupplier extends JoinTable<Product, Supplier> {
   public readonly productId: ForeignKey<Product>;
   public readonly supplierId: ForeignKey<Supplier>;
+}
+
+// A join table whose target carries an object attribute, so a target guard can
+// compare it whole
+const depotAddressSchema = {
+  city: { type: "string" },
+  zip: { type: "string", nullable: true }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Kiosk extends MockTable {
+  declare readonly type: "Kiosk";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Depot, {
+    targetKey: "kiosks",
+    through: () => ({ joinTable: KioskDepot, foreignKey: "kioskId" })
+  })
+  public readonly depots: Depot[];
+}
+
+@Entity
+class Depot extends MockTable {
+  declare readonly type: "Depot";
+
+  @ObjectAttribute({ alias: "Address", schema: depotAddressSchema })
+  public readonly address: InferObjectSchema<typeof depotAddressSchema>;
+
+  @HasAndBelongsToMany(() => Kiosk, {
+    targetKey: "depots",
+    through: () => ({ joinTable: KioskDepot, foreignKey: "depotId" })
+  })
+  public readonly kiosks: Kiosk[];
+}
+
+class KioskDepot extends JoinTable<Kiosk, Depot> {
+  public readonly kioskId: ForeignKey<Kiosk>;
+  public readonly depotId: ForeignKey<Depot>;
 }
 
 describe("JoinTable", () => {
@@ -1930,6 +1975,71 @@ describe("JoinTable", () => {
         expect(malformed).toBeInstanceOf(FilterError);
         expect(emptyOr).toBeInstanceOf(FilterError);
         expect(mockSend.mock.calls).toEqual([]);
+      });
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+      // Before this was refused, the operand was converted to its stored form,
+      // which strips a field the schema does not declare: `{ ..., region: "west" }`
+      // was sent as `{ ... }`, so the guard held against a Depot holding no
+      // region at all and let through the link the caller meant to stop
+      const undeclared = new FilterError(
+        'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+      );
+      const depotKeys = { kioskId: "k1", depotId: "d1" };
+      const address = { city: "Denver", zip: "80202" };
+
+      it("throws a FilterError on create before anything is sent", async () => {
+        expect.assertions(4);
+
+        const e = await failureOf(async () => {
+          await KioskDepot.create(depotKeys, {
+            condition: {
+              depotId: {
+                target: {
+                  address: {
+                    ...address,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                }
+              }
+            }
+          });
+        });
+
+        expect(e).toEqual(undeclared);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError on delete before anything is sent, including inside an IN element", async () => {
+        expect.assertions(4);
+
+        const e = await failureOf(async () => {
+          await KioskDepot.delete(depotKeys, {
+            condition: {
+              depotId: {
+                target: {
+                  address: [
+                    address,
+                    {
+                      ...address,
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      region: "west"
+                    }
+                  ]
+                }
+              }
+            }
+          });
+        });
+
+        expect(e).toEqual(undeclared);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       });
     });
   });

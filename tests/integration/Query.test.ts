@@ -7,6 +7,7 @@ import {
   ArrayOfObjectsEntity,
   DeepNestedEntity,
   DiscriminatedUnionEntity,
+  DuplicateFieldEntity,
   ArrayOfUnionsEntity,
   Employee,
   Festival,
@@ -32,6 +33,7 @@ import {
 } from "../../src/operations/index.js";
 import Logger from "../../src/Logger.js";
 import { FilterError } from "../../src/errors.js";
+import type { FilterParams } from "../../src/filter-utils/index.js";
 
 const mockSend = vi.fn();
 const mockQuery = vi.fn();
@@ -864,6 +866,71 @@ describe("Query", () => {
       );
       expect(mockSend.mock.calls).toEqual([]);
       expect(mockedQueryCommand.mock.calls).toEqual([]);
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare", () => {
+      // Before this was refused, the operand was converted to its stored form,
+      // which strips a field the schema does not declare: `{ ..., region: "west" }`
+      // was sent as `{ ... }` and matched rows the caller's operand does not
+      // describe
+      const undeclared = (attr: string, path: string): FilterError =>
+        new FilterError(
+          `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+        );
+
+      const geo = { lat: 39.7, lng: -104.9, accuracy: "precise" as const };
+
+      it("rejects one at the top level of an object attribute, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not a field the location declares
+          Warehouse.query("w1", {
+            filter: {
+              location: { city: "Denver", state: "CO", region: "west" }
+            }
+          })
+        ).rejects.toThrow(undeclared("location", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("rejects one inside a nested object, in an IN element and inside an $or block, sending no QueryCommand", async () => {
+        expect.assertions(5);
+
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: {
+              addressAttribute: {
+                street: "1 Main St",
+                city: "Denver",
+                geo: { ...geo, alt: 1600 },
+                scores: [1]
+              }
+            }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute", "geo.alt"));
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: { "addressAttribute.geo": [geo, { ...geo, alt: 1600 }] }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute.geo", "alt"));
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: {
+              $or: [
+                { stringAttribute: "a" },
+                { "addressAttribute.geo": { ...geo, alt: 1600 } }
+              ]
+            }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute.geo", "alt"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
     });
   });
 
@@ -3817,6 +3884,144 @@ describe("Query", () => {
               // @ts-expect-error: lat is declared as a number
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { "addressAttribute.geo.lat": { $gt: "0" } }
+              })
+            );
+          });
+        });
+
+        describe("whole-value object operands", () => {
+          const location = { city: "Denver", state: "CO" };
+          const geo = { lat: 39.7, lng: -104.9, accuracy: "precise" as const };
+
+          it("takes an object operand whose every field is declared", async () => {
+            await swallow(
+              // @ts-expect-no-error: location is an object of declared fields
+              Warehouse.query("w1", { filter: { location } })
+            );
+            await swallow(
+              // @ts-expect-no-error: a dot path names an object field, compared whole
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo": geo }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: every IN element is an object of declared fields
+              Warehouse.query("w1", {
+                filter: { location: [location, { ...location, zip: 80202 }] }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: the key-conditions overload takes the same operand
+              Warehouse.query(
+                { pk: "Warehouse#w1" },
+                { filter: { location, $or: [{ location }] } }
+              )
+            );
+          });
+
+          it("still narrows the results by type beside an object operand", async () => {
+            const results = await Warehouse.query("w1", {
+              filter: { type: "Warehouse", location }
+            });
+
+            // @ts-expect-no-error: the type filter narrows the results to Warehouse
+            const _exact: Array<EntityAttributesInstance<Warehouse>> = results;
+
+            Logger.log(_exact);
+          });
+
+          it("rejects an undeclared field in an object attribute's operand", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: { location: { ...location, region: "west" } }
+              })
+            );
+          });
+
+          it("rejects an undeclared field in a dot-path object field's operand", async () => {
+            await swallow(
+              // @ts-expect-error: alt is not a field the geo declares
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo": { ...geo, alt: 1600 } }
+              })
+            );
+          });
+
+          it("rejects an undeclared field inside a nested object of the operand", async () => {
+            await swallow(
+              // @ts-expect-error: extra is not a field nested1 declares
+              DuplicateFieldEntity.query("123", {
+                filter: {
+                  duplicateFieldObj: {
+                    name: "n",
+                    nested1: { name: "n", value: 1, extra: 1 },
+                    nested2: { name: "n", value: 2 }
+                  }
+                }
+              })
+            );
+          });
+
+          it("rejects an undeclared field in an IN element", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: {
+                  location: [location, { ...location, region: "west" }]
+                }
+              })
+            );
+          });
+
+          it("rejects an undeclared field inside an $or block", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: { $or: [{ location: { ...location, region: "west" } }] }
+              })
+            );
+          });
+
+          it("rejects an undeclared field through the key-conditions overload", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query(
+                { pk: "Warehouse#w1" },
+                { filter: { location: { ...location, region: "west" } } }
+              )
+            );
+          });
+
+          it("still takes a filter typed as FilterParams rather than written as a literal", async () => {
+            const filter: FilterParams = { name: "Central" };
+
+            await swallow(
+              // @ts-expect-no-error: an index signature names no key to look up, so the filter keeps its own type
+              Warehouse.query("w1", { filter })
+            );
+          });
+
+          it("rejects an undeclared key beside a declared one", async () => {
+            await swallow(
+              // @ts-expect-error: region is not an attribute of the partition
+              Warehouse.query("w1", { filter: { location, region: "west" } })
+            );
+          });
+
+          it("rejects an undeclared field in a whole $contains element of a nested list of objects", async () => {
+            await swallow(
+              // @ts-expect-error: mood is not a field a history element declares
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      mood: "calm"
+                    }
+                  }
+                }
               })
             );
           });

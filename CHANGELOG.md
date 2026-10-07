@@ -50,6 +50,8 @@
 
 - **`ConditionalCheckFailedError.code` is typed as `"ConditionalCheckFailedError" | "WriteConditionFailedError"`.** It was the single literal, which left no room for the subclass's own code. An instance of the base class still carries `"ConditionalCheckFailedError"`, and equality checks on `code` and `instanceof` behave as before. Only code that assigns `code` to a variable typed as the single literal notices.
 
+- **A typed `query` filter refuses an undeclared field in an object operand.** `Entity.query(...)` infers its filter so the results can be narrowed by `type`, and that inferred type made any field written in an object operand acceptable: `{ "address.geo": { lat: 1, lng: 2, alt: 3 } }`, an undeclared field inside a top-level object operand, the same in a partition of several entities, a whole `$contains` element of a list of objects, and the key-conditions overload all compiled, as did a key no partition entity declares when written beside one it does (`{ location, region: "west" }`). They are now compile errors, as they already were in write conditions. Narrowing by `type`, by filter keys and by `$or` blocks is unchanged, and a filter typed as `FilterParams` rather than written as a literal is accepted as before.
+
 ### Fixed
 
 - **A range on an enum attribute takes any two of its members as bounds.** `$between` and composed comparisons were typed one member at a time, so both bounds had to be the same member: `{ $between: ["bronze", "gold"] }` and `{ $gte: "bronze", $lte: "gold" }` failed to compile, while `{ $between: ["gold", "gold"] }` compiled. An enum is stored as a string, which DynamoDB orders lexicographically, so a range across any two members is valid, and the expression builder already compiled it. This applies to filters, index key conditions and nested enum fields. A bound outside the enum, a number, `null` and a boolean are still rejected, and ranges on every other attribute kind are unchanged.
@@ -69,6 +71,8 @@
   - On a list of numbers, `NaN`, `Infinity` and a `bigint` are rejected, as a write of the field rejects them.
 
   `$contains` on a string attribute is unchanged.
+
+- **An object operand naming a field its schema does not declare is a `FilterError`.** An equality or `IN` element comparing a whole object attribute or object field (`{ address: { city: "Denver", region: "west" } }`, `{ "address.geo": [...] }`) was converted to its stored form by the attribute's serializer, which drops a field the schema does not declare, so the operand sent was not the one written. A query filter matched rows the operand did not describe, and a write condition `{ address: { city: "Denver", region: "west" } }` held against a stored `{ city: "Denver" }`, letting through a write the caller meant to stop. Such a field is now rejected before anything is sent, at any depth (in a nested object, in an element of a nested list of objects, in a union variant), naming its path, in filters and write conditions alike. An operand whose every field is declared is compiled as before. This had shipped in query filters before write conditions.
 
 ## 3.4.0 - 2026-10-03
 

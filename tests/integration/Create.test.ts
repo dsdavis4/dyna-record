@@ -24,7 +24,7 @@ import {
   type Assignment,
   type Student,
   Employee,
-  type Warehouse,
+  Warehouse,
   Shipment,
   DeepNestedEntity,
   ArrayOfObjectsEntity,
@@ -129,6 +129,20 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+// A standalone typed foreign key — no BelongsTo backs it — to an entity with an
+// object attribute, so a write condition can guard the referenced Warehouse
+// under the key's `target`
+@Entity
+class WarehouseInspection extends MockTable {
+  declare readonly type: "WarehouseInspection";
+
+  @StringAttribute({ alias: "Inspector" })
+  public readonly inspector: string;
+
+  @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+  public readonly warehouseId: ForeignKey<Warehouse>;
+}
 
 @Entity
 class MyModelNullableAttribute extends MockTable {
@@ -7814,6 +7828,103 @@ describe("Create with write conditions", () => {
         `Invalid write condition key "store": it is not an attribute, relationship or foreign key of Order`
       );
       expect(mockSend.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+    // Before this was refused, the operand was converted to its stored form,
+    // which strips a field the schema does not declare: `{ ..., region: "west" }`
+    // was sent as `{ ... }`, so the guard held against a Warehouse holding no
+    // region at all and let through the create the caller meant to stop
+    const undeclared = new FilterError(
+      'Invalid filter value for attribute "location": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+    );
+
+    const location = { city: "Denver", state: "CO" };
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses one in a BelongsTo guard's condition before anything is sent", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await Shipment.create(
+            {
+              destination: "Boise",
+              dimensions: { weight: 2, unit: "kg" },
+              warehouseId: "w1"
+            },
+            {
+              condition: {
+                warehouse: {
+                  location: {
+                    ...location,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared);
+      expectNothingSent();
+    });
+
+    it("refuses one in a foreign key target guard's condition, including inside an IN element, before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await WarehouseInspection.create(
+            { inspector: "Ann", warehouseId: "w1" },
+            {
+              condition: {
+                warehouseId: {
+                  target: {
+                    location: {
+                      ...location,
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      region: "west"
+                    }
+                  }
+                }
+              }
+            }
+          )
+      );
+      const inElement = await failureOf(
+        async () =>
+          await WarehouseInspection.create(
+            { inspector: "Ann", warehouseId: "w1" },
+            {
+              condition: {
+                warehouseId: {
+                  target: {
+                    location: [
+                      location,
+                      {
+                        ...location,
+                        // @ts-expect-error: a plain JavaScript caller's undeclared field
+                        region: "west"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared);
+      expect(inElement).toEqual(undeclared);
+      expectNothingSent();
     });
   });
 });

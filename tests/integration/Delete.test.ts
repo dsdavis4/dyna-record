@@ -24,6 +24,7 @@ import {
   Profile,
   Shipment,
   Warehouse,
+  Festival,
   ArrayOfObjectsEntity,
   DeepNestedEntity,
   Category,
@@ -6083,6 +6084,174 @@ describe("Delete with write conditions", () => {
 
       expect(e).toBeInstanceOf(FilterError);
       expect(mockSend.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+    // Before this was refused, the operand was converted to its stored form,
+    // which strips a field the schema does not declare: `{ ..., region: "west" }`
+    // was sent as `{ ... }`, so the guard held against a row holding no region
+    // at all and let through the delete the caller meant to stop
+    const undeclared = (attr: string, path: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+
+    const address = {
+      street: "1 Main St",
+      city: "Denver",
+      geo: { lat: 39.7, lng: -104.9, accuracy: "precise" as const },
+      scores: [1]
+    };
+    const location = { city: "Denver", state: "CO" };
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses one on the entity's own row, at the top level, nested, in an IN element and on a dot-path object field", async () => {
+      expect.assertions(7);
+
+      const topLevel = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              addressAttribute: {
+                ...address,
+                // @ts-expect-error: a plain JavaScript caller's undeclared field
+                region: "west"
+              }
+            }
+          })
+      );
+      const nested = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              addressAttribute: {
+                ...address,
+                geo: {
+                  ...address.geo,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  alt: 1600
+                }
+              }
+            }
+          })
+      );
+      const inElement = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              addressAttribute: [
+                address,
+                {
+                  ...address,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              ]
+            }
+          })
+      );
+      const dotPath = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              "addressAttribute.geo": {
+                ...address.geo,
+                // @ts-expect-error: a plain JavaScript caller's undeclared field
+                alt: 1600
+              }
+            }
+          })
+      );
+
+      expect(topLevel).toEqual(undeclared("addressAttribute", "region"));
+      expect(nested).toEqual(undeclared("addressAttribute", "geo.alt"));
+      expect(inElement).toEqual(undeclared("addressAttribute", "region"));
+      expect(dotPath).toEqual(undeclared("addressAttribute.geo", "alt"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a BelongsTo guard's condition before anything is sent", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await Shipment.delete("s1", {
+            condition: {
+              warehouse: {
+                location: {
+                  ...location,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              }
+            }
+          })
+      );
+
+      expect(e).toEqual(undeclared("location", "region"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasMany entry's condition before anything is sent", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await Warehouse.delete("w1", {
+            condition: {
+              shipments: [
+                {
+                  id: "s1",
+                  condition: {
+                    dimensions: {
+                      weight: 2,
+                      unit: "kg",
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      fragile: true
+                    }
+                  }
+                }
+              ]
+            }
+          })
+      );
+
+      expect(e).toEqual(undeclared("dimensions", "fragile"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasAndBelongsToMany entry's condition before anything is sent", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await Festival.delete("f1", {
+            condition: {
+              sponsors: [
+                {
+                  id: "sp1",
+                  condition: {
+                    inventory: {
+                      quantity: 3,
+                      location: "Bay 4",
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      reserved: 1
+                    }
+                  }
+                }
+              ]
+            }
+          })
+      );
+
+      expect(e).toEqual(undeclared("inventory", "reserved"));
+      expectNothingSent();
     });
   });
 });

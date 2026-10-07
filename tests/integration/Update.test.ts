@@ -15,7 +15,7 @@ import {
   Desk,
   DuplicateFieldEntity,
   Employee,
-  type Festival,
+  Festival,
   Grade,
   Listing,
   MockTable,
@@ -184,6 +184,20 @@ class MockInformation extends MockTable {
 
   @DateAttribute({ nullable: true })
   public someDate?: Date;
+}
+
+// A standalone typed foreign key — no BelongsTo backs it — to an entity with an
+// object attribute, so a write condition can guard the referenced Warehouse
+// under the key's `target`
+@Entity
+class WarehouseInspection extends MockTable {
+  declare readonly type: "WarehouseInspection";
+
+  @StringAttribute({ alias: "Inspector" })
+  public readonly inspector: string;
+
+  @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+  public readonly warehouseId: ForeignKey<Warehouse>;
 }
 
 describe("Update", () => {
@@ -21379,6 +21393,308 @@ describe("Update with write conditions", () => {
           { entity: "Listing", id: "123", guards: [{ kind: "self" }] }
         )
       ]);
+    });
+  });
+  describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+    // Before this was refused, the operand was converted to its stored form,
+    // which strips a field the schema does not declare: `{ ..., region: "west" }`
+    // was sent as `{ ... }`, so the guard held against a row holding no region
+    // at all and let through the write the caller meant to stop
+    const undeclared = (attr: string, path: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+
+    const address = {
+      street: "1 Main St",
+      city: "Denver",
+      geo: { lat: 39.7, lng: -104.9, accuracy: "precise" as const },
+      scores: [1]
+    };
+    const location = { city: "Denver", state: "CO" };
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses one at the top level of an own-row object attribute before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: {
+                  ...address,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("addressAttribute", "region"));
+      expectNothingSent();
+    });
+
+    it("refuses one inside a nested object, a nested list element, an IN element and a dot-path object field", async () => {
+      expect.assertions(8);
+
+      const nested = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: {
+                  ...address,
+                  geo: {
+                    ...address.geo,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    alt: 1600
+                  }
+                }
+              }
+            }
+          )
+      );
+      const inList = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                objectAttribute: {
+                  name: "Jane",
+                  email: "jane@example.com",
+                  tags: [],
+                  status: "active",
+                  createdDate: new Date("2023-01-01T00:00:00.000Z"),
+                  history: [
+                    {
+                      at: new Date("2023-01-02T00:00:00.000Z"),
+                      actor: "ann",
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      mood: "calm"
+                    }
+                  ]
+                }
+              }
+            }
+          )
+      );
+      const inElement = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: [
+                  address,
+                  {
+                    ...address,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                ]
+              }
+            }
+          )
+      );
+      const dotPath = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                "addressAttribute.geo": {
+                  ...address.geo,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  alt: 1600
+                }
+              }
+            }
+          )
+      );
+
+      expect(nested).toEqual(undeclared("addressAttribute", "geo.alt"));
+      expect(inList).toEqual(undeclared("objectAttribute", "history[0].mood"));
+      expect(inElement).toEqual(undeclared("addressAttribute", "region"));
+      expect(dotPath).toEqual(undeclared("addressAttribute.geo", "alt"));
+      expectNothingSent();
+    });
+
+    it("refuses one through the instance method, leaving the instance unmodified", async () => {
+      expect.assertions(6);
+
+      const instance = createInstance(Warehouse, {
+        pk: "Warehouse#w1" as PartitionKey,
+        sk: "Warehouse" as SortKey,
+        id: "w1",
+        type: "Warehouse",
+        name: "Central",
+        location,
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const e = await failureOf(
+        async () =>
+          await instance.update(
+            { name: "North" },
+            {
+              condition: {
+                location: {
+                  ...location,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("location", "region"));
+      expect(instance).toEqual({
+        pk: "Warehouse#w1",
+        sk: "Warehouse",
+        id: "w1",
+        type: "Warehouse",
+        name: "Central",
+        location,
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      expectNothingSent();
+    });
+
+    it("refuses one in a BelongsTo guard's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Shipment.update(
+            "s1",
+            { destination: "Boise" },
+            {
+              condition: {
+                warehouse: {
+                  location: {
+                    ...location,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("location", "region"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasMany entry's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Warehouse.update(
+            "w1",
+            { name: "North" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "s1",
+                    condition: {
+                      dimensions: {
+                        weight: 2,
+                        unit: "kg",
+                        // @ts-expect-error: a plain JavaScript caller's undeclared field
+                        fragile: true
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("dimensions", "fragile"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasAndBelongsToMany entry's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Festival.update(
+            "f1",
+            { name: "Summer" },
+            {
+              condition: {
+                sponsors: [
+                  {
+                    id: "sp1",
+                    condition: {
+                      inventory: {
+                        quantity: 3,
+                        location: "Bay 4",
+                        // @ts-expect-error: a plain JavaScript caller's undeclared field
+                        reserved: 1
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("inventory", "reserved"));
+      expectNothingSent();
+    });
+
+    it("refuses one in a foreign key target guard's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await WarehouseInspection.update(
+            "i1",
+            { warehouseId: "w2" },
+            {
+              condition: {
+                warehouseId: {
+                  target: {
+                    location: {
+                      ...location,
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      region: "west"
+                    }
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("location", "region"));
+      expectNothingSent();
     });
   });
 });

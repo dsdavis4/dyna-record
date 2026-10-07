@@ -60,6 +60,7 @@ import type {
  * @property placeholderKey - A flat key for use in value placeholders (e.g., `Addresscity`)
  * @property valueSchema - Optional zod validator to run on condition values for the attribute
  * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
+ * @property undeclaredField - For an object, or a field that holds one at any depth, the first field a whole-value operand carries that the schema does not declare
  * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
  * @property nullable - Whether the attribute or nested field is declared nullable. Absent when that could not be resolved, which is read as not nullable
  * @property elementForm - For a field stored as a list, the form its elements are stored in. Decides what a `$contains` operand on it must be
@@ -73,6 +74,7 @@ interface ResolvedPath {
   placeholderKey: string;
   valueSchema?: ZodType;
   toStored?: TableSerializer;
+  undeclaredField?: (value: unknown) => Optional<string>;
   storedForm?: StoredForm;
   nullable?: boolean;
   elementForm?: StoredForm;
@@ -754,9 +756,9 @@ class FilterExpressionBuilder {
    *
    * A whole value of the attribute: an equality value, an `IN` element, a
    * comparison operand, a `$between` bound. Shape-checked against the stored
-   * form, validated in the declared form and converted to the stored one —
-   * the operand rule's first half applied in one place instead of in each
-   * branch that carries such an operand. Putting the shape check here rather
+   * form, validated in the declared form with every field it carries declared,
+   * and converted to the stored one — the operand rule's first half applied in
+   * one place instead of in each branch that carries such an operand. Putting the shape check here rather
    * than at each call site is what kept the equality arm from being the one
    * that forgot it
    * @param resolved - The resolved attribute path
@@ -773,6 +775,7 @@ class FilterExpressionBuilder {
   ): string {
     this.assertWholeValueShape(resolved, value, attr);
     this.validateConditionValue(resolved, attr, value);
+    this.assertFieldsDeclared(resolved, attr, value);
     const placeholder = this.nextPlaceholder(resolved);
     values[placeholder] = this.toStoredValue(resolved, value, attr);
     return `:${placeholder}`;
@@ -1456,6 +1459,39 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Rejects a whole-value operand carrying a field its schema does not declare,
+   * at any depth.
+   *
+   * The schema's validator strips such a field rather than rejecting it, and so
+   * does the conversion to the stored form — right for a value about to be
+   * written, wrong for one compared whole. The stripped operand is not the value
+   * the caller described: `{ city: "X", zip: "Y" }` would be sent as
+   * `{ city: "X" }`, and a write condition would hold against a row that holds
+   * no `zip` at all, letting through a write the caller meant to stop. Unless
+   * every field is declared, no stored value can equal the operand, so it is
+   * refused before anything is sent.
+   *
+   * Runs after {@link validateConditionValue}, which has accepted every declared
+   * field's value, so the walk only has undeclared fields left to find
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for error messages
+   * @param value - The operand as the caller supplied it
+   */
+  private assertFieldsDeclared(
+    resolved: ResolvedPath,
+    attr: string,
+    value: unknown
+  ): void {
+    const undeclared = resolved.undeclaredField?.(value);
+
+    if (undeclared !== undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": "${undeclared}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+    }
+  }
+
+  /**
    * Resolves an attribute key (potentially a dot-path) into its DynamoDB expression components.
    *
    * For simple keys (e.g., "name"), resolves via the context's attribute resolver.
@@ -1499,6 +1535,10 @@ class FilterExpressionBuilder {
         placeholderKey: tableToken,
         valueSchema,
         toStored: serializers?.toTableAttribute,
+        ...(objectSchema !== undefined && {
+          undeclaredField: value =>
+            undeclaredFieldIn({ type: "object", fields: objectSchema }, value)
+        }),
         storedForm: storedFormOfAttribute(kind),
         nullable
       };
@@ -1614,6 +1654,7 @@ class FilterExpressionBuilder {
       // which operators apply
       ...(fieldValidatesConditionValue(fieldDef) && {
         valueSchema: fieldDefToZod(fieldDef),
+        undeclaredField: value => undeclaredFieldIn(fieldDef, value),
         // Only when the field converts: toStored doubles as the signal that a
         // rejected value's remedy should point at the declared form
         ...(fieldConverts(fieldDef) && {

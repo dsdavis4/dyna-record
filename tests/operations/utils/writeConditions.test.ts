@@ -36,6 +36,7 @@ import {
   Customer,
   DiscriminatedUnionEntity,
   Employee,
+  Festival,
   MyClassWithAllAttributeTypes,
   Order,
   Organization,
@@ -43,6 +44,7 @@ import {
   Shipment,
   StudentCourse,
   User,
+  Warehouse,
   Website
 } from "../../integration/mockModels.js";
 
@@ -1179,6 +1181,116 @@ describe("writeConditions", () => {
       expect(compiled.self?.ExpressionAttributeValues).toEqual({
         ":wc2_Name1": "Jane"
       });
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+      const address = {
+        street: "1 Main St",
+        city: "Denver",
+        geo: { lat: 39.7, lng: -104.9, accuracy: "precise" },
+        scores: [1]
+      };
+      const location = { city: "Denver", state: "CO" };
+
+      // Converting the operand to its stored form strips the field, and the
+      // stripped guard holds against a row the caller's operand does not
+      // describe — every guard kind compiles through the same builder
+      it.each<[string, CompileInput, string, string]>([
+        [
+          "the entity's own row",
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "update",
+            condition: { addressAttribute: { ...address, region: "west" } }
+          },
+          "addressAttribute",
+          "region"
+        ],
+        [
+          "the entity's own row, inside a nested list element",
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "delete",
+            condition: {
+              objectAttribute: {
+                name: "Jane",
+                email: "jane@example.com",
+                tags: [],
+                status: "active",
+                createdDate: cutoff,
+                history: [{ at: cutoff, actor: "ann", mood: "calm" }]
+              }
+            }
+          },
+          "objectAttribute",
+          "history[0].mood"
+        ],
+        [
+          "a BelongsTo guard",
+          {
+            EntityClass: Shipment,
+            operation: "update",
+            condition: {
+              warehouse: { location: { ...location, region: "west" } }
+            }
+          },
+          "location",
+          "region"
+        ],
+        [
+          "a HasMany entry",
+          {
+            EntityClass: Warehouse,
+            operation: "delete",
+            condition: {
+              shipments: [
+                {
+                  id: "s1",
+                  condition: {
+                    dimensions: { weight: 2, unit: "kg", fragile: true }
+                  }
+                }
+              ]
+            }
+          },
+          "dimensions",
+          "fragile"
+        ],
+        [
+          "a HasAndBelongsToMany entry, in an IN element",
+          {
+            EntityClass: Festival,
+            operation: "update",
+            condition: {
+              sponsors: [
+                {
+                  id: "sp1",
+                  condition: {
+                    inventory: [
+                      { quantity: 3, location: "Bay 4" },
+                      { quantity: 3, location: "Bay 4", reserved: 1 }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "inventory",
+          "reserved"
+        ]
+      ])(
+        "rejects one in %s before anything is sent",
+        (_, props, attr, path) => {
+          expect.assertions(2);
+
+          expect(() => compile(props)).toThrow(
+            new FilterError(
+              `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+            )
+          );
+          expect(mockSend.mock.calls).toEqual([]);
+        }
+      );
     });
   });
 

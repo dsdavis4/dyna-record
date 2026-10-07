@@ -9,7 +9,11 @@ import {
   type FilterExpressionBuilderProps
 } from "../../src/filter-utils/index.js";
 import { FilterError } from "../../src/errors.js";
-import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
+import {
+  createObjectSerializer,
+  dateSerializer
+} from "../../src/decorators/attributes/serializers.js";
+import { objectSchemaToZod } from "../../src/decorators/attributes/fieldZod.js";
 import type { Serializers } from "../../src/metadata/types.js";
 import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
 import type { AttributeKind } from "../../src/metadata/types.js";
@@ -20,6 +24,35 @@ import type {
   FilterValue,
   KeyConditions
 } from "../../src/filter-utils/index.js";
+
+/**
+ * An object attribute declared the way `@ObjectAttribute` registers one: its
+ * zod schema, its serializers and its object schema. A whole value of it, or of
+ * a field holding an object, is compared whole — see the whole-value object
+ * operand tests
+ */
+const addressSchema = {
+  city: { type: "string" },
+  zip: { type: "string", nullable: true },
+  geo: {
+    type: "object",
+    fields: { lat: { type: "number" }, surveyedAt: { type: "date" } }
+  },
+  lines: {
+    type: "array",
+    items: { type: "object", fields: { sku: { type: "string" } } },
+    nullable: true
+  },
+  channel: {
+    type: "discriminatedUnion",
+    discriminator: "kind",
+    variants: {
+      email: { address: { type: "string" } },
+      sms: { phone: { type: "string" } }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
 
 const attributes: Record<
   string,
@@ -162,6 +195,13 @@ const attributes: Record<
         }
       }
     } as const satisfies ObjectSchema
+  },
+  address: {
+    alias: "Address",
+    type: objectSchemaToZod(addressSchema),
+    kind: "object",
+    serializers: createObjectSerializer(addressSchema),
+    objectSchema: addressSchema
   },
   // Declared as a Date, stored as an ISO string — the pairing the whole
   // declared-form/stored-form split exists for
@@ -2151,6 +2191,152 @@ describe("FilterExpressionBuilder", () => {
           expression: "contains(#Meta.#label, :Metalabel1)",
           values: { Metalabel1: "ware" }
         });
+      });
+    });
+  });
+
+  describe("a whole-value object operand carries only declared fields", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      // Every case but the one under test declares its required fields, so the
+      // schema accepts it and only the undeclared field is left to reject
+      const geo = { lat: 39.7, surveyedAt: new Date(0) };
+
+      it("compiles an object operand whose every field is declared as before", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            address: {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              city: "Denver",
+              geo: {
+                lat: 39.7,
+                surveyedAt: new Date("2023-01-01T00:00:00.000Z")
+              },
+              lines: [{ sku: "a" }],
+              channel: { kind: "email", address: "a@example.com" }
+            },
+            "address.geo": [
+              { lat: 1, surveyedAt: new Date("2023-01-02T00:00:00.000Z") },
+              { lat: 2, surveyedAt: new Date("2023-01-03T00:00:00.000Z") }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "#Address = :Address1 AND #Address.#geo IN (:Addressgeo2,:Addressgeo3)",
+          values: {
+            Address1: {
+              city: "Denver",
+              geo: { lat: 39.7, surveyedAt: "2023-01-01T00:00:00.000Z" },
+              lines: [{ sku: "a" }],
+              channel: { kind: "email", address: "a@example.com" }
+            },
+            Addressgeo2: { lat: 1, surveyedAt: "2023-01-02T00:00:00.000Z" },
+            Addressgeo3: { lat: 2, surveyedAt: "2023-01-03T00:00:00.000Z" }
+          }
+        });
+      });
+
+      it.each<[string, string, unknown, string]>([
+        [
+          "at the top level of an object attribute",
+          "address",
+          { city: "Denver", geo, region: "west" },
+          "region"
+        ],
+        [
+          "inside a nested object",
+          "address",
+          {
+            city: "Denver",
+            geo: { lat: 39.7, surveyedAt: new Date(0), alt: 1600 }
+          },
+          "geo.alt"
+        ],
+        [
+          "inside an element of a nested list of objects",
+          "address",
+          {
+            city: "Denver",
+            geo,
+            lines: [{ sku: "a" }, { sku: "b", qty: 1 }]
+          },
+          "lines[1].qty"
+        ],
+        [
+          "inside a union variant, though another variant declares it",
+          "address",
+          {
+            city: "Denver",
+            geo,
+            channel: { kind: "email", address: "a@example.com", phone: "1" }
+          },
+          "channel.phone"
+        ],
+        [
+          "in an IN element",
+          "address",
+          [
+            { city: "Denver", geo },
+            { city: "Boise", geo, region: "west" }
+          ],
+          "region"
+        ],
+        [
+          "on an object field a dot path names",
+          "address.geo",
+          { lat: 39.7, surveyedAt: new Date(0), alt: 1600 },
+          "alt"
+        ],
+        [
+          "in an IN element on an object field a dot path names",
+          "address.geo",
+          [
+            { lat: 1, surveyedAt: new Date(0) },
+            { lat: 2, surveyedAt: new Date(0), alt: 1600 }
+          ],
+          "alt"
+        ],
+        [
+          "on a union field a dot path names",
+          "address.channel",
+          { kind: "sms", phone: "1", address: "a" },
+          "address"
+        ]
+      ])("rejects an undeclared field %s", (_, attr, operand, path) => {
+        expect.assertions(1);
+
+        // Converting to the stored form would strip the field, and the
+        // stripped operand would equal a stored value the caller's does not
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any object
+          builder().filterParams({ [attr]: operand })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+          )
+        );
+      });
+
+      it("rejects an undeclared field inside an $or block", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            $or: [
+              { "address.city": "Boise" },
+              // @ts-expect-error a plain JavaScript caller can pass any object
+              { address: { city: "Denver", geo, region: "west" } }
+            ]
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+          )
+        );
       });
     });
   });
