@@ -29,7 +29,9 @@ import type {
 type ExcludeKeys = "type1" | "type2";
 
 /**
- * Lookup item for looking up existing table items by id
+ * Lookup for the pre-read table items, keyed by each item's partition key
+ * value. The partition key carries both the entity type and the id, so two
+ * entities of different types that share an id never overwrite each other
  */
 type TableItemLookup = Record<string, DynamoTableItem>;
 
@@ -236,7 +238,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       keys,
       rel1,
       rel2,
-      lookupTableItem[transactionProps.ids.linkedEntityId],
+      lookupTableItem[
+        transactionProps.entities.parentEntity.partitionKeyValue(
+          transactionProps.ids.linkedEntityId
+        )
+      ],
       referentialIntegrityCheck
     );
     JoinTable.denormalizeLinkRecord(
@@ -244,7 +250,11 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
       keys,
       rel2,
       rel1,
-      lookupTableItem[transactionProps.ids.parentId],
+      lookupTableItem[
+        transactionProps.entities.linkedEntity.partitionKeyValue(
+          transactionProps.ids.parentId
+        )
+      ],
       referentialIntegrityCheck
     );
 
@@ -333,7 +343,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
   ): Promise<TableItemLookup> {
     const { tableProps, entities, ids } = transactionProps;
 
-    const idAlias = tableProps.defaultAttributes.id.alias;
+    const { alias: partitionKeyAlias } = tableProps.partitionKeyAttribute;
 
     const parentKey = JoinTable.buildForeignEntityKey(
       tableProps,
@@ -377,9 +387,10 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     }
 
     return transactionResults.reduce<TableItemLookup>((acc, res) => {
-      if (res.Item !== undefined) {
-        const id = res.Item[idAlias] as string;
-        acc[id] = res.Item;
+      const partitionKey: unknown = res.Item?.[partitionKeyAlias];
+
+      if (res.Item !== undefined && typeof partitionKey === "string") {
+        acc[partitionKey] = res.Item;
       }
 
       return acc;
@@ -550,27 +561,30 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
     ids: JoinedKeys
   ): string {
     const joinedEntityData = [
-      { entityId: ids.parentId, entityName: entities.linkedEntity.name },
-      { entityId: ids.linkedEntityId, entityName: entities.parentEntity.name }
+      { entityId: ids.parentId, entity: entities.linkedEntity },
+      { entityId: ids.linkedEntityId, entity: entities.parentEntity }
     ];
 
     const tableMeta = Metadata.getEntityTable(entities.parentEntity.name);
-    const idAlias = tableMeta.defaultAttributes.id.alias;
+    const { alias: partitionKeyAlias } = tableMeta.partitionKeyAttribute;
 
-    const foundEntityIds = new Set(
-      transactionResults
-        .filter(result => result.Item !== undefined)
-        .map(
-          result => (result.Item as Record<string, unknown>)[idAlias] as string
-        )
+    // Matched by partition key, which carries the entity type as well as the
+    // id, so an entity that shares its id with the other is not mistaken for
+    // it
+    const foundPartitionKeys = new Set(
+      transactionResults.map(
+        (result): unknown => result.Item?.[partitionKeyAlias]
+      )
     );
 
     const missingEntities = joinedEntityData.filter(entityData => {
-      return !foundEntityIds.has(entityData.entityId); // If not in Set, it's missing
+      return !foundPartitionKeys.has(
+        entityData.entity.partitionKeyValue(entityData.entityId)
+      ); // If not in Set, it's missing
     });
 
     const missingEntityStr = missingEntities
-      .map(entity => `(${entity.entityName}: ${entity.entityId})`)
+      .map(entityData => `(${entityData.entity.name}: ${entityData.entityId})`)
       .join(", ");
 
     return `Entities not found: ${missingEntityStr}`;

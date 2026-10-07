@@ -1745,6 +1745,224 @@ describe("JoinTable", () => {
       });
     });
 
+    // Caller-supplied ids (`@IdAttribute`) let entities of different types
+    // share an id string. Each partition must still receive a copy of the
+    // other entity, never of itself
+    describe("linking two entities of different types that share an id (R15)", () => {
+      const sharedProduct: MockTableEntityTableItem<Product> = {
+        ...product,
+        PK: "Product#shared",
+        Id: "shared"
+      };
+
+      const sharedSupplier: MockTableEntityTableItem<Supplier> = {
+        ...supplier,
+        PK: "Supplier#shared",
+        Id: "shared"
+      };
+
+      const sharedKeys = { productId: "shared", supplierId: "shared" };
+
+      // The Supplier denormalized into the Product's partition
+      const sharedSupplierLinkPut = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Product#shared",
+            SK: "Supplier#shared",
+            Id: "shared",
+            Type: "Supplier",
+            Name: "Acme",
+            Status: "active",
+            CreatedAt: "2021-10-15T08:31:15.148Z",
+            UpdatedAt: "2022-10-15T08:31:15.148Z"
+          }
+        }
+      };
+
+      // The Product denormalized into the Supplier's partition
+      const sharedProductLinkPut = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Supplier#shared",
+            SK: "Product#shared",
+            Id: "shared",
+            Type: "Product",
+            Name: "Mug",
+            Price: 12,
+            CreatedAt: "2024-02-27T03:19:52.667Z",
+            UpdatedAt: "2024-02-27T03:19:52.667Z"
+          }
+        }
+      };
+
+      const sharedProductCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Product#shared", SK: "Product" },
+          ConditionExpression: "attribute_exists(PK)"
+        }
+      };
+
+      const sharedSupplierGuardCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Supplier#shared", SK: "Supplier" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Status = :wc1_Status1))",
+          ExpressionAttributeNames: { "#Status": "Status" },
+          ExpressionAttributeValues: { ":wc1_Status1": "active" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+
+      const sharedPreReadGet = [
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Supplier#shared", SK: "Supplier" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Product#shared", SK: "Product" }
+                }
+              }
+            ]
+          }
+        ]
+      ];
+
+      describe("when both entities exist", () => {
+        // DynamoDB's real response shape: one entry per Get, in Get order
+        beforeEach(() => {
+          mockTransactGetItems.mockResolvedValueOnce({
+            Responses: [{ Item: sharedSupplier }, { Item: sharedProduct }]
+          });
+        });
+
+        it("denormalizes each entity into the other's partition", async () => {
+          expect.assertions(3);
+
+          await ProductSupplier.create(sharedKeys);
+
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual(sharedPreReadGet);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  {
+                    ConditionCheck: {
+                      TableName: "mock-table",
+                      Key: { PK: "Supplier#shared", SK: "Supplier" },
+                      ConditionExpression: "attribute_exists(PK)"
+                    }
+                  },
+                  sharedSupplierLinkPut,
+                  sharedProductCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with a target guard", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  sharedSupplierGuardCheck,
+                  sharedSupplierLinkPut,
+                  sharedProductCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with referentialIntegrityCheck: false and a target guard", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            referentialIntegrityCheck: false,
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  sharedSupplierLinkPut,
+                  sharedSupplierGuardCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with referentialIntegrityCheck: false", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            referentialIntegrityCheck: false
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: [sharedProductLinkPut, sharedSupplierLinkPut] }]
+          ]);
+        });
+      });
+
+      describe.each([
+        [
+          "the Product is missing",
+          [{ Item: sharedSupplier }, {}],
+          "Entities not found: (Product: shared)"
+        ],
+        [
+          "the Supplier is missing",
+          [{}, { Item: sharedProduct }],
+          "Entities not found: (Supplier: shared)"
+        ]
+      ])("when %s", (_missing, responses, message) => {
+        it("throws NotFoundError naming only the missing entity and sends only the pre-read", async () => {
+          expect.assertions(3);
+
+          mockTransactGetItems.mockResolvedValueOnce({ Responses: responses });
+
+          const e = await failureOf(async () => {
+            await ProductSupplier.create(sharedKeys);
+          });
+
+          expect(e).toEqual(new NotFoundError(message));
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        });
+      });
+    });
+
     describe("on delete", () => {
       const remove = async (): Promise<void> => {
         await ProductSupplier.delete(keys, {

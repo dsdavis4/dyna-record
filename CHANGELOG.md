@@ -76,6 +76,8 @@
 
 - **Linking an entity that does not exist through a join table is a `NotFoundError`.** `create` on a join table reads both entities before writing, and decided whether one was missing by counting the responses. DynamoDB returns a response for every read, with no item for an entity that does not exist, so the count always matched and `create` failed with `TypeError: Cannot convert undefined or null to object` instead. Only responses that carry an item now count, so a missing entity is reported as `NotFoundError` (`Entities not found: (Store: store-9)`) before anything is written, with or without `referentialIntegrityCheck` and with or without a condition. Nothing was ever written for a missing entity.
 
+- **Linking two entities that share an id through a join table copies each into the other's partition.** `create` on a join table reads both entities and keyed what it read by id alone. Entities of different types can share an id when it is caller-supplied (`@IdAttribute`), and then the second overwrote the first: both link rows were written from the same entity, so one partition held a copy of itself in place of the entity it is linked to, with no error. What is read is now keyed by entity type and id, so each partition receives a copy of the other entity. When one of two such entities is missing, the `NotFoundError` now names it; it previously named neither. Links between entities with different ids are unchanged.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added
