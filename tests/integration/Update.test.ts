@@ -19389,6 +19389,95 @@ describe("Update with write conditions", () => {
     });
   });
 
+  describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
+    const update = async (): Promise<void> => {
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.name": "Jane",
+            "addressAttribute.scores[0]": { $gt: 5 },
+            "addressAttribute.zip": null
+          }
+        }
+      );
+    };
+
+    const guardedUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: {
+          PK: "MyClassWithAllAttributeTypes#123",
+          SK: "MyClassWithAllAttributeTypes"
+        },
+        UpdateExpression:
+          "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+        ConditionExpression:
+          "attribute_exists(PK) AND (#objectAttribute.#name = :wc1_objectAttributename1 AND #addressAttribute.#scores[0] > :wc1_addressAttributescores02 AND attribute_not_exists(#addressAttribute.#zip))",
+        ExpressionAttributeNames: {
+          "#stringAttribute": "stringAttribute",
+          "#UpdatedAt": "UpdatedAt",
+          "#objectAttribute": "objectAttribute",
+          "#name": "name",
+          "#addressAttribute": "addressAttribute",
+          "#scores": "scores",
+          "#zip": "zip"
+        },
+        ExpressionAttributeValues: {
+          ":stringAttribute": "new",
+          ":UpdatedAt": now,
+          ":wc1_objectAttributename1": "Jane",
+          ":wc1_addressAttributescores02": 5
+        },
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+      }
+    };
+
+    it("ANDs the nested paths onto the canonical update", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a failed nested condition as a WriteConditionFailedError naming the self row", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "MyClassWithAllAttributeTypes#123" },
+            SK: { S: "MyClassWithAllAttributeTypes" },
+            objectAttribute: { M: { name: { S: "John" } } }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on MyClassWithAllAttributeTypes with ID '123': its own row",
+          {
+            entity: "MyClassWithAllAttributeTypes",
+            id: "123",
+            guards: [{ kind: "self" }]
+          }
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+  });
+
   describe("a BelongsTo guard", () => {
     const petQuery = [
       {

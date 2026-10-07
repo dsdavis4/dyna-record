@@ -660,8 +660,8 @@ const assertSelfOnlyBranches = (
  * writes anything.
  *
  * The condition's keys are split by the entity's metadata:
- * - its own attributes and `$or`, compiled into one fragment for its own row
- *   (not accepted on create)
+ * - its own attributes, dot paths into them and `$or`, compiled into one
+ *   fragment for its own row (not accepted on create)
  * - its relationships by property name: a BelongsTo or HasOne takes a
  *   condition on the related row, a HasMany or HasAndBelongsToMany takes
  *   `{ id, condition }` entries (only a BelongsTo on create)
@@ -698,6 +698,13 @@ export const compileWriteCondition = (
     const attribute = Object.hasOwn(entityMeta.attributes, key)
       ? entityMeta.attributes[key]
       : undefined;
+    // A dot path (`"details.sku"`, `"details.audit[0].at"`) names a field of
+    // the attribute its first segment names. The filter builder splits it the
+    // same way, then resolves and validates the rest
+    const isOwnAttributePath = Object.hasOwn(
+      entityMeta.attributes,
+      key.split(".")[0]
+    );
 
     if (relationship !== undefined && !isOwnedByRelationship(relationship)) {
       guards.push(
@@ -717,7 +724,7 @@ export const compileWriteCondition = (
           value
         )
       );
-    } else if (key === "$or" || attribute !== undefined) {
+    } else if (key === "$or" || isOwnAttributePath) {
       if (key === "$or") assertSelfOnlyBranches(entityMeta, value);
       selfConditions[key] = value;
     } else {

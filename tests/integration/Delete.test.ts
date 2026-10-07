@@ -5633,6 +5633,110 @@ describe("Delete with write conditions", () => {
     });
   });
 
+  describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
+    const remove = async (): Promise<void> => {
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.name": "Jane",
+          "addressAttribute.geo.lat": { $between: [1, 2] },
+          "objectAttribute.deletedAt": null
+        }
+      });
+    };
+
+    const guardedItems = [
+      {
+        Delete: {
+          TableName: "mock-table",
+          Key: {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes"
+          },
+          ConditionExpression:
+            "attribute_exists(PK) AND (#objectAttribute.#name = :wc1_objectAttributename1 AND #addressAttribute.#geo.#lat BETWEEN :wc1_addressAttributegeolat2 AND :wc1_addressAttributegeolat3 AND attribute_not_exists(#objectAttribute.#deletedAt))",
+          ExpressionAttributeNames: {
+            "#objectAttribute": "objectAttribute",
+            "#name": "name",
+            "#addressAttribute": "addressAttribute",
+            "#geo": "geo",
+            "#lat": "lat",
+            "#deletedAt": "deletedAt"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_objectAttributename1": "Jane",
+            ":wc1_addressAttributegeolat2": 1,
+            ":wc1_addressAttributegeolat3": 2
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      }
+    ];
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [
+          {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes",
+            Id: "123",
+            Type: "MyClassWithAllAttributeTypes",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+    });
+
+    it("merges the nested paths onto the own Delete", async () => {
+      expect.assertions(3);
+
+      await remove();
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: guardedItems }]
+      ]);
+    });
+
+    it("reports a failed nested condition as a WriteConditionFailedError naming the self row", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "MyClassWithAllAttributeTypes#123" },
+            SK: { S: "MyClassWithAllAttributeTypes" },
+            objectAttribute: { M: { name: { S: "John" } } }
+          }
+        }
+      ]);
+
+      const e = await failureOf(remove);
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on MyClassWithAllAttributeTypes with ID '123': its own row",
+          {
+            entity: "MyClassWithAllAttributeTypes",
+            id: "123",
+            guards: [{ kind: "self" }]
+          }
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: guardedItems }]
+      ]);
+    });
+  });
+
   describe("an invalid condition", () => {
     it("throws a FilterError before any read when a HasMany id is guarded twice (R25)", async () => {
       expect.assertions(3);

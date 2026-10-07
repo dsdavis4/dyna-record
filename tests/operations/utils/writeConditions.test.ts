@@ -35,6 +35,7 @@ import {
   ContactInformation,
   Customer,
   Employee,
+  MyClassWithAllAttributeTypes,
   Order,
   Organization,
   Profile,
@@ -395,6 +396,147 @@ describe("writeConditions", () => {
       });
     });
 
+    describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
+      it("compiles dot paths and list-index paths into the self fragment, beside a plain attribute", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: MyClassWithAllAttributeTypes,
+          operation: "update",
+          condition: {
+            "objectAttribute.name": "Jane",
+            "addressAttribute.geo.lat": { $between: [1, 2] },
+            "addressAttribute.scores[0]": { $gt: 5 },
+            "objectAttribute.tags[1]": "vip",
+            stringAttribute: "s"
+          }
+        });
+
+        expect(compiled).toEqual({
+          EntityClass: MyClassWithAllAttributeTypes,
+          self: {
+            ConditionExpression:
+              "#objectAttribute.#name = :wc1_objectAttributename1 AND #addressAttribute.#geo.#lat BETWEEN :wc1_addressAttributegeolat2 AND :wc1_addressAttributegeolat3 AND #addressAttribute.#scores[0] > :wc1_addressAttributescores04 AND #objectAttribute.#tags[1] = :wc1_objectAttributetags15 AND #stringAttribute = :wc1_stringAttribute6",
+            ExpressionAttributeNames: {
+              "#objectAttribute": "objectAttribute",
+              "#name": "name",
+              "#addressAttribute": "addressAttribute",
+              "#geo": "geo",
+              "#lat": "lat",
+              "#scores": "scores",
+              "#tags": "tags",
+              "#stringAttribute": "stringAttribute"
+            },
+            ExpressionAttributeValues: {
+              ":wc1_objectAttributename1": "Jane",
+              ":wc1_addressAttributegeolat2": 1,
+              ":wc1_addressAttributegeolat3": 2,
+              ":wc1_addressAttributescores04": 5,
+              ":wc1_objectAttributetags15": "vip",
+              ":wc1_stringAttribute6": "s"
+            }
+          },
+          guards: [],
+          needsStoredRow: false
+        });
+      });
+
+      it("compiles null on a nullable nested field to attribute_not_exists", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: MyClassWithAllAttributeTypes,
+          operation: "delete",
+          condition: { "addressAttribute.zip": null }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression: "attribute_not_exists(#addressAttribute.#zip)",
+          ExpressionAttributeNames: {
+            "#addressAttribute": "addressAttribute",
+            "#zip": "zip"
+          }
+        });
+      });
+
+      it("compiles a field the schema does not declare exactly as a $or branch does, leaving it unvalidated", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: MyClassWithAllAttributeTypes,
+          operation: "update",
+          condition: { "addressAttribute.country": "US" }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression:
+            "#addressAttribute.#country = :wc1_addressAttributecountry1",
+          ExpressionAttributeNames: {
+            "#addressAttribute": "addressAttribute",
+            "#country": "country"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_addressAttributecountry1": "US"
+          }
+        });
+      });
+
+      it.each([
+        [
+          "null on a non-nullable nested field",
+          { "addressAttribute.city": null },
+          'Invalid filter value for attribute "addressAttribute.city": null means "not set" in write conditions, which only an attribute declared nullable can be'
+        ],
+        [
+          "null on a field the schema does not declare",
+          { "addressAttribute.country": null },
+          'Invalid filter value for attribute "addressAttribute.country": null means "not set" in write conditions, which only an attribute declared nullable can be'
+        ],
+        [
+          "a value of the wrong type for a nested field",
+          { "addressAttribute.zip": "x" },
+          'Invalid filter value for attribute "addressAttribute.zip": the value does not match the attribute\'s type'
+        ],
+        [
+          "a path through a list without an index",
+          { "addressAttribute.scores.x": 1 },
+          'Invalid filter key "addressAttribute.scores.x"'
+        ],
+        [
+          "a dot path whose first segment is not an attribute",
+          { "colour.shade": "red" },
+          'Invalid write condition key "colour.shade": it is not an attribute, relationship or foreign key of MyClassWithAllAttributeTypes'
+        ]
+      ])(
+        "rejects %s with the filter builder's message",
+        (_, condition, text) => {
+          expect.assertions(2);
+
+          expectFilterError(
+            {
+              EntityClass: MyClassWithAllAttributeTypes,
+              operation: "update",
+              condition
+            },
+            text
+          );
+        }
+      );
+
+      it("rejects a dot path whose first segment is a relationship as an unknown key", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "update",
+            condition: { "customer.name": "Jane" }
+          },
+          'Invalid write condition key "customer.name": it is not an attribute, relationship or foreign key of Order'
+        );
+      });
+    });
+
     describe("degenerate shapes (R29)", () => {
       it("adds nothing for an empty condition or an empty HasMany array", () => {
         expect.assertions(2);
@@ -738,6 +880,20 @@ describe("writeConditions", () => {
           );
         }
       );
+
+      it("rejects a dot path on the entity's own row as a condition on its own row", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "create",
+            condition: { "objectAttribute.name": "Jane" },
+            payload: {}
+          },
+          'Invalid write condition key "objectAttribute.name": a create takes no condition on the entity\'s own row'
+        );
+      });
 
       it.each([
         ["HasMany", { orders: [{ id: "o1", condition: {} }] }, '"orders"'],
