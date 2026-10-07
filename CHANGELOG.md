@@ -74,6 +74,8 @@
 
 - **An object operand naming a field its schema does not declare is a `FilterError`.** An equality or `IN` element comparing a whole object attribute or object field (`{ address: { city: "Denver", region: "west" } }`, `{ "address.geo": [...] }`) was converted to its stored form by the attribute's serializer, which drops a field the schema does not declare, so the operand sent was not the one written. A query filter matched rows the operand did not describe, and a write condition `{ address: { city: "Denver", region: "west" } }` held against a stored `{ city: "Denver" }`, letting through a write the caller meant to stop. Such a field is now rejected before anything is sent, at any depth (in a nested object, in an element of a nested list of objects, in a union variant), naming its path, in filters and write conditions alike. An operand whose every field is declared is compiled as before. This had shipped in query filters before write conditions.
 
+- **Linking an entity that does not exist through a join table is a `NotFoundError`.** `create` on a join table reads both entities before writing, and decided whether one was missing by counting the responses. DynamoDB returns a response for every read, with no item for an entity that does not exist, so the count always matched and `create` failed with `TypeError: Cannot convert undefined or null to object` instead. Only responses that carry an item now count, so a missing entity is reported as `NotFoundError` (`Entities not found: (Store: store-9)`) before anything is written, with or without `referentialIntegrityCheck` and with or without a condition. Nothing was ever written for a missing entity.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added

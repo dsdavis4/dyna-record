@@ -1577,6 +1577,64 @@ describe("JoinTable", () => {
       );
     });
 
+    // DynamoDB's TransactGetItems returns one Responses entry per Get, in Get
+    // order (Supplier, then Product), with `{}` for an item that does not exist
+    describe("a missing entity in DynamoDB's real pre-read response shape (R27)", () => {
+      describe.each([
+        [
+          "the first entity is missing",
+          [{ Item: supplier }, {}],
+          "Entities not found: (Product: p1)"
+        ],
+        [
+          "the second entity is missing",
+          [{}, { Item: product }],
+          "Entities not found: (Supplier: s1)"
+        ],
+        [
+          "both entities are missing",
+          [{}, {}],
+          "Entities not found: (Supplier: s1), (Product: p1)"
+        ]
+      ])("when %s", (_missing, responses, message) => {
+        describe.each([
+          ["without a condition", undefined],
+          [
+            "with a condition",
+            {
+              productId: { target: { name: "Mug" } },
+              supplierId: { target: { status: "active" as const } }
+            }
+          ]
+        ])("%s", (_label, condition) => {
+          it.each([true, false])(
+            "throws NotFoundError and sends only the pre-read (referentialIntegrityCheck: %s)",
+            async referentialIntegrityCheck => {
+              expect.assertions(4);
+
+              mockTransactGetItems.mockResolvedValueOnce({
+                Responses: responses
+              });
+
+              const e = await failureOf(async () => {
+                await ProductSupplier.create(keys, {
+                  referentialIntegrityCheck,
+                  condition
+                });
+              });
+
+              expect(e).toEqual(new NotFoundError(message));
+              expect(mockSend.mock.calls).toEqual([
+                [{ name: "TransactGetCommand" }]
+              ]);
+              expect(mockTransactGetCommand.mock.calls).toEqual(preReadGet);
+              expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+            }
+          );
+        });
+      });
+    });
+
     describe("on a self-referential join table", () => {
       const accessory = (id: string): MockTableEntityTableItem<Accessory> => ({
         PK: `Accessory#${id}`,

@@ -361,7 +361,13 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
 
     const transactionResults = await transactionGetBuilder.executeTransaction();
 
-    if (transactionResults.length !== 2) {
+    // DynamoDB returns one response per get, with no `Item` for a missing
+    // entity, so only responses that carry an `Item` count as found
+    const foundCount = transactionResults.filter(
+      res => res.Item !== undefined
+    ).length;
+
+    if (foundCount !== 2) {
       const errorMessage = this.preFetchNotFoundErrorMessage(
         transactionResults,
         entities,
