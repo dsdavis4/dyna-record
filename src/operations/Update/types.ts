@@ -1,4 +1,5 @@
 import type DynaRecord from "../../DynaRecord.js";
+import type { AllowNullInWholeValue } from "../../types.js";
 import type { EntityDefinedAttributes } from "../types.js";
 import type { WriteCondition } from "../WriteCondition/index.js";
 
@@ -21,8 +22,11 @@ type NullableProperties<T> = {
  *   matching the partial update semantics (only provided fields are modified).
  * - Nullable fields at any nesting depth receive `| null` during updates.
  *
- * Arrays resolve through {@link AllowNullInListElement}: a list is replaced
- * whole, so its elements stay complete but their nullable fields take `null`.
+ * Arrays resolve through {@link AllowNullInWholeValue}: a list is written whole
+ * (`SET`, never a document path), so nothing inside it becomes `Partial` and
+ * every non-nullable field of an element is still required, while a nullable
+ * field at any depth inside an element takes `null`, as it does everywhere else
+ * in an update; the element is stored without that field.
  *
  * Primitives, `Date`, and functions pass through unchanged.
  */
@@ -36,40 +40,9 @@ type AllowNullForNullableValue<T> = T extends
   | ((...args: unknown[]) => unknown)
   ? T
   : T extends readonly unknown[]
-    ? AllowNullInListElement<T>
+    ? AllowNullInWholeValue<T>
     : T extends Record<string, unknown>
       ? Partial<AllowNullForNullable<T>>
-      : T;
-
-/**
- * Resolves a list, or a value inside a list element, in an update payload.
- *
- * A list is written whole (`SET`, never a document path), so nothing inside
- * it becomes `Partial` — every non-nullable field of an element is still
- * required. A nullable field at any depth inside an element (an object, a
- * discriminated union variant, an object or list within the element) also
- * takes `null`, as it does everywhere else in an update; the element is
- * stored without that field.
- *
- * Primitives, `Date`, and functions pass through unchanged.
- */
-type AllowNullInListElement<T> = T extends
-  | Date
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | ((...args: unknown[]) => unknown)
-  ? T
-  : T extends readonly unknown[]
-    ? { [I in keyof T]: AllowNullInListElement<T[I]> }
-    : T extends Record<string, unknown>
-      ? {
-          [K in keyof T]: K extends NullableProperties<T>
-            ? AllowNullInListElement<NonNullable<T[K]>> | null | undefined
-            : AllowNullInListElement<T[K]>;
-        }
       : T;
 
 /**

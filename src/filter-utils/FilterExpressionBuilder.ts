@@ -12,7 +12,6 @@ import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
 import {
   fieldConverts,
-  fieldValidatesConditionValue,
   parseSegment,
   resolveFieldDef,
   toStoredFieldValue,
@@ -1649,17 +1648,16 @@ class FilterExpressionBuilder {
           elementToStored: value => toStoredFieldValue(fieldDef.items, value)
         })
       }),
-      // Not every field's schema describes the value a condition carries;
-      // where it does not, the stored form is still known and is what decides
-      // which operators apply
-      ...(fieldValidatesConditionValue(fieldDef) && {
-        valueSchema: fieldDefToZod(fieldDef),
-        undeclaredField: value => undeclaredFieldIn(fieldDef, value),
-        // Only when the field converts: toStored doubles as the signal that a
-        // rejected value's remedy should point at the declared form
-        ...(fieldConverts(fieldDef) && {
-          toStored: value => toStoredFieldValue(fieldDef, value)
-        })
+      // A whole-value operand is a whole value of the field — for a list, a
+      // whole list, which is what each element of an IN on it is — so it is
+      // validated, has its undeclared fields refused and is converted as the
+      // field is written, whatever the field's type
+      valueSchema: fieldDefToZod(fieldDef),
+      undeclaredField: value => undeclaredFieldIn(fieldDef, value),
+      // Only when the field converts: toStored doubles as the signal that a
+      // rejected value's remedy should point at the declared form
+      ...(fieldConverts(fieldDef) && {
+        toStored: value => toStoredFieldValue(fieldDef, value)
       })
     };
   }

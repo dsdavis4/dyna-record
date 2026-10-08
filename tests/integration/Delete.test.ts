@@ -40,11 +40,16 @@ import {
   HasMany,
   HasOne,
   NumberAttribute,
+  ObjectAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
   StringAttribute,
   Table
+} from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
 } from "../../src/decorators/index.js";
 import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
 import type {
@@ -100,6 +105,92 @@ class MockModel extends MockTable {
 
   @NumberAttribute({ alias: "MyVar2" })
   public myVar2: number;
+}
+
+/**
+ * Nullable lists whose elements are not plain objects: a list of lists and a
+ * list of discriminated-union elements
+ */
+const nullableListsSchema = {
+  bays: {
+    type: "array",
+    items: { type: "array", items: { type: "number" } },
+    nullable: true
+  },
+  promos: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "kind",
+      variants: {
+        discount: { percent: { type: "number" }, endsAt: { type: "date" } },
+        bundle: {
+          sku: { type: "string" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NullableListsEntity extends MockTable {
+  declare readonly type: "NullableListsEntity";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Shelf", schema: nullableListsSchema })
+  public shelf: InferObjectSchema<typeof nullableListsSchema>;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NestedListsEntity extends MockTable {
+  declare readonly type: "NestedListsEntity";
+
+  @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+  public layout: InferObjectSchema<typeof nestedListsSchema>;
 }
 
 vi.mock("@aws-sdk/client-dynamodb", () => {
@@ -3485,6 +3576,913 @@ describe("Delete", () => {
           Logger.log("Testing types");
         });
       });
+
+      describe("a list-index path into a nullable list", () => {
+        // A nullable list is declared `Element[] | undefined`. These pin that an
+        // index into one types its element as an index into a list that is not
+        // nullable does, rather than falling back to the stored form
+        it("accepts a whole object element, named as declared, and an IN of them", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+              "objectAttribute.history[0]": {
+                at: new Date("2026-01-01"),
+                actor: "ann"
+              },
+              // @ts-expect-no-error: the element's nullable field may be set
+              "objectAttribute.history[1]": {
+                at: new Date("2026-01-01"),
+                actor: "ann",
+                note: "restocked"
+              },
+              // @ts-expect-no-error: an IN of whole elements
+              "objectAttribute.history[2]": [
+                { at: new Date("2026-01-01"), actor: "ann" },
+                { at: new Date("2026-02-01"), actor: "bob" }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: the same on a nullable list of objects in another schema
+              "data.backup[9]": { sku: "abc", price: 1 }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts a field below the index, in the field's own type and operators", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: actor is a string, so it takes a prefix
+              "objectAttribute.history[0].actor": { $beginsWith: "a" },
+              // @ts-expect-no-error: an IN of strings
+              "objectAttribute.history[1].actor": ["ann", "bob"],
+              // @ts-expect-no-error: at is a date, compared as a Date
+              "objectAttribute.history[0].at": { $gte: new Date("2026-01-01") },
+              // @ts-expect-no-error: and ranged as one
+              "objectAttribute.history[1].at": {
+                $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+              },
+              // @ts-expect-no-error: a nullable field below the index takes its type
+              "objectAttribute.history[2].note": { $contains: "late" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: price is a number
+              "data.backup[0].price": { $lt: 10 }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts null on a nullable field below the index, as not set", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+              "objectAttribute.history[0].note": null
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts an element of a nullable list of scalars in its own type", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: a contactedAt element is a Date
+              "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+              // @ts-expect-no-error: and is compared as one
+              "objectAttribute.contactedAt[1]": { $lt: new Date("2026-01-01") },
+              // @ts-expect-no-error: a roles element is one of the enum's members
+              "objectAttribute.roles[0]": "owner"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts an element that is itself a list, or a union variant", async () => {
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: a bays element is a list of numbers, so it takes $contains on a number
+              "shelf.bays[0]": { $contains: 3 },
+              // @ts-expect-no-error: a promos element is a whole variant
+              "shelf.promos[0]": {
+                kind: "discount",
+                percent: 10,
+                endsAt: new Date("2026-03-31")
+              },
+              // @ts-expect-no-error: either variant
+              "shelf.promos[1]": { kind: "bundle", sku: "KIT-1" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a whole element its schema cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is declared as a string
+              "objectAttribute.history[0]": {
+                at: new Date("2026-01-01"),
+                actor: 1
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: at is declared as a date, so it takes a Date
+              "objectAttribute.history[0]": { at: "2026-01-01", actor: "ann" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              "objectAttribute.history[0]": {
+                at: new Date("2026-01-01"),
+                actor: "ann",
+                // @ts-expect-error: an element has no mood, so no element can equal this one
+                mood: "calm"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is required, so an element without it is no element
+              "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: price is a number
+              "data.backup[0]": { sku: "abc", price: "1" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator a whole element's stored form cannot carry", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: an element is stored as a Map, which has no prefix
+              "objectAttribute.history[0]": { $beginsWith: "a" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a Map has no ordering
+              "objectAttribute.history[0]": { $gt: "a" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a Map holds no elements to contain
+              "objectAttribute.history[0]": { $contains: "a" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on the element and on a field below it that is not nullable", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+              "objectAttribute.history[0]": null
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is not nullable
+              "objectAttribute.history[0].actor": null
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a contactedAt element is not nullable
+              "objectAttribute.contactedAt[0]": null
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a history element declares at, actor and note, not mood
+              "objectAttribute.history[0].mood": "calm"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is a string
+              "objectAttribute.history[0].actor": 1
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: at is a date, so it compares against a Date
+              "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a string has no $between of numbers
+              "objectAttribute.history[0].actor": { $between: [1, 2] }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: price is a number
+              "data.backup[0].price": { $lt: "10" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+              "objectAttribute.contactedAt[0]": "2026-01-01"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: admin is not a member of the roles enum
+              "objectAttribute.roles[0]": "admin"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an element that is itself a list, or a union variant, in a shape it cannot hold", async () => {
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: a bays element holds numbers
+              "shelf.bays[0]": { $contains: "3" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: percent is a number
+              "shelf.promos[0]": {
+                kind: "discount",
+                percent: "10",
+                endsAt: new Date("2026-03-31")
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              "shelf.promos[0]": {
+                kind: "bundle",
+                sku: "KIT-1",
+                // @ts-expect-error: percent belongs to the discount variant, not bundle
+                percent: 10
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not offer an index past the tenth, as for any list", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: indexes 0 to 9 are offered
+              "objectAttribute.history[10].actor": "ann"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole $contains element with null on a nullable field", () => {
+        // An element is stored without a nulled field, and contains compares an
+        // element whole, so null on a nullable field of the operand means the
+        // element looked for lacks it. These pin that the operand offers null
+        // there at every depth, and nowhere else
+        it("accepts null on a nullable field of the element, at every depth", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: note is nullable, so the element looked for has no note
+              "objectAttribute.history": {
+                $contains: {
+                  at: new Date("2026-01-01"),
+                  actor: "ann",
+                  note: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+              "layout.section.entries": {
+                $contains: {
+                  sku: "MUG-1",
+                  note: null,
+                  placement: { aisle: "A", bin: null },
+                  restocks: [{ at: new Date("2026-01-01"), note: null }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: label is nullable in the bundle variant
+              "shelf.promos": {
+                $contains: { kind: "bundle", sku: "KIT-1", label: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on a field of the element that is not nullable", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is not nullable, so every element has one
+              "objectAttribute.history": {
+                $contains: { at: new Date("2026-01-01"), actor: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: aisle is not nullable
+              "layout.section.entries": {
+                $contains: {
+                  sku: "MUG-1",
+                  placement: { aisle: null },
+                  restocks: []
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: placement is an object field, which is never nullable
+              "layout.section.entries": {
+                $contains: { sku: "MUG-1", placement: null, restocks: [] }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: restocks is not nullable
+              "layout.section.entries": {
+                $contains: {
+                  sku: "MUG-1",
+                  placement: { aisle: "A" },
+                  restocks: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: a restocks element is never null
+              "layout.section.entries": {
+                $contains: {
+                  sku: "MUG-1",
+                  placement: { aisle: "A" },
+                  restocks: [null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: a restocks element's at is not nullable
+              "layout.section.entries": {
+                $contains: {
+                  sku: "MUG-1",
+                  placement: { aisle: "A" },
+                  restocks: [{ at: null }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: sku is not nullable in the bundle variant
+              "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: the discriminator names the variant, so it is never null
+              "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null as the whole element", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: $contains looks for an element, and no element is null
+              "objectAttribute.history": { $contains: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: nor on a list of union variants
+              "shelf.promos": { $contains: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: nor on a list of strings
+              "objectAttribute.tags": { $contains: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: nor on a nullable list of dates
+              "objectAttribute.contactedAt": { $contains: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is required, so an element without it is no element
+              "objectAttribute.history": {
+                $contains: { at: new Date("2026-01-01"), note: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: note is a string when it is set
+              "objectAttribute.history": {
+                $contains: { at: new Date("2026-01-01"), actor: "ann", note: 1 }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              "objectAttribute.history": {
+                $contains: {
+                  at: new Date("2026-01-01"),
+                  actor: "ann",
+                  note: null,
+                  // @ts-expect-error: mood is not a field a history element declares
+                  mood: "calm"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              "shelf.promos": {
+                $contains: {
+                  kind: "discount",
+                  percent: 10,
+                  endsAt: new Date("2026-03-31"),
+                  // @ts-expect-error: label belongs to the bundle variant, not discount
+                  label: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole value compared by equality or IN with null on a nullable field", () => {
+        // An object, or a list element named by an index, is compared whole by
+        // equality and IN, and a nulled field is stored by leaving it out. So
+        // null on a nullable field of the operand means the value compared
+        // lacks it: the expression builder drops the field, as it does in a
+        // $contains element. These pin that equality and IN offer null there at
+        // every depth, and nowhere else
+        it("accepts null on a nullable field of a whole value, at every depth", async () => {
+          const at = new Date("2026-01-01");
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+              "objectAttribute.history[0]": { at, actor: "ann", note: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+              "objectAttribute.history[0]": [
+                { at, actor: "ann", note: null },
+                { at, actor: "bo" }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+              addressAttribute: {
+                street: "1 Main St",
+                city: "Denver",
+                zip: null,
+                geo: { lat: 1, lng: 2, accuracy: "precise" },
+                scores: [],
+                category: null
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: the same in an IN of whole objects
+              addressAttribute: [
+                {
+                  street: "1 Main St",
+                  city: "Denver",
+                  zip: null,
+                  geo: { lat: 1, lng: 2, accuracy: "precise" },
+                  scores: [],
+                  category: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+              objectAttribute: {
+                name: "Ann",
+                email: "ann@example.com",
+                tags: [],
+                status: "active",
+                createdDate: at,
+                deletedAt: null,
+                contactedAt: null,
+                roles: null,
+                history: [{ at, actor: "ann", note: null }]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+              "layout.section": {
+                entries: [
+                  {
+                    sku: "MUG-1",
+                    note: null,
+                    placement: { aisle: "A", bin: null },
+                    restocks: [{ at, note: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: bin is nullable in an object field below an index
+              "layout.section.entries[0].placement": { aisle: "A", bin: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+              "layout.section.entries[0]": [
+                {
+                  sku: "MUG-1",
+                  note: null,
+                  placement: { aisle: "A", bin: null },
+                  restocks: [{ at, note: null }]
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+              "shelf.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+              "objectAttribute.history": [
+                [{ at, actor: "ann", note: null }],
+                []
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+              "layout.section.entries": [
+                [
+                  {
+                    sku: "MUG-1",
+                    note: null,
+                    placement: { aisle: "A", bin: null },
+                    restocks: [{ at, note: null }]
+                  }
+                ]
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-no-error: an IN of whole lists of union variants
+              "shelf.promos": [[{ kind: "bundle", sku: "KIT-1", label: null }]]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+          const at = new Date("2026-01-01");
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is not nullable, so every element has one
+              "objectAttribute.history[0]": { at, actor: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+              "objectAttribute.history[0]": { at, note: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              "objectAttribute.history[0]": {
+                at,
+                actor: "ann",
+                note: null,
+                // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                mood: "calm"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: an IN element is a whole element, and no element is null
+              "objectAttribute.history[0]": [null]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: city is not nullable
+              addressAttribute: {
+                street: "1 Main St",
+                city: null,
+                geo: { lat: 1, lng: 2, accuracy: "precise" },
+                scores: []
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: geo is an object field, which is never nullable
+              addressAttribute: {
+                street: "1 Main St",
+                city: "Denver",
+                geo: null,
+                scores: []
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: an element of a list inside the value is never null
+              objectAttribute: {
+                name: "Ann",
+                email: "ann@example.com",
+                tags: [],
+                status: "active",
+                createdDate: at,
+                history: [null]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: aisle is not nullable
+              "layout.section.entries[0].placement": { aisle: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: the discriminator names the variant, so it is never null
+              "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NullableListsEntity.delete("123", {
+            condition: {
+              // @ts-expect-error: sku is not nullable in the bundle variant
+              "shelf.promos[0]": { kind: "bundle", sku: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: actor is not nullable in an element of a list compared whole
+              "objectAttribute.history": [[{ at, actor: null }]]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: an element of a list compared whole is never null
+              "objectAttribute.history": [[null]]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error: mood is not a field a history element declares
+              "objectAttribute.history": [[{ at, actor: "ann", mood: "calm" }]]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
     });
   });
 });
@@ -6014,6 +7012,514 @@ describe("Delete with write conditions", () => {
           }
         ]
       ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole $contains element, so it equals the element as stored", async () => {
+      expect.assertions(3);
+
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.history": {
+            $contains: {
+              at: new Date("2023-01-01T00:00:00.000Z"),
+              actor: "ann",
+              note: null
+            }
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#history, :wc1_objectAttributehistory1))",
+                  ExpressionAttributeNames: {
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_objectAttributehistory1": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole $contains element at every depth", async () => {
+      expect.assertions(3);
+
+      const ownRow = (type: string): Record<string, unknown> => ({
+        Items: [
+          {
+            PK: `${type}#123`,
+            SK: type,
+            Id: "123",
+            Type: type,
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+      mockQuery
+        .mockResolvedValueOnce(ownRow("NestedListsEntity"))
+        .mockResolvedValueOnce(ownRow("NullableListsEntity"));
+
+      await NestedListsEntity.delete("123", {
+        condition: {
+          "layout.section.entries": {
+            $contains: {
+              sku: "MUG-1",
+              note: null,
+              placement: { aisle: "A", bin: null },
+              restocks: [
+                { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+                { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+              ]
+            }
+          }
+        }
+      });
+      await NullableListsEntity.delete("123", {
+        condition: {
+          "shelf.promos": {
+            $contains: { kind: "bundle", sku: "KIT-1", label: null }
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }],
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("NestedListsEntity#123"),
+        partitionQuery("NullableListsEntity#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: { PK: "NestedListsEntity#123", SK: "NestedListsEntity" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#Layout.#section.#entries, :wc1_Layoutsectionentries1))",
+                  ExpressionAttributeNames: {
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_Layoutsectionentries1": {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [
+                        { at: "2023-01-01T00:00:00.000Z" },
+                        { at: "2023-01-02T00:00:00.000Z", note: "late" }
+                      ]
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "NullableListsEntity#123",
+                    SK: "NullableListsEntity"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#Shelf.#promos, :wc1_Shelfpromos1))",
+                  ExpressionAttributeNames: {
+                    "#Shelf": "Shelf",
+                    "#promos": "promos"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_Shelfpromos1": { kind: "bundle", sku: "KIT-1" }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole value compared by equality or IN, so it equals the value as stored", async () => {
+      expect.assertions(3);
+
+      const at = new Date("2023-01-01T00:00:00.000Z");
+
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.history[0]": { at, actor: "ann", note: null },
+          addressAttribute: [
+            {
+              street: "1 Main St",
+              city: "Denver",
+              zip: null,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [],
+              category: null
+            },
+            {
+              street: "9 Elm St",
+              city: "Boise",
+              zip: 83702,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [1],
+              category: "work"
+            }
+          ],
+          objectAttribute: {
+            name: "Ann",
+            email: "ann@example.com",
+            tags: [],
+            status: "active",
+            createdDate: at,
+            deletedAt: null,
+            contactedAt: null,
+            roles: null,
+            history: [{ at, actor: "ann", note: null }]
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#objectAttribute.#history[0] = :wc1_objectAttributehistory01 AND #addressAttribute IN (:wc1_addressAttribute2,:wc1_addressAttribute3) AND #objectAttribute = :wc1_objectAttribute4)",
+                  ExpressionAttributeNames: {
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history",
+                    "#addressAttribute": "addressAttribute"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_objectAttributehistory01": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    },
+                    ":wc1_addressAttribute2": {
+                      street: "1 Main St",
+                      city: "Denver",
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: []
+                    },
+                    ":wc1_addressAttribute3": {
+                      street: "9 Elm St",
+                      city: "Boise",
+                      zip: 83702,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [1],
+                      category: "work"
+                    },
+                    ":wc1_objectAttribute4": {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: "2023-01-01T00:00:00.000Z",
+                      history: [
+                        { at: "2023-01-01T00:00:00.000Z", actor: "ann" }
+                      ]
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole value compared by equality or IN at every depth", async () => {
+      expect.assertions(3);
+
+      const ownRow = (type: string): Record<string, unknown> => ({
+        Items: [
+          {
+            PK: `${type}#123`,
+            SK: type,
+            Id: "123",
+            Type: type,
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+      mockQuery
+        .mockResolvedValueOnce(ownRow("NestedListsEntity"))
+        .mockResolvedValueOnce(ownRow("NullableListsEntity"));
+
+      await NestedListsEntity.delete("123", {
+        condition: {
+          "layout.section": {
+            entries: [
+              {
+                sku: "MUG-1",
+                note: null,
+                placement: { aisle: "A", bin: null },
+                restocks: [
+                  { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+                  { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+                ]
+              }
+            ]
+          },
+          "layout.section.entries[0].placement": [
+            { aisle: "A", bin: null },
+            { aisle: "B", bin: "7" }
+          ]
+        }
+      });
+      await NullableListsEntity.delete("123", {
+        condition: {
+          "shelf.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }],
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("NestedListsEntity#123"),
+        partitionQuery("NullableListsEntity#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: { PK: "NestedListsEntity#123", SK: "NestedListsEntity" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Layout.#section = :wc1_Layoutsection1 AND #Layout.#section.#entries[0].#placement IN (:wc1_Layoutsectionentries0placement2,:wc1_Layoutsectionentries0placement3))",
+                  ExpressionAttributeNames: {
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries",
+                    "#placement": "placement"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_Layoutsection1": {
+                      entries: [
+                        {
+                          sku: "MUG-1",
+                          placement: { aisle: "A" },
+                          restocks: [
+                            { at: "2023-01-01T00:00:00.000Z" },
+                            { at: "2023-01-02T00:00:00.000Z", note: "late" }
+                          ]
+                        }
+                      ]
+                    },
+                    ":wc1_Layoutsectionentries0placement2": { aisle: "A" },
+                    ":wc1_Layoutsectionentries0placement3": {
+                      aisle: "B",
+                      bin: "7"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "NullableListsEntity#123",
+                    SK: "NullableListsEntity"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Shelf.#promos[0] = :wc1_Shelfpromos01)",
+                  ExpressionAttributeNames: {
+                    "#Shelf": "Shelf",
+                    "#promos": "promos"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_Shelfpromos01": { kind: "bundle", sku: "KIT-1" }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("converts each list of an IN of whole lists to the form the table stores it", async () => {
+      expect.assertions(3);
+
+      const at = new Date("2023-01-01T00:00:00.000Z");
+
+      await MyClassWithAllAttributeTypes.delete("123", {
+        condition: {
+          "objectAttribute.history": [
+            [
+              { at, actor: "ann", note: null },
+              { at, actor: "bo", note: "late" }
+            ],
+            []
+          ],
+          "objectAttribute.contactedAt": [[at]]
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "QueryCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        partitionQuery("MyClassWithAllAttributeTypes#123")
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Delete: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#objectAttribute.#history IN (:wc1_objectAttributehistory1,:wc1_objectAttributehistory2) AND #objectAttribute.#contactedAt IN (:wc1_objectAttributecontactedAt3))",
+                  ExpressionAttributeNames: {
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history",
+                    "#contactedAt": "contactedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":wc1_objectAttributehistory1": [
+                      { at: "2023-01-01T00:00:00.000Z", actor: "ann" },
+                      {
+                        at: "2023-01-01T00:00:00.000Z",
+                        actor: "bo",
+                        note: "late"
+                      }
+                    ],
+                    ":wc1_objectAttributehistory2": [],
+                    ":wc1_objectAttributecontactedAt3": [
+                      "2023-01-01T00:00:00.000Z"
+                    ]
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("rejects an undeclared field in an IN of whole lists before any read", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              "objectAttribute.history": [
+                // @ts-expect-error mood is not a field a history element declares
+                [{ at: new Date(0), actor: "ann", mood: "calm" }]
+              ]
+            }
+          })
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.history": "[0].mood" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects an element of the wrong type in an IN of whole lists before any read", async () => {
+      expect.assertions(4);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.delete("123", {
+            condition: {
+              // @ts-expect-error a tags element is a string
+              "objectAttribute.tags": [[1]]
+            }
+          })
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.tags": the value does not match the attribute\'s type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     });
 
     it("rejects a $contains element outside the enum of a list of enums before any read", async () => {

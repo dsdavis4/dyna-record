@@ -256,6 +256,33 @@ class NestedListsEntity extends MockTable {
   public layout: InferObjectSchema<typeof nestedListsSchema>;
 }
 
+/**
+ * Nullable lists whose elements are not plain objects: a list of lists and a
+ * list of discriminated-union elements
+ */
+const nullableListsSchema = {
+  bays: {
+    type: "array",
+    items: { type: "array", items: { type: "number" } },
+    nullable: true
+  },
+  promos: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "kind",
+      variants: {
+        discount: { percent: { type: "number" }, endsAt: { type: "date" } },
+        bundle: {
+          sku: { type: "string" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
 describe("Create", () => {
   beforeAll(() => {
     vi.useFakeTimers();
@@ -5081,6 +5108,41 @@ describe("Create", () => {
         paymentMethodId: "pm1"
       };
       const variant = { name: "Blue", sourceId: "s1" };
+
+      // A target whose lists hold elements with a nullable field at every
+      // depth, guarded through a BelongsTo and through a foreign key target
+      @Entity
+      class ListsTarget extends MockTable {
+        declare readonly type: "ListsTarget";
+
+        @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+        public readonly layout: InferObjectSchema<typeof nestedListsSchema>;
+
+        @ObjectAttribute({ alias: "Shelf", schema: nullableListsSchema })
+        public readonly shelf: InferObjectSchema<typeof nullableListsSchema>;
+      }
+
+      @Entity
+      class ListsVariant extends MockTable {
+        declare readonly type: "ListsVariant";
+
+        @ForeignKeyAttribute(() => ListsTarget, { alias: "ListsId" })
+        public readonly listsId: ForeignKey<ListsTarget>;
+
+        @BelongsTo(() => ListsTarget, { foreignKey: "listsId" })
+        public readonly lists: ListsTarget;
+      }
+
+      @Entity
+      class ListsSample extends MockTable {
+        declare readonly type: "ListsSample";
+
+        @ForeignKeyAttribute(() => ListsTarget, { alias: "ListsId" })
+        public readonly listsId: ForeignKey<ListsTarget>;
+      }
+
+      const listsVariant = { listsId: "l1" };
+      const listsSample = { listsId: "l1" };
       const sample = { name: "Swatch", sourceId: "s1", backupSourceId: "s2" };
       const founder = { name: "Jane", organizationId: "o1" };
       const allTypes: CreateOptions<MyClassWithAllAttributeTypes> = {
@@ -6293,6 +6355,2060 @@ describe("Create", () => {
           condition: [{ customer: {} }]
         }).catch(() => {
           Logger.log("Testing types");
+        });
+      });
+
+      describe("a list-index path into a nullable list, in a BelongsTo target", () => {
+        // A nullable list is declared `Element[] | undefined`. These pin that an
+        // index into one types its element as an index into a list that is not
+        // nullable does, rather than falling back to the stored form
+        it("accepts a whole object element, named as declared, and an IN of them", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                "objectAttribute.history[0]": {
+                  at: new Date("2026-01-01"),
+                  actor: "ann"
+                },
+                // @ts-expect-no-error: the element's nullable field may be set
+                "objectAttribute.history[1]": {
+                  at: new Date("2026-01-01"),
+                  actor: "ann",
+                  note: "restocked"
+                },
+                // @ts-expect-no-error: an IN of whole elements
+                "objectAttribute.history[2]": [
+                  { at: new Date("2026-01-01"), actor: "ann" },
+                  { at: new Date("2026-02-01"), actor: "bob" }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts a field below the index, in the field's own type and operators", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: actor is a string, so it takes a prefix
+                "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                // @ts-expect-no-error: an IN of strings
+                "objectAttribute.history[1].actor": ["ann", "bob"],
+                // @ts-expect-no-error: at is a date, compared as a Date
+                "objectAttribute.history[0].at": {
+                  $gte: new Date("2026-01-01")
+                },
+                // @ts-expect-no-error: and ranged as one
+                "objectAttribute.history[1].at": {
+                  $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                },
+                // @ts-expect-no-error: a nullable field below the index takes its type
+                "objectAttribute.history[2].note": { $contains: "late" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts null on a nullable field below the index, as not set", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                "objectAttribute.history[0].note": null
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts an element of a nullable list of scalars in its own type", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: a contactedAt element is a Date
+                "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                // @ts-expect-no-error: and is compared as one
+                "objectAttribute.contactedAt[1]": {
+                  $lt: new Date("2026-01-01")
+                },
+                // @ts-expect-no-error: a roles element is one of the enum's members
+                "objectAttribute.roles[0]": "owner"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a whole element its schema cannot hold", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is declared as a string
+                "objectAttribute.history[0]": {
+                  at: new Date("2026-01-01"),
+                  actor: 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: at is declared as a date, so it takes a Date
+                "objectAttribute.history[0]": { at: "2026-01-01", actor: "ann" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                "objectAttribute.history[0]": {
+                  at: new Date("2026-01-01"),
+                  actor: "ann",
+                  // @ts-expect-error: an element has no mood, so no element can equal this one
+                  mood: "calm"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is required, so an element without it is no element
+                "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator a whole element's stored form cannot carry", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: an element is stored as a Map, which has no prefix
+                "objectAttribute.history[0]": { $beginsWith: "a" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a Map has no ordering
+                "objectAttribute.history[0]": { $gt: "a" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a Map holds no elements to contain
+                "objectAttribute.history[0]": { $contains: "a" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on the element and on a field below it that is not nullable", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                "objectAttribute.history[0]": null
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is not nullable
+                "objectAttribute.history[0].actor": null
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a contactedAt element is not nullable
+                "objectAttribute.contactedAt[0]": null
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a history element declares at, actor and note, not mood
+                "objectAttribute.history[0].mood": "calm"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is a string
+                "objectAttribute.history[0].actor": 1
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: at is a date, so it compares against a Date
+                "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a string has no $between of numbers
+                "objectAttribute.history[0].actor": { $between: [1, 2] }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                "objectAttribute.contactedAt[0]": "2026-01-01"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: admin is not a member of the roles enum
+                "objectAttribute.roles[0]": "admin"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not offer an index past the tenth, as for any list", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: indexes 0 to 9 are offered
+                "objectAttribute.history[10].actor": "ann"
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole $contains element with null on a nullable field, in a BelongsTo target", () => {
+        // An element is stored without a nulled field, and contains compares an
+        // element whole, so null on a nullable field of the operand means the
+        // element looked for lacks it. These pin that the operand offers null
+        // there at every depth, and nowhere else
+        it("accepts null on a nullable field of the element, at every depth", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                "objectAttribute.history": {
+                  $contains: {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    note: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                "layout.section.entries": {
+                  $contains: {
+                    sku: "MUG-1",
+                    note: null,
+                    placement: { aisle: "A", bin: null },
+                    restocks: [{ at: new Date("2026-01-01"), note: null }]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: label is nullable in the bundle variant
+                "shelf.promos": {
+                  $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on a field of the element that is not nullable", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is not nullable, so every element has one
+                "objectAttribute.history": {
+                  $contains: { at: new Date("2026-01-01"), actor: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: aisle is not nullable
+                "layout.section.entries": {
+                  $contains: {
+                    sku: "MUG-1",
+                    placement: { aisle: null },
+                    restocks: []
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: placement is an object field, which is never nullable
+                "layout.section.entries": {
+                  $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: restocks is not nullable
+                "layout.section.entries": {
+                  $contains: {
+                    sku: "MUG-1",
+                    placement: { aisle: "A" },
+                    restocks: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: a restocks element is never null
+                "layout.section.entries": {
+                  $contains: {
+                    sku: "MUG-1",
+                    placement: { aisle: "A" },
+                    restocks: [null]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: a restocks element's at is not nullable
+                "layout.section.entries": {
+                  $contains: {
+                    sku: "MUG-1",
+                    placement: { aisle: "A" },
+                    restocks: [{ at: null }]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: sku is not nullable in the bundle variant
+                "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: the discriminator names the variant, so it is never null
+                "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null as the whole element", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: $contains looks for an element, and no element is null
+                "objectAttribute.history": { $contains: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: nor on a list of union variants
+                "shelf.promos": { $contains: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: nor on a list of strings
+                "objectAttribute.tags": { $contains: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: nor on a nullable list of dates
+                "objectAttribute.contactedAt": { $contains: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is required, so an element without it is no element
+                "objectAttribute.history": {
+                  $contains: { at: new Date("2026-01-01"), note: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: note is a string when it is set
+                "objectAttribute.history": {
+                  $contains: {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    note: 1
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                "objectAttribute.history": {
+                  $contains: {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    note: null,
+                    // @ts-expect-error: mood is not a field a history element declares
+                    mood: "calm"
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                "shelf.promos": {
+                  $contains: {
+                    kind: "discount",
+                    percent: 10,
+                    endsAt: new Date("2026-03-31"),
+                    // @ts-expect-error: label belongs to the bundle variant, not discount
+                    label: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole value compared by equality or IN with null on a nullable field, in a BelongsTo target", () => {
+        // An object, or a list element named by an index, is compared whole by
+        // equality and IN, and a nulled field is stored by leaving it out. So
+        // null on a nullable field of the operand means the value compared
+        // lacks it: the expression builder drops the field, as it does in a
+        // $contains element. These pin that equality and IN offer null there at
+        // every depth, and nowhere else
+        it("accepts null on a nullable field of a whole value, at every depth", async () => {
+          const at = new Date("2026-01-01");
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                "objectAttribute.history[0]": { at, actor: "ann", note: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                "objectAttribute.history[0]": [
+                  { at, actor: "ann", note: null },
+                  { at, actor: "bo" }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                addressAttribute: {
+                  street: "1 Main St",
+                  city: "Denver",
+                  zip: null,
+                  geo: { lat: 1, lng: 2, accuracy: "precise" },
+                  scores: [],
+                  category: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: the same in an IN of whole objects
+                addressAttribute: [
+                  {
+                    street: "1 Main St",
+                    city: "Denver",
+                    zip: null,
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [],
+                    category: null
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                objectAttribute: {
+                  name: "Ann",
+                  email: "ann@example.com",
+                  tags: [],
+                  status: "active",
+                  createdDate: at,
+                  deletedAt: null,
+                  contactedAt: null,
+                  roles: null,
+                  history: [{ at, actor: "ann", note: null }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                "layout.section": {
+                  entries: [
+                    {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at, note: null }]
+                    }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: bin is nullable in an object field below an index
+                "layout.section.entries[0].placement": { aisle: "A", bin: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                "layout.section.entries[0]": [
+                  {
+                    sku: "MUG-1",
+                    note: null,
+                    placement: { aisle: "A", bin: null },
+                    restocks: [{ at, note: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                "shelf.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                "objectAttribute.history": [
+                  [{ at, actor: "ann", note: null }],
+                  []
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                "layout.section.entries": [
+                  [
+                    {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at, note: null }]
+                    }
+                  ]
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-no-error: an IN of whole lists of union variants
+                "shelf.promos": [
+                  [{ kind: "bundle", sku: "KIT-1", label: null }]
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+          const at = new Date("2026-01-01");
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is not nullable, so every element has one
+                "objectAttribute.history[0]": { at, actor: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                "objectAttribute.history[0]": { at, note: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                "objectAttribute.history[0]": {
+                  at,
+                  actor: "ann",
+                  note: null,
+                  // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                  mood: "calm"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: an IN element is a whole element, and no element is null
+                "objectAttribute.history[0]": [null]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: city is not nullable
+                addressAttribute: {
+                  street: "1 Main St",
+                  city: null,
+                  geo: { lat: 1, lng: 2, accuracy: "precise" },
+                  scores: []
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: geo is an object field, which is never nullable
+                addressAttribute: {
+                  street: "1 Main St",
+                  city: "Denver",
+                  geo: null,
+                  scores: []
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: an element of a list inside the value is never null
+                objectAttribute: {
+                  name: "Ann",
+                  email: "ann@example.com",
+                  tags: [],
+                  status: "active",
+                  createdDate: at,
+                  history: [null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: aisle is not nullable
+                "layout.section.entries[0].placement": { aisle: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: the discriminator names the variant, so it is never null
+                "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsVariant.create(listsVariant, {
+            condition: {
+              lists: {
+                // @ts-expect-error: sku is not nullable in the bundle variant
+                "shelf.promos[0]": { kind: "bundle", sku: null }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                "objectAttribute.history": [[{ at, actor: null }]]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                // @ts-expect-error: an element of a list compared whole is never null
+                "objectAttribute.history": [[null]]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Variant.create(variant, {
+            condition: {
+              source: {
+                "objectAttribute.history": [
+                  // @ts-expect-error: mood is not a field a history element declares
+                  [{ at, actor: "ann", mood: "calm" }]
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a list-index path into a nullable list, in a foreign key target", () => {
+        // A nullable list is declared `Element[] | undefined`. These pin that an
+        // index into one types its element as an index into a list that is not
+        // nullable does, rather than falling back to the stored form
+        it("accepts a whole object element, named as declared, and an IN of them", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann"
+                  },
+                  // @ts-expect-no-error: the element's nullable field may be set
+                  "objectAttribute.history[1]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    note: "restocked"
+                  },
+                  // @ts-expect-no-error: an IN of whole elements
+                  "objectAttribute.history[2]": [
+                    { at: new Date("2026-01-01"), actor: "ann" },
+                    { at: new Date("2026-02-01"), actor: "bob" }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts a field below the index, in the field's own type and operators", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: actor is a string, so it takes a prefix
+                  "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                  // @ts-expect-no-error: an IN of strings
+                  "objectAttribute.history[1].actor": ["ann", "bob"],
+                  // @ts-expect-no-error: at is a date, compared as a Date
+                  "objectAttribute.history[0].at": {
+                    $gte: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: and ranged as one
+                  "objectAttribute.history[1].at": {
+                    $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                  },
+                  // @ts-expect-no-error: a nullable field below the index takes its type
+                  "objectAttribute.history[2].note": { $contains: "late" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts null on a nullable field below the index, as not set", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                  "objectAttribute.history[0].note": null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts an element of a nullable list of scalars in its own type", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: a contactedAt element is a Date
+                  "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                  // @ts-expect-no-error: and is compared as one
+                  "objectAttribute.contactedAt[1]": {
+                    $lt: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: a roles element is one of the enum's members
+                  "objectAttribute.roles[0]": "owner"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a whole element its schema cannot hold", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is declared as a string
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: 1
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: at is declared as a date, so it takes a Date
+                  "objectAttribute.history[0]": {
+                    at: "2026-01-01",
+                    actor: "ann"
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    // @ts-expect-error: an element has no mood, so no element can equal this one
+                    mood: "calm"
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is required, so an element without it is no element
+                  "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator a whole element's stored form cannot carry", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an element is stored as a Map, which has no prefix
+                  "objectAttribute.history[0]": { $beginsWith: "a" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a Map has no ordering
+                  "objectAttribute.history[0]": { $gt: "a" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a Map holds no elements to contain
+                  "objectAttribute.history[0]": { $contains: "a" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on the element and on a field below it that is not nullable", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                  "objectAttribute.history[0]": null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is not nullable
+                  "objectAttribute.history[0].actor": null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a contactedAt element is not nullable
+                  "objectAttribute.contactedAt[0]": null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a history element declares at, actor and note, not mood
+                  "objectAttribute.history[0].mood": "calm"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is a string
+                  "objectAttribute.history[0].actor": 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: at is a date, so it compares against a Date
+                  "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a string has no $between of numbers
+                  "objectAttribute.history[0].actor": { $between: [1, 2] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                  "objectAttribute.contactedAt[0]": "2026-01-01"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: admin is not a member of the roles enum
+                  "objectAttribute.roles[0]": "admin"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not offer an index past the tenth, as for any list", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: indexes 0 to 9 are offered
+                  "objectAttribute.history[10].actor": "ann"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole $contains element with null on a nullable field, in a foreign key target", () => {
+        // An element is stored without a nulled field, and contains compares an
+        // element whole, so null on a nullable field of the operand means the
+        // element looked for lacks it. These pin that the operand offers null
+        // there at every depth, and nowhere else
+        it("accepts null on a nullable field of the element, at every depth", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: null
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at: new Date("2026-01-01"), note: null }]
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: label is nullable in the bundle variant
+                  "shelf.promos": {
+                    $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on a field of the element that is not nullable", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is not nullable, so every element has one
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: null }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: aisle is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: null },
+                      restocks: []
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: placement is an object field, which is never nullable
+                  "layout.section.entries": {
+                    $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: restocks is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: null
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: a restocks element is never null
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [null]
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: a restocks element's at is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [{ at: null }]
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: sku is not nullable in the bundle variant
+                  "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: the discriminator names the variant, so it is never null
+                  "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null as the whole element", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: $contains looks for an element, and no element is null
+                  "objectAttribute.history": { $contains: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: nor on a list of union variants
+                  "shelf.promos": { $contains: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: nor on a list of strings
+                  "objectAttribute.tags": { $contains: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: nor on a nullable list of dates
+                  "objectAttribute.contactedAt": { $contains: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is required, so an element without it is no element
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), note: null }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: note is a string when it is set
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: 1
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: null,
+                      // @ts-expect-error: mood is not a field a history element declares
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  "shelf.promos": {
+                    $contains: {
+                      kind: "discount",
+                      percent: 10,
+                      endsAt: new Date("2026-03-31"),
+                      // @ts-expect-error: label belongs to the bundle variant, not discount
+                      label: null
+                    }
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
+
+      describe("a whole value compared by equality or IN with null on a nullable field, in a foreign key target", () => {
+        // An object, or a list element named by an index, is compared whole by
+        // equality and IN, and a nulled field is stored by leaving it out. So
+        // null on a nullable field of the operand means the value compared
+        // lacks it: the expression builder drops the field, as it does in a
+        // $contains element. These pin that equality and IN offer null there at
+        // every depth, and nowhere else
+        it("accepts null on a nullable field of a whole value, at every depth", async () => {
+          const at = new Date("2026-01-01");
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                  "objectAttribute.history[0]": { at, actor: "ann", note: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                  "objectAttribute.history[0]": [
+                    { at, actor: "ann", note: null },
+                    { at, actor: "bo" }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: "Denver",
+                    zip: null,
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [],
+                    category: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: the same in an IN of whole objects
+                  addressAttribute: [
+                    {
+                      street: "1 Main St",
+                      city: "Denver",
+                      zip: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [],
+                      category: null
+                    }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                  objectAttribute: {
+                    name: "Ann",
+                    email: "ann@example.com",
+                    tags: [],
+                    status: "active",
+                    createdDate: at,
+                    deletedAt: null,
+                    contactedAt: null,
+                    roles: null,
+                    history: [{ at, actor: "ann", note: null }]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                  "layout.section": {
+                    entries: [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: bin is nullable in an object field below an index
+                  "layout.section.entries[0].placement": {
+                    aisle: "A",
+                    bin: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                  "layout.section.entries[0]": [
+                    {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at, note: null }]
+                    }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                  "shelf.promos[0]": {
+                    kind: "bundle",
+                    sku: "KIT-1",
+                    label: null
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                  "objectAttribute.history": [
+                    [{ at, actor: "ann", note: null }],
+                    []
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                  "layout.section.entries": [
+                    [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-no-error: an IN of whole lists of union variants
+                  "shelf.promos": [
+                    [{ kind: "bundle", sku: "KIT-1", label: null }]
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+          const at = new Date("2026-01-01");
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is not nullable, so every element has one
+                  "objectAttribute.history[0]": { at, actor: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                  "objectAttribute.history[0]": { at, note: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  "objectAttribute.history[0]": {
+                    at,
+                    actor: "ann",
+                    note: null,
+                    // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                    mood: "calm"
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an IN element is a whole element, and no element is null
+                  "objectAttribute.history[0]": [null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: city is not nullable
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: null,
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: []
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: geo is an object field, which is never nullable
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: "Denver",
+                    geo: null,
+                    scores: []
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an element of a list inside the value is never null
+                  objectAttribute: {
+                    name: "Ann",
+                    email: "ann@example.com",
+                    tags: [],
+                    status: "active",
+                    createdDate: at,
+                    history: [null]
+                  }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: aisle is not nullable
+                  "layout.section.entries[0].placement": { aisle: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: the discriminator names the variant, so it is never null
+                  "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ListsSample.create(listsSample, {
+            condition: {
+              listsId: {
+                target: {
+                  // @ts-expect-error: sku is not nullable in the bundle variant
+                  "shelf.promos[0]": { kind: "bundle", sku: null }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                  "objectAttribute.history": [[{ at, actor: null }]]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an element of a list compared whole is never null
+                  "objectAttribute.history": [[null]]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Sample.create(sample, {
+            condition: {
+              sourceId: {
+                target: {
+                  "objectAttribute.history": [
+                    // @ts-expect-error: mood is not a field a history element declares
+                    [{ at, actor: "ann", mood: "calm" }]
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
         });
       });
     });

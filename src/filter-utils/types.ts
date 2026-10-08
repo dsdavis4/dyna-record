@@ -9,6 +9,7 @@ import type {
   DynamoNativeValue,
   DynamoScalarValue,
   LibraryBrandToValue,
+  AllowNullInWholeValue,
   Optional
 } from "../types.js";
 
@@ -356,6 +357,11 @@ export type BeginsWithConditionFor<V> = V extends Date
  * is what lets the member test keep the field's own type instead of widening
  * to any scalar.
  *
+ * The element is written as {@link AllowNullInWholeValue} describes, which
+ * offers `null` on its nullable fields: `contains` compares an element whole,
+ * and the expression builder leaves a nulled field out of the bound element,
+ * as the element is stored.
+ *
  * Distributes for the same reason {@link BeginsWithConditionFor} does.
  *
  * @typeParam V - The attribute's declared type.
@@ -365,7 +371,7 @@ export type ContainsConditionFor<V> = V extends Date
   : V extends string
     ? ContainsFilter
     : V extends readonly (infer Element)[]
-      ? Record<"$contains", Element>
+      ? Record<"$contains", AllowNullInWholeValue<Element>>
       : never;
 
 /**
@@ -385,7 +391,8 @@ export type ContainsConditionFor<V> = V extends Date
  * - A **whole value** of the attribute — an equality value, every `IN` element,
  *   every {@link ComparisonFilter} operand, both {@link BetweenFilter} bounds.
  *   Named the way the entity declares the attribute, so a date attribute takes
- *   a `Date`. Validated and converted.
+ *   a `Date`, and an object compared whole takes `null` on a nullable field
+ *   (see {@link EqualityConditionFor}). Validated and converted.
  * - A **fragment** of the stored form — {@link BeginsWithFilter}'s prefix, and
  *   {@link ContainsFilter}'s substring. There is no "Date that starts with
  *   2026", so these stay strings and scalars whatever the attribute declares,
@@ -402,7 +409,7 @@ export type FilterConditionFor<V> =
   | ComparisonConditionFor<V>
   | BetweenConditionFor<V>
   | EqualityConditionFor<V>
-  | V[];
+  | InConditionFor<V>;
 
 /**
  * The equality condition, which an array-typed field does not offer.
@@ -411,14 +418,67 @@ export type FilterConditionFor<V> =
  * as a list of values to compare against rather than as the list itself — the
  * two are indistinguishable, and the builder resolves the ambiguity in `IN`'s
  * favour. Offering `V` there would advertise a whole-list equality the
- * compilation cannot express. The `IN` form for such a field is `V[]`, a list
- * of lists.
+ * compilation cannot express. The `IN` form for such a field is a list of
+ * lists: see {@link InConditionFor}.
+ *
+ * The value is compared whole, so it is written as
+ * {@link AllowNullInWholeValue} describes: an object, or a list element named
+ * by an index, takes `null` on a nullable field at any depth. dyna-record
+ * stores a nulled field by leaving it out, and the expression builder leaves it
+ * out of the bound value too, so the operand equals the value as stored.
  *
  * Distributes for the same reason the operator gates do.
  *
  * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // A shipping address whose nullable `zip` is not set
+ * filter: { shippingAddress: { street: "1 Main St", city: "Denver", zip: null } }
+ *
+ * // The first line item of an order, without a note
+ * filter: { "details.lineItems[0]": { sku: "MUG-1", quantity: 2, note: null } }
+ * ```
  */
-export type EqualityConditionFor<V> = V extends readonly unknown[] ? never : V;
+export type EqualityConditionFor<V> = V extends readonly unknown[]
+  ? never
+  : AllowNullInWholeValue<V>;
+
+/**
+ * The `IN` condition: a list of values the attribute is compared against, each
+ * a whole value of it.
+ *
+ * Each element is written as an equality value is, so an object element takes
+ * `null` on a nullable field at any depth (see {@link EqualityConditionFor}).
+ * On an array-typed field each element is a whole list, which is the form the
+ * equality condition cannot take there; its elements take `null` on their
+ * nullable fields the same way, and the expression builder converts each list
+ * as the write stores it.
+ *
+ * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // Either of two addresses, the second without a zip
+ * filter: {
+ *   shippingAddress: [
+ *     { street: "1 Main St", city: "Denver", zip: "80202" },
+ *     { street: "9 Elm St", city: "Boise", zip: null }
+ *   ]
+ * }
+ *
+ * // An order whose line items are exactly these, the second without a note
+ * filter: {
+ *   "details.lineItems": [
+ *     [
+ *       { sku: "MUG-1", quantity: 2, note: "gift" },
+ *       { sku: "KET-1", quantity: 1, note: null }
+ *     ]
+ *   ]
+ * }
+ * ```
+ */
+export type InConditionFor<V> = Array<AllowNullInWholeValue<V>>;
 
 /**
  * Every condition a filter key accepts, over the values a caller may write.

@@ -193,6 +193,54 @@ const attributes: Record<
             text: { body: { type: "string" } }
           }
         }
+      },
+      // A nullable field at every depth below an element's top: a nested
+      // object's, an element's of a list within the element, a nullable list
+      // within the element, and a union variant's
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            },
+            lines: {
+              type: "array",
+              items: { type: "object", fields: { sku: { type: "string" } } },
+              nullable: true
+            }
+          }
+        }
+      },
+      promos: {
+        type: "array",
+        items: {
+          type: "discriminatedUnion",
+          discriminator: "kind",
+          variants: {
+            discount: { percent: { type: "number" } },
+            bundle: {
+              sku: { type: "string" },
+              label: { type: "string", nullable: true }
+            }
+          }
+        }
       }
     } as const satisfies ObjectSchema
   },
@@ -2000,6 +2048,145 @@ describe("FilterExpressionBuilder", () => {
         });
       });
 
+      it("leaves a nulled nullable field out of the element at every depth", () => {
+        expect.assertions(1);
+
+        // contains compares the element whole, and the write stores each of
+        // these elements without its nulled fields, so the bound element
+        // lacks them too: in a nested object, in an element of a list within
+        // the element, as a nullable list itself, and in a union variant
+        const restocked: Record<string, unknown> = {
+          sku: "MUG-1",
+          placement: { aisle: "A", bin: null },
+          restocks: [
+            { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+            { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+          ],
+          lines: null
+        };
+        const bundled: Record<string, unknown> = {
+          sku: "MUG-2",
+          placement: { aisle: "B", bin: null },
+          restocks: [],
+          lines: [{ sku: "KIT-1" }]
+        };
+        const bundle: Record<string, unknown> = {
+          kind: "bundle",
+          sku: "KIT-1",
+          label: null
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.entries": { $contains: restocked },
+            $or: [
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.entries": { $contains: bundled } },
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.promos": { $contains: bundle } }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "(contains(#Lists.#entries, :Listsentries1) OR contains(#Lists.#promos, :Listspromos2)) AND (contains(#Lists.#entries, :Listsentries3))",
+          values: {
+            Listsentries1: {
+              sku: "MUG-2",
+              placement: { aisle: "B" },
+              restocks: [],
+              lines: [{ sku: "KIT-1" }]
+            },
+            Listspromos2: { kind: "bundle", sku: "KIT-1" },
+            Listsentries3: {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [
+                { at: "2023-01-01T00:00:00.000Z" },
+                { at: "2023-01-02T00:00:00.000Z", note: "late" }
+              ]
+            }
+          }
+        });
+      });
+
+      it.each([
+        [
+          "a non-nullable field of a nested object",
+          {
+            sku: "MUG-1",
+            placement: { aisle: null },
+            restocks: []
+          }
+        ],
+        [
+          "an object field, which is never nullable",
+          { sku: "MUG-1", placement: null, restocks: [] }
+        ],
+        [
+          "a list that is not nullable",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: null }
+        ],
+        [
+          "an element of a list within the element",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: [null] }
+        ],
+        [
+          "a non-nullable field of an element of a list within the element",
+          {
+            sku: "MUG-1",
+            placement: { aisle: "A" },
+            restocks: [{ at: null }]
+          }
+        ]
+      ])("rejects null on %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.entries": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.entries": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        [
+          "a non-nullable field of a union variant",
+          { kind: "bundle", sku: null }
+        ],
+        ["the discriminator", { kind: null, sku: "KIT-1" }]
+      ])("rejects null on %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.promos": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.promos": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it("rejects null as the element itself", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({ "lists.entries": { $contains: null } })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.entries": $contains takes a single value to look for, and null is not one'
+          )
+        );
+      });
+
       it.each([
         [
           "a field of the wrong type",
@@ -2335,6 +2522,285 @@ describe("FilterExpressionBuilder", () => {
         ).toThrow(
           new FilterError(
             'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+          )
+        );
+      });
+    });
+  });
+
+  describe("a whole value compared by equality or IN leaves a nulled nullable field out", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("binds the value without the field at every depth, as the write stores it", () => {
+        expect.assertions(1);
+
+        // Equality and IN compare an object, or a list element named by an
+        // index, whole, and the write stores it without its nulled fields, so
+        // the bound value lacks them too: an object attribute's own, a nested
+        // object's, a nullable list's, an element's of a list within the
+        // value, and a union variant's
+        const at = new Date("2023-01-01T00:00:00.000Z");
+        const surveyedAt = new Date("2023-01-02T00:00:00.000Z");
+
+        expect(
+          builder().filterParams({
+            address: {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              city: "Denver",
+              zip: null,
+              geo: { lat: 39.7, surveyedAt },
+              lines: null,
+              channel: null
+            },
+            "lists.audit[0]": [
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              { at, actor: "ann", note: null, source: { seenAt: at } },
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              { at, actor: "bo", note: "late", source: { seenAt: at } }
+            ],
+            "lists.entries[0]": {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              sku: "MUG-1",
+              placement: { aisle: "A", bin: null },
+              restocks: [{ at, note: null }],
+              lines: null
+            },
+            // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+            "lists.entries[0].placement": { aisle: "A", bin: null },
+            // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+            "lists.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+          })
+        ).toEqual({
+          expression:
+            "#Address = :Address1 AND #Lists.#audit[0] IN (:Listsaudit02,:Listsaudit03) AND #Lists.#entries[0] = :Listsentries04 AND #Lists.#entries[0].#placement = :Listsentries0placement5 AND #Lists.#promos[0] = :Listspromos06",
+          values: {
+            Address1: {
+              city: "Denver",
+              geo: { lat: 39.7, surveyedAt: "2023-01-02T00:00:00.000Z" }
+            },
+            Listsaudit02: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "ann",
+              source: { seenAt: "2023-01-01T00:00:00.000Z" }
+            },
+            Listsaudit03: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "bo",
+              note: "late",
+              source: { seenAt: "2023-01-01T00:00:00.000Z" }
+            },
+            Listsentries04: {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [{ at: "2023-01-01T00:00:00.000Z" }]
+            },
+            Listsentries0placement5: { aisle: "A" },
+            Listspromos06: { kind: "bundle", sku: "KIT-1" }
+          }
+        });
+      });
+
+      it.each<[string, string, unknown]>([
+        [
+          "a non-nullable field of an indexed element",
+          "lists.audit[0]",
+          { at: new Date(0), actor: null, source: { seenAt: new Date(0) } }
+        ],
+        [
+          "an object field, which is never nullable",
+          "address",
+          { city: "Denver", geo: null }
+        ],
+        [
+          "an element of a list within the value",
+          "lists.entries[0]",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: [null] }
+        ],
+        [
+          "the discriminator of an indexed union element",
+          "lists.promos[0]",
+          { kind: null, sku: "KIT-1" }
+        ]
+      ])("rejects null on %s", (_, attr, operand) => {
+        expect.assertions(1);
+
+        // Leaving such a field out would not describe a value the schema can
+        // hold, so null there is still a value of the wrong type
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any object
+          builder().filterParams({ [attr]: operand })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": the value does not match the attribute's type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)`
+          )
+        );
+      });
+    });
+  });
+
+  describe("an IN of whole lists is validated and converted like any whole value", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("binds each list in the form the table stores it, without its nulled fields", () => {
+        expect.assertions(1);
+
+        // Each IN element on a list is a whole list, compared whole: its dates
+        // are converted and its nulled fields dropped, at every depth, as the
+        // write stores the list
+        const at = new Date("2023-01-01T00:00:00.000Z");
+        const seenAt = new Date("2023-01-02T00:00:00.000Z");
+
+        const filter: Record<string, unknown> = {
+          "lists.audit": [
+            [
+              { at, actor: "ann", note: null, source: { seenAt } },
+              { at, actor: "bo", note: "late", source: { seenAt } }
+            ],
+            []
+          ],
+          "meta.seenAt": [[at, seenAt]],
+          "lists.entries": [
+            [
+              {
+                sku: "MUG-1",
+                placement: { aisle: "A", bin: null },
+                restocks: [{ at, note: null }],
+                lines: null
+              }
+            ]
+          ],
+          "lists.promos": [[{ kind: "bundle", sku: "KIT-1", label: null }]]
+        };
+
+        expect(
+          // @ts-expect-error the entity-level type offers an IN of lists; the builder's own FilterParams does not
+          builder().filterParams(filter)
+        ).toEqual({
+          expression:
+            "#Lists.#audit IN (:Listsaudit1,:Listsaudit2) AND #Meta.#seenAt IN (:MetaseenAt3) AND #Lists.#entries IN (:Listsentries4) AND #Lists.#promos IN (:Listspromos5)",
+          values: {
+            Listsaudit1: [
+              {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "ann",
+                source: { seenAt: "2023-01-02T00:00:00.000Z" }
+              },
+              {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "bo",
+                note: "late",
+                source: { seenAt: "2023-01-02T00:00:00.000Z" }
+              }
+            ],
+            Listsaudit2: [],
+            MetaseenAt3: [
+              "2023-01-01T00:00:00.000Z",
+              "2023-01-02T00:00:00.000Z"
+            ],
+            Listsentries4: [
+              {
+                sku: "MUG-1",
+                placement: { aisle: "A" },
+                restocks: [{ at: "2023-01-01T00:00:00.000Z" }]
+              }
+            ],
+            Listspromos5: [{ kind: "bundle", sku: "KIT-1" }]
+          }
+        });
+      });
+
+      it.each<[string, string, unknown, string]>([
+        [
+          "at the top of an element",
+          "lists.audit",
+          [
+            {
+              at: new Date(0),
+              actor: "ann",
+              source: { seenAt: new Date(0) },
+              mood: "calm"
+            }
+          ],
+          "[0].mood"
+        ],
+        [
+          "in a nested object of a later element",
+          "lists.entries",
+          [
+            { sku: "MUG-1", placement: { aisle: "A" }, restocks: [] },
+            { sku: "MUG-2", placement: { aisle: "B", shelf: 3 }, restocks: [] }
+          ],
+          "[1].placement.shelf"
+        ],
+        [
+          "in an element of a list within an element",
+          "lists.entries",
+          [
+            {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [{ at: new Date(0), by: "ann" }]
+            }
+          ],
+          "[0].restocks[0].by"
+        ],
+        [
+          "in a union variant, though another variant declares it",
+          "lists.promos",
+          [{ kind: "bundle", sku: "KIT-1", percent: 10 }],
+          "[0].percent"
+        ]
+      ])(
+        "rejects an undeclared field %s, naming its path",
+        (_, attr, list, path) => {
+          expect.assertions(1);
+
+          // Converting the list would strip the field, and the stripped list
+          // would equal a stored one the caller's does not
+          expect(() =>
+            // @ts-expect-error a plain JavaScript caller can pass any object
+            builder().filterParams({ [attr]: [list] })
+          ).toThrow(
+            new FilterError(
+              `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+            )
+          );
+        }
+      );
+
+      it.each<[string, string, unknown]>([
+        ["a string on a list of numbers", "lists.scores", ["1"]],
+        ["a non-member on a list of enums", "lists.roles", ["admin"]],
+        ["a number on a list of dates", "meta.seenAt", [1]],
+        [
+          "a field of the wrong type in an element",
+          "lists.audit",
+          [{ at: 5, actor: "ann", source: { seenAt: new Date(0) } }]
+        ],
+        [
+          "null on a field that is not nullable",
+          "lists.audit",
+          [{ at: new Date(0), actor: null, source: { seenAt: new Date(0) } }]
+        ],
+        ["null as an element", "lists.audit", [null]],
+        [
+          "an element of a variant the union does not declare",
+          "lists.promos",
+          [{ kind: "gift", sku: "KIT-1" }]
+        ]
+      ])("rejects %s in a listed list", (_, attr, list) => {
+        expect.assertions(1);
+
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any value
+          builder().filterParams({ [attr]: [list] })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": the value does not match the attribute's type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)`
           )
         );
       });

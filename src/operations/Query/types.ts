@@ -50,8 +50,9 @@ export type QueryOptions = QueryBuilderOptions & {
  * enable literal type inference for return type narrowing. Both declarations are required:
  * this one provides excess property checking on object literals, while the generic
  * provides literal type capture for return type inference. The generic is inferred
- * through {@link InferableFilterParams}, which keeps it from making an undeclared key
- * in an object operand known to the intersection.
+ * from {@link FilterInferenceSite} and checked against {@link CheckedFilterParams},
+ * which keeps it from making an undeclared key in an object operand known to the
+ * intersection.
  *
  * @template T - The entity type being queried. Defaults to `DynaRecord` for backward
  * compatibility in generic contexts.
@@ -304,11 +305,17 @@ export type TypeAtDotPath<
  * The type one path segment names: a field of `T`, or — where the segment
  * carries indexes — the element that indexing that field reaches.
  *
+ * `NonNullable` is applied before stepping into the element, for the reason
+ * {@link TypeAtDotPath} applies it between segments: a nullable List is
+ * declared `Element[] | undefined`, which as a union does not match the array
+ * pattern, and an element of a List that is set is defined. Without it the
+ * index resolved to `never` and the key fell back to the stored form.
+ *
  * @typeParam T - The type the segment is read against.
  * @typeParam S - The segment, with any indexes still attached.
  */
 type TypeAtSegment<T, S extends string> = S extends `${infer Name}[${number}]`
-  ? TypeAtSegment<T, Name> extends readonly (infer Element)[]
+  ? NonNullable<TypeAtSegment<T, Name>> extends readonly (infer Element)[]
     ? Element
     : never
   : S extends keyof T
@@ -575,33 +582,77 @@ type AllowedConditionAt<Allowed, K> = Allowed extends unknown
   : never;
 
 /**
- * The type a query's `filter` option is inferred through: the filter's own keys,
+ * The type a query's `filter` option is checked against: the filter's own keys,
  * with the `type` and `$or` values that narrow the results kept as written, and
  * every other key given the condition `Allowed` declares for it.
  *
  * The query overloads infer the filter as a `const F` to narrow their results
- * by it, and that inferred type is intersected with the declared filter shape.
- * Were the filter typed as `F` itself, every key's value would be its own
- * literal type intersected with the declared condition — so a key an object
- * operand carries that the attribute does not declare would be known to the
- * intersection, and the object literal would compile with it. Inferring
- * through this mapping keeps the keys and the narrowing values, while each
- * operand is checked against the declared condition alone, so an undeclared
- * key in an object operand is an excess property at any depth.
+ * by it (see {@link FilterInferenceSite}). Were the filter checked against `F`
+ * itself, every key's value would be its own literal type intersected with the
+ * declared condition — so a key an object operand carries that the attribute
+ * does not declare would be known to the intersection, and the object literal
+ * would compile with it. Checking against this mapping keeps the keys and the
+ * narrowing values, while each operand is checked against the declared
+ * condition alone, so an undeclared key in an object operand is an excess
+ * property at any depth.
  *
  * A filter typed with an index signature rather than written as a literal —
  * a `FilterParams` variable — names no key the mapping could look up, so its
- * index signature keeps the filter's own type, as it did before.
+ * index signature keeps the filter's own type, as it did before. A filter typed
+ * as a union, such as a `TypedFilterParams<T>` variable, is mapped one member at
+ * a time, because the mapping is homomorphic in `F`; each member keeps its own
+ * `type`, and its other keys take conditions it already satisfies.
  *
- * @template F - The filter as the caller wrote it, inferred through this type.
+ * @template F - The filter as the caller wrote it.
  * @template Allowed - The filter shapes the query accepts.
  */
-export type InferableFilterParams<F, Allowed> = {
+export type CheckedFilterParams<F, Allowed> = {
   [K in keyof F]: K extends "type" | "$or"
     ? F[K]
     : string extends K
       ? F[K]
       : AllowedConditionAt<Allowed, K>;
+};
+
+/**
+ * `unknown` for any `F` the call settles on, and left unresolved while `F` is
+ * still being inferred.
+ *
+ * A conditional on `F` is deferred until `F` is known, so beside a naked `F` in
+ * a union it neither takes part in inference nor survives it: `F | UnknownOnceInferred<F>`
+ * is a union with a naked `F` while the call is inferred, and `unknown` once it
+ * is checked.
+ *
+ * @template F - The type parameter being inferred.
+ */
+type UnknownOnceInferred<F> = F extends unknown ? unknown : never;
+
+/**
+ * The `filter` declaration the non-index query overloads infer their `const F`
+ * from, intersected beside the declaration that checks it
+ * ({@link CheckedFilterParams}).
+ *
+ * `F` has to be inferred from a naked `F` in a union, because only there does
+ * TypeScript infer a filter typed as a union — a `TypedFilterParams<T>` or
+ * `SKScopedFilterParams<T, SK>` variable, parameter or property — as the whole
+ * union. Inferred through a mapped type instead, each member of the union
+ * becomes a separate candidate and one of them is kept, so the other members,
+ * such as the one without `type`, no longer match and the call has no overload.
+ * A literal filter is inferred here as its own literal type, as before.
+ *
+ * Checking against a naked `F` would let a literal's own type vouch for itself,
+ * reopening the excess keys {@link CheckedFilterParams} closes. Beside `F` sits
+ * {@link UnknownOnceInferred}, which resolves to `unknown` once `F` is inferred,
+ * so this declaration checks nothing and the filter is held to
+ * {@link CheckedFilterParams} and the declared filter type alone. It must stay
+ * its own object in the intersection: as a member of the same property's type
+ * the union would be distributed across the check and `F` would no longer be
+ * naked.
+ *
+ * @template F - The filter as the caller wrote it.
+ */
+export type FilterInferenceSite<F> = {
+  filter?: F | UnknownOnceInferred<F>;
 };
 
 // ─── Return Type Narrowing Types ────────────────────────────────────────────

@@ -70,10 +70,10 @@ export type FieldResolution =
  * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
  *
  * A path ending *at* an array resolves: the field exists and its stored form is
- * a List, which is what decides whether a fragment operator applies to it. What
- * its schema cannot do is validate a condition value, because the schema
- * describes the list while a condition carries an element — that judgement
- * belongs to the caller, which has the condition in hand.
+ * a List, which is what decides whether a fragment operator applies to it. Its
+ * schema validates a whole list, which is what an `IN` element on it is; a
+ * `$contains` operand is one element, which the caller judges against the
+ * element's schema instead.
  *
  * A path continuing *through* an array needs an index to say which element it
  * means. Without one it names nothing DynamoDB can reach, so it is reported
@@ -152,39 +152,6 @@ export const resolveFieldDef = (
     ? { outcome: "unknown" }
     : { outcome: "resolved", fieldDef };
 };
-
-/**
- * Whether a field's own schema can validate a condition value on it.
- *
- * Exhaustive over `FieldDef`, so a new field type fails compilation here until
- * it declares a stance — the standard the stored-form map sets, applied to the
- * other per-field question a condition has to ask.
- *
- * An array is the one that cannot: its schema describes the list, while a
- * condition on it carries an element — an `IN` element, or a `$contains`
- * operand — so validating against it would reject every one. A discriminated
- * union can: a path ending at one names the whole field, and a condition on it
- * carries a whole variant.
- */
-const VALIDATES_CONDITION_VALUE: Record<FieldDef["type"], boolean> = {
-  string: true,
-  number: true,
-  boolean: true,
-  date: true,
-  enum: true,
-  object: true,
-  discriminatedUnion: true,
-  array: false
-};
-
-/**
- * Whether a condition value on this field can be validated against the field's
- * own schema.
- * @param fieldDef - The field a dot path names
- * @returns Whether the schema describes the value a condition carries
- */
-export const fieldValidatesConditionValue = (fieldDef: FieldDef): boolean =>
-  VALIDATES_CONDITION_VALUE[fieldDef.type];
 
 /**
  * Joins a field to the path of an undeclared field found below it, so a list
