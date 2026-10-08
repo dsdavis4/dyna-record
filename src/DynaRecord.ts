@@ -194,6 +194,30 @@ abstract class DynaRecord implements DynaRecordBase {
    * inference limitation. Use `filter: { type: "Order" }` or the `skCondition` option for
    * return type narrowing.
    *
+   * **Sort key narrowing reads the entity name:** `skCondition` narrows on an entity name or a
+   * prefix of one. `"Order"` and `{ $beginsWith: "Order" }` narrow to every entity whose name
+   * starts with `Order` (an `OrderItem` too, if the partition has one). A value that runs past
+   * the entity name, such as `"Order#123"` or `{ $beginsWith: "Order#" }`, is accepted but does
+   * not narrow: the table's delimiter is configurable and invisible to the types, so they cannot
+   * tell where the name ends. Narrowing assumes no entity's sort key starts with another entity's
+   * name followed by the delimiter, which always holds with the default `#` delimiter and with
+   * any delimiter whose first character cannot appear in a class name.
+   *
+   * **Reusing a filter:** narrowing reads the filter's literal type, which a filter written at the
+   * call has. To define a filter once and keep narrowing, check it with
+   * `satisfies TypedFilterParams<T>`. A filter whose type is a {@link TypedFilterParams}
+   * annotation (a function parameter, an object property) is accepted, but the annotation widens
+   * it, so the results are the whole partition's union. Beside an `skCondition` that names an
+   * entity, type a reusable filter as {@link SKScopedFilterParams} with the same sort key
+   * condition, such as `SKScopedFilterParams<Customer, "Order">`: a partition-wide
+   * `TypedFilterParams<T>` is refused there, because it offers other entities' keys and `type`
+   * values that cannot match the rows the sort key selects.
+   *
+   * **`null` in a filter:** `null` is not a filter value on its own. Inside an object compared
+   * whole (an equality value, an `IN` element, or a `$contains` element of a list of objects),
+   * `null` on a nullable field means "not set": the field is left out of the value sent, which
+   * then equals a value stored without it.
+   *
    * @template T - The entity type being queried.
    * @template SK - The inferred sort key condition type, captured via `const` generic for literal type inference.
    * @template F - The inferred filter type, captured via `const` generic. Constrained by {@link SKScopedFilterParams} — when SK narrows, only matched entities' attributes are accepted.
@@ -202,6 +226,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * @param {SKScopedFilterParams<T, SK>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes, scoped by `skCondition` when present. The `type` field accepts valid entity class names within the SK scope.
    * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Accepts entity names, entity-name-prefixed strings, `$beginsWith` with exact names or partial prefixes, a single comparison, or a `$between` range. Narrows the return type and scopes the filter to matched entities.
    * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value, filter keys, and `skCondition`.
+   * @throws {@link FilterError} Before the query is sent, when a filter or key condition value cannot match: a value that fails the attribute's schema, an inverted `$between`, a dot path the schema does not declare, a field an object operand's schema does not declare, or a key condition set to `undefined`.
    *
    * @example By entity ID
    * ```typescript
@@ -278,6 +303,43 @@ abstract class DynaRecord implements DynaRecordBase {
    * // orders is Array<EntityAttributesInstance<Order>>
    * ```
    *
+   * @example Reusing a filter: satisfies keeps narrowing, an annotation widens
+   * ```typescript
+   * const ordersIn2026 = {
+   *   type: "Order",
+   *   orderDate: { $gte: new Date("2026-01-01") }
+   * } satisfies TypedFilterParams<Customer>;
+   *
+   * const orders = await Customer.query("123", { filter: ordersIn2026 });
+   * // orders is Array<EntityAttributesInstance<Order>>
+   *
+   * async function customerRecords(filter: TypedFilterParams<Customer>) {
+   *   // Accepted, but the annotation widens the filter: QueryResults<Customer>
+   *   return await Customer.query("123", { filter });
+   * }
+   * ```
+   *
+   * @example Reusing a filter beside an skCondition that names an entity
+   * ```typescript
+   * async function ordersFor(
+   *   customerId: string,
+   *   filter: SKScopedFilterParams<Customer, "Order">
+   * ) {
+   *   // Array<EntityAttributesInstance<Order>>
+   *   return await Customer.query(customerId, { skCondition: "Order", filter });
+   * }
+   *
+   * await ordersFor("123", { orderDate: { $gte: new Date("2026-01-01") } });
+   * ```
+   *
+   * @example A prefix past the entity name does not narrow
+   * ```typescript
+   * const results = await Customer.query("123", {
+   *   skCondition: { $beginsWith: "Order#" }
+   * });
+   * // results is QueryResults<Customer> — the types cannot see the delimiter
+   * ```
+   *
    * @example Query as consistent read
    * ```typescript
    * const results = await Customer.query("123", { consistentRead: true });
@@ -342,19 +404,47 @@ abstract class DynaRecord implements DynaRecordBase {
 
   /**
    * Create an entity. If foreign keys are included in the attributes then links will be denormalized accordingly
-   * @param attributes - Attributes of the model to create
+   *
+   * The entity, its denormalized copies and its relationship links are written in one transaction.
+   * With a `condition`, the create also guards the rows the new entity references, its BelongsTo
+   * parents and the rows its other typed foreign keys reference, and happens only if every guard
+   * holds. A create takes no condition on the new row's own attributes, which must not exist yet.
+   * See {@link CreateCondition}.
+   *
+   * @param attributes - Attributes of the model to create. A nullable attribute is omitted rather than set to `null`, inside a list element as anywhere else.
    * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition on the rows the new entity references, checked in the same transaction as the create. See {@link CreateOperationOptions}
    * @returns The new Entity
+   * @throws {@link ValidationError} Before anything is written, when the attributes do not match the entity's schema.
+   * @throws {@link FilterError} Before anything is read or written, when the write condition is invalid, such as a guard on a foreign key the attributes leave unset.
+   * @throws {@link TransactionWriteFailedError} When DynamoDB cancels the transaction. Its `errors` hold a {@link WriteConditionFailedError} for each guarded row whose condition failed, and a {@link ConditionalCheckFailedError} for a library check that failed: the entity already exists, or a referenced entity does not exist.
    *
    * @example Basic usage
    * ```typescript
-   * const newUser = await User.create({ name: "Alice", email: "alice@example.com", profileId: "123" });
+   * const customer = await Customer.create({ name: "Jane Doe", status: "active" });
+   * ```
+   *
+   * @example With relationships
+   * ```typescript
+   * // Denormalizes the Order into its Customer's partition
+   * const order = await Order.create({
+   *   orderDate: new Date("2026-10-06"),
+   *   total: 40,
+   *   status: "pending",
+   *   customerId: "customer-1",
+   *   storeId: "store-1"
+   * });
    * ```
    *
    * @example With referential integrity check disabled
    * ```typescript
-   * const newUser = await User.create(
-   *   { name: "Alice", email: "alice@example.com", profileId: "123" },
+   * const order = await Order.create(
+   *   {
+   *     orderDate: new Date("2026-10-06"),
+   *     total: 40,
+   *     status: "pending",
+   *     customerId: "customer-1",
+   *     storeId: "store-1"
+   *   },
    *   { referentialIntegrityCheck: false }
    * );
    * ```
@@ -363,7 +453,13 @@ abstract class DynaRecord implements DynaRecordBase {
    * ```typescript
    * // Place an Order only for an active Customer at an open Store
    * const order = await Order.create(
-   *   { orderDate, total: 40, status: "pending", customerId: "customer-1", storeId: "store-1" },
+   *   {
+   *     orderDate: new Date("2026-10-06"),
+   *     total: 40,
+   *     status: "pending",
+   *     customerId: "customer-1",
+   *     storeId: "store-1"
+   *   },
    *   {
    *     condition: {
    *       customer: { status: "active" },
@@ -388,37 +484,50 @@ abstract class DynaRecord implements DynaRecordBase {
    *   - If the entity already had a foreign key relationship, then denormalized records will be deleted from each partition
    *     - If the foreign key is not nullable then a {@link NullConstraintViolationError} is thrown.
    *   - Validation errors will be thrown if the attribute being removed is not nullable
+   *
+   * Setting a nullable attribute to `null` removes it. The same holds for a nullable field inside an
+   * `@ObjectAttribute` and inside an element of a list, which is written whole and stored without the field.
+   *
+   * With a `condition`, the entity, its denormalized copies and its relationship links are updated only
+   * if every part of the condition holds, checked in the same transaction: a condition on the entity's
+   * own row, on its related entities by relationship name, and on the rows its other foreign keys
+   * reference through `target`. See {@link WriteCondition}.
+   *
    * @param id - The id of the entity to update
    * @param attributes - Attributes to update
    * @param options - Optional operation options: the referentialIntegrityCheck flag, forceEmbed and a write condition. See {@link UpdateOperationOptions}
+   * @throws {@link ValidationError} Before anything is written, when the attributes do not match the entity's schema.
+   * @throws {@link FilterError} Before anything is read or written, when the write condition is invalid, such as an `undefined` operand or a guard on a relationship whose foreign key the same update sets to `null`.
+   * @throws {@link NotFoundError} When the update reads the entity first (it has relationships, or a condition needs its stored row) and the entity does not exist.
+   * @throws {@link TransactionWriteFailedError} When DynamoDB cancels the transaction. Its `errors` hold a {@link WriteConditionFailedError} for each guarded row whose condition failed, and a {@link ConditionalCheckFailedError} for a library check that failed: a missing row, a referenced entity that does not exist, a relationship changed by a concurrent write, or a HasMany or HasAndBelongsToMany id that is not related.
    *
-   * @example Updating an entity.
+   * @example Updating an entity
    * ```typescript
-   * await User.update("userId", { email: "newemail@example.com", profileId: 789 });
+   * await Customer.update("customer-1", { name: "Jane Smith", status: "suspended" });
    * ```
    *
-   * @example Removing a nullable entities attributes
+   * @example Removing a nullable attribute
    * ```typescript
-   * await User.update("userId", { email: "newemail@example.com", someKey: null });
+   * await Customer.update("customer-1", { phone: null });
    * ```
    *
-   * @example With referential integrity check disabled
+   * @example Changing a foreign key, with the referential integrity check disabled
    * ```typescript
-   * await User.update(
-   *   "userId",
-   *   { email: "newemail@example.com", profileId: 789 },
+   * await Order.update(
+   *   "order-1",
+   *   { customerId: "customer-2" },
    *   { referentialIntegrityCheck: false }
    * );
    * ```
    *
    * @example Partial update of an ObjectAttribute (only provided fields are modified, omitted fields are preserved)
    * ```typescript
-   * await User.update("userId", { address: { street: "456 Oak Ave" } });
+   * await Store.update("store-1", { address: { city: "Springfield" } });
    * ```
    *
    * @example Force a searchable entity to re-embed even when the value is unchanged (backfills, embedding model changes)
    * ```typescript
-   * await Product.update("productId", { description }, { forceEmbed: true });
+   * await Product.update("product-1", { description }, { forceEmbed: true });
    * ```
    *
    * @example With a write condition: the update happens only if it holds, checked in the same transaction
@@ -428,6 +537,13 @@ abstract class DynaRecord implements DynaRecordBase {
    *   "order-1",
    *   { status: "cancelled" },
    *   { condition: { status: "pending", customer: { status: "active" } } }
+   * );
+   *
+   * // Ship an Order only if it has no tracking number yet: null means "not set"
+   * await Order.update(
+   *   "order-1",
+   *   { status: "shipped", trackingNumber: "1Z999" },
+   *   { condition: { trackingNumber: null } }
    * );
    * ```
    */
@@ -446,29 +562,39 @@ abstract class DynaRecord implements DynaRecordBase {
    *
    * For `@ObjectAttribute` fields, the returned instance deep merges the partial update
    * with the existing object value — omitted fields are preserved, and fields set to `null`
-   * are removed.
+   * are removed, including a nullable field inside a list element.
    *
-   * @example Updating an entity.
+   * Takes the same options as the static method, including a `condition`; see {@link UpdateOperationOptions}.
+   *
+   * @param attributes - Attributes to update
+   * @param options - Optional operation options: the referentialIntegrityCheck flag, forceEmbed and a write condition. See {@link UpdateOperationOptions}
+   * @returns The updated instance
+   * @throws {@link ValidationError} Before anything is written, when the attributes do not match the entity's schema.
+   * @throws {@link FilterError} Before anything is read or written, when the write condition is invalid.
+   * @throws {@link TransactionWriteFailedError} When DynamoDB cancels the transaction; a failed condition is reported inside it as a {@link WriteConditionFailedError}. See the static `update`.
+   *
+   * @example Updating an entity
    * ```typescript
-   * const updatedInstance = await instance.update({ email: "newemail@example.com", profileId: 789 });
+   * const updated = await customer.update({ name: "Jane Smith" });
    * ```
    *
-   * @example Removing a nullable entities attributes
+   * @example Removing a nullable attribute
    * ```typescript
-   * const updatedInstance = await instance.update({ email: "newemail@example.com", someKey: null });
+   * const updated = await customer.update({ phone: null });
+   * // updated.phone is undefined
    * ```
    *
    * @example Partial ObjectAttribute update with deep merge
    * ```typescript
-   * // instance.address is { street: "123 Main", city: "Springfield", zip: 12345 }
-   * const updated = await instance.update({ address: { street: "456 Oak Ave" } });
-   * // updated.address is { street: "456 Oak Ave", city: "Springfield", zip: 12345 }
+   * // store.address.city is "Springfield"
+   * const updated = await store.update({ address: { street: "456 Oak Ave" } });
+   * // updated.address.street is "456 Oak Ave"; updated.address.city is still "Springfield"
    * ```
    *
    * @example With referential integrity check disabled
    * ```typescript
-   * const updatedInstance = await instance.update(
-   *   { email: "newemail@example.com", profileId: 789 },
+   * const updated = await order.update(
+   *   { customerId: "customer-2" },
    *   { referentialIntegrityCheck: false }
    * );
    * ```
@@ -511,18 +637,28 @@ abstract class DynaRecord implements DynaRecordBase {
    * Delete an entity by ID
    *   - Delete all denormalized records
    *   - Disassociate all foreign keys of linked models
-   * @param id - The id of the entity to update
+   *
+   * With a `condition`, the entity, its denormalized records and its relationship links are deleted,
+   * and its children's foreign keys cleared, only if every part of the condition holds and the
+   * entity's own row still exists, checked in the same transaction. See {@link WriteCondition}.
+   *
+   * @param id - The id of the entity to delete
    * @param options - Optional operation options: a write condition, checked in the same transaction as the delete. The entity is deleted only if every part of the condition holds and its own row still exists. See {@link DeleteOperationOptions}
+   * @throws {@link NotFoundError} When the entity does not exist.
+   * @throws {@link FilterError} Before anything is read or written, when the write condition is invalid.
+   * @throws {@link TransactionWriteFailedError} When a child's non-nullable foreign key would be cleared (holding a {@link NullConstraintViolationError}, before anything is sent), or when DynamoDB cancels the transaction. Its `errors` then hold a {@link WriteConditionFailedError} for each guarded row whose condition failed, and a {@link ConditionalCheckFailedError} for a library check that failed, such as the entity's row being deleted by a concurrent write.
    *
    * @example Delete an entity
    * ```typescript
-   * await User.delete("userId");
+   * await Order.delete("order-1");
    * ```
    *
    * @example With a write condition: the delete happens only if it holds, checked in the same transaction
    * ```typescript
-   * // Delete an Order only while it is still pending
-   * await Order.delete("order-1", { condition: { status: "pending" } });
+   * // Delete an Order only while it is still pending and its Customer is active
+   * await Order.delete("order-1", {
+   *   condition: { status: "pending", customer: { status: "active" } }
+   * });
    * ```
    */
   public static async delete<T extends DynaRecord>(

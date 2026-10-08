@@ -14,10 +14,27 @@ import type { EntityAttributesOnly } from "../types.js";
  * The error surface presented when a `target` guard is written on a foreign
  * key declared without its target type.
  *
+ * Never written by hand: it is the type a `target` takes on a bare
+ * `ForeignKey`, so the compile error on the guard quotes its message.
+ *
  * A bare `ForeignKey` carries no compile-time link to the entity it
  * references, so a guard on it could only be typed against attributes of the
  * wrong entity. Adding the type parameter — `ForeignKey<Customer>` — is a
  * non-breaking change that makes the guard available.
+ *
+ * @example
+ * ```typescript
+ * class CustomerStore extends JoinTable<Customer, Store> {
+ *   public readonly customerId: ForeignKey<Customer>;
+ *   public readonly storeId: ForeignKey; // bare: no target type
+ * }
+ *
+ * await CustomerStore.create(
+ *   { customerId: "customer-1", storeId: "store-1" },
+ *   // Compile error naming this surface: declare storeId as ForeignKey<Store>
+ *   { condition: { storeId: { target: { status: "open" } } } }
+ * );
+ * ```
  */
 export interface UntypedForeignKeyTargetError {
   __writeConditionError: "declare this foreign key with its target type, ForeignKey<Target> or NullableForeignKey<Target>, to guard the row it references";
@@ -27,10 +44,32 @@ export interface UntypedForeignKeyTargetError {
  * The error surface presented when a `target` guard is written on a foreign
  * key that backs a BelongsTo relationship.
  *
+ * Never written by hand: it is the type a `target` takes on such a key, so
+ * the compile error on the guard quotes its message and names the
+ * relationship to use.
+ *
  * The referenced row is guarded under the relationship key instead, so that
  * one parent row is never reachable by two keys.
  *
  * @typeParam Relationship - The relationship key to guard the row under.
+ *
+ * @example
+ * ```typescript
+ * // Order declares customerId: ForeignKey<Customer> and a BelongsTo customer
+ * await Order.update(
+ *   "order-1",
+ *   { total: 90 },
+ *   // Compile error naming this surface, with relationship: "customer"
+ *   { condition: { customerId: { target: { status: "active" } } } }
+ * );
+ *
+ * // Guard the Customer under the relationship instead
+ * await Order.update(
+ *   "order-1",
+ *   { total: 90 },
+ *   { condition: { customer: { status: "active" } } }
+ * );
+ * ```
  */
 export interface BelongsToForeignKeyTargetError<Relationship> {
   __writeConditionError: "this foreign key backs a BelongsTo relationship; guard the row it references under the relationship key";
@@ -41,9 +80,22 @@ export interface BelongsToForeignKeyTargetError<Relationship> {
  * The error surface presented when a create condition names a single-valued
  * relationship that is not a BelongsTo backed by a typed foreign key.
  *
+ * Never written by hand: it is the type such a relationship key takes in a
+ * {@link CreateCondition}, so the compile error quotes its message.
+ *
  * A new entity has no HasOne child yet, so only its parents can be guarded,
  * and a parent is known at compile time only through a foreign key declared
  * with its target type.
+ *
+ * @example
+ * ```typescript
+ * // Customer declares @HasOne(() => ContactInformation, ...) contactInformation
+ * await Customer.create(
+ *   { name: "Jane Doe", status: "active" },
+ *   // Compile error naming this surface: a new Customer has no contact yet
+ *   { condition: { contactInformation: { email: "jane@example.com" } } }
+ * );
+ * ```
  */
 export interface CreateRelationshipConditionError {
   __writeConditionError: "create guards only a BelongsTo relationship whose foreign key is declared with its target type, ForeignKey<Target> or NullableForeignKey<Target>";
@@ -79,8 +131,10 @@ type IsNullableConditionKey<
  *
  * dyna-record removes a nulled attribute rather than storing it, so in a write
  * condition `null` means "not set" and matches a row where the attribute is
- * absent. On an attribute that cannot be absent it could never match, so it is
- * not offered there.
+ * absent (DynamoDB's `attribute_not_exists`). On an attribute that cannot be
+ * absent it could never match, so it is not offered there. Inside an object
+ * compared whole, `null` on a nullable field means the same, as it does in a
+ * query filter (see {@link EqualityConditionFor}).
  *
  * @typeParam T - The entity the key belongs to.
  * @typeParam K - The condition key: an attribute or a dot path below one.
@@ -115,6 +169,12 @@ type SelfCondition<T extends DynaRecord> = {
  * Every guard on another row also requires that row to exist, so an empty
  * condition (`{}`) is a guard that the row exists.
  *
+ * It is the value of a BelongsTo or HasOne key in a {@link WriteCondition},
+ * of `condition` in a {@link RelatedEntityCondition}, and of `target` in a
+ * {@link ForeignKeyTargetGuard}. It names the related entity's own attributes
+ * only: a guard cannot reach a further row through the related entity's
+ * relationships.
+ *
  * @typeParam T - The related entity whose row the condition is evaluated against.
  *
  * @example
@@ -123,6 +183,12 @@ type SelfCondition<T extends DynaRecord> = {
  * const customer: TargetCondition<Customer> = {
  *   $or: [{ name: "Jane" }, { name: { $beginsWith: "J" } }]
  * };
+ *
+ * // An active Customer with no phone on file
+ * const reachable: TargetCondition<Customer> = { status: "active", phone: null };
+ *
+ * // Any existing Customer
+ * const exists: TargetCondition<Customer> = {};
  * ```
  */
 export type TargetCondition<T extends DynaRecord> = SelfCondition<T> & {
@@ -142,6 +208,10 @@ export type TargetCondition<T extends DynaRecord> = SelfCondition<T> & {
  * actually related: a HasMany child's foreign key points at this entity, or the
  * HasAndBelongsToMany link exists.
  *
+ * Naming the same id twice in one relationship is a `FilterError`. An id that
+ * is not related fails the write with a plain `ConditionalCheckFailedError`,
+ * not a `WriteConditionFailedError`, inside the `TransactionWriteFailedError`.
+ *
  * @typeParam T - The related entity.
  *
  * @example
@@ -151,6 +221,13 @@ export type TargetCondition<T extends DynaRecord> = SelfCondition<T> & {
  *   id: "order-1",
  *   condition: { total: { $lt: 100 } }
  * };
+ *
+ * // Rename a Customer only while order-1 is theirs and still pending
+ * await Customer.update(
+ *   "customer-1",
+ *   { name: "Jane Smith" },
+ *   { condition: { orders: [{ id: "order-1", condition: { status: "pending" } }] } }
+ * );
  * ```
  */
 export interface RelatedEntityCondition<T extends DynaRecord> {
@@ -171,6 +248,11 @@ export interface RelatedEntityCondition<T extends DynaRecord> {
  * join table's foreign keys, the child side of a one-way HasMany, and a
  * standalone foreign key.
  *
+ * A bare `ForeignKey` presents {@link UntypedForeignKeyTargetError} instead,
+ * and a foreign key backing a BelongsTo presents
+ * {@link BelongsToForeignKeyTargetError}. A key holds either a condition on
+ * its own value or a `target` guard, never both.
+ *
  * @typeParam T - The entity the foreign key references.
  *
  * @example
@@ -179,6 +261,13 @@ export interface RelatedEntityCondition<T extends DynaRecord> {
  * const condition: WriteCondition<PaymentMethod> = {
  *   customerId: { target: { name: "Jane" } }
  * };
+ *
+ * // Order declares a standalone storeId: ForeignKey<Store>
+ * await Order.update(
+ *   "order-1",
+ *   { total: 90 },
+ *   { condition: { storeId: { target: { status: "open" } } } }
+ * );
  * ```
  */
 export interface ForeignKeyTargetGuard<T extends DynaRecord> {
@@ -301,7 +390,9 @@ type RelationshipConditions<T extends DynaRecord> = {
 
 /**
  * The condition an `update` or `delete` accepts. The write happens only if
- * every part holds, checked in the same transaction as the write.
+ * every part holds, checked in the same transaction as the write. A condition
+ * only decides whether the write happens: it never changes which items are
+ * written, and when it fails nothing is written.
  *
  * One object holds three kinds of key, mirroring the entity's own shape:
  * - **Its own attributes**, in the full query-filter vocabulary, guarding the
@@ -315,6 +406,14 @@ type RelationshipConditions<T extends DynaRecord> = {
  *   they reference through a {@link ForeignKeyTargetGuard}. Such a key holds
  *   either a condition on its own value or a `target` guard, never both; the
  *   value condition goes in an `$or` branch.
+ *
+ * Unlike a query filter, an `undefined` operand is a `FilterError` rather than
+ * a dropped condition, because dropping part of a guard would loosen it; an
+ * empty `$or` is a `FilterError` too. A dot path or list-index path naming a
+ * field the schema does not declare is a `FilterError` naming the path.
+ *
+ * A failed condition is reported as a `WriteConditionFailedError` inside the
+ * `TransactionWriteFailedError` the write throws.
  *
  * @typeParam T - The entity being written.
  *
@@ -330,6 +429,39 @@ type RelationshipConditions<T extends DynaRecord> = {
  * const guard: WriteCondition<Customer> = {
  *   orders: [{ id: "order-1", condition: { orderDate: { $lt: new Date("2026-01-01") } } }]
  * };
+ * ```
+ *
+ * @example Null means "not set", and $or stays within the written row
+ * ```typescript
+ * // Ship an Order that has no tracking number yet, while it is pending or
+ * // under 50, and while its Store is open
+ * await Order.update(
+ *   "order-1",
+ *   { status: "shipped", trackingNumber: "1Z999" },
+ *   {
+ *     condition: {
+ *       trackingNumber: null,
+ *       $or: [{ status: "pending" }, { total: { $lt: 50 } }],
+ *       storeId: { target: { status: "open" } }
+ *     }
+ *   }
+ * );
+ * ```
+ *
+ * @example Dot paths and list-index paths into an object attribute
+ * ```typescript
+ * // Close a Store only while it is in Springfield and its first contact,
+ * // compared whole, is Jane with no phone
+ * await Store.update(
+ *   "store-1",
+ *   { status: "closed" },
+ *   {
+ *     condition: {
+ *       "address.city": "Springfield",
+ *       "address.contacts[0]": { name: "Jane", phone: null }
+ *     }
+ *   }
+ * );
  * ```
  */
 export type WriteCondition<T extends DynaRecord> = {
@@ -398,12 +530,35 @@ type CreateConditionKeys<T extends DynaRecord> = {
  * object type `{}`, which an object literal is never checked against for
  * excess properties, so any key would be accepted.
  *
+ * A single-valued relationship that is not such a BelongsTo presents
+ * {@link CreateRelationshipConditionError}, and a `target` on a bare
+ * `ForeignKey` presents {@link UntypedForeignKeyTargetError}. The guarded
+ * foreign key must be set in the attributes being created: a guard on one the
+ * create leaves unset is a `FilterError`.
+ *
  * @typeParam T - The entity being created.
  *
  * @example
  * ```typescript
  * // Create an Order only for a Customer named Jane
  * const condition: CreateCondition<Order> = { customer: { name: "Jane" } };
+ *
+ * // Place an Order only for an active Customer at an open Store
+ * await Order.create(
+ *   {
+ *     orderDate: new Date("2026-10-06"),
+ *     total: 40,
+ *     status: "pending",
+ *     customerId: "customer-1",
+ *     storeId: "store-1"
+ *   },
+ *   {
+ *     condition: {
+ *       customer: { status: "active" },
+ *       storeId: { target: { status: "open" } }
+ *     }
+ *   }
+ * );
  * ```
  */
 export type CreateCondition<T extends DynaRecord> = [

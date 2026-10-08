@@ -48,10 +48,22 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
   Brand<string, { kind: "NullableForeignKey"; entity: T }>
 >;
 
+/**
+ * The branded string a {@link NullableForeignKey} holds when set, without the
+ * `undefined` it is declared with, so its target can be inferred from it.
+ *
+ * @typeParam T - The entity the foreign key references.
+ */
 type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
   NullableForeignKey<T>
 >;
 
+/**
+ * A foreign key attribute's declared type without `undefined` and `null`, so a
+ * nullable key is matched against the brands like a required one.
+ *
+ * @typeParam Value - The attribute's declared type.
+ */
 type NormalizedForeignKey<Value> = NonNullable<Value>;
 
 /**

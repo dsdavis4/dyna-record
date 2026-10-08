@@ -211,9 +211,10 @@ const returnedRow = (
 const describeGuard = (guard: WriteConditionGuard): string => {
   if (guard.kind === "self") return "its own row";
 
-  const kind = guard.kind === "relationship" ? "relationship" : "foreign key";
+  if (guard.kind === "foreignKey") return `foreign key '${guard.name}'`;
+
   const id = guard.id === undefined ? "" : ` (ID '${guard.id}')`;
-  return `${kind} '${guard.name}'${id}`;
+  return `relationship '${guard.name}'${id}`;
 };
 
 /**

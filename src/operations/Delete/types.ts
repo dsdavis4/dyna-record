@@ -10,9 +10,19 @@ export interface DeleteOptions {
 }
 
 /**
- * Options for delete operations
+ * Options for {@link DynaRecord.delete}.
  *
  * @typeParam T - The entity being deleted.
+ *
+ * @example
+ * ```typescript
+ * // Delete an Order only while it is still pending
+ * const options: DeleteOperationOptions<Order> = {
+ *   condition: { status: "pending" }
+ * };
+ *
+ * await Order.delete("order-1", options);
+ * ```
  */
 export interface DeleteOperationOptions<T extends DynaRecord> {
   /**

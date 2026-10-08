@@ -266,6 +266,14 @@ type KeyConditionDeclaredValue<V> =
     ? string
     : LibraryBrandToValue<NonNullable<V>>;
 
+/**
+ * The condition a filter key accepts when it names a top-level attribute of
+ * one of `Entities`, unioned across the entities that declare it; `never` for a
+ * key no entity declares as an attribute, which is then read as a dot path.
+ *
+ * @template Entities - The entities whose attributes the key may name.
+ * @template K - The filter key.
+ */
 export type QueryFilterValueFor<
   Entities extends DynaRecord,
   K
@@ -427,8 +435,48 @@ type FilterParamsForEntities<Entities extends DynaRecord> =
   AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
 
 /**
- * Top-level filter combining AND and OR for a full partition.
- * Alias for {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
+ * The filter a query on `T` accepts: conditions on the attributes of `T` and of
+ * every entity in its partition, combined with AND, plus `$or` blocks.
+ *
+ * It is a union with one member per partition entity, keyed by a single `type`,
+ * plus members for a `type` array and for no `type` at all, so naming one
+ * entity's `type` limits the block to that entity's attributes. Alias for
+ * {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
+ *
+ * **Reusing a filter.** A query narrows its results by the filter's literal
+ * type: the `type` it names, its keys and its `$or` blocks. A filter written at
+ * the call has that type, and so does one checked with
+ * `satisfies TypedFilterParams<T>`, which also gets every check a literal at the
+ * call gets. A filter whose type is this annotation (a function parameter, an
+ * object property) is accepted too, but the annotation widens it to the whole
+ * union, so the query cannot narrow by it and returns the whole partition.
+ *
+ * Beside an `skCondition` that names an entity, the query accepts only
+ * {@link SKScopedFilterParams} for that sort key condition: a value typed
+ * `TypedFilterParams<T>` is refused there, because it also offers other
+ * entities' keys and `type` values that cannot match the rows the sort key
+ * selects.
+ *
+ * @template T - The entity being queried.
+ *
+ * @example Reuse a filter with satisfies to keep narrowing
+ * ```typescript
+ * const ordersIn2026 = {
+ *   type: "Order",
+ *   orderDate: { $gte: new Date("2026-01-01") }
+ * } satisfies TypedFilterParams<Customer>;
+ *
+ * const orders = await Customer.query("123", { filter: ordersIn2026 });
+ * // orders is Array<EntityAttributesInstance<Order>>
+ * ```
+ *
+ * @example An annotated parameter is accepted, but does not narrow
+ * ```typescript
+ * async function customerRecords(filter: TypedFilterParams<Customer>) {
+ *   // QueryResults<Customer>: the whole partition
+ *   return await Customer.query("123", { filter });
+ * }
+ * ```
  */
 export type TypedFilterParams<T extends DynaRecord> = FilterParamsForEntities<
   PartitionEntities<T>
@@ -535,10 +583,25 @@ type SortKeyValueFor<T extends DynaRecord> =
  *
  * Does not narrow when:
  * - SK is a prefixed string like `"Order#123"` (can't parse the delimiter at type level)
- * - SK is `{ $beginsWith: "Order#..." }` (specific prefix past entity name boundary)
+ * - SK is `{ $beginsWith: "Order#" }` (a prefix past the entity name's boundary)
+ * - SK is a comparison or a `$between` range
+ *
+ * The table's delimiter is configurable and is not visible to the types, so
+ * they cannot tell where an entity name ends inside a longer value. Narrowing
+ * on a name or a prefix of one assumes that no entity's sort key starts with
+ * another entity's name followed by the delimiter. That always holds with the
+ * default `#` delimiter, and with any delimiter whose first character cannot
+ * appear in a class name.
  *
  * @template T - The entity type being queried.
  * @template SK - The inferred sort key condition literal type.
+ *
+ * @example
+ * ```typescript
+ * type One = ExtractEntityFromSK<Customer, "Order">; // "Order"
+ * type Prefix = ExtractEntityFromSK<Customer, { $beginsWith: "C" }>; // "Customer" | "ContactInformation"
+ * type None = ExtractEntityFromSK<Customer, { $beginsWith: "Order#" }>; // never: no narrowing
+ * ```
  */
 export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
   $beginsWith: infer V extends string;
@@ -552,10 +615,33 @@ export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
  * Computes the filter type based on SK narrowing. When `skCondition` narrows to
  * specific entities, only those entities' attributes are accepted in the filter.
  * When SK doesn't narrow (no skCondition, suffixed string, etc.), falls back to
- * the full {@link TypedFilterParams}.
+ * the full {@link TypedFilterParams}. See {@link ExtractEntityFromSK} for which
+ * sort key conditions narrow.
+ *
+ * Use it to type a reusable filter for a query whose `skCondition` names an
+ * entity, passing the same sort key condition. A partition-wide
+ * {@link TypedFilterParams} is refused beside such an `skCondition`, because it
+ * also offers other entities' keys and `type` values that cannot match the rows
+ * the sort key selects.
  *
  * @template T - The root entity being queried.
  * @template SK - The inferred sort key condition type.
+ *
+ * @example
+ * ```typescript
+ * async function ordersFor(
+ *   customerId: string,
+ *   filter: SKScopedFilterParams<Customer, "Order">
+ * ) {
+ *   // Array<EntityAttributesInstance<Order>>
+ *   return await Customer.query(customerId, { skCondition: "Order", filter });
+ * }
+ *
+ * await ordersFor("123", { orderDate: { $gte: new Date("2026-01-01") } });
+ *
+ * // A filter scoped to Order cannot name a ContactInformation attribute
+ * await ordersFor("123", { email: "jane@example.com" }); // Compile error
+ * ```
  */
 export type SKScopedFilterParams<T extends DynaRecord, SK> =
   ExtractEntityFromSK<T, SK> extends infer Names

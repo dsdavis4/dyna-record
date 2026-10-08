@@ -298,6 +298,16 @@ export type SingleComparisonConditionFor<V> = V extends Date
  * never pairs with a number one. DynamoDB requires both bounds to share a type.
  *
  * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // An enum is stored as a string, so any two members bound a range,
+ * // ordered lexicographically
+ * filter: { status: { $between: ["cancelled", "pending"] } }
+ *
+ * // The same range composed from two comparisons
+ * filter: { status: { $gte: "cancelled", $lte: "pending" } }
+ * ```
  */
 export type BetweenConditionFor<V> =
   | BetweenOfKind<Extract<V, Date>>

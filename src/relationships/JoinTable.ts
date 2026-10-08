@@ -44,11 +44,17 @@ type ForeignKeyProperties<T> = {
     : never;
 };
 
+/**
+ * The two entity classes a join table links
+ */
 interface JoinedEntityClasses {
   parentEntity: EntityClass<DynaRecord>;
   linkedEntity: EntityClass<DynaRecord>;
 }
 
+/**
+ * The ids of the two entities a join table links
+ */
 interface JoinedKeys {
   parentId: string;
   linkedEntityId: string;
@@ -88,7 +94,14 @@ type JoinTableForeignKeys<J> = {
  * applies to that entity's row rather than to the key's value. Each target is
  * typed from the foreign key's own type parameter, so the key must be declared
  * `ForeignKey<Target>`: on a bare `ForeignKey` the guard is a compile error
- * naming the missing type parameter.
+ * naming the missing type parameter (see {@link UntypedForeignKeyTargetError}).
+ *
+ * Each `target` takes a {@link TargetCondition} on the referenced entity, in
+ * the full query-filter vocabulary, `null` and `$or` included. A guard also
+ * requires its entity to exist, even with `referentialIntegrityCheck: false`.
+ * When a guard fails, the `WriteConditionFailedError` names the join table as
+ * its `entity` and the join table's keys as its `id`, for example
+ * `customerId=customer-1, storeId=store-1`.
  *
  * @typeParam J - The join table class.
  *
@@ -158,8 +171,8 @@ interface TransactionProps {
  * Declare each foreign key with the entity it references, `ForeignKey<Target>`,
  * so a write condition on `create` or `delete` can guard that entity's row.
  *
- * Example:
- * ```
+ * @example
+ * ```typescript
  * class CustomerStore extends JoinTable<Customer, Store> {
  *   public readonly customerId: ForeignKey<Customer>;
  *   public readonly storeId: ForeignKey<Store>;
@@ -181,8 +194,9 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param this
    * @param keys - The foreign key values of the entities to link
    * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition on the entities being linked, checked in the same transaction as the link. See {@link JoinTableCreateOptions}
-   * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
-   * @throws {NotFoundError} Before anything is written, when either entity does not exist.
+   * @throws {@link FilterError} Before anything is read or written, when the write condition is invalid.
+   * @throws {@link NotFoundError} Before anything is written, when either entity does not exist. The message names each missing entity, such as `Entities not found: (Store: store-9)`.
+   * @throws {@link TransactionWriteFailedError} When DynamoDB cancels the transaction. Its `errors` hold a {@link WriteConditionFailedError} for each guarded entity whose condition failed, and a {@link ConditionalCheckFailedError} for a library check that failed, such as the entities already being linked.
    *
    * @example
    * ```typescript
@@ -281,7 +295,8 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
    * @param this
    * @param keys - The foreign key values of the entities to unlink
    * @param options - Optional operation options: a write condition on the entities being unlinked, checked in the same transaction as the unlink. See {@link JoinTableDeleteOptions}
-   * @throws {FilterError} Before anything is written, when the write condition is invalid.
+   * @throws {@link FilterError} Before anything is written, when the write condition is invalid.
+   * @throws {@link TransactionWriteFailedError} When DynamoDB cancels the transaction. Its `errors` hold a {@link WriteConditionFailedError} for each guarded entity whose condition failed, and a {@link ConditionalCheckFailedError} for a library check that failed, such as the entities not being linked or a guarded entity not existing.
    *
    * @example
    * ```typescript

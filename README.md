@@ -31,10 +31,18 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
     - [Comparison and range conditions](#comparison-and-range-conditions)
     - [Filtering on Object Attributes](#filtering-on-object-attributes)
     - [Typed Query Filters](#typed-query-filters)
+    - [Reusing a filter](#reusing-a-filter)
   - [Update](#update)
     - [Updating Object Attributes](#updating-object-attributes)
   - [Delete](#delete)
   - [Write conditions](#write-conditions)
+    - [The entity's own row](#the-entitys-own-row)
+    - [Related entities](#related-entities)
+    - [Foreign keys and `target`](#foreign-keys-and-target)
+    - [Conditions on create](#conditions-on-create)
+    - [Join tables](#join-tables)
+    - [When a condition fails](#when-a-condition-fails)
+    - [Limits](#limits)
 - [Vector Search](#vector-search)
   - [Declaring searchable entities](#declaring-searchable-entities)
   - [Defining vector indexes](#defining-vector-indexes)
@@ -376,7 +384,10 @@ const addressSchema = {
     type: "array",
     items: {
       type: "object",
-      fields: { name: { type: "string" }, phone: { type: "string" } }
+      fields: {
+        name: { type: "string" },
+        phone: { type: "string", nullable: true }
+      }
     }
   },
   category: { type: "enum", values: ["home", "work", "other"] },
@@ -706,6 +717,8 @@ await StudentCourse.create({ studentId: "student-1", courseId: "course-1" });
 await StudentCourse.delete({ studentId: "student-1", courseId: "course-1" });
 ```
 
+`create` reads both entities before writing the links. If either does not exist it throws a [NotFoundError](https://docs.dyna-record.com/classes/NotFoundError.html) naming the missing entity, such as `Entities not found: (Course: course-9)`, and nothing is written.
+
 #### Conditional writes
 
 `create` and `delete` on a join table accept a `condition` that guards the entities being linked or unlinked. A join table has no row of its own, so the condition is keyed by its foreign keys, and each value wraps a condition on the referenced entity in `target`. Using the `CustomerStore` join table from [Write conditions](#write-conditions):
@@ -875,7 +888,7 @@ Both kinds of key need the foreign key declared with its target type (`ForeignKe
 
 #### Error handling
 
-The method is designed to throw errors under various conditions, such as transaction cancellation due to failed conditional checks. For instance, if you attempt to create a `Grade` for an `Assignment` that already has one, the method throws a [TransactionWriteFailedError](https://docs.dyna-record.com/classes/TransactionWriteFailedError.html).
+The method is designed to throw errors under various conditions, such as transaction cancellation due to failed conditional checks. For instance, if you attempt to create a `Grade` for an `Assignment` that already has one, the method throws a [TransactionWriteFailedError](https://docs.dyna-record.com/classes/TransactionWriteFailedError.html). A failed `condition` is reported inside it as a `WriteConditionFailedError` (see [When a condition fails](#when-a-condition-fails)).
 
 #### Notes
 
@@ -1010,6 +1023,8 @@ const result = await Store.query("123", {
 });
 ```
 
+An enum attribute is stored as a string, so a range on one takes any two of its members as bounds and orders them as strings: `{ status: { $between: ["cancelled", "pending"] } }`. A bound outside the enum is a compile error.
+
 Several comparison operators on one attribute compose with **AND**, which is how a half-open range is written — the `$gte`/`$lt` pair above. `$between` is inclusive on both bounds and its pair is ordered: the lower bound comes first. dyna-record rejects an inverted pair with a `FilterError` naming the attribute, before the request is sent.
 
 A range that cannot match is rejected either way, but the two spellings fail differently. DynamoDB validates `BETWEEN`'s bounds and rejects an inverted pair itself. It does **not** validate a composed range: `{ $gte: 100, $lt: 1 }` is applied as written and returns no rows with no error, which is indistinguishable from a query that legitimately matched nothing. dyna-record rejects both.
@@ -1030,6 +1045,15 @@ await Order.query("123", {
 // A fragment: a prefix of the ISO string the table stores
 await Order.query("123", {
   filter: { createdAt: { $beginsWith: "2026" } }
+});
+```
+
+A whole value that is an object, or a list element named by an index, is compared whole. dyna-record stores a nulled nullable field by leaving it out, so in such an operand `null` on a nullable field means "not set": the field is left out of the value sent, which then equals a value stored without it, exactly as omitting the field does. The same holds for an `IN` element and for a `$contains` element of a list of objects. `null` is offered only on a field declared nullable, never on a required field, an object field or the whole value.
+
+```typescript
+// The Store whose first contact is Jane, with no phone
+await Store.query("123", {
+  filter: { "address.contacts[0]": { name: "Jane", phone: null } }
 });
 ```
 
@@ -1139,7 +1163,14 @@ const result = await Store.query("123", {
 });
 ```
 
-On a string the operand is a substring. On a list it is one whole element, written the way the schema declares an element: a member of the enum on a list of enums, a `Date` on a list of dates, and on a list of objects an object with the element's fields. DynamoDB compares a list of objects element by element, whole, so the operand must describe a complete element. A field the element does not declare is a `FilterError`, because no element could equal the operand, while a nullable field may be omitted, as it is from an element written without it.
+On a string the operand is a substring. On a list it is one whole element, written the way the schema declares an element: a member of the enum on a list of enums, a `Date` on a list of dates, and on a list of objects an object with the element's fields. DynamoDB compares a list of objects element by element, whole, so the operand must describe a complete element. A field the element does not declare is a `FilterError`, because no element could equal the operand, while a nullable field may be omitted or set to `null`, either of which matches an element stored without it.
+
+```typescript
+// A Store with a contact named Jane who has no phone
+const result = await Store.query("123", {
+  filter: { "address.contacts": { $contains: { name: "Jane", phone: null } } }
+});
+```
 
 ##### Combining dot-path and `$contains` with AND/OR
 
@@ -1170,7 +1201,7 @@ The type system validates:
 - **SK-scoped filters**: When `skCondition` narrows to specific entities, the `filter` parameter is scoped to only those entities' attributes. For example, `skCondition: { $beginsWith: "Order" }` restricts the filter to Order's attributes — using `lastFour` (a PaymentMethod attribute) produces a compile error.
 - **`type` narrowing in `$or`**: Each `$or` element is independently narrowed. When an `$or` block specifies `type: "Order"`, only Order's attributes are allowed in that block.
 - **Dot-path keys**: Nested `@ObjectAttribute` fields are available as typed filter keys using dot notation (e.g., `"address.city"`).
-- **Filter values**: A filter value is typed by the attribute it targets, and named the way the entity declares it — so a date attribute takes a `Date`, which dyna-record converts to the ISO string the table stores. An array of those values is an `IN` condition. A function, a class instance, `null`, or an operator that does not exist such as `$ne` is a compile error, as is an operator object that names none (`{}`) or that mixes families (`{ $gt, $between }`).
+- **Filter values**: A filter value is typed by the attribute it targets, and named the way the entity declares it — so a date attribute takes a `Date`, which dyna-record converts to the ISO string the table stores. An array of those values is an `IN` condition. A function, a class instance, `null` as the whole value, or an operator that does not exist such as `$ne` is a compile error, as is an operator object that names none (`{}`) or that mixes families (`{ $gt, $between }`). Inside an object compared whole, `null` on a nullable field is accepted and means "not set" — see [Whole values and fragments](#whole-values-and-fragments).
 - **Operator operands**: `$beginsWith` and `$contains` match against the _stored_ form, so their operands stay strings and scalars whatever the attribute's declared type. This is how a date is matched by partial value: `filter: { createdAt: { $beginsWith: "2026" } }` finds everything in that year. Every other operand is a whole value of the attribute — see [Whole values and fragments](#whole-values-and-fragments). `$contains` on a list is the exception: its operand is one whole element, named as the entity declares an element, so a list of dates takes a `Date` and a list of objects takes an object whose date fields are `Date`s.
 - **Operators an attribute offers**: Each operator is available only where the attribute's stored form can carry it, so a comparator on a boolean and a `$beginsWith` on a number are compile errors rather than queries that match nothing — see [Which operators an attribute offers](#which-operators-an-attribute-offers).
 - **Key condition values**: A key condition takes a value to match, `$beginsWith`, a single comparator, or `$between`. The partition key takes an equality only, and the sort key takes one condition, so the comparators do not compose there — see [Ranges in key conditions](#ranges-in-key-conditions).
@@ -1287,7 +1318,7 @@ await Customer.query({ pk: "Customer#123", sk: { $beginsWith: "Order" } }); // O
 await Customer.query({ pk: "Customer#123", sk: "NonExistent" }); // Compile error
 ```
 
-**Return type narrowing** works with `skCondition` when the value is an exact entity name or `$beginsWith` with an entity name:
+**Return type narrowing** works with `skCondition` when the value is an exact entity name, or `$beginsWith` with an entity name or a prefix of one:
 
 ```typescript
 // skCondition narrows the return type
@@ -1299,10 +1330,19 @@ const orders2 = await Customer.query("123", {
 });
 // orders2 is Array<EntityAttributesInstance<Order>>
 
-// Suffix prevents narrowing (delimiter is configurable)
+// A value that runs past the entity name does not narrow
 const specific = await Customer.query("123", { skCondition: "Order#123" });
 // specific is QueryResults<Customer> (full union)
+
+const fromPrefix = await Customer.query("123", {
+  skCondition: { $beginsWith: "Order#" }
+});
+// fromPrefix is QueryResults<Customer> (full union)
 ```
+
+Narrowing reads the entity name at the start of the sort key. `$beginsWith: "Order"` selects every entity whose name starts with `Order`, which includes an `OrderItem` if the partition has one. A value that runs past the entity name, such as `"Order#123"` or `{ $beginsWith: "Order#" }`, is accepted but does not narrow: the table's [delimiter](#customizing-the-default-field-table-aliases-or-delimiter) is configurable and the types cannot see it, so they cannot tell where the name ends.
+
+Narrowing assumes that no entity's sort key starts with another entity's name followed by the delimiter. With the default `#` delimiter this always holds, as it does with any delimiter whose first character cannot appear in a class name.
 
 ##### `$beginsWith` prefix matching
 
@@ -1392,6 +1432,49 @@ const orders = await Customer.query(
 > **AND intersection:** Since DynamoDB ANDs top-level filter conditions with `$or` blocks, the return type reflects this. When both top-level conditions and `$or` blocks independently narrow to specific entity sets, the return type is their intersection. If no entity satisfies both (e.g., `{ orderDate: "2023", $or: [{ lastFour: "1234" }] }` where `orderDate` is on `Order` and `lastFour` is on `PaymentMethod`), the return type is `never[]` — correctly indicating that no records can match.
 >
 > **SK intersection:** `skCondition` is always intersected with filter-based narrowing because it is a DynamoDB key condition that physically limits which items are scanned. When both `skCondition` and a filter narrow to different entity sets, the return type is their intersection.
+
+##### Reusing a filter
+
+Narrowing reads the filter's literal type: the `type` it names, its keys and its `$or` blocks. A filter written inline at the call has that type. To define a filter once and reuse it, check it with `satisfies`, which keeps the literal type. A filter whose type is a [TypedFilterParams](https://docs.dyna-record.com/types/TypedFilterParams.html) annotation, such as a function parameter or an object property, is accepted too, but the annotation widens it to every filter the partition allows, so the query cannot narrow by it and returns the whole partition's union.
+
+```typescript
+import type { TypedFilterParams } from "dyna-record";
+
+// satisfies checks the filter and keeps its literal type
+const ordersIn2026 = {
+  type: "Order",
+  orderDate: { $beginsWith: "2026" }
+} satisfies TypedFilterParams<Customer>;
+
+const orders = await Customer.query("123", { filter: ordersIn2026 });
+// orders is Array<EntityAttributesInstance<Order>>
+
+// An annotated parameter is accepted, but widens the filter
+async function customerRecords(filter: TypedFilterParams<Customer>) {
+  return await Customer.query("123", { filter });
+}
+
+const results = await customerRecords({ type: "Order" });
+// results is QueryResults<Customer> (full union)
+```
+
+`satisfies` also keeps every check a literal gets: a key the partition does not declare, or a value of the wrong type, is a compile error on the offending property.
+
+When the query also takes an `skCondition` that names an entity, the filter is scoped to that entity (see [SK-scoped filter validation](#sk-scoped-filter-validation)). Type a reusable filter for that query as [SKScopedFilterParams](https://docs.dyna-record.com/types/SKScopedFilterParams.html), passing the same sort key condition. A partition-wide `TypedFilterParams<T>` is refused there, because it also offers other entities' keys and `type` values that cannot match the rows the sort key selects.
+
+```typescript
+import type { SKScopedFilterParams } from "dyna-record";
+
+async function ordersFor(
+  customerId: string,
+  filter: SKScopedFilterParams<Customer, "Order">
+) {
+  // The skCondition narrows the results to Order
+  return await Customer.query(customerId, { skCondition: "Order", filter });
+}
+
+await ordersFor("123", { orderDate: { $beginsWith: "2026" } });
+```
 
 ### Querying on an index
 
@@ -1495,7 +1578,21 @@ await Store.update("123", {
 });
 ```
 
-Because the array is written whole, each element of an array of objects must include every non-nullable field. A nullable field inside an element can be omitted or set to `null`; either way the element is stored without it.
+Because the array is written whole, each element of an array of objects must include every non-nullable field. A nullable field inside an element can be omitted or set to `null`; either way the element is stored without it, and the instance `update` returns leaves it out too.
+
+```typescript
+// Replaces the contacts; the second is stored without a phone
+await Store.update("123", {
+  address: {
+    contacts: [
+      { name: "Jane", phone: "555-0100" },
+      { name: "Sam", phone: null }
+    ]
+  }
+});
+```
+
+`create` takes no `null`: a nullable field is omitted on create, inside a list element as anywhere else.
 
 **Discriminated unions** within objects are also **full replacement** (not merged):
 
@@ -1761,6 +1858,29 @@ await Order.update(
 );
 ```
 
+Dot paths reach fields inside an object attribute, and an index names one element of a list, exactly as in a [filter](#list-elements). A path is validated against the schema: one naming a field the schema does not declare is a `FilterError` rather than a guard that can never hold. An object compared whole, such as a list element named by an index, takes `null` on a nullable field to mean the field is not set (see [Whole values and fragments](#whole-values-and-fragments)).
+
+```typescript
+// Close a Store only while it is in Springfield and its first contact is Jane
+await Store.update(
+  "store-1",
+  { status: "closed" },
+  {
+    condition: {
+      "address.city": "Springfield",
+      "address.contacts[0].name": "Jane"
+    }
+  }
+);
+
+// Close a Store only while its first contact is Jane, with no phone
+await Store.update(
+  "store-1",
+  { status: "closed" },
+  { condition: { "address.contacts[0]": { name: "Jane", phone: null } } }
+);
+```
+
 #### Related entities
 
 A related entity's row is guarded under the relationship's property name, beside the entity's own attributes. The value depends on the kind of relationship:
@@ -1859,6 +1979,14 @@ await Order.update(
 
 `target` guards, and the relationship guards `create` accepts, need the foreign key declared with its target type: `ForeignKey<Store>` or `NullableForeignKey<Store>`. A bare `ForeignKey` carries no compile-time link to the entity it references, so a guard on it is a compile error that points at the missing type parameter. Adding the type parameter changes nothing else.
 
+#### Conditions on create
+
+A `create` condition guards only the rows the new entity references: its BelongsTo relationships by property name, and its other typed foreign keys through `target`. It takes no condition on the new row's own attributes, because create already requires that row not to exist, and no HasOne, HasMany or HasAndBelongsToMany keys, because a new entity has no children or link partners yet. Every guard needs its foreign key declared with its target type and set in the attributes being created. See [Create](#create) for an example and the reasoning.
+
+#### Join tables
+
+A join table's `create` and `delete` take a condition keyed by the join table's foreign keys, each wrapping a condition on the referenced entity in `target`, since a join table has no row of its own. The link records are written or deleted only if every guard holds. See [HasAndBelongsToMany](#hasandbelongstomany) for an example. When a join-table guard fails, the `WriteConditionFailedError` names the join table as the `entity` and its keys as the `id`, for example `CustomerStore` and `customerId=customer-1, storeId=store-1`.
+
 #### When a condition fails
 
 A condition that does not hold fails the write with a [TransactionWriteFailedError](https://docs.dyna-record.com/classes/TransactionWriteFailedError.html), as any failed transaction does. Among its `errors` is a `WriteConditionFailedError`, a subclass of `ConditionalCheckFailedError`, so existing catch blocks keep working. Identify it with `instanceof`:
@@ -1889,7 +2017,7 @@ try {
 }
 ```
 
-`entity` and `id` name the entity being written. `guards` names each guard on the row whose check failed: `{ kind: "self" }` for the entity's own row, `{ kind: "relationship", name }` for a relationship (with `id` for a HasMany or HasAndBelongsToMany entry), and `{ kind: "foreignKey", name }` for a `target` guard. DynamoDB reports only that a row's combined check failed, so when several guards land on one row, all of them are named. The message names them too: `ConditionalCheckFailed: Write condition failed on Order with ID 'order-1': its own row`.
+`entity` and `id` name the entity being written. `guards` names each guard on the row whose check failed: `{ kind: "self" }` for the entity's own row, `{ kind: "relationship", name }` for a relationship (with `id` for a HasMany or HasAndBelongsToMany entry), and `{ kind: "foreignKey", name }` for a `target` guard. DynamoDB reports only that a row's combined check failed, so when several guards land on one row, all of them are named. The message names them too: `ConditionalCheckFailed: Write condition failed on Order with ID 'order-1': its own row`. Its `code` is `"WriteConditionFailedError"`, where a plain `ConditionalCheckFailedError` carries `"ConditionalCheckFailedError"`, so code that compares `code` rather than using `instanceof` can tell them apart too.
 
 Failures that are not your condition are reported as a plain `ConditionalCheckFailedError` inside the same `TransactionWriteFailedError`, never as a `WriteConditionFailedError`, even when they land on a guarded row. Each message starts with `ConditionalCheckFailed: `:
 
@@ -1902,7 +2030,15 @@ A guard whose target cannot be found in what is stored, such as a BelongsTo whos
 
 When two writers race for the same row, DynamoDB may cancel the loser with a `TransactionConflict` instead of evaluating its condition. That `TransactionCanceledException` is passed through unchanged, not wrapped in a `TransactionWriteFailedError`, and nothing is written. It is safe to retry: the retry evaluates the condition against the winner's write.
 
-An invalid condition (an unknown key, a relationship inside `$or`, a guard the payload rules out) is a `FilterError` thrown before anything is read or written. Each relationship guard adds at most one item to the write's transaction, two for a HasAndBelongsToMany entry, and those count toward DynamoDB's limit of 100 items per transaction.
+An invalid condition (an unknown key, a relationship inside `$or`, a guard the payload rules out, an `undefined` operand, a dot path the schema does not declare) is a `FilterError` thrown before anything is read or written.
+
+#### Limits
+
+A write condition is a DynamoDB transaction condition, so DynamoDB's transaction rules bound it:
+
+- **One operation per item.** A transaction may touch each item once. When a guard lands on a row the transaction already touches, such as the entity's own row or a parent row its referential integrity check reads, it is merged into that operation's condition rather than added as a separate check. That is also why several guards on one row are reported together.
+- **100 items per transaction.** A guard on a row the write does not otherwise touch adds one `ConditionCheck` item, and a HasAndBelongsToMany entry adds two (the related row and the link). These count toward DynamoDB's limit of 100 items per transaction, alongside the denormalized copies the write already maintains.
+- **One row per condition.** DynamoDB evaluates a condition against exactly one item, which is why `$or` [stays within one row](#or-stays-within-one-row).
 
 ## Vector Search
 
@@ -2340,6 +2476,7 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 - **Typed Query Filters**: Query filter keys are validated against the attributes of entities in the partition. Invalid keys, relationship property names, and non-existent attributes produce compile errors. The `type` field only accepts valid entity class names. Filter values are checked too: each is typed by the attribute it targets, and each operator is offered only where that attribute's stored form can carry it.
 - **Return Type Narrowing**: When a query filter specifies a `type` value, the return type is automatically narrowed to only the matching entity types instead of the full partition union.
 - **`$or` Element Narrowing**: Each element in a `$or` filter array is independently type-checked based on its own `type` field, preventing attribute mismatches.
+- **Typed Write Conditions**: A [write condition](#write-conditions) is typed like a query filter over the entity's own attributes, with relationship keys typed by the related entity and `target` guards typed by the foreign key's type parameter. A relationship inside `$or`, a `target` guard on a bare `ForeignKey`, and a `create` condition on the new row's own attributes are compile errors.
 - **Searchable Brands**: `@Searchable()` and `@SearchFilterable()` require the `Searchable`/`SearchFilterable` property brands, so the searchable and filterable sets are known at compile time — search `in:` values, filter keys, and result unions all derive from them. A second `@Searchable` attribute on one entity is a compile error at the `@Entity` decorator.
 - **Vector Index Declaration Validation**: `vectorIndexes` declarations are validated at the type level — a duplicate `vectorAttribute` or `IndexName`, a missing or wrongly-prefixed vector attribute, a member entity with no `@Searchable` attribute, or an unknown option is a compile error on the offending entry, with metadata initialization as the runtime backstop.
 - **Search Return Type Narrowing**: Search results are inferred from the searched membership — the union of searched entity types by default, narrowed to a single entity type when `in:` is present, mirroring query return type narrowing. Membership is declared explicitly, so scoped and unscoped constructs are typed alike.

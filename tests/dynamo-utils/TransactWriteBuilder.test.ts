@@ -933,7 +933,7 @@ describe("TransactWriteBuilder", () => {
       builder.addGuard(customerRow, {
         entity: "Order",
         id: "o1",
-        guard: { kind: "foreignKey", name: "billingCustomerId", id: "c1" },
+        guard: { kind: "foreignKey", name: "billingCustomerId" },
         condition: {
           ConditionExpression: "#Tier = :wc3_Tier1",
           ExpressionAttributeNames: { "#Tier": "Tier" },
@@ -952,11 +952,11 @@ describe("TransactWriteBuilder", () => {
       const [failure] = error.errors;
       expect(failure).toBeInstanceOf(WriteConditionFailedError);
       expect(failure.message).toEqual(
-        "ConditionalCheckFailed: Write condition failed on Order with ID 'o1': relationship 'customer', foreign key 'billingCustomerId' (ID 'c1')"
+        "ConditionalCheckFailed: Write condition failed on Order with ID 'o1': relationship 'customer', foreign key 'billingCustomerId'"
       );
       expect(failure.guards).toEqual([
         { kind: "relationship", name: "customer" },
-        { kind: "foreignKey", name: "billingCustomerId", id: "c1" }
+        { kind: "foreignKey", name: "billingCustomerId" }
       ]);
     });
 
