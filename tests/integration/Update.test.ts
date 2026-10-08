@@ -25454,4 +25454,134 @@ describe("Update with write conditions", () => {
       expectNothingSent();
     });
   });
+
+  describe("a range whose bounds are different kinds on a path into a union variant (R30)", () => {
+    // A path into a union variant resolves to no field, so no schema
+    // validates its bounds. Before this was refused, a $between across a
+    // string and a number was sent and rejected by DynamoDB with a
+    // ValidationException, and a composed range across them was sent, could
+    // never hold, and failed as the row's own guard
+    const mixed = (operators: string, kinds: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "payment.method.cardNumber": ${operators} bound a range with ${kinds}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`
+      );
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses a $between of a string and a number before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's string and number
+                "payment.method.cardNumber": { $between: ["4000", 4999] }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(mixed("$between", "a string and a number"));
+      expectNothingSent();
+    });
+
+    it("refuses a composed range across kinds, in either order, before anything is sent", async () => {
+      expect.assertions(6);
+
+      const stringToNumber = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's string to number
+                "payment.method.cardNumber": { $gte: "4000", $lte: 4999 }
+              }
+            }
+          )
+      );
+      const numberToString = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's number to string
+                "payment.method.cardNumber": { $gt: 4000, $lt: "4999" }
+              }
+            }
+          )
+      );
+
+      expect(stringToNumber).toEqual(
+        mixed("$gte and $lte", "a string and a number")
+      );
+      expect(numberToString).toEqual(
+        mixed("$gt and $lt", "a number and a string")
+      );
+      expectNothingSent();
+    });
+
+    it("still sends a range whose bounds share a kind, unjudged", async () => {
+      expect.assertions(2);
+
+      await DiscriminatedUnionEntity.update(
+        "du-1",
+        { payment: { amount: 300 } },
+        {
+          condition: {
+            "payment.method.cardNumber": { $between: ["4000", "4999"] }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-1",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#amount = :Payment_amount",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Payment.#method.#cardNumber BETWEEN :wc1_PaymentmethodcardNumber1 AND :wc1_PaymentmethodcardNumber2)",
+                  ExpressionAttributeNames: {
+                    "#Payment": "Payment",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#amount": "amount",
+                    "#cardNumber": "cardNumber",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Payment_amount": 300,
+                    ":UpdatedAt": now,
+                    ":wc1_PaymentmethodcardNumber1": "4000",
+                    ":wc1_PaymentmethodcardNumber2": "4999"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
 });

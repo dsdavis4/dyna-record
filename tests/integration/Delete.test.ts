@@ -29,6 +29,7 @@ import {
   DeepNestedEntity,
   Category,
   Accessory,
+  DiscriminatedUnionEntity,
   mockEmbeddingProvider,
   mockEmbeddingProviderCalls
 } from "./mockModels.js";
@@ -7758,6 +7759,61 @@ describe("Delete with write conditions", () => {
 
       expect(e).toEqual(undeclared("inventory", "reserved"));
       expectNothingSent();
+    });
+  });
+
+  describe("a range whose bounds are different kinds on a path into a union variant (R30)", () => {
+    // A path into a union variant resolves to no field, so no schema
+    // validates its bounds. Before this was refused, a $between across a
+    // string and a number was sent and rejected by DynamoDB with a
+    // ValidationException, and a composed range across them was sent, could
+    // never hold, and failed as the row's own guard
+    const mixed = (operators: string, kinds: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "payment.method.cardNumber": ${operators} bound a range with ${kinds}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`
+      );
+
+    it("refuses a $between of a string and a number, and a composed range across kinds in either order, before anything is sent", async () => {
+      expect.assertions(6);
+
+      const between = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.delete("du-1", {
+            condition: {
+              // @ts-expect-error: a plain JavaScript caller's string and number
+              "payment.method.cardNumber": { $between: ["4000", 4999] }
+            }
+          })
+      );
+      const stringToNumber = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.delete("du-1", {
+            condition: {
+              // @ts-expect-error: a plain JavaScript caller's string to number
+              "payment.method.cardNumber": { $gte: "4000", $lte: 4999 }
+            }
+          })
+      );
+      const numberToString = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.delete("du-1", {
+            condition: {
+              // @ts-expect-error: a plain JavaScript caller's number to string
+              "payment.method.cardNumber": { $gt: 4000, $lt: "4999" }
+            }
+          })
+      );
+
+      expect(between).toEqual(mixed("$between", "a string and a number"));
+      expect(stringToNumber).toEqual(
+        mixed("$gte and $lte", "a string and a number")
+      );
+      expect(numberToString).toEqual(
+        mixed("$gt and $lt", "a number and a string")
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
     });
   });
 });

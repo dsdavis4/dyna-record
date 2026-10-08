@@ -1503,6 +1503,250 @@ describe("FilterExpressionBuilder", () => {
     });
   });
 
+  describe("a range's bounds are one kind of value", () => {
+    // The condition types build a range per comparable kind — strings,
+    // numbers, bigints, Dates or binary — so its bounds never mix two. A path
+    // into a union variant resolves to no field, so nothing validates its
+    // operands against a schema, and a plain JavaScript caller's mixed pair
+    // would reach DynamoDB: a $between there is rejected with a
+    // ValidationException, and a composed range can never hold. The bounds
+    // alone are enough to refuse it, before anything is sent
+    const mixed = (attr: string, operators: string, kinds: string): string =>
+      `Invalid filter value for attribute "${attr}": ${operators} bound a range with ${kinds}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`;
+
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("refuses a $between whose bounds are different kinds on a path whose field is unresolved, naming the path", () => {
+        expect.assertions(5);
+
+        const path = "meta.channel.address";
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string and number
+            [path]: { $between: ["4000", 4999] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a string and a number"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number and string
+            [path]: { $between: [4000, "4999"] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a number and a string"))
+        );
+        // A bigint is stored as a Number, but the types keep it a kind of its
+        // own, and so does this check
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number and bigint
+            [path]: { $between: [1, 5n] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a number and a bigint"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's binary and string
+            [path]: { $between: [new Uint8Array([1]), "b"] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "binary and a string"))
+        );
+        // Deeper below the variant's field the path is no more resolved
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string and number
+            "meta.channel.address.zip": { $between: ["80000", 89999] }
+          })
+        ).toThrow(
+          new FilterError(
+            mixed(
+              "meta.channel.address.zip",
+              "$between",
+              "a string and a number"
+            )
+          )
+        );
+      });
+
+      it("refuses a composed range whose bounds are different kinds on a path whose field is unresolved, in either order", () => {
+        expect.assertions(3);
+
+        const path = "meta.channel.address";
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string to number
+            [path]: { $gte: "4000", $lte: 4999 }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$gte and $lte", "a string and a number"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number to string
+            [path]: { $gt: 4000, $lt: "4999" }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$gt and $lt", "a number and a string"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's three kinds
+            [path]: { $gt: "1", $lt: 5n, $lte: 6 }
+          })
+        ).toThrow(
+          new FilterError(
+            mixed(
+              path,
+              "$gt and $lt and $lte",
+              "a string, a bigint and a number"
+            )
+          )
+        );
+      });
+
+      it("refuses a mixed range inside an $or branch", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            $or: [
+              { name: "Scale-A" },
+              // @ts-expect-error a plain JavaScript caller's mixed pair
+              { "meta.channel.address": { $between: ["4000", 4999] } }
+            ]
+          })
+        ).toThrow(
+          new FilterError(
+            mixed("meta.channel.address", "$between", "a string and a number")
+          )
+        );
+      });
+
+      it.each<
+        [
+          string,
+          FilterParams,
+          ReturnType<FilterExpressionBuilder["filterParams"]>
+        ]
+      >([
+        [
+          "two strings",
+          { "meta.channel.address": { $between: ["4000", "4999"] } },
+          {
+            expression:
+              "#Meta.#channel.#address BETWEEN :Metachanneladdress1 AND :Metachanneladdress2",
+            values: { Metachanneladdress1: "4000", Metachanneladdress2: "4999" }
+          }
+        ],
+        [
+          "two numbers",
+          { "meta.channel.address": { $between: [4000, 4999] } },
+          {
+            expression:
+              "#Meta.#channel.#address BETWEEN :Metachanneladdress1 AND :Metachanneladdress2",
+            values: { Metachanneladdress1: 4000, Metachanneladdress2: 4999 }
+          }
+        ],
+        [
+          "a composed range of two strings",
+          { "meta.channel.address": { $gte: "4000", $lte: "4999" } },
+          {
+            expression:
+              "#Meta.#channel.#address >= :Metachanneladdress1 AND #Meta.#channel.#address <= :Metachanneladdress2",
+            values: { Metachanneladdress1: "4000", Metachanneladdress2: "4999" }
+          }
+        ],
+        [
+          "a composed range of two numbers",
+          { "meta.channel.address": { $gt: 4000, $lt: 4999 } },
+          {
+            expression:
+              "#Meta.#channel.#address > :Metachanneladdress1 AND #Meta.#channel.#address < :Metachanneladdress2",
+            values: { Metachanneladdress1: 4000, Metachanneladdress2: 4999 }
+          }
+        ]
+      ])(
+        "still sends a range of %s on a path whose field is unresolved, unjudged",
+        (_, condition, compiled) => {
+          expect.assertions(1);
+
+          expect(builder().filterParams(condition)).toEqual(compiled);
+        }
+      );
+
+      it("still sends a range of two Dates on a date attribute and a date field", () => {
+        expect.assertions(2);
+
+        // A Date is a kind of its own, though it is sent as the ISO string
+        // it is stored as
+        const start = new Date("2023-01-01T00:00:00.000Z");
+        const end = new Date("2023-12-31T00:00:00.000Z");
+        expect(
+          builder().filterParams({ createdAt: { $between: [start, end] } })
+        ).toEqual({
+          expression: "#CreatedAt BETWEEN :CreatedAt1 AND :CreatedAt2",
+          values: {
+            CreatedAt1: "2023-01-01T00:00:00.000Z",
+            CreatedAt2: "2023-12-31T00:00:00.000Z"
+          }
+        });
+        expect(
+          builder().filterParams({
+            "meta.recordedAt": { $gte: start, $lt: end }
+          })
+        ).toEqual({
+          expression:
+            "#Meta.#recordedAt >= :MetarecordedAt1 AND #Meta.#recordedAt < :MetarecordedAt2",
+          values: {
+            MetarecordedAt1: "2023-01-01T00:00:00.000Z",
+            MetarecordedAt2: "2023-12-31T00:00:00.000Z"
+          }
+        });
+      });
+    });
+
+    it("refuses a mixed range on a resolved attribute whose resolver supplies no type", () => {
+      expect.assertions(1);
+
+      // Without a zod type nothing validates the bounds against the
+      // attribute, so this check is the one that refuses them
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed pair
+          price: { $between: ["1", 5] }
+        })
+      ).toThrow(
+        new FilterError(mixed("price", "$between", "a string and a number"))
+      );
+    });
+
+    it("keeps refusing a mixed range on a resolved field as a value its type does not hold", () => {
+      expect.assertions(2);
+
+      // Validation against the field's schema answers first, as it did before
+      // this check existed
+      const message =
+        'Invalid filter value for attribute "meta.nested.count": the value does not match the attribute\'s type';
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed pair
+          "meta.nested.count": { $between: ["1", 5] }
+        })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed range
+          "meta.nested.count": { $gte: 1, $lte: "5" }
+        })
+      ).toThrow(new FilterError(message));
+    });
+  });
+
   describe("operator object shape", () => {
     it("rejects an empty operator object", () => {
       expect.assertions(1);

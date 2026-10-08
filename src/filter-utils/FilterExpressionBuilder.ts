@@ -192,6 +192,26 @@ const isOrdered = (
   typeof value === "bigint";
 
 /**
+ * The comparable kind of a range bound, as the caller supplied it, phrased for
+ * an error message.
+ *
+ * Mirrors the kinds the condition types build a range from
+ * (`ComparisonConditionFor` and `BetweenConditionFor`): a `Date`, a string, a
+ * number, a bigint or binary. A `Date` is a kind of its own although it is
+ * sent as an ISO string, and a bigint although it is stored as a Number,
+ * because the types keep them apart. Read before conversion for that reason.
+ * Only ever asked of a bound already proven orderable, so `typeof` names
+ * every other kind it can be
+ * @param operand - A range bound, in the form the caller supplied it
+ * @returns The kind, with its article (EX: `a string`, `binary`)
+ */
+const rangeKindOf = (operand: unknown): string => {
+  if (operand instanceof Date) return "a Date";
+  if (operand instanceof Uint8Array) return "binary";
+  return `a ${typeof operand}`;
+};
+
+/**
  * Properties for constructing a {@link FilterExpressionBuilder}.
  *
  * @property {FilterCapabilities} capabilities - The filter vocabulary the context supports.
@@ -609,6 +629,11 @@ class FilterExpressionBuilder {
         this.assertOperandOrdered(values, reference, attr, operator);
         return { operator, reference };
       });
+      this.assertBoundsOneKind(
+        operands.map(operator => value[operator]),
+        attr,
+        operands.join(" and ")
+      );
       this.assertComposedRangeSatisfiable(values, bound, attr);
       condition = bound
         .map(
@@ -633,6 +658,7 @@ class FilterExpressionBuilder {
       const upperRef = this.bindWholeValue(resolved, attr, upper, values);
       this.assertOperandOrdered(values, lowerRef, attr, "$between");
       this.assertOperandOrdered(values, upperRef, attr, "$between");
+      this.assertBoundsOneKind([lower, upper], attr, "$between");
       this.assertBoundsOrdered(values, lowerRef, upperRef, attr);
       condition = `${resolved.expressionPath} BETWEEN ${lowerRef} AND ${upperRef}`;
     } else if (this.isBeginsWithFilter(value)) {
@@ -849,6 +875,42 @@ class FilterExpressionBuilder {
     this.assertOperandDefined(upper, attr, "$between");
 
     return [lower, upper];
+  }
+
+  /**
+   * Rejects a range whose bounds are of different kinds.
+   *
+   * The condition types build a range per comparable kind, so a typed caller
+   * cannot pair a string bound with a number one. This answers for a plain
+   * JavaScript caller, on every path, and matters most where the field could
+   * not be resolved — a dot path into a union variant — because nothing
+   * validates the bounds against a schema there. Such a range reaches DynamoDB
+   * otherwise: a `BETWEEN` across a String and a Number is rejected with "The
+   * BETWEEN operator requires same data type for lower and upper bounds", and
+   * a composed range across them is accepted and can never hold, so a write
+   * condition fails as though the row had failed it. Verified against the
+   * service. Needs no schema, so it applies where every schema-side guard
+   * abstains; on a resolved field, validation has already answered.
+   *
+   * Asked after each bound is proven orderable, so a bound DynamoDB cannot
+   * order at all is reported as that, and before the order of the bounds is
+   * compared, which across kinds would mean nothing
+   * @param operands - The range's bounds, as the caller supplied them
+   * @param attr - The attribute key, for the error message
+   * @param operators - The operator or operators being applied, for the message
+   */
+  private assertBoundsOneKind(
+    operands: readonly unknown[],
+    attr: string,
+    operators: string
+  ): void {
+    const kinds = [...new Set(operands.map(rangeKindOf))];
+    if (kinds.length < 2) return;
+
+    const named = `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`;
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": ${operators} bound a range with ${named}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`
+    );
   }
 
   /**
