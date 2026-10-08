@@ -66,11 +66,16 @@ import {
   HasOne,
   DateAttribute,
   IdAttribute,
+  ObjectAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
   StringAttribute,
   Table
+} from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
 } from "../../src/decorators/index.js";
 import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
 import {
@@ -198,6 +203,54 @@ class WarehouseInspection extends MockTable {
 
   @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
   public readonly warehouseId: ForeignKey<Warehouse>;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NestedListsEntity extends MockTable {
+  declare readonly type: "NestedListsEntity";
+
+  @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+  public layout: InferObjectSchema<typeof nestedListsSchema>;
 }
 
 describe("Update", () => {
@@ -2263,6 +2316,255 @@ describe("Update", () => {
                   TableName: "mock-table",
                   UpdateExpression:
                     "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street, #addressAttribute.#city = :addressAttribute_city, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat, #addressAttribute.#geo.#lng = :addressAttribute_geo_lng, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy, #addressAttribute.#scores = :addressAttribute_scores REMOVE #addressAttribute.#zip, #addressAttribute.#category"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  describe("a nullable field inside a list element set to null is left out of the stored element", () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    it("in a list nested in an object, in an object inside the element and in a list inside the element", async () => {
+      expect.assertions(4);
+
+      await NestedListsEntity.update("123", {
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: null,
+                placement: { aisle: "A1", bin: null },
+                restocks: [
+                  { at: new Date("2024-06-15T12:00:00.000Z"), note: null },
+                  { at: new Date("2024-06-16T12:00:00.000Z"), note: "late" }
+                ]
+              },
+              {
+                sku: "sku-2",
+                note: "kept",
+                placement: { aisle: "B2", bin: "7" },
+                restocks: []
+              }
+            ]
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Layout_section_entries": [
+                      {
+                        sku: "sku-1",
+                        placement: { aisle: "A1" },
+                        restocks: [
+                          { at: "2024-06-15T12:00:00.000Z" },
+                          { at: "2024-06-16T12:00:00.000Z", note: "late" }
+                        ]
+                      },
+                      {
+                        sku: "sku-2",
+                        note: "kept",
+                        placement: { aisle: "B2", bin: "7" },
+                        restocks: []
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "NestedListsEntity#123",
+                    SK: "NestedListsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Layout.#section.#entries = :Layout_section_entries"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("in a discriminated union variant inside a list", async () => {
+      expect.assertions(4);
+
+      await ArrayOfUnionsEntity.update("123", {
+        dashboard: {
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Revenue",
+              value: 500,
+              format: "currency",
+              trend: null
+            },
+            {
+              type: "date-marker",
+              date: new Date("2024-06-15T12:00:00.000Z"),
+              label: null
+            }
+          ]
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Dashboard": "Dashboard",
+                    "#widgets": "widgets"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Dashboard_widgets": [
+                      {
+                        type: "metric-card",
+                        label: "Revenue",
+                        value: 500,
+                        format: "currency"
+                      },
+                      {
+                        type: "date-marker",
+                        date: "2024-06-15T12:00:00.000Z"
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "ArrayOfUnionsEntity#123",
+                    SK: "ArrayOfUnionsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Dashboard.#widgets = :Dashboard_widgets"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("through the instance method, which returns the element without the field", async () => {
+      expect.assertions(5);
+
+      const instance = createInstance(NestedListsEntity, {
+        pk: "NestedListsEntity#123" as PartitionKey,
+        sk: "NestedListsEntity" as SortKey,
+        id: "123",
+        type: "NestedListsEntity",
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: "old",
+                placement: { aisle: "A1", bin: "3" },
+                restocks: [
+                  { at: new Date("2024-06-14T12:00:00.000Z"), note: "old" }
+                ]
+              }
+            ]
+          }
+        },
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: null,
+                placement: { aisle: "A1", bin: null },
+                restocks: [
+                  { at: new Date("2024-06-15T12:00:00.000Z"), note: null }
+                ]
+              }
+            ]
+          }
+        }
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                placement: { aisle: "A1" },
+                restocks: [{ at: new Date("2024-06-15T12:00:00.000Z") }]
+              }
+            ]
+          }
+        },
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Layout_section_entries": [
+                      {
+                        sku: "sku-1",
+                        placement: { aisle: "A1" },
+                        restocks: [{ at: "2024-06-15T12:00:00.000Z" }]
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "NestedListsEntity#123",
+                    SK: "NestedListsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Layout.#section.#entries = :Layout_section_entries"
                 }
               }
             ]
@@ -11153,6 +11455,213 @@ describe("Update", () => {
           Logger.log("Testing types");
         });
       });
+      describe("a nullable field inside a list element", () => {
+        it("can be null, like a nullable field anywhere else in an update", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  actor: "buyer",
+                  // @ts-expect-no-error: note is nullable, null is allowed for updates (the element is stored without it)
+                  note: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("can be null in a list inside a nested object, in an object inside the element and in a list inside the element", async () => {
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-no-error: note is nullable, null is allowed in a list nested in an object
+                    note: null,
+                    // @ts-expect-no-error: bin is nullable, null is allowed in an object inside a list element
+                    placement: { aisle: "A1", bin: null },
+                    // @ts-expect-no-error: note is nullable, null is allowed in a list inside a list element
+                    restocks: [{ at: new Date(), note: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("can be null in a discriminated union variant inside a list", async () => {
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  value: 500,
+                  format: "currency",
+                  // @ts-expect-no-error: trend is nullable in the metric-card variant, null is allowed
+                  trend: null
+                },
+                {
+                  type: "date-marker",
+                  date: new Date(),
+                  // @ts-expect-no-error: label is nullable in the date-marker variant, null is allowed
+                  label: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not allow a non-nullable field inside a list element to be null", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  // @ts-expect-error: actor is non-nullable, cannot be null
+                  actor: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    // @ts-expect-error: sku is non-nullable, cannot be null
+                    sku: null,
+                    // @ts-expect-error: aisle is non-nullable, cannot be null
+                    placement: { aisle: null },
+                    // @ts-expect-error: at is non-nullable, cannot be null
+                    restocks: [{ at: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  // @ts-expect-error: value is non-nullable in the metric-card variant, cannot be null
+                  value: null,
+                  format: "currency"
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not allow the element itself to be null", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              // @ts-expect-error: list elements are not nullable
+              history: [null]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not accept wrong types for a nullable field inside a list element", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  actor: "buyer",
+                  // @ts-expect-error: note is a string
+                  note: 1
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-error: bin is a string
+                    placement: { aisle: "A1", bin: 2 },
+                    // @ts-expect-error: note is a string
+                    restocks: [{ at: new Date(), note: false }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  value: 500,
+                  format: "currency",
+                  // @ts-expect-error: "sideways" is not a trend value
+                  trend: "sideways"
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("still requires every non-nullable field of an element, since a list is replaced whole", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              // @ts-expect-error: at is required in each element (lists are replaced whole, never merged)
+              history: [{ actor: "buyer", note: null }]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-error: aisle is required in an object inside an element
+                    placement: { bin: null },
+                    restocks: []
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
     });
 
     describe("instance method", () => {
@@ -11962,6 +12471,129 @@ describe("Update", () => {
           .catch(() => {
             Logger.log("Testing types");
           });
+      });
+      describe("a nullable field inside a list element", () => {
+        it("can be null, like a nullable field anywhere else in an update", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update({
+              objectAttribute: {
+                history: [
+                  {
+                    at: new Date(),
+                    actor: "buyer",
+                    // @ts-expect-no-error: note is nullable, null is allowed for updates (the element is stored without it)
+                    note: null
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("can be null in a list inside a nested object, in an object inside the element and in a list inside the element", async () => {
+          const instance = new NestedListsEntity();
+
+          await instance
+            .update({
+              layout: {
+                section: {
+                  entries: [
+                    {
+                      sku: "sku-1",
+                      // @ts-expect-no-error: note is nullable, null is allowed in a list nested in an object
+                      note: null,
+                      // @ts-expect-no-error: bin is nullable, null is allowed in an object inside a list element
+                      placement: { aisle: "A1", bin: null },
+                      // @ts-expect-no-error: note is nullable, null is allowed in a list inside a list element
+                      restocks: [{ at: new Date(), note: null }]
+                    }
+                  ]
+                }
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("can be null in a discriminated union variant inside a list", async () => {
+          const instance = new ArrayOfUnionsEntity();
+
+          await instance
+            .update({
+              dashboard: {
+                widgets: [
+                  {
+                    type: "metric-card",
+                    label: "Revenue",
+                    value: 500,
+                    format: "currency",
+                    // @ts-expect-no-error: trend is nullable in the metric-card variant, null is allowed
+                    trend: null
+                  },
+                  {
+                    type: "date-marker",
+                    date: new Date(),
+                    // @ts-expect-no-error: label is nullable in the date-marker variant, null is allowed
+                    label: null
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("does not allow a non-nullable field inside a list element to be null", async () => {
+          const instance = new NestedListsEntity();
+
+          await instance
+            .update({
+              layout: {
+                section: {
+                  entries: [
+                    {
+                      // @ts-expect-error: sku is non-nullable, cannot be null
+                      sku: null,
+                      // @ts-expect-error: aisle is non-nullable, cannot be null
+                      placement: { aisle: null },
+                      // @ts-expect-error: at is non-nullable, cannot be null
+                      restocks: [{ at: null }]
+                    }
+                  ]
+                }
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("does not accept wrong types for a nullable field inside a list element", async () => {
+          const instance = new ArrayOfUnionsEntity();
+
+          await instance
+            .update({
+              dashboard: {
+                widgets: [
+                  {
+                    type: "date-marker",
+                    date: new Date(),
+                    // @ts-expect-error: label is a string
+                    label: 3
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
       });
     });
 

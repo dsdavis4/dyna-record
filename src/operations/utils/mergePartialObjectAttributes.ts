@@ -1,5 +1,12 @@
 import type { AttributeMetadataStorage } from "../../metadata/index.js";
-import type { ObjectSchema } from "../../decorators/attributes/types.js";
+import type {
+  FieldDef,
+  ObjectSchema
+} from "../../decorators/attributes/types.js";
+import {
+  convertFieldToEntityValue,
+  convertFieldToTableItem
+} from "../../decorators/attributes/serializers.js";
 
 /**
  * Deep merges partial ObjectAttribute updates into the target object.
@@ -39,7 +46,8 @@ export function mergePartialObjectAttributes(
  * (which should be overwritten).
  * - null values cause the key to be deleted
  * - object-type fields per the schema are recursed
- * - everything else (primitives, arrays, dates, enums) is overwritten
+ * - everything else (primitives, arrays, dates, enums, discriminated unions)
+ *   is overwritten with the value as it is stored (see {@link asStored})
  */
 function deepMergeObject(
   existing: Record<string, unknown>,
@@ -74,9 +82,25 @@ function deepMergeObject(
         fieldDef.fields
       );
     } else {
-      result[key] = val;
+      result[key] = asStored(fieldDef, val);
     }
   }
 
   return result;
+}
+
+/**
+ * A field's value as the write stores it and a read returns it. A value
+ * written whole (a list or a discriminated union) leaves out its nullable
+ * fields set to `null` at any depth, so the updated instance leaves them out
+ * too, matching a nullable field set to `null` anywhere else.
+ * @param fieldDef - The field's definition
+ * @param val - The value from the update payload
+ * @returns The value the field holds after the write
+ */
+function asStored(fieldDef: FieldDef, val: unknown): unknown {
+  return convertFieldToEntityValue(
+    fieldDef,
+    convertFieldToTableItem(fieldDef, val)
+  );
 }

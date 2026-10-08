@@ -21,11 +21,13 @@ type NullableProperties<T> = {
  *   matching the partial update semantics (only provided fields are modified).
  * - Nullable fields at any nesting depth receive `| null` during updates.
  *
- * Primitives, `Date`, arrays, and functions pass through unchanged.
+ * Arrays resolve through {@link AllowNullInListElement}: a list is replaced
+ * whole, so its elements stay complete but their nullable fields take `null`.
+ *
+ * Primitives, `Date`, and functions pass through unchanged.
  */
 type AllowNullForNullableValue<T> = T extends
   | Date
-  | readonly unknown[]
   | string
   | number
   | boolean
@@ -33,9 +35,42 @@ type AllowNullForNullableValue<T> = T extends
   | undefined
   | ((...args: unknown[]) => unknown)
   ? T
-  : T extends Record<string, unknown>
-    ? Partial<AllowNullForNullable<T>>
-    : T;
+  : T extends readonly unknown[]
+    ? AllowNullInListElement<T>
+    : T extends Record<string, unknown>
+      ? Partial<AllowNullForNullable<T>>
+      : T;
+
+/**
+ * Resolves a list, or a value inside a list element, in an update payload.
+ *
+ * A list is written whole (`SET`, never a document path), so nothing inside
+ * it becomes `Partial` — every non-nullable field of an element is still
+ * required. A nullable field at any depth inside an element (an object, a
+ * discriminated union variant, an object or list within the element) also
+ * takes `null`, as it does everywhere else in an update; the element is
+ * stored without that field.
+ *
+ * Primitives, `Date`, and functions pass through unchanged.
+ */
+type AllowNullInListElement<T> = T extends
+  | Date
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ((...args: unknown[]) => unknown)
+  ? T
+  : T extends readonly unknown[]
+    ? { [I in keyof T]: AllowNullInListElement<T[I]> }
+    : T extends Record<string, unknown>
+      ? {
+          [K in keyof T]: K extends NullableProperties<T>
+            ? AllowNullInListElement<NonNullable<T[K]>> | null | undefined
+            : AllowNullInListElement<T[K]>;
+        }
+      : T;
 
 /**
  * Transforms a type `T` by allowing `null` as an additional type for its nullable properties.

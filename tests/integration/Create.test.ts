@@ -59,11 +59,16 @@ import {
   HasMany,
   HasOne,
   IdAttribute,
+  ObjectAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
   StringAttribute,
   Table
+} from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
 } from "../../src/decorators/index.js";
 import type {
   EntityClass,
@@ -201,6 +206,54 @@ class MyModelNullableAttribute extends MockTable {
 
   @StringAttribute({ alias: "MyAttribute", nullable: true })
   public myAttribute?: string;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NestedListsEntity extends MockTable {
+  declare readonly type: "NestedListsEntity";
+
+  @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+  public layout: InferObjectSchema<typeof nestedListsSchema>;
 }
 
 describe("Create", () => {
@@ -3564,6 +3617,109 @@ describe("Create", () => {
     });
   });
 
+  describe("create with a nullable field inside a list element", () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+      mockedGenerateId.mockReturnValueOnce("uuid1");
+      mockSend.mockResolvedValue({});
+    });
+
+    it("stores each element without its omitted or null nullable fields, at any depth", async () => {
+      expect.assertions(3);
+
+      const instance = await NestedListsEntity.create({
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                // @ts-expect-error: the types ask for omission; a JS caller's null is left out the same way
+                note: null,
+                // @ts-expect-error: the types ask for omission; a JS caller's null is left out the same way
+                placement: { aisle: "A1", bin: null },
+                restocks: [
+                  // @ts-expect-error: the types ask for omission; a JS caller's null is left out the same way
+                  { at: new Date("2024-06-15T12:00:00.000Z"), note: null },
+                  { at: new Date("2024-06-16T12:00:00.000Z") }
+                ]
+              },
+              {
+                sku: "sku-2",
+                note: "kept",
+                placement: { aisle: "B2", bin: "7" },
+                restocks: []
+              }
+            ]
+          }
+        }
+      });
+
+      expect(instance.layout).toEqual({
+        section: {
+          entries: [
+            {
+              sku: "sku-1",
+              placement: { aisle: "A1" },
+              restocks: [
+                { at: new Date("2024-06-15T12:00:00.000Z") },
+                { at: new Date("2024-06-16T12:00:00.000Z") }
+              ]
+            },
+            {
+              sku: "sku-2",
+              note: "kept",
+              placement: { aisle: "B2", bin: "7" },
+              restocks: []
+            }
+          ]
+        }
+      });
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Put: {
+                  ConditionExpression: "attribute_not_exists(PK)",
+                  Item: {
+                    PK: "NestedListsEntity#uuid1",
+                    SK: "NestedListsEntity",
+                    Id: "uuid1",
+                    Type: "NestedListsEntity",
+                    CreatedAt: "2023-10-16T03:31:35.918Z",
+                    UpdatedAt: "2023-10-16T03:31:35.918Z",
+                    Layout: {
+                      section: {
+                        entries: [
+                          {
+                            sku: "sku-1",
+                            placement: { aisle: "A1" },
+                            restocks: [
+                              { at: "2024-06-15T12:00:00.000Z" },
+                              { at: "2024-06-16T12:00:00.000Z" }
+                            ]
+                          },
+                          {
+                            sku: "sku-2",
+                            note: "kept",
+                            placement: { aisle: "B2", bin: "7" },
+                            restocks: []
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  TableName: "mock-table"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
   describe("types", () => {
     beforeAll(() => {
       // Mock return values as empty since it doesn't matter for type does
@@ -4160,6 +4316,204 @@ describe("Create", () => {
         }
       }).catch(() => {
         Logger.log("Testing types");
+      });
+    });
+
+    describe("a nullable field inside a list element", () => {
+      it("can be omitted, in a list on the attribute, in a nested list and in a union variant", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          },
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date(),
+            // @ts-expect-no-error: note is nullable so it can be omitted from an element
+            history: [{ at: new Date(), actor: "buyer" }]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await NestedListsEntity.create({
+          layout: {
+            section: {
+              entries: [
+                {
+                  sku: "sku-1",
+                  // @ts-expect-no-error: bin is nullable so it can be omitted
+                  placement: { aisle: "A1" },
+                  // @ts-expect-no-error: note is nullable so it can be omitted
+                  restocks: [{ at: new Date() }]
+                }
+              ]
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Sales",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Revenue",
+                value: 500,
+                // @ts-expect-no-error: trend is nullable in the metric-card variant so it can be omitted
+                format: "currency"
+              },
+              // @ts-expect-no-error: label is nullable in the date-marker variant so it can be omitted
+              { type: "date-marker", date: new Date() }
+            ]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("cannot be null (omit instead), like a nullable field anywhere else in a create", async () => {
+        await MyClassWithAllAttributeTypes.create({
+          stringAttribute: "val",
+          dateAttribute: new Date(),
+          foreignKeyAttribute: "123",
+          boolAttribute: true,
+          numberAttribute: 1,
+          enumAttribute: "val-1",
+          addressAttribute: {
+            street: "123 Main St",
+            city: "Springfield",
+            geo: { lat: 1, lng: 2, accuracy: "precise" },
+            scores: [95]
+          },
+          objectAttribute: {
+            name: "John",
+            email: "john@example.com",
+            tags: ["work"],
+            status: "active",
+            createdDate: new Date(),
+            history: [
+              {
+                at: new Date(),
+                actor: "buyer",
+                // @ts-expect-error: nullable fields cannot be set to null on create, they should be left undefined
+                note: null
+              }
+            ]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await NestedListsEntity.create({
+          layout: {
+            section: {
+              entries: [
+                {
+                  sku: "sku-1",
+                  // @ts-expect-error: nullable fields cannot be set to null on create, they should be left undefined
+                  note: null,
+                  // @ts-expect-error: nullable fields cannot be set to null on create, they should be left undefined
+                  placement: { aisle: "A1", bin: null },
+                  // @ts-expect-error: nullable fields cannot be set to null on create, they should be left undefined
+                  restocks: [{ at: new Date(), note: null }]
+                }
+              ]
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Sales",
+            widgets: [
+              {
+                type: "date-marker",
+                date: new Date(),
+                // @ts-expect-error: nullable fields cannot be set to null on create, they should be left undefined
+                label: null
+              }
+            ]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("does not allow a non-nullable field inside a list element to be null", async () => {
+        await NestedListsEntity.create({
+          layout: {
+            section: {
+              entries: [
+                {
+                  // @ts-expect-error: sku is non-nullable, cannot be null
+                  sku: null,
+                  // @ts-expect-error: aisle is non-nullable, cannot be null
+                  placement: { aisle: null },
+                  // @ts-expect-error: at is non-nullable, cannot be null
+                  restocks: [{ at: null }]
+                }
+              ]
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("does not accept wrong types for a nullable field inside a list element", async () => {
+        await NestedListsEntity.create({
+          layout: {
+            section: {
+              entries: [
+                {
+                  sku: "sku-1",
+                  // @ts-expect-error: note is a string
+                  note: 1,
+                  // @ts-expect-error: bin is a string
+                  placement: { aisle: "A1", bin: 2 },
+                  // @ts-expect-error: note is a string
+                  restocks: [{ at: new Date(), note: false }]
+                }
+              ]
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        await ArrayOfUnionsEntity.create({
+          dashboard: {
+            title: "Sales",
+            widgets: [
+              {
+                type: "metric-card",
+                label: "Revenue",
+                value: 500,
+                format: "currency",
+                // @ts-expect-error: "sideways" is not a trend value
+                trend: "sideways"
+              }
+            ]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
       });
     });
 

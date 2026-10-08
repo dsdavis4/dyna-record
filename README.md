@@ -1495,6 +1495,8 @@ await Store.update("123", {
 });
 ```
 
+Because the array is written whole, each element of an array of objects must include every non-nullable field. A nullable field inside an element can be omitted or set to `null`; either way the element is stored without it.
+
 **Discriminated unions** within objects are also **full replacement** (not merged):
 
 ```typescript

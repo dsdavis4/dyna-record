@@ -78,6 +78,8 @@
 
 - **Linking two entities that share an id through a join table copies each into the other's partition.** `create` on a join table reads both entities and keyed what it read by id alone. Entities of different types can share an id when it is caller-supplied (`@IdAttribute`), and then the second overwrote the first: both link rows were written from the same entity, so one partition held a copy of itself in place of the entity it is linked to, with no error. What is read is now keyed by entity type and id, so each partition receives a copy of the other entity. When one of two such entities is missing, the `NotFoundError` now names it; it previously named neither. Links between entities with different ids are unchanged.
 
+- **An update can set a nullable field inside a list element to `null`.** The update payload types offered `null` for a nullable field at the top level and inside an object attribute, but not inside an element of a list: an object element, a discriminated union variant, or an object or list within an element. So `update({ details: { history: [{ …, note: null }] } })` failed to compile, although the write accepted it and stored the element without the field. The types now offer `null` there too; each element is still written whole, so its other required fields stay required. The instance returned by `update` also leaves the field out instead of holding `null`, matching what is stored. Create is unchanged: a nullable field is omitted on create, inside a list element as anywhere else.
+
 ## 3.4.0 - 2026-10-03
 
 ### Added
