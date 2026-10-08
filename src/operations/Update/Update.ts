@@ -1,8 +1,6 @@
 import type DynaRecord from "../../DynaRecord.js";
 import {
   type ConditionCheck,
-  type LibraryPin,
-  type TransactConditionRow,
   TransactGetBuilder,
   TransactWriteBuilder
 } from "../../dynamo-utils/index.js";
@@ -23,9 +21,11 @@ import {
   type UpdateExpressionClauses,
   type DocumentPathOperation,
   type CompiledWriteCondition,
+  type RowPin,
   attachWriteCondition,
   buildBelongsToLinkKey,
   compileWriteCondition,
+  existingEntityRow,
   expressionBuilder,
   renderUpdateExpression,
   extractForeignKeyFromEntity,
@@ -105,14 +105,6 @@ interface PreFetchData {
   newBelongsToEntityLookup: BelongsToEntityLookup;
 }
 
-/**
- * A library pin and the row it is merged onto
- */
-interface TransactConditionPin {
-  row: TransactConditionRow;
-  pin: LibraryPin;
-}
-
 interface UpdateMetadata<T extends DynaRecord> {
   updatedAttrs: UpdatedAttributes<T>;
   expression: UpdateExpression;
@@ -161,7 +153,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * The searchable-value pin of an update carrying a write condition, merged
    * with the condition's guards once every library item is queued
    */
-  #searchableValuePin?: TransactConditionPin;
+  #searchableValuePin?: RowPin;
 
   constructor(
     Entity: EntityClass<T>,
@@ -711,14 +703,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     if (this.#writeCondition !== undefined) {
       this.#searchableValuePin = {
-        row: {
-          TableName: this.tableMetadata.name,
-          Key: {
-            [this.partitionKeyAlias]: this.EntityClass.partitionKeyValue(id),
-            [this.sortKeyAlias]: this.EntityClass.name
-          },
-          missingRowMessage: `${this.EntityClass.name} with ID '${id}' does not exist`
-        },
+        row: existingEntityRow(this.EntityClass, id),
         pin: { attribute: alias, value, failureMessage }
       };
       this.transactionBuilder.overrideConditionFailedMsg(

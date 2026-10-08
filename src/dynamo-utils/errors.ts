@@ -31,9 +31,9 @@ export class ConditionalCheckFailedError extends Error {
    * Widened to every subclass's code, so a subclass can narrow it. An instance
    * of this class itself always carries `"ConditionalCheckFailedError"`, and a
    * {@link WriteConditionFailedError} carries `"WriteConditionFailedError"`.
-   * Comparing `code` and testing `instanceof` behave as before the subclass
-   * existed; only code that assigns `code` to a variable typed as the single
-   * literal `"ConditionalCheckFailedError"` needs to widen that variable.
+   * Comparing `code` and testing `instanceof` work for either class; only code
+   * that assigns `code` to a variable typed as the single literal
+   * `"ConditionalCheckFailedError"` needs to widen that variable.
    */
   public readonly code:
     | "ConditionalCheckFailedError"

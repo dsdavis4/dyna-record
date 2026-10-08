@@ -225,13 +225,16 @@ export interface AttachJoinTableConditionProps {
 }
 
 /**
- * A row and the library pin or consumer guard to merge onto it
+ * A row and the library pin to merge onto it
  */
-interface RowPin {
+export interface RowPin {
   row: TransactConditionRow;
   pin: LibraryPin;
 }
 
+/**
+ * A row and the consumer guard to merge onto it
+ */
 interface RowGuard {
   row: TransactConditionRow;
   guard: ConsumerGuard;
@@ -258,6 +261,21 @@ interface ResolvedWriteCondition {
  */
 const isConditionObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Asserts that a write condition is an object of condition keys
+ * @param condition - The condition as the caller passed it
+ * @throws {FilterError} When it is not an object of condition keys
+ */
+function assertConditionObject(
+  condition: unknown
+): asserts condition is Record<string, unknown> {
+  if (!isConditionObject(condition)) {
+    throw new FilterError(
+      "Invalid write condition: the condition must be an object of condition keys"
+    );
+  }
+}
 
 /**
  * Reads one attribute of an object
@@ -701,12 +719,7 @@ export const compileWriteCondition = (
 ): CompiledWriteCondition => {
   const { EntityClass, operation, transactionBuilder } = props;
   const { condition } = props;
-
-  if (!isConditionObject(condition)) {
-    throw new FilterError(
-      "Invalid write condition: the condition must be an object of condition keys"
-    );
-  }
+  assertConditionObject(condition);
 
   const entityMeta = Metadata.getEntity(EntityClass.name);
   const selfConditions: Record<string, unknown> = {};
@@ -802,6 +815,20 @@ const entityRowKey = (
 };
 
 /**
+ * An entity's own row, reported as not found when it is missing
+ * @param Target - The entity
+ * @param id - Its id
+ * @returns The row
+ */
+export const existingEntityRow = (
+  Target: EntityClass<DynaRecord>,
+  id: string
+): TransactConditionRow => ({
+  ...entityRowKey(Target, id),
+  missingRowMessage: `${Target.name} with ID '${id}' does not exist`
+});
+
+/**
  * Describes a guard on another entity's row for an error message
  * @param guard - The guard
  * @returns The description (EX: `relationship 'customer'`)
@@ -839,10 +866,7 @@ const resolveTargetGuard = (
 
   switch (guard.kind) {
     case "parent": {
-      const selfRow = {
-        ...entityRowKey(EntityClass, id),
-        missingRowMessage: `${EntityClass.name} with ID '${id}' does not exist`
-      };
+      const selfRow = existingEntityRow(EntityClass, id);
       const storedForeignKey =
         props.stored === undefined
           ? undefined
@@ -880,10 +904,7 @@ const resolveTargetGuard = (
       }
 
       resolved.guards.push({
-        row: {
-          ...entityRowKey(guard.target, targetId),
-          missingRowMessage: `${guard.target.name} with ID '${targetId}' does not exist`
-        },
+        row: existingEntityRow(guard.target, targetId),
         guard: {
           ...consumerGuard,
           ...(!targetsPayload && {
@@ -917,12 +938,12 @@ const resolveTargetGuard = (
       // A self-referential child named by the entity's own id is the entity's
       // own row, which is reported as not-found when it is missing
       const isOwnRow = guard.target === EntityClass && childId === id;
-      const childRow = {
-        ...entityRowKey(guard.target, childId),
-        missingRowMessage: isOwnRow
-          ? `${EntityClass.name} with ID '${id}' does not exist`
-          : notAssociated
-      };
+      const childRow = isOwnRow
+        ? existingEntityRow(EntityClass, id)
+        : {
+            ...entityRowKey(guard.target, childId),
+            missingRowMessage: notAssociated
+          };
       const { alias } = Metadata.getEntityAttributes(guard.target.name)[
         guard.foreignKey
       ];
@@ -958,10 +979,7 @@ const resolveTargetGuard = (
         }
       });
       resolved.guards.push({
-        row: {
-          ...entityRowKey(guard.target, guard.id),
-          missingRowMessage: `${guard.target.name} with ID '${guard.id}' does not exist`
-        },
+        row: existingEntityRow(guard.target, guard.id),
         guard: {
           ...consumerGuard,
           pinnedBy: { TableName: linkRow.TableName, Key: linkRow.Key }
@@ -1022,10 +1040,7 @@ export const attachWriteCondition = (
 
   if (compiled.self !== undefined) {
     resolved.guards.push({
-      row: {
-        ...entityRowKey(compiled.EntityClass, id),
-        missingRowMessage: `${compiled.EntityClass.name} with ID '${id}' does not exist`
-      },
+      row: existingEntityRow(compiled.EntityClass, id),
       guard: {
         entity: compiled.EntityClass.name,
         id,
@@ -1073,11 +1088,7 @@ export const compileJoinTableCondition = (
   props: CompileJoinTableConditionProps
 ): CompiledJoinTableCondition => {
   const { condition } = props;
-  if (!isConditionObject(condition)) {
-    throw new FilterError(
-      "Invalid write condition: the condition must be an object of condition keys"
-    );
-  }
+  assertConditionObject(condition);
 
   const targets = joinTableTargets(props.joinTableName);
 

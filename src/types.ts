@@ -59,14 +59,6 @@ type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
 >;
 
 /**
- * A foreign key attribute's declared type without `undefined` and `null`, so a
- * nullable key is matched against the brands like a required one.
- *
- * @typeParam Value - The attribute's declared type.
- */
-type NormalizedForeignKey<Value> = NonNullable<Value>;
-
-/**
  * The entity a {@link ForeignKey} or {@link NullableForeignKey} attribute
  * references, read from its declared type: `Customer` for
  * `ForeignKey<Customer>`, and {@link DynaRecord} for a bare `ForeignKey`.
@@ -75,9 +67,9 @@ type NormalizedForeignKey<Value> = NonNullable<Value>;
  * @typeParam Value - The attribute's declared type.
  */
 export type ExtractForeignKeyTarget<Value> =
-  NormalizedForeignKey<Value> extends ForeignKey<infer Target>
+  NonNullable<Value> extends ForeignKey<infer Target>
     ? Target
-    : NormalizedForeignKey<Value> extends NullableForeignKeyBrand<infer Target>
+    : NonNullable<Value> extends NullableForeignKeyBrand<infer Target>
       ? Target
       : never;
 

@@ -177,12 +177,14 @@ const mergeBindings = <V>(
   if (added === undefined || Object.keys(added).length === 0) return undefined;
 
   for (const [placeholder, value] of Object.entries(added)) {
-    if (existing !== undefined && placeholder in existing) {
-      if (existing[placeholder] !== value) {
-        throw new Error(
-          `Write condition merge would rebind '${placeholder}' on the item for key ${JSON.stringify(row.Key)} to a different value`
-        );
-      }
+    if (
+      existing !== undefined &&
+      placeholder in existing &&
+      existing[placeholder] !== value
+    ) {
+      throw new Error(
+        `Write condition merge would rebind '${placeholder}' on the item for key ${JSON.stringify(row.Key)} to a different value`
+      );
     }
   }
 
