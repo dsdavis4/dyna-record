@@ -3658,6 +3658,18 @@ describe("FilterExpressionBuilder", () => {
         // An $or of nothing asks for nothing, and dropping it from a guard
         // would loosen it
         "write conditions": "$or has no condition blocks"
+      },
+      {
+        operand: "empty $or branch",
+        condition: { $or: [{}, { name: "Scale-A" }] },
+        capability: "dropEmptyOr",
+        "query filters": "compiles",
+        // Rejected by the or capability, which comes first
+        "key conditions": "$or conditions are not supported",
+        "search filters": "$or conditions are not supported",
+        // An empty branch always holds, so dropping it would tighten the guard
+        // and keeping it would make the whole $or vacuous
+        "write conditions": "a $or branch holds no conditions"
       }
     ];
 
@@ -3764,6 +3776,7 @@ describe("FilterExpressionBuilder", () => {
           "IN array",
           "composed comparisons",
           "empty $or",
+          "empty $or branch",
           "equality",
           "nested path",
           "null",
@@ -4225,6 +4238,40 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({ expression: "", values: {} });
     });
 
+    it("drops an $or branch that holds no conditions, keeping the others", () => {
+      expect.assertions(4);
+
+      // A filter that drops an always-true branch narrows nothing it was not
+      // already narrowing within the partition; write conditions reject it
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{}, { name: "Scale-A" }]
+        })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ $or: [] }, { name: "Scale-A" }]
+        })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({ $or: [{}], name: "Scale-A" })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      // Every branch empty leaves nothing, which assembly drops
+      expect(queryBuilderInstance().filterParams({ $or: [{}] })).toEqual({
+        expression: "",
+        values: {}
+      });
+    });
+
     it("groups both halves when both carry conditions", () => {
       expect.assertions(1);
 
@@ -4587,6 +4634,73 @@ describe("FilterExpressionBuilder", () => {
           "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks"
         )
       );
+    });
+
+    describe("a $or branch that holds no conditions", () => {
+      const emptyBranchError = new FilterError(
+        "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+      );
+
+      it.each<{ shape: string; condition: FilterParams }>([
+        { shape: "alone", condition: { $or: [{}] } },
+        {
+          shape: "beside a branch that holds conditions",
+          condition: { $or: [{}, { status: "open" }] }
+        },
+        {
+          shape: "after a branch that holds conditions",
+          condition: { $or: [{ status: "open" }, {}] }
+        },
+        {
+          shape: "beside a condition outside the $or",
+          condition: { $or: [{}], status: "open" }
+        }
+      ])("rejects an empty branch $shape", ({ condition }) => {
+        expect.assertions(1);
+
+        expect(() => writeConditionBuilder().filterParams(condition)).toThrow(
+          emptyBranchError
+        );
+      });
+
+      it("rejects an empty branch inside a nested $or", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            // @ts-expect-error: an $or block cannot hold an $or; this is the untyped caller's shape
+            $or: [{ $or: [{}] }, { status: "open" }]
+          })
+        ).toThrow(emptyBranchError);
+      });
+
+      it("rejects a branch holding only an empty nested $or as an empty $or", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            $or: [{ $or: [] }, { status: "open" }]
+          })
+        ).toThrow(
+          new FilterError(
+            "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks"
+          )
+        );
+      });
+
+      it("rejects a branch whose every condition is undefined by the condition's key", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            $or: [{ name: undefined }, { status: "open" }]
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "name": the condition has no value, and write conditions reject one rather than dropping it — dropping it would loosen what the condition checks'
+          )
+        );
+      });
     });
 
     it("rejects null inside an IN list", () => {

@@ -1023,6 +1023,64 @@ describe("Query", () => {
         expect(mockedQueryCommand.mock.calls).toEqual([]);
       });
     });
+    describe("a filter key the entity does not declare", () => {
+      // The partition's attributes, which the query builder resolves a filter
+      // key against: the Warehouse's own and those of its Shipments
+      const unknownKey = (key: string, attribute: string): FilterError =>
+        new FilterError(
+          `Invalid filter key "${key}": attribute "${attribute}" does not exist on this entity. Valid attributes are: id, type, createdAt, updatedAt, destination, dimensions, warehouseId, pk, sk, name, location`
+        );
+
+      it("throws a FilterError for an undeclared attribute, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not an attribute of the partition
+          Warehouse.query("w1", { filter: { region: "west" } })
+        ).rejects.toEqual(unknownKey("region", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for a dot path whose attribute is undeclared, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: colour is not an attribute of the partition
+          Warehouse.query("w1", { filter: { "colour.shade": "red" } })
+        ).rejects.toEqual(unknownKey("colour.shade", "colour"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for an undeclared attribute inside an $or block, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not an attribute of the partition
+          Warehouse.query("w1", {
+            filter: { $or: [{ name: "Main" }, { region: "west" }] }
+          })
+        ).rejects.toEqual(unknownKey("region", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for an $or nested directly in an $or block, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        // Only an untyped caller can write this: the block's key "$or" names
+        // no attribute, so it is refused like any other undeclared key
+        await expect(
+          // @ts-expect-error: an $or block takes attribute keys, not another $or
+          Warehouse.query("w1", {
+            filter: { $or: [{ $or: [{ name: "Main" }] }] }
+          })
+        ).rejects.toEqual(unknownKey("$or", "$or"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+    });
   });
 
   describe("queries by PK only", () => {

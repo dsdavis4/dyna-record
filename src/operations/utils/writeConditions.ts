@@ -369,17 +369,35 @@ const compileFragment = (
 };
 
 /**
+ * Describes where a condition on another entity's row sits in the caller's
+ * condition, for an error message
+ * @param guard - The guard the condition belongs to
+ * @returns The location (EX: `"customer"`, `"orders" entry "o1"`, `"organizationId" target`)
+ */
+const describeConditionLocation = (
+  guard: TargetWriteConditionGuard
+): string => {
+  if (guard.kind === "foreignKey") return `"${guard.name}" target`;
+  return guard.id === undefined
+    ? `"${guard.name}"`
+    : `"${guard.name}" entry "${guard.id}"`;
+};
+
+/**
  * Compiles a condition on a related entity's row. The guard requires the row
  * to exist whatever it says, so `null` as "not set" can never pass on a
  * missing row and an empty condition is a guard that the row exists
  * @param Target - The related entity
  * @param conditions - The condition on its row
+ * @param guard - The guard the condition belongs to, which a rejection names
  * @param transactionBuilder - The transaction, for the placeholder prefix
  * @returns The compiled fragment
+ * @throws {FilterError} When the filter builder rejects the condition: its error, prefixed with where the condition sits, which the builder never sees, and kept as the `cause`
  */
 const compileTargetFragment = (
   Target: EntityClass<DynaRecord>,
   conditions: Record<string, unknown>,
+  guard: TargetWriteConditionGuard,
   transactionBuilder: TransactWriteBuilder
 ): ConditionFragment => {
   const prefix = transactionBuilder.nextPlaceholderPrefix();
@@ -392,7 +410,16 @@ const compileTargetFragment = (
     return { ConditionExpression: exists };
   }
 
-  const fragment = compileFragment(Target, conditions, prefix);
+  let fragment: ConditionFragment;
+  try {
+    fragment = compileFragment(Target, conditions, prefix);
+  } catch (error) {
+    if (!(error instanceof FilterError)) throw error;
+    throw new FilterError(
+      `Invalid write condition for ${describeConditionLocation(guard)}: ${error.message}`,
+      { cause: error }
+    );
+  }
   return {
     ...fragment,
     ConditionExpression: `${exists} AND ${parenthesize(fragment.ConditionExpression)}`
@@ -571,27 +598,45 @@ const compileRelationshipGuards = (
       key,
       foreignKey
     );
+    const guard: TargetWriteConditionGuard = {
+      kind: "relationship",
+      name: key
+    };
     return [
       {
         kind: "parent",
-        guard: { kind: "relationship", name: key },
+        guard,
         target,
         foreignKey,
         ...(payloadForeignKey !== undefined && { payloadForeignKey }),
-        condition: compileTargetFragment(target, condition, transactionBuilder)
+        condition: compileTargetFragment(
+          target,
+          condition,
+          guard,
+          transactionBuilder
+        )
       }
     ];
   }
 
   if (isHasOneRelationship(relationship)) {
     const condition = targetConditionOf(key, value);
+    const guard: TargetWriteConditionGuard = {
+      kind: "relationship",
+      name: key
+    };
     return [
       {
         kind: "hasOne",
-        guard: { kind: "relationship", name: key },
+        guard,
         target,
         foreignKey: relationship.foreignKey,
-        condition: compileTargetFragment(target, condition, transactionBuilder)
+        condition: compileTargetFragment(
+          target,
+          condition,
+          guard,
+          transactionBuilder
+        )
       }
     ];
   }
@@ -599,23 +644,47 @@ const compileRelationshipGuards = (
   const entries = relatedEntriesOf(key, value);
 
   if (isHasManyRelationship(relationship)) {
-    return entries.map(({ id, condition }) => ({
-      kind: "hasMany",
-      guard: { kind: "relationship", name: key, id },
-      target,
-      id,
-      foreignKey: relationship.foreignKey,
-      condition: compileTargetFragment(target, condition, transactionBuilder)
-    }));
+    return entries.map(({ id, condition }) => {
+      const guard: TargetWriteConditionGuard = {
+        kind: "relationship",
+        name: key,
+        id
+      };
+      return {
+        kind: "hasMany",
+        guard,
+        target,
+        id,
+        foreignKey: relationship.foreignKey,
+        condition: compileTargetFragment(
+          target,
+          condition,
+          guard,
+          transactionBuilder
+        )
+      };
+    });
   }
 
-  return entries.map(({ id, condition }) => ({
-    kind: "hasAndBelongsToMany",
-    guard: { kind: "relationship", name: key, id },
-    target,
-    id,
-    condition: compileTargetFragment(target, condition, transactionBuilder)
-  }));
+  return entries.map(({ id, condition }) => {
+    const guard: TargetWriteConditionGuard = {
+      kind: "relationship",
+      name: key,
+      id
+    };
+    return {
+      kind: "hasAndBelongsToMany",
+      guard,
+      target,
+      id,
+      condition: compileTargetFragment(
+        target,
+        condition,
+        guard,
+        transactionBuilder
+      )
+    };
+  });
 };
 
 /**
@@ -648,15 +717,17 @@ const compileForeignKeyGuard = (
   }
 
   const payloadForeignKey = payloadForeignKeyOf(props, target, key, key);
+  const guard: TargetWriteConditionGuard = { kind: "foreignKey", name: key };
   return {
     kind: "parent",
-    guard: { kind: "foreignKey", name: key },
+    guard,
     target,
     foreignKey: key,
     ...(payloadForeignKey !== undefined && { payloadForeignKey }),
     condition: compileTargetFragment(
       target,
       condition,
+      guard,
       props.transactionBuilder
     )
   };
@@ -1105,16 +1176,15 @@ export const compileJoinTableCondition = (
       );
     }
 
+    const guard: TargetWriteConditionGuard = { kind: "foreignKey", name: key };
     return {
       foreignKey: key,
-      guard: {
-        kind: "foreignKey",
-        name: key
-      } satisfies TargetWriteConditionGuard,
+      guard,
       target,
       condition: compileTargetFragment(
         target,
         foreignKeyTargetOf(key, value),
+        guard,
         props.transactionBuilder
       )
     };
@@ -1152,7 +1222,7 @@ export const attachJoinTableCondition = (
     return {
       row: {
         ...entityRowKey(guard.target, targetId),
-        missingRowMessage: `${guard.target.name} with ID ${targetId} does not exist`
+        missingRowMessage: `${guard.target.name} with ID '${targetId}' does not exist`
       },
       guard: {
         entity: compiled.joinTableName,

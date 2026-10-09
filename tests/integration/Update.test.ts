@@ -25152,6 +25152,132 @@ describe("Update with write conditions", () => {
       ]);
     });
   });
+  describe("a $or branch that holds no conditions", () => {
+    // An empty branch always holds. Kept, it sent `attribute_exists(PK) AND ()`,
+    // which DynamoDB rejects; dropped beside another branch, it tightened the
+    // guard to that branch. Either way the guard was not the one written
+    const emptyBranchError = new FilterError(
+      "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+    );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${emptyBranchError.message}`,
+        { cause: emptyBranchError }
+      );
+
+    it.each<[string, () => Promise<unknown>, FilterError]>([
+      [
+        "alone on the entity's own row",
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { $or: [{}] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "beside a branch that holds conditions",
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { $or: [{}, { state: "CO" }] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "on an instance update",
+        async () =>
+          await createInstance(MockInformation, {
+            pk: "MockInformation#123" as PartitionKey,
+            sk: "MockInformation" as SortKey,
+            id: "123",
+            type: "MockInformation",
+            address: "9 Example Ave",
+            email: "example@example.com",
+            createdAt: new Date("2023-10-01"),
+            updatedAt: new Date("2023-10-02")
+          }).update(
+            { email: "new@example.com" },
+            { condition: { $or: [{ state: "CO" }, {}] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "in a BelongsTo guard",
+        async () =>
+          await Pet.update(
+            "123",
+            { name: "New Name" },
+            { condition: { owner: { $or: [{}] } } }
+          ),
+        located('"owner"')
+      ],
+      [
+        "in a HasOne guard",
+        async () =>
+          await Customer.update(
+            "123",
+            { name: "New Name" },
+            { condition: { contactInformation: { $or: [{}] } } }
+          ),
+        located('"contactInformation"')
+      ],
+      [
+        "in a HasMany entry's condition",
+        async () =>
+          await Customer.update(
+            "123",
+            { name: "New Name" },
+            {
+              condition: {
+                orders: [{ id: "o1", condition: { $or: [{}] } }]
+              }
+            }
+          ),
+        located('"orders" entry "o1"')
+      ],
+      [
+        "in a HasAndBelongsToMany entry's condition",
+        async () =>
+          await Book.update(
+            "123",
+            { name: "New Name" },
+            {
+              condition: {
+                authors: [{ id: "456", condition: { $or: [{}] } }]
+              }
+            }
+          ),
+        located('"authors" entry "456"')
+      ],
+      [
+        "in a foreign key's target",
+        async () =>
+          await Employee.update(
+            "123",
+            { name: "New Name" },
+            { condition: { organizationId: { target: { $or: [{}] } } } }
+          ),
+        located('"organizationId" target')
+      ]
+    ])(
+      "rejects an empty branch %s before sending anything",
+      async (_, update, expected) => {
+        expect.assertions(3);
+
+        const e = await failureOf(update);
+
+        expect(e).toEqual(expected);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    );
+  });
+
   describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
     // Before this was refused, the operand was converted to its stored form,
     // which strips a field the schema does not declare: `{ ..., region: "west" }`
@@ -25160,6 +25286,15 @@ describe("Update with write conditions", () => {
     const undeclared = (attr: string, path: string): FilterError =>
       new FilterError(
         `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string, error: FilterError): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${error.message}`,
+        {
+          cause: error
+        }
       );
 
     const address = {
@@ -25358,7 +25493,9 @@ describe("Update with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared("location", "region"));
+      expect(e).toEqual(
+        located('"warehouse"', undeclared("location", "region"))
+      );
       expectNothingSent();
     });
 
@@ -25390,7 +25527,9 @@ describe("Update with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared("dimensions", "fragile"));
+      expect(e).toEqual(
+        located('"shipments" entry "s1"', undeclared("dimensions", "fragile"))
+      );
       expectNothingSent();
     });
 
@@ -25422,7 +25561,9 @@ describe("Update with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared("inventory", "reserved"));
+      expect(e).toEqual(
+        located('"sponsors" entry "sp1"', undeclared("inventory", "reserved"))
+      );
       expectNothingSent();
     });
 
@@ -25450,7 +25591,9 @@ describe("Update with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared("location", "region"));
+      expect(e).toEqual(
+        located('"warehouseId" target', undeclared("location", "region"))
+      );
       expectNothingSent();
     });
   });

@@ -456,7 +456,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
         },
         ConditionExpression: `attribute_not_exists(${partitionKeyAlias})` // Ensure item doesn't already exist
       },
-      `${parentEntity.name} with ID ${linkedEntityId} is already linked to ${linkedEntity.name} with ID ${parentId}`
+      `${parentEntity.name} with ID '${linkedEntityId}' is already linked to ${linkedEntity.name} with ID '${parentId}'`
     );
 
     if (referentialIntegrityCheck) {
@@ -470,7 +470,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
           ),
           ConditionExpression: `attribute_exists(${partitionKeyAlias})`
         },
-        `${parentEntity.name} with ID ${linkedEntityId} does not exist`
+        `${parentEntity.name} with ID '${linkedEntityId}' does not exist`
       );
     }
   }
@@ -526,7 +526,7 @@ abstract class JoinTable<T extends DynaRecord, K extends DynaRecord> {
         Key: this.joinTableKey(keys, parentEntityMeta, linkedEntityMeta),
         ConditionExpression: `attribute_exists(${partitionKeyAttribute.alias})`
       },
-      `${parentEntity.name} with ID ${linkedEntityId} is not linked to ${linkedEntity.name} with ID ${parentId}`
+      `${parentEntity.name} with ID '${linkedEntityId}' is not linked to ${linkedEntity.name} with ID '${parentId}'`
     );
   }
 

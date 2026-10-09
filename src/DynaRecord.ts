@@ -226,7 +226,7 @@ abstract class DynaRecord implements DynaRecordBase {
    * @param {SKScopedFilterParams<T, SK>=} options.filter - Typed filter conditions. Keys are validated against partition entity attributes, scoped by `skCondition` when present. The `type` field accepts valid entity class names within the SK scope.
    * @param {TypedSortKeyCondition<T>=} options.skCondition - Sort key condition. Accepts entity names, entity-name-prefixed strings, `$beginsWith` with exact names or partial prefixes, a single comparison, or a `$between` range. Narrows the return type and scopes the filter to matched entities.
    * @returns A promise resolving to query results. The return type narrows based on the filter's `type` value, filter keys, and `skCondition`.
-   * @throws {@link FilterError} Before the query is sent, when a filter or key condition value cannot match: a value that fails the attribute's schema, an inverted `$between`, a dot path the schema does not declare, a field an object operand's schema does not declare, or a key condition set to `undefined`.
+   * @throws {@link FilterError} Before the query is sent, when a filter or key condition value cannot match: a filter key naming no attribute of the partition's entities, a value that fails the attribute's schema, an inverted `$between`, a dot path the schema does not declare, a field an object operand's schema does not declare, or a key condition set to `undefined`.
    *
    * @example By entity ID
    * ```typescript

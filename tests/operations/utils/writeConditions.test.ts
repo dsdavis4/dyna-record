@@ -24,6 +24,7 @@ import {
   WriteConditionFailedError
 } from "../../../src/dynamo-utils/index.js";
 import { FilterError } from "../../../src/errors.js";
+import { FilterExpressionBuilder } from "../../../src/filter-utils/index.js";
 import {
   attachJoinTableCondition,
   attachWriteCondition,
@@ -889,6 +890,337 @@ describe("writeConditions", () => {
       });
     });
 
+    describe("a $or branch that holds no conditions", () => {
+      // An empty branch always holds. Kept, it put `()` in the expression,
+      // which DynamoDB rejects; dropped, it tightened the guard to the other
+      // branches. Either way the guard was not the one written
+      const emptyBranch =
+        "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous";
+
+      it.each<[string, CompileInput]>([
+        [
+          "alone on the entity's own row",
+          { EntityClass: Order, operation: "update", condition: { $or: [{}] } }
+        ],
+        [
+          "beside a branch that holds conditions on the entity's own row",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { $or: [{}, { orderDate: cutoff }] }
+          }
+        ],
+        [
+          "inside a nested $or on the entity's own row",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { $or: [{ $or: [{}] }] }
+          }
+        ]
+      ])("rejects an empty branch %s", (_, props) => {
+        expect.assertions(1);
+
+        expect(() => compile(props)).toThrow(new FilterError(emptyBranch));
+      });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "in a BelongsTo condition",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { $or: [{}] } }
+          },
+          '"customer"'
+        ],
+        [
+          "in a BelongsTo condition on create",
+          {
+            EntityClass: Order,
+            operation: "create",
+            condition: { customer: { $or: [{}, { name: "Jane" }] } },
+            payload: { customerId: "c1" }
+          },
+          '"customer"'
+        ],
+        [
+          "in a HasOne condition",
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: { contactInformation: { $or: [{}] } }
+          },
+          '"contactInformation"'
+        ],
+        [
+          "in a HasMany entry's condition",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [{ id: "o1", condition: { $or: [{}] } }]
+            }
+          },
+          '"orders" entry "o1"'
+        ],
+        [
+          "in a foreign key's target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: {
+              organizationId: { target: { $or: [{ name: "Acme" }, {}] } }
+            }
+          },
+          '"organizationId" target'
+        ]
+      ])("rejects an empty branch %s", (_, props, location) => {
+        expect.assertions(1);
+
+        expect(() => compile(props)).toThrow(
+          new FilterError(
+            `Invalid write condition for ${location}: ${emptyBranch}`
+          )
+        );
+      });
+
+      it("rejects an empty branch in a join table's target", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          compileJoinTableCondition({
+            joinTableName: StudentCourse.name,
+            condition: { courseId: { target: { $or: [{}] } } },
+            transactionBuilder: newBuilder()
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid write condition for "courseId" target: ${emptyBranch}`
+          )
+        );
+      });
+    });
+
+    describe("a builder error in a condition on another row names where it came from", () => {
+      const emptyOr =
+        "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks";
+
+      /**
+       * Returns the FilterError a call throws, rethrowing anything else
+       */
+      const filterErrorOf = (run: () => unknown): FilterError => {
+        try {
+          run();
+        } catch (e) {
+          if (e instanceof FilterError) return e;
+          throw e;
+        }
+        throw new Error("Expected a FilterError");
+      };
+
+      /**
+       * The error a location wraps a builder error in: the location in the
+       * message, the builder's own error as the cause
+       */
+      const wrapped = (location: string, message: string): FilterError =>
+        new FilterError(`Invalid write condition for ${location}: ${message}`, {
+          cause: new FilterError(message)
+        });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "a BelongsTo relationship",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { $or: [] } }
+          },
+          '"customer"'
+        ],
+        [
+          "a BelongsTo relationship on create",
+          {
+            EntityClass: Order,
+            operation: "create",
+            condition: { customer: { $or: [] } },
+            payload: { customerId: "c1" }
+          },
+          '"customer"'
+        ],
+        [
+          "a HasOne relationship",
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: { contactInformation: { $or: [] } }
+          },
+          '"contactInformation"'
+        ],
+        [
+          "a HasMany entry, with its id",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o2", condition: { $or: [] } }
+              ]
+            }
+          },
+          '"orders" entry "o2"'
+        ],
+        [
+          "a HasAndBelongsToMany entry, with its id",
+          {
+            EntityClass: User,
+            operation: "delete",
+            condition: { websites: [{ id: "w1", condition: { $or: [] } }] }
+          },
+          '"websites" entry "w1"'
+        ],
+        [
+          "a foreign key's target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: { organizationId: { target: { $or: [] } } }
+          },
+          '"organizationId" target'
+        ]
+      ])("names %s", (_, props, location) => {
+        expect.assertions(1);
+
+        expect(filterErrorOf(() => compile(props))).toEqual(
+          wrapped(location, emptyOr)
+        );
+      });
+
+      it("names a join table's target", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compileJoinTableCondition({
+              joinTableName: StudentCourse.name,
+              condition: { courseId: { target: { $or: [] } } },
+              transactionBuilder: newBuilder()
+            })
+          )
+        ).toEqual(wrapped('"courseId" target', emptyOr));
+      });
+
+      it("names the key the failing part sits under in a condition guarding several rows", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compile({
+              EntityClass: Customer,
+              operation: "update",
+              condition: {
+                name: "Jane",
+                contactInformation: { email: { $beginsWith: "jane@" } },
+                orders: [
+                  { id: "o1", condition: {} },
+                  { id: "o2", condition: { colour: "red" } }
+                ]
+              }
+            })
+          )
+        ).toEqual(
+          wrapped(
+            '"orders" entry "o2"',
+            'Invalid write condition key "colour": attribute "colour" does not exist on Order. Valid attributes are: id, createdAt, updatedAt, customerId, paymentMethodId, orderDate'
+          )
+        );
+      });
+
+      it("passes an error that is not a FilterError through untouched", () => {
+        expect.assertions(1);
+
+        const error = new TypeError("Unexpected failure");
+        const filterParams = vi
+          .spyOn(FilterExpressionBuilder.prototype, "filterParams")
+          .mockImplementationOnce(() => {
+            throw error;
+          });
+
+        let thrown: unknown;
+        try {
+          compile({
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { name: "Jane" } }
+          });
+        } catch (e) {
+          thrown = e;
+        }
+        filterParams.mockRestore();
+
+        expect(thrown).toBe(error);
+      });
+
+      it("leaves a builder error on the entity's own row as the builder wrote it", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compile({
+              EntityClass: Order,
+              operation: "update",
+              condition: { $or: [] }
+            })
+          )
+        ).toEqual(new FilterError(emptyOr));
+      });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "a relationship condition that is not an object",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: "Jane" }
+          },
+          'Invalid write condition for "customer": a guard on a related row takes a condition object on that row (an empty object requires only that it exists)'
+        ],
+        [
+          "an id guarded twice",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o1", condition: {} }
+              ]
+            }
+          },
+          'Invalid write condition for "orders": id "o1" is guarded twice. Combine its conditions into one entry'
+        ],
+        [
+          "a value condition beside a target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: { organizationId: { target: {}, $beginsWith: "org" } }
+          },
+          'Invalid write condition for "organizationId": a foreign key holds either a condition on its own value or a target guard, never both (found $beginsWith beside target). Put the value condition in a $or branch'
+        ]
+      ])(
+        "names the key of %s once, as the message already does",
+        (_, props, message) => {
+          expect.assertions(1);
+
+          expect(filterErrorOf(() => compile(props))).toEqual(
+            new FilterError(message)
+          );
+        }
+      );
+    });
+
     describe("key validation", () => {
       it("rejects an unknown key, naming it", () => {
         expect.assertions(2);
@@ -1362,8 +1694,9 @@ describe("writeConditions", () => {
 
       // Converting the operand to its stored form strips the field, and the
       // stripped guard holds against a row the caller's operand does not
-      // describe — every guard kind compiles through the same builder
-      it.each<[string, CompileInput, string, string]>([
+      // describe — every guard kind compiles through the same builder, and a
+      // guard on another row names where it sits
+      it.each<[string, CompileInput, string, string, string]>([
         [
           "the entity's own row",
           {
@@ -1372,7 +1705,8 @@ describe("writeConditions", () => {
             condition: { addressAttribute: { ...address, region: "west" } }
           },
           "addressAttribute",
-          "region"
+          "region",
+          ""
         ],
         [
           "the entity's own row, inside a nested list element",
@@ -1391,7 +1725,8 @@ describe("writeConditions", () => {
             }
           },
           "objectAttribute",
-          "history[0].mood"
+          "history[0].mood",
+          ""
         ],
         [
           "a BelongsTo guard",
@@ -1403,7 +1738,8 @@ describe("writeConditions", () => {
             }
           },
           "location",
-          "region"
+          "region",
+          'Invalid write condition for "warehouse": '
         ],
         [
           "a HasMany entry",
@@ -1422,7 +1758,8 @@ describe("writeConditions", () => {
             }
           },
           "dimensions",
-          "fragile"
+          "fragile",
+          'Invalid write condition for "shipments" entry "s1": '
         ],
         [
           "a HasAndBelongsToMany entry, in an IN element",
@@ -1444,16 +1781,17 @@ describe("writeConditions", () => {
             }
           },
           "inventory",
-          "reserved"
+          "reserved",
+          'Invalid write condition for "sponsors" entry "sp1": '
         ]
       ])(
         "rejects one in %s before anything is sent",
-        (_, props, attr, path) => {
+        (_, props, attr, path, location) => {
           expect.assertions(2);
 
           expect(() => compile(props)).toThrow(
             new FilterError(
-              `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+              `${location}Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
             )
           );
           expect(mockSend.mock.calls).toEqual([]);

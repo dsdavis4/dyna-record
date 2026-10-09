@@ -749,10 +749,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 is already linked to Book with ID 2"
+            "ConditionalCheckFailed: Author with ID '1' is already linked to Book with ID '2'"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 is already linked to Author with ID 1"
+            "ConditionalCheckFailed: Book with ID '2' is already linked to Author with ID '1'"
           )
         ]);
       }
@@ -913,10 +913,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 does not exist"
+            "ConditionalCheckFailed: Author with ID '1' does not exist"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 does not exist"
+            "ConditionalCheckFailed: Book with ID '2' does not exist"
           )
         ]);
       }
@@ -1045,10 +1045,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 is not linked to Book with ID 2"
+            "ConditionalCheckFailed: Author with ID '1' is not linked to Book with ID '2'"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 is not linked to Author with ID 1"
+            "ConditionalCheckFailed: Book with ID '2' is not linked to Author with ID '1'"
           )
         ]);
       }
@@ -1431,7 +1431,7 @@ describe("JoinTable", () => {
 
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
-              "ConditionalCheckFailed: Supplier with ID s1 does not exist"
+              "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
             )
           ]);
           expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
@@ -1451,7 +1451,7 @@ describe("JoinTable", () => {
 
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
-              "ConditionalCheckFailed: Supplier with ID s1 is already linked to Product with ID p1"
+              "ConditionalCheckFailed: Supplier with ID 's1' is already linked to Product with ID 'p1'"
             )
           ]);
           expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
@@ -1579,7 +1579,7 @@ describe("JoinTable", () => {
 
           expect(e.errors).toEqual([
             new ConditionalCheckFailedError(
-              "ConditionalCheckFailed: Supplier with ID s1 does not exist"
+              "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
             )
           ]);
           expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
@@ -2168,10 +2168,10 @@ describe("JoinTable", () => {
 
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Supplier with ID s1 is not linked to Product with ID p1"
+            "ConditionalCheckFailed: Supplier with ID 's1' is not linked to Product with ID 'p1'"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Product with ID p1 is not linked to Supplier with ID s1"
+            "ConditionalCheckFailed: Product with ID 'p1' is not linked to Supplier with ID 's1'"
           )
         ]);
       });
@@ -2189,7 +2189,7 @@ describe("JoinTable", () => {
 
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Supplier with ID s1 does not exist"
+            "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
           )
         ]);
         expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
@@ -2319,6 +2319,53 @@ describe("JoinTable", () => {
         expect(emptyOr).toBeInstanceOf(FilterError);
         expect(mockSend.mock.calls).toEqual([]);
       });
+
+      it.each<[string, () => Promise<unknown>, string]>([
+        [
+          "alone in a create's target",
+          async () =>
+            await ProductSupplier.create(keys, {
+              condition: { supplierId: { target: { $or: [{}] } } }
+            }),
+          "supplierId"
+        ],
+        [
+          "beside a branch that holds conditions in a create's target",
+          async () =>
+            await ProductSupplier.create(keys, {
+              condition: {
+                supplierId: { target: { $or: [{}, { name: "Acme" }] } }
+              }
+            }),
+          "supplierId"
+        ],
+        [
+          "in a delete's target",
+          async () =>
+            await ProductSupplier.delete(keys, {
+              condition: { productId: { target: { $or: [{}] } } }
+            }),
+          "productId"
+        ]
+      ])(
+        "throws a FilterError before anything is sent for a $or branch that holds no conditions %s",
+        async (_, write, foreignKey) => {
+          expect.assertions(2);
+
+          const e = await failureOf(write);
+          const emptyBranch = new FilterError(
+            "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+          );
+
+          expect(e).toEqual(
+            new FilterError(
+              `Invalid write condition for "${foreignKey}" target: ${emptyBranch.message}`,
+              { cause: emptyBranch }
+            )
+          );
+          expect(mockSend.mock.calls).toEqual([]);
+        }
+      );
     });
 
     describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
@@ -2328,6 +2375,11 @@ describe("JoinTable", () => {
       // region at all and let through the link the caller meant to stop
       const undeclared = new FilterError(
         'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+      );
+      // The target guard wraps the builder's error in one naming its key
+      const located = new FilterError(
+        `Invalid write condition for "depotId" target: ${undeclared.message}`,
+        { cause: undeclared }
       );
       const depotKeys = { kioskId: "k1", depotId: "d1" };
       const address = { city: "Denver", zip: "80202" };
@@ -2351,7 +2403,7 @@ describe("JoinTable", () => {
           });
         });
 
-        expect(e).toEqual(undeclared);
+        expect(e).toEqual(located);
         expect(mockSend.mock.calls).toEqual([]);
         expect(mockTransactGetCommand.mock.calls).toEqual([]);
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);
@@ -2379,7 +2431,7 @@ describe("JoinTable", () => {
           });
         });
 
-        expect(e).toEqual(undeclared);
+        expect(e).toEqual(located);
         expect(mockSend.mock.calls).toEqual([]);
         expect(mockTransactGetCommand.mock.calls).toEqual([]);
         expect(mockTransactWriteCommand.mock.calls).toEqual([]);

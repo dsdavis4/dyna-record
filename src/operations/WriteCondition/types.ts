@@ -409,8 +409,11 @@ type RelationshipConditions<T extends DynaRecord> = {
  *
  * Unlike a query filter, an `undefined` operand is a `FilterError` rather than
  * a dropped condition, because dropping part of a guard would loosen it; an
- * empty `$or` is a `FilterError` too. A dot path or list-index path naming a
- * field the schema does not declare is a `FilterError` naming the path.
+ * empty `$or` is a `FilterError` too. So is a `$or` branch that holds no
+ * conditions: an empty branch always holds, so the whole `$or` would check
+ * nothing, and dropping the branch would tighten the `$or` to the others. A
+ * dot path or list-index path naming a field the schema does not declare is a
+ * `FilterError` naming the path.
  *
  * A failed condition is reported as a `WriteConditionFailedError` inside the
  * `TransactionWriteFailedError` the write throws.

@@ -10480,6 +10480,53 @@ describe("Create with write conditions", () => {
       expect(mockSend.mock.calls).toEqual([]);
     });
 
+    it.each<[string, () => Promise<unknown>, string]>([
+      [
+        "alone in a BelongsTo guard",
+        async () =>
+          await Order.create(orderAttributes, {
+            condition: { customer: { $or: [{}] } }
+          }),
+        '"customer"'
+      ],
+      [
+        "beside a branch that holds conditions in a BelongsTo guard",
+        async () =>
+          await Order.create(orderAttributes, {
+            condition: { customer: { $or: [{}, { name: "Jane" }] } }
+          }),
+        '"customer"'
+      ],
+      [
+        "in a foreign key's target",
+        async () =>
+          await WarehouseInspection.create(
+            { inspector: "Ann", warehouseId: "w1" },
+            { condition: { warehouseId: { target: { $or: [{}] } } } }
+          ),
+        '"warehouseId" target'
+      ]
+    ])(
+      "throws a FilterError before any read for a $or branch that holds no conditions %s",
+      async (_, create, location) => {
+        expect.assertions(3);
+
+        const e = await failureOf(create);
+        const emptyBranch = new FilterError(
+          "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+        );
+
+        expect(e).toEqual(
+          new FilterError(
+            `Invalid write condition for ${location}: ${emptyBranch.message}`,
+            { cause: emptyBranch }
+          )
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    );
+
     it("throws a FilterError before any read for a key the entity does not declare", async () => {
       expect.assertions(3);
 
@@ -10506,6 +10553,13 @@ describe("Create with write conditions", () => {
     const undeclared = new FilterError(
       'Invalid filter value for attribute "location": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
     );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${undeclared.message}`,
+        { cause: undeclared }
+      );
 
     const location = { city: "Denver", state: "CO" };
 
@@ -10540,7 +10594,7 @@ describe("Create with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared);
+      expect(e).toEqual(located('"warehouse"'));
       expectNothingSent();
     });
 
@@ -10589,8 +10643,8 @@ describe("Create with write conditions", () => {
           )
       );
 
-      expect(e).toEqual(undeclared);
-      expect(inElement).toEqual(undeclared);
+      expect(e).toEqual(located('"warehouseId" target'));
+      expect(inElement).toEqual(located('"warehouseId" target'));
       expectNothingSent();
     });
   });

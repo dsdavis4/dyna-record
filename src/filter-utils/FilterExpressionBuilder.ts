@@ -1731,9 +1731,10 @@ class FilterExpressionBuilder {
    */
   private orFilter(filter: OrFilter): FilterExpression {
     // A block whose every condition was dropped contributes nothing — see
-    // orCondition, which is where the bare " OR " is prevented. An $or left
-    // with nothing compiles to nothing itself, which the caller assembling the
-    // command drops in turn
+    // orCondition, which is where the bare " OR " is prevented, and where a
+    // context that does not drop an empty $or rejects the block instead. An
+    // $or left with nothing compiles to nothing itself, which the caller
+    // assembling the command drops in turn
     const orFilter = filter.$or
       .map(block => this.orCondition(block))
       .reduce<FilterExpression>(
@@ -1755,8 +1756,19 @@ class FilterExpressionBuilder {
   private orCondition(andFilter: AndFilter): FilterExpression {
     const andParams = this.filterParams(andFilter);
 
-    // Nothing to join and nothing to parenthesize; orFilter drops these
-    if (andParams.expression === "") return { expression: "", values: {} };
+    if (andParams.expression === "") {
+      // A block with no conditions always holds. A filter drops it: there is
+      // nothing to join or parenthesize, and orFilter skips what it returns.
+      // A context that does not drop an empty $or rejects an empty block too:
+      // dropping the block would tighten the $or it was meant to satisfy,
+      // and keeping it would make the whole $or hold for every row
+      if (!this.#capabilities.dropEmptyOr) {
+        throw new FilterError(
+          `Invalid condition: a $or branch holds no conditions, and ${this.#capabilities.context} reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous`
+        );
+      }
+      return { expression: "", values: {} };
+    }
 
     // Grouped when the block binds more than one value, which stands in for
     // "the block has more than one condition". That substitution is sound only

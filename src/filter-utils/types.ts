@@ -637,10 +637,15 @@ export interface FilterCapabilities {
    */
   nullMeansNotSet: boolean;
   /**
-   * Whether an `$or` with no condition blocks is dropped rather than rejected.
+   * Whether an `$or` with no condition blocks, or a block with no conditions,
+   * is dropped rather than rejected.
    *
    * An empty `$or` asks for nothing. A filter drops it, which widens the read;
    * a write condition rejects it, because dropping it would loosen the guard.
+   *
+   * An empty block always holds. A filter drops it, keeping the other blocks;
+   * a write condition rejects it, because dropping it would tighten the `$or`
+   * and keeping it would make the whole `$or` hold for every row.
    */
   dropEmptyOr: boolean;
 }

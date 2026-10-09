@@ -170,13 +170,14 @@ class QueryBuilder {
    * @param attributeKey - The attribute key being filtered on. For dot-path keys this is the top level segment
    * @param filterKey - The full filter key as provided by the caller
    * @returns The resolved {@link FilterAttribute}
+   * @throws {FilterError} When no entity in the partition declares the attribute
    */
   private resolveAttribute(
     attributeKey: string,
     filterKey: string
   ): FilterAttribute {
     if (!Object.hasOwn(this.#attributeMetadata, attributeKey)) {
-      throw new Error(
+      throw new FilterError(
         `Invalid filter key "${filterKey}": attribute "${attributeKey}" does not exist on this entity. ` +
           `Valid attributes are: ${Object.keys(this.#attributeMetadata).join(", ")}`
       );

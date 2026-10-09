@@ -7569,6 +7569,71 @@ describe("Delete with write conditions", () => {
       expect(mockSend.mock.calls).toEqual([]);
     });
 
+    it.each<[string, () => Promise<unknown>, string]>([
+      [
+        "alone on the entity's own row",
+        async () => await Order.delete("123", { condition: { $or: [{}] } }),
+        ""
+      ],
+      [
+        "beside a branch that holds conditions",
+        async () =>
+          await Order.delete("123", {
+            condition: {
+              $or: [{}, { orderDate: new Date("2026-01-01T00:00:00.000Z") }]
+            }
+          }),
+        ""
+      ],
+      [
+        "in a BelongsTo guard",
+        async () =>
+          await Order.delete("123", {
+            condition: { customer: { $or: [{}] } }
+          }),
+        'Invalid write condition for "customer": '
+      ],
+      [
+        "in a HasMany entry's condition",
+        async () =>
+          await Person.delete("123", {
+            condition: {
+              pets: [{ id: "001", condition: { $or: [{}, { name: "Pet-1" }] } }]
+            }
+          }),
+        'Invalid write condition for "pets" entry "001": '
+      ],
+      [
+        "in a HasAndBelongsToMany entry's condition",
+        async () =>
+          await Book.delete("123", {
+            condition: { authors: [{ id: "456", condition: { $or: [{}] } }] }
+          }),
+        'Invalid write condition for "authors" entry "456": '
+      ],
+      [
+        "in a foreign key's target",
+        async () =>
+          await Employee.delete("123", {
+            condition: { organizationId: { target: { $or: [{}] } } }
+          }),
+        'Invalid write condition for "organizationId" target: '
+      ]
+    ])(
+      "throws a FilterError before any read for a $or branch that holds no conditions %s",
+      async (_, remove, location) => {
+        expect.assertions(3);
+
+        const e = await failureOf(remove);
+
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          `${location}Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous`
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      }
+    );
+
     it("throws a FilterError before any read for an empty $or (R29)", async () => {
       expect.assertions(2);
 
@@ -7602,6 +7667,15 @@ describe("Delete with write conditions", () => {
     const undeclared = (attr: string, path: string): FilterError =>
       new FilterError(
         `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string, error: FilterError): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${error.message}`,
+        {
+          cause: error
+        }
       );
 
     const address = {
@@ -7701,7 +7775,9 @@ describe("Delete with write conditions", () => {
           })
       );
 
-      expect(e).toEqual(undeclared("location", "region"));
+      expect(e).toEqual(
+        located('"warehouse"', undeclared("location", "region"))
+      );
       expectNothingSent();
     });
 
@@ -7729,7 +7805,9 @@ describe("Delete with write conditions", () => {
           })
       );
 
-      expect(e).toEqual(undeclared("dimensions", "fragile"));
+      expect(e).toEqual(
+        located('"shipments" entry "s1"', undeclared("dimensions", "fragile"))
+      );
       expectNothingSent();
     });
 
@@ -7757,7 +7835,9 @@ describe("Delete with write conditions", () => {
           })
       );
 
-      expect(e).toEqual(undeclared("inventory", "reserved"));
+      expect(e).toEqual(
+        located('"sponsors" entry "sp1"', undeclared("inventory", "reserved"))
+      );
       expectNothingSent();
     });
   });

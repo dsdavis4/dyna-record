@@ -56,6 +56,7 @@ Note: ACID compliant according to DynamoDB [limitations](https://docs.aws.amazon
 - [Type Safety Features](#type-safety-features)
 - [Best Practices](#best-practices)
 - [Debug Logging](#debug-logging)
+- [Versioning](#versioning)
 
 ## Getting Started
 
@@ -1230,6 +1231,8 @@ await Customer.query("123", {
 });
 ```
 
+The same keys are refused at runtime for a caller the types do not reach: a filter key naming no attribute of an entity in the partition, at the top level or inside an `$or` block, is a `FilterError` thrown before the query is sent.
+
 ##### Type field narrowing
 
 ```typescript
@@ -1840,7 +1843,7 @@ if (order !== undefined) {
 Two rules differ from a query filter:
 
 - **`null` means "not set".** dyna-record removes a nulled attribute rather than storing it, so in a write condition `null` on a nullable attribute matches a row where that attribute is absent, including inside `$or` branches. On an attribute that is not nullable, `null` could never match, so it is a compile error.
-- **`undefined` is an error, not a dropped condition.** A filter drops an `undefined` condition so that optional inputs can be forwarded. Dropping part of a guard would quietly loosen it, so a write condition with an `undefined` operand throws a `FilterError`. An empty `$or` and a `null` inside an `IN` array are `FilterError`s too.
+- **`undefined` is an error, not a dropped condition.** A filter drops an `undefined` condition so that optional inputs can be forwarded. Dropping part of a guard would quietly loosen it, so a write condition with an `undefined` operand throws a `FilterError`. An empty `$or` and a `null` inside an `IN` array are `FilterError`s too, and so is a `$or` branch that holds no conditions (`{ $or: [{}, { status: "pending" }] }`): an empty branch always holds, so the whole `$or` would check nothing, and dropping it, as a query filter does, would tighten the guard to the other branches.
 
 ```typescript
 // Ship an Order only if it has no tracking number yet
@@ -2030,7 +2033,7 @@ A guard whose target cannot be found in what is stored, such as a BelongsTo whos
 
 When two writers race for the same row, DynamoDB may cancel the loser with a `TransactionConflict` instead of evaluating its condition. That `TransactionCanceledException` is passed through unchanged, not wrapped in a `TransactionWriteFailedError`, and nothing is written. It is safe to retry: the retry evaluates the condition against the winner's write.
 
-An invalid condition (an unknown key, a relationship inside `$or`, a guard the payload rules out, an `undefined` operand, a dot path the schema does not declare) is a `FilterError` thrown before anything is read or written.
+An invalid condition (an unknown key, a relationship inside `$or`, a guard the payload rules out, an `undefined` operand, an empty `$or` or `$or` branch, a dot path the schema does not declare) is a `FilterError` thrown before anything is read or written. When the invalid part is in the condition on a related row, the message names where that condition sits, so the failing part of a condition that guards several rows can be found: the relationship (`Invalid write condition for "customer": ...`), a HasMany or HasAndBelongsToMany entry with its id (`Invalid write condition for "stores" entry "store-1": ...`) or a `target` guard's foreign key (`Invalid write condition for "storeId" target: ...`). The error the condition itself raised is the `cause`.
 
 #### Limits
 
@@ -2492,3 +2495,11 @@ Dyna-Record integrates type safety into your DynamoDB interactions, reducing run
 ## Debug logging
 
 To enable debug logging set `process.env.DYNA_RECORD_LOGGING_ENABLED` to `"true"`. When enabled, dyna-record will log to console the dynamo operations it is performing.
+
+## Versioning
+
+From 3.5.0 on, dyna-record follows [semantic versioning](https://semver.org) for its runtime behavior and its public API under the policy below: a breaking change to either ships in a new major version.
+
+Two kinds of type-level change ship in minor releases. A minor release may tighten a type when the code it stops compiling could not behave as written at runtime: it was silently ignored, matched nothing, or failed, in dyna-record or at DynamoDB. A minor release may also widen a type when the only code that needs an edit assigns it to a narrower annotation. The [changelog](CHANGELOG.md) lists both under "Breaking (type-level only)", with the shape that stopped compiling and what to write instead.
+
+A change that makes correct code stop compiling for any other reason ships in a major version. 2.0.0 is the example: `DynaRecord` gained a static `search` method, and a subclass declaring its own static `search` no longer compiled.

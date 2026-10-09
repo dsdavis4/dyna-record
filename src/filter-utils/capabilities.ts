@@ -90,10 +90,10 @@ export const searchFilterCapabilities: FilterCapabilities = {
  * `FilterExpression`, so the vocabulary is the query filter's in full. What
  * differs is what a condition means when it says nothing: a filter that drops
  * one returns more rows, while a guard that drops one lets through a write it
- * was meant to stop. So a condition set to `undefined` and an empty `$or` are
- * rejected rather than dropped, and `null` means "not set" — the state
- * dyna-record leaves an attribute in when it is nulled — on an attribute
- * declared nullable.
+ * was meant to stop. So a condition set to `undefined`, an empty `$or` and a
+ * `$or` block with no conditions are rejected rather than dropped, and `null`
+ * means "not set" — the state dyna-record leaves an attribute in when it is
+ * nulled — on an attribute declared nullable.
  */
 export const writeConditionCapabilities: FilterCapabilities = {
   ...queryFilterCapabilities,
