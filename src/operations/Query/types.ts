@@ -49,7 +49,10 @@ export type QueryOptions = QueryBuilderOptions & {
  * The query overload also re-declares `filter` with a `const F` generic parameter to
  * enable literal type inference for return type narrowing. Both declarations are required:
  * this one provides excess property checking on object literals, while the generic
- * provides literal type capture for return type inference.
+ * provides literal type capture for return type inference. The generic is inferred
+ * from {@link FilterInferenceSite} and checked against {@link CheckedFilterParams},
+ * which keeps it from making an undeclared key in an object operand known to the
+ * intersection.
  *
  * @template T - The entity type being queried. Defaults to `DynaRecord` for backward
  * compatibility in generic contexts.
@@ -263,6 +266,14 @@ type KeyConditionDeclaredValue<V> =
     ? string
     : LibraryBrandToValue<NonNullable<V>>;
 
+/**
+ * The condition a filter key accepts when it names a top-level attribute of
+ * one of `Entities`, unioned across the entities that declare it; `never` for a
+ * key no entity declares as an attribute, which is then read as a dot path.
+ *
+ * @template Entities - The entities whose attributes the key may name.
+ * @template K - The filter key.
+ */
 export type QueryFilterValueFor<
   Entities extends DynaRecord,
   K
@@ -287,7 +298,7 @@ export type QueryFilterValueFor<
  * @typeParam T - The type the path starts at.
  * @typeParam P - The remaining dot path.
  */
-type TypeAtDotPath<
+export type TypeAtDotPath<
   T,
   P extends string
 > = P extends `${infer Head}.${infer Rest}`
@@ -302,11 +313,17 @@ type TypeAtDotPath<
  * The type one path segment names: a field of `T`, or — where the segment
  * carries indexes — the element that indexing that field reaches.
  *
+ * `NonNullable` is applied before stepping into the element, for the reason
+ * {@link TypeAtDotPath} applies it between segments: a nullable List is
+ * declared `Element[] | undefined`, which as a union does not match the array
+ * pattern, and an element of a List that is set is defined. Without it the
+ * index resolved to `never` and the key fell back to the stored form.
+ *
  * @typeParam T - The type the segment is read against.
  * @typeParam S - The segment, with any indexes still attached.
  */
 type TypeAtSegment<T, S extends string> = S extends `${infer Name}[${number}]`
-  ? TypeAtSegment<T, Name> extends readonly (infer Element)[]
+  ? NonNullable<TypeAtSegment<T, Name>> extends readonly (infer Element)[]
     ? Element
     : never
   : S extends keyof T
@@ -418,8 +435,48 @@ type FilterParamsForEntities<Entities extends DynaRecord> =
   AndFilterForEntities<Entities> & OrFilterForEntities<Entities>;
 
 /**
- * Top-level filter combining AND and OR for a full partition.
- * Alias for {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
+ * The filter a query on `T` accepts: conditions on the attributes of `T` and of
+ * every entity in its partition, combined with AND, plus `$or` blocks.
+ *
+ * It is a union with one member per partition entity, keyed by a single `type`,
+ * plus members for a `type` array and for no `type` at all, so naming one
+ * entity's `type` limits the block to that entity's attributes. Alias for
+ * {@link FilterParamsForEntities} applied to {@link PartitionEntities}.
+ *
+ * **Reusing a filter.** A query narrows its results by the filter's literal
+ * type: the `type` it names, its keys and its `$or` blocks. A filter written at
+ * the call has that type, and so does one checked with
+ * `satisfies TypedFilterParams<T>`, which also gets every check a literal at the
+ * call gets. A filter whose type is this annotation (a function parameter, an
+ * object property) is accepted too, but the annotation widens it to the whole
+ * union, so the query cannot narrow by it and returns the whole partition.
+ *
+ * Beside an `skCondition` that names an entity, the query accepts only
+ * {@link SKScopedFilterParams} for that sort key condition: a value typed
+ * `TypedFilterParams<T>` is refused there, because it also offers other
+ * entities' keys and `type` values that cannot match the rows the sort key
+ * selects.
+ *
+ * @template T - The entity being queried.
+ *
+ * @example Reuse a filter with satisfies to keep narrowing
+ * ```typescript
+ * const ordersIn2026 = {
+ *   type: "Order",
+ *   orderDate: { $gte: new Date("2026-01-01") }
+ * } satisfies TypedFilterParams<Customer>;
+ *
+ * const orders = await Customer.query("123", { filter: ordersIn2026 });
+ * // orders is Array<EntityAttributesInstance<Order>>
+ * ```
+ *
+ * @example An annotated parameter is accepted, but does not narrow
+ * ```typescript
+ * async function customerRecords(filter: TypedFilterParams<Customer>) {
+ *   // QueryResults<Customer>: the whole partition
+ *   return await Customer.query("123", { filter });
+ * }
+ * ```
  */
 export type TypedFilterParams<T extends DynaRecord> = FilterParamsForEntities<
   PartitionEntities<T>
@@ -526,10 +583,25 @@ type SortKeyValueFor<T extends DynaRecord> =
  *
  * Does not narrow when:
  * - SK is a prefixed string like `"Order#123"` (can't parse the delimiter at type level)
- * - SK is `{ $beginsWith: "Order#..." }` (specific prefix past entity name boundary)
+ * - SK is `{ $beginsWith: "Order#" }` (a prefix past the entity name's boundary)
+ * - SK is a comparison or a `$between` range
+ *
+ * The table's delimiter is configurable and is not visible to the types, so
+ * they cannot tell where an entity name ends inside a longer value. Narrowing
+ * on a name or a prefix of one assumes that no entity's sort key starts with
+ * another entity's name followed by the delimiter. That always holds with the
+ * default `#` delimiter, and with any delimiter whose first character cannot
+ * appear in a class name.
  *
  * @template T - The entity type being queried.
  * @template SK - The inferred sort key condition literal type.
+ *
+ * @example
+ * ```typescript
+ * type One = ExtractEntityFromSK<Customer, "Order">; // "Order"
+ * type Prefix = ExtractEntityFromSK<Customer, { $beginsWith: "C" }>; // "Customer" | "ContactInformation"
+ * type None = ExtractEntityFromSK<Customer, { $beginsWith: "Order#" }>; // never: no narrowing
+ * ```
  */
 export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
   $beginsWith: infer V extends string;
@@ -543,10 +615,33 @@ export type ExtractEntityFromSK<T extends DynaRecord, SK> = SK extends {
  * Computes the filter type based on SK narrowing. When `skCondition` narrows to
  * specific entities, only those entities' attributes are accepted in the filter.
  * When SK doesn't narrow (no skCondition, suffixed string, etc.), falls back to
- * the full {@link TypedFilterParams}.
+ * the full {@link TypedFilterParams}. See {@link ExtractEntityFromSK} for which
+ * sort key conditions narrow.
+ *
+ * Use it to type a reusable filter for a query whose `skCondition` names an
+ * entity, passing the same sort key condition. A partition-wide
+ * {@link TypedFilterParams} is refused beside such an `skCondition`, because it
+ * also offers other entities' keys and `type` values that cannot match the rows
+ * the sort key selects.
  *
  * @template T - The root entity being queried.
  * @template SK - The inferred sort key condition type.
+ *
+ * @example
+ * ```typescript
+ * async function ordersFor(
+ *   customerId: string,
+ *   filter: SKScopedFilterParams<Customer, "Order">
+ * ) {
+ *   // Array<EntityAttributesInstance<Order>>
+ *   return await Customer.query(customerId, { skCondition: "Order", filter });
+ * }
+ *
+ * await ordersFor("123", { orderDate: { $gte: new Date("2026-01-01") } });
+ *
+ * // A filter scoped to Order cannot name a ContactInformation attribute
+ * await ordersFor("123", { email: "jane@example.com" }); // Compile error
+ * ```
  */
 export type SKScopedFilterParams<T extends DynaRecord, SK> =
   ExtractEntityFromSK<T, SK> extends infer Names
@@ -554,6 +649,97 @@ export type SKScopedFilterParams<T extends DynaRecord, SK> =
       ? FilterParamsForEntities<ResolveEntityByName<T, Names & string>>
       : TypedFilterParams<T>
     : TypedFilterParams<T>;
+
+/**
+ * The condition a filter key accepts in any of the filter shapes `Allowed`
+ * offers, unioned across them.
+ *
+ * Distributes because `Allowed` is a union — one shape per partition entity and
+ * per form of `type` — and a key only some of them declare would otherwise
+ * index to nothing.
+ *
+ * @template Allowed - The filter shapes the query accepts.
+ * @template K - The filter key.
+ */
+type AllowedConditionAt<Allowed, K> = Allowed extends unknown
+  ? K extends keyof Allowed
+    ? Allowed[K]
+    : never
+  : never;
+
+/**
+ * The type a query's `filter` option is checked against: the filter's own keys,
+ * with the `type` and `$or` values that narrow the results kept as written, and
+ * every other key given the condition `Allowed` declares for it.
+ *
+ * The query overloads infer the filter as a `const F` to narrow their results
+ * by it (see {@link FilterInferenceSite}). Were the filter checked against `F`
+ * itself, every key's value would be its own literal type intersected with the
+ * declared condition — so a key an object operand carries that the attribute
+ * does not declare would be known to the intersection, and the object literal
+ * would compile with it. Checking against this mapping keeps the keys and the
+ * narrowing values, while each operand is checked against the declared
+ * condition alone, so an undeclared key in an object operand is an excess
+ * property at any depth.
+ *
+ * A filter typed with an index signature rather than written as a literal —
+ * a `FilterParams` variable — names no key the mapping could look up, so its
+ * index signature keeps the filter's own type, as it did before. A filter typed
+ * as a union, such as a `TypedFilterParams<T>` variable, is mapped one member at
+ * a time, because the mapping is homomorphic in `F`; each member keeps its own
+ * `type`, and its other keys take conditions it already satisfies.
+ *
+ * @template F - The filter as the caller wrote it.
+ * @template Allowed - The filter shapes the query accepts.
+ */
+export type CheckedFilterParams<F, Allowed> = {
+  [K in keyof F]: K extends "type" | "$or"
+    ? F[K]
+    : string extends K
+      ? F[K]
+      : AllowedConditionAt<Allowed, K>;
+};
+
+/**
+ * `unknown` for any `F` the call settles on, and left unresolved while `F` is
+ * still being inferred.
+ *
+ * A conditional on `F` is deferred until `F` is known, so beside a naked `F` in
+ * a union it neither takes part in inference nor survives it: `F | UnknownOnceInferred<F>`
+ * is a union with a naked `F` while the call is inferred, and `unknown` once it
+ * is checked.
+ *
+ * @template F - The type parameter being inferred.
+ */
+type UnknownOnceInferred<F> = F extends unknown ? unknown : never;
+
+/**
+ * The `filter` declaration the non-index query overloads infer their `const F`
+ * from, intersected beside the declaration that checks it
+ * ({@link CheckedFilterParams}).
+ *
+ * `F` has to be inferred from a naked `F` in a union, because only there does
+ * TypeScript infer a filter typed as a union — a `TypedFilterParams<T>` or
+ * `SKScopedFilterParams<T, SK>` variable, parameter or property — as the whole
+ * union. Inferred through a mapped type instead, each member of the union
+ * becomes a separate candidate and one of them is kept, so the other members,
+ * such as the one without `type`, no longer match and the call has no overload.
+ * A literal filter is inferred here as its own literal type, as before.
+ *
+ * Checking against a naked `F` would let a literal's own type vouch for itself,
+ * reopening the excess keys {@link CheckedFilterParams} closes. Beside `F` sits
+ * {@link UnknownOnceInferred}, which resolves to `unknown` once `F` is inferred,
+ * so this declaration checks nothing and the filter is held to
+ * {@link CheckedFilterParams} and the declared filter type alone. It must stay
+ * its own object in the intersection: as a member of the same property's type
+ * the union would be distributed across the check and `F` would no longer be
+ * naked.
+ *
+ * @template F - The filter as the caller wrote it.
+ */
+export type FilterInferenceSite<F> = {
+  filter?: F | UnknownOnceInferred<F>;
+};
 
 // ─── Return Type Narrowing Types ────────────────────────────────────────────
 

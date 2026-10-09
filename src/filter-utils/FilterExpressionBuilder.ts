@@ -1,15 +1,22 @@
 import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import { keyConditionCapabilities } from "./capabilities.js";
-import type { DynamoNativeValue, Optional, StringObj } from "../types.js";
+import { parenthesize } from "../dynamo-utils/conditionExpression.js";
+import type {
+  DynamoNativeValue,
+  DynamoScalarValue,
+  Optional,
+  StringObj
+} from "../types.js";
 import type { TableSerializer } from "../metadata/types.js";
 import { fieldDefToZod } from "../decorators/attributes/fieldZod.js";
 import {
   fieldConverts,
-  fieldValidatesConditionValue,
   parseSegment,
   resolveFieldDef,
-  toStoredFieldValue
+  toStoredFieldValue,
+  undeclaredFieldIn,
+  type FieldResolution
 } from "./resolveFieldDef.js";
 import {
   fragmentOperatorApplies,
@@ -21,6 +28,7 @@ import {
   orderedOperatorDomain,
   storedFormOfAttribute,
   storedFormOfField,
+  storedFormOfOperand,
   type FragmentOperator,
   type StoredForm
 } from "./storedForm.js";
@@ -51,7 +59,13 @@ import type {
  * @property placeholderKey - A flat key for use in value placeholders (e.g., `Addresscity`)
  * @property valueSchema - Optional zod validator to run on condition values for the attribute
  * @property toStored - Optional conversion to the stored form, applied by {@link FilterExpressionBuilder.toStoredValue}
+ * @property undeclaredField - For an object, or a field that holds one at any depth, the first field a whole-value operand carries that the schema does not declare
  * @property storedForm - The form the table stores the value in, when it could be resolved. Decides which fragment operators apply
+ * @property nullable - Whether the attribute or nested field is declared nullable. Absent when that could not be resolved, which is read as not nullable
+ * @property elementForm - For a field stored as a list, the form its elements are stored in. Decides what a `$contains` operand on it must be
+ * @property elementValueSchema - For a field stored as a list, the zod validator for one element in the form the entity declares it
+ * @property elementToStored - For a list whose elements convert (dates, objects, lists and unions), the conversion of one element to the form the table stores, applied by {@link FilterExpressionBuilder.toStoredElement}
+ * @property elementUndeclaredField - For a field stored as a list, the first field an element carries that the element's schema does not declare
  */
 interface ResolvedPath {
   expressionPath: string;
@@ -59,7 +73,13 @@ interface ResolvedPath {
   placeholderKey: string;
   valueSchema?: ZodType;
   toStored?: TableSerializer;
+  undeclaredField?: (value: unknown) => Optional<string>;
   storedForm?: StoredForm;
+  nullable?: boolean;
+  elementForm?: StoredForm;
+  elementValueSchema?: ZodType;
+  elementToStored?: TableSerializer;
+  elementUndeclaredField?: (element: unknown) => Optional<string>;
 }
 
 /**
@@ -172,6 +192,26 @@ const isOrdered = (
   typeof value === "bigint";
 
 /**
+ * The comparable kind of a range bound, as the caller supplied it, phrased for
+ * an error message.
+ *
+ * Mirrors the kinds the condition types build a range from
+ * (`ComparisonConditionFor` and `BetweenConditionFor`): a `Date`, a string, a
+ * number, a bigint or binary. A `Date` is a kind of its own although it is
+ * sent as an ISO string, and a bigint although it is stored as a Number,
+ * because the types keep them apart. Read before conversion for that reason.
+ * Only ever asked of a bound already proven orderable, so `typeof` names
+ * every other kind it can be
+ * @param operand - A range bound, in the form the caller supplied it
+ * @returns The kind, with its article (EX: `a string`, `binary`)
+ */
+const rangeKindOf = (operand: unknown): string => {
+  if (operand instanceof Date) return "a Date";
+  if (operand instanceof Uint8Array) return "binary";
+  return `a ${typeof operand}`;
+};
+
+/**
  * Properties for constructing a {@link FilterExpressionBuilder}.
  *
  * @property {FilterCapabilities} capabilities - The filter vocabulary the context supports.
@@ -180,6 +220,15 @@ const isOrdered = (
 export interface FilterExpressionBuilderProps {
   capabilities: FilterCapabilities;
   resolveAttribute: FilterAttributeResolver;
+  /**
+   * Prepended to every value placeholder the instance binds, leaving attribute
+   * names unchanged. Lets a compiled condition share an expression's value map
+   * with placeholders compiled elsewhere — an update expression's, or another
+   * condition's — without binding the same name twice. Must consist of the
+   * characters an expression token accepts. Defaults to none, which is the
+   * naming every query and search compiles with.
+   */
+  valuePlaceholderPrefix?: string;
 }
 
 /**
@@ -200,6 +249,7 @@ export interface FilterExpressionBuilderProps {
 class FilterExpressionBuilder {
   readonly #capabilities: FilterCapabilities;
   readonly #resolveAttribute: FilterAttributeResolver;
+  readonly #valuePlaceholderPrefix: string;
   #attrCounter: number;
   /**
    * Expression paths a condition has been compiled for, tracked when the
@@ -210,6 +260,7 @@ class FilterExpressionBuilder {
   constructor(props: FilterExpressionBuilderProps) {
     this.#capabilities = props.capabilities;
     this.#resolveAttribute = props.resolveAttribute;
+    this.#valuePlaceholderPrefix = props.valuePlaceholderPrefix ?? "";
     this.#attrCounter = 0;
     this.#conditionedPaths = new Set();
   }
@@ -234,7 +285,11 @@ class FilterExpressionBuilder {
     // an expression referencing a placeholder with nothing bound to it, which
     // DynamoDB rejects. `$or` blocks reach this method through orCondition, so
     // they are covered here too, and an undefined `$or` drops rather than being
-    // read as an attribute named "$or"
+    // read as an attribute named "$or". A context that does not drop one
+    // rejects it here instead, at every depth for the same reason
+    if (!this.#capabilities.dropUndefinedConditions) {
+      this.assertConditionsDefined(rawFilter);
+    }
     const filter = this.definedConditions(rawFilter);
     const isOrFilter = this.isOrFilter(filter);
 
@@ -242,6 +297,14 @@ class FilterExpressionBuilder {
       if (!this.#capabilities.or) {
         throw new FilterError(
           `$or conditions are not supported in ${this.#capabilities.context}`
+        );
+      }
+      // An $or of no blocks compiles to nothing, which a filter drops. A
+      // context that does not drop it rejects it, because nothing is what it
+      // asks for
+      if (filter.$or.length === 0 && !this.#capabilities.dropEmptyOr) {
+        throw new FilterError(
+          `Invalid condition: $or has no condition blocks, and ${this.#capabilities.context} reject an empty $or rather than dropping it — dropping it would loosen what the condition checks`
         );
       }
       const isAndOrFilter = this.isAndOrFilter(filter);
@@ -265,6 +328,26 @@ class FilterExpressionBuilder {
     return Object.fromEntries(
       Object.entries(conditions).filter(([, value]) => value !== undefined)
     );
+  }
+
+  /**
+   * Rejects a condition set to undefined, for a context that does not drop one.
+   *
+   * A write condition is the case: dropping one of its conditions lets through
+   * a write the caller meant to stop, where dropping a filter's only widens a
+   * read
+   * @param conditions - The conditions as the caller supplied them
+   */
+  private assertConditionsDefined(conditions: FilterParams): void {
+    const undefinedKey = Object.keys(conditions).find(
+      key => conditions[key] === undefined
+    );
+
+    if (undefinedKey !== undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${undefinedKey}": the condition has no value, and ${this.#capabilities.context} reject one rather than dropping it — dropping it would loosen what the condition checks`
+      );
+    }
   }
 
   /**
@@ -432,11 +515,14 @@ class FilterExpressionBuilder {
       ({ expression }) => expression !== ""
     );
 
-    // One part needs no grouping; it is the whole expression
+    // One part needs no grouping; it is the whole expression. Of two, each is
+    // isolated in one pair of parentheses: an $or of one block that binds
+    // several values is already one group, and a second pair around it is
+    // rejected by DynamoDB as redundant
     const expression =
       parts.length === 1
         ? parts[0].expression
-        : parts.map(({ expression }) => `(${expression})`).join(" AND ");
+        : parts.map(({ expression }) => parenthesize(expression)).join(" AND ");
 
     const values = { ...orFilterParams.values, ...andFilterParams.values };
     return { expression, values };
@@ -497,6 +583,13 @@ class FilterExpressionBuilder {
         );
       }
       const mappings = value.map(val => {
+        // Where null means "not set" it is a condition of its own rather than
+        // a value to compare against, so it has no place in a list of them
+        if (val === null && capabilities.nullMeansNotSet) {
+          throw new FilterError(
+            `Invalid filter value for attribute "${attr}": an IN list cannot carry null. null means "not set" in ${capabilities.context}, which is its own condition — write it as an $or block`
+          );
+        }
         // The same checks every other operand gets. Without the first, an
         // element that resolved to undefined still takes a placeholder and the
         // expression references one with no value bound to it
@@ -536,6 +629,11 @@ class FilterExpressionBuilder {
         this.assertOperandOrdered(values, reference, attr, operator);
         return { operator, reference };
       });
+      this.assertBoundsOneKind(
+        operands.map(operator => value[operator]),
+        attr,
+        operands.join(" and ")
+      );
       this.assertComposedRangeSatisfiable(values, bound, attr);
       condition = bound
         .map(
@@ -560,6 +658,7 @@ class FilterExpressionBuilder {
       const upperRef = this.bindWholeValue(resolved, attr, upper, values);
       this.assertOperandOrdered(values, lowerRef, attr, "$between");
       this.assertOperandOrdered(values, upperRef, attr, "$between");
+      this.assertBoundsOneKind([lower, upper], attr, "$between");
       this.assertBoundsOrdered(values, lowerRef, upperRef, attr);
       condition = `${resolved.expressionPath} BETWEEN ${lowerRef} AND ${upperRef}`;
     } else if (this.isBeginsWithFilter(value)) {
@@ -590,14 +689,18 @@ class FilterExpressionBuilder {
       );
       this.assertOperandDefined(value.$contains, attr, "$contains");
       this.assertFragmentOperatorApplies(resolved, attr, "$contains");
-      this.assertFragmentOperandShape(
-        resolved,
-        value.$contains,
-        attr,
-        "$contains"
-      );
-      const reference = this.bindFragment(resolved, value.$contains, values);
+      // A list element is validated and converted before the shape check, so
+      // an element named the way the entity declares it is judged in the form
+      // it will be sent in
+      const operand = this.toStoredElement(resolved, value.$contains, attr);
+      this.assertFragmentOperandShape(resolved, operand, attr, "$contains");
+      const reference = this.bindFragment(resolved, operand, values);
       condition = `contains(${resolved.expressionPath}, ${reference})`;
+    } else if (value === null && capabilities.nullMeansNotSet) {
+      // dyna-record removes a nulled attribute rather than storing NULL, so
+      // "not set" is an absent attribute — a test of the path, binding no value
+      this.assertNullable(resolved, attr, capabilities);
+      condition = `attribute_not_exists(${resolved.expressionPath})`;
     } else {
       const reference = this.bindWholeValue(resolved, attr, value, values);
       condition = `${resolved.expressionPath} = ${reference}`;
@@ -640,14 +743,47 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Rejects `null` as "not set" on an attribute that is not declared nullable.
+   *
+   * Such an attribute is always set, so the condition could never hold. The
+   * nullability read is the attribute's, or for a dot path the nested field's;
+   * a path whose field could not be resolved is not known to be nullable and
+   * is rejected too
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for the error message
+   * @param capabilities - The vocabulary this compilation may use, for the message
+   */
+  private assertNullable(
+    resolved: ResolvedPath,
+    attr: string,
+    capabilities: FilterCapabilities
+  ): void {
+    if (resolved.nullable === true) return;
+
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": null means "not set" in ${capabilities.context}, which only an attribute declared nullable can be`
+    );
+  }
+
+  /**
+   * The next value placeholder for a path: the instance's prefix, the path's
+   * placeholder key and the instance's counter
+   * @param resolved - The resolved attribute path
+   * @returns The placeholder, without its `:`
+   */
+  private nextPlaceholder(resolved: ResolvedPath): string {
+    return `${this.#valuePlaceholderPrefix}${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+  }
+
+  /**
    * Binds a whole-value operand and returns the placeholder reference naming
    * it.
    *
    * A whole value of the attribute: an equality value, an `IN` element, a
    * comparison operand, a `$between` bound. Shape-checked against the stored
-   * form, validated in the declared form and converted to the stored one —
-   * the operand rule's first half applied in one place instead of in each
-   * branch that carries such an operand. Putting the shape check here rather
+   * form, validated in the declared form with every field it carries declared,
+   * and converted to the stored one — the operand rule's first half applied in
+   * one place instead of in each branch that carries such an operand. Putting the shape check here rather
    * than at each call site is what kept the equality arm from being the one
    * that forgot it
    * @param resolved - The resolved attribute path
@@ -664,7 +800,8 @@ class FilterExpressionBuilder {
   ): string {
     this.assertWholeValueShape(resolved, value, attr);
     this.validateConditionValue(resolved, attr, value);
-    const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+    this.assertFieldsDeclared(resolved, attr, value);
+    const placeholder = this.nextPlaceholder(resolved);
     values[placeholder] = this.toStoredValue(resolved, value, attr);
     return `:${placeholder}`;
   }
@@ -687,7 +824,7 @@ class FilterExpressionBuilder {
     value: DynamoNativeValue,
     values: Record<string, DynamoNativeValue>
   ): string {
-    const placeholder = `${resolved.placeholderKey}${String(++this.#attrCounter)}`;
+    const placeholder = this.nextPlaceholder(resolved);
     values[placeholder] = value;
     return `:${placeholder}`;
   }
@@ -738,6 +875,42 @@ class FilterExpressionBuilder {
     this.assertOperandDefined(upper, attr, "$between");
 
     return [lower, upper];
+  }
+
+  /**
+   * Rejects a range whose bounds are of different kinds.
+   *
+   * The condition types build a range per comparable kind, so a typed caller
+   * cannot pair a string bound with a number one. This answers for a plain
+   * JavaScript caller, on every path, and matters most where the field could
+   * not be resolved — a dot path into a union variant — because nothing
+   * validates the bounds against a schema there. Such a range reaches DynamoDB
+   * otherwise: a `BETWEEN` across a String and a Number is rejected with "The
+   * BETWEEN operator requires same data type for lower and upper bounds", and
+   * a composed range across them is accepted and can never hold, so a write
+   * condition fails as though the row had failed it. Verified against the
+   * service. Needs no schema, so it applies where every schema-side guard
+   * abstains; on a resolved field, validation has already answered.
+   *
+   * Asked after each bound is proven orderable, so a bound DynamoDB cannot
+   * order at all is reported as that, and before the order of the bounds is
+   * compared, which across kinds would mean nothing
+   * @param operands - The range's bounds, as the caller supplied them
+   * @param attr - The attribute key, for the error message
+   * @param operators - The operator or operators being applied, for the message
+   */
+  private assertBoundsOneKind(
+    operands: readonly unknown[],
+    attr: string,
+    operators: string
+  ): void {
+    const kinds = [...new Set(operands.map(rangeKindOf))];
+    if (kinds.length < 2) return;
+
+    const named = `${kinds.slice(0, -1).join(", ")} and ${kinds[kinds.length - 1]}`;
+    throw new FilterError(
+      `Invalid filter value for attribute "${attr}": ${operators} bound a range with ${named}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`
+    );
   }
 
   /**
@@ -861,8 +1034,8 @@ class FilterExpressionBuilder {
     //
     // An unresolved form answers the same way, because this guard is the only
     // one that would otherwise judge what it cannot see: a path into a union
-    // variant, or naming no declared field, resolves to no field, and the field
-    // it names may well be a Map. Abstaining is what every other guard does
+    // variant resolves to no field, and the field it names may well be a Map.
+    // Abstaining is what every other guard does
     const families = this.operatorFamilies(value);
 
     // A `$`-prefixed key is this vocabulary's mark of an operator, so one that
@@ -880,7 +1053,7 @@ class FilterExpressionBuilder {
 
     // Whether a plain object is the attribute's own value does depend on the
     // form. An unresolved form abstains, as every other guard does — a path
-    // into a union variant, or naming no declared field, may well name a Map
+    // into a union variant may well name a Map
     const mayHoldAnObject =
       resolved.storedForm === "map" || resolved.storedForm === undefined;
 
@@ -992,6 +1165,22 @@ class FilterExpressionBuilder {
         `Invalid filter value for attribute "${attr}": $contains takes a single value to look for, and null is not one`
       );
     }
+
+    // On a List whose elements' form is known, the operand is one of them, so
+    // it has to be stored in that form — a number in a list of strings is never
+    // a member, and DynamoDB answers the test with nothing. Judged by stored
+    // form, as the String reading above is: the operand arrives here already
+    // converted, so this is the form it is sent in
+    const { elementForm } = resolved;
+
+    if (
+      elementForm !== undefined &&
+      storedFormOfOperand(operand) !== elementForm
+    ) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${elementForm}, which this operand is not`
+      );
+    }
   }
 
   /**
@@ -1084,7 +1273,7 @@ class FilterExpressionBuilder {
     const { storedForm } = resolved;
 
     // Where the stored form is unknown, dyna-record cannot judge the element —
-    // the same abstention a dot path naming no field gets everywhere else
+    // the same abstention a dot path into a union variant gets everywhere else
     if (storedForm === undefined) return;
 
     const isList = Array.isArray(element);
@@ -1145,7 +1334,7 @@ class FilterExpressionBuilder {
    *
    * The attribute-side gate ({@link assertOrderedOperatorApplies}) answers the
    * same question from the schema, and abstains where the stored form could not
-   * be resolved — a dot path into a union variant, or naming no declared field.
+   * be resolved — a dot path into a union variant.
    * This is the check that still applies there, where the value is all there is
    * to go on
    * @param values - The value map the operand was bound into
@@ -1208,6 +1397,86 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Validates a `$contains` operand on a list against the list's element schema
+   * and converts it from the form the entity declares an element in to the form
+   * the table stores it.
+   *
+   * On a List the operand is not a fragment but a whole element, so the
+   * operand rule's first half applies to it: it is validated against the
+   * element's schema and converted through the same conversion that writes the
+   * field. An enum element must be a member, a number element a finite number,
+   * an object element an object of the element's fields with each field's
+   * declared type, and a union element one of the union's variants. A `Date` is
+   * converted to the ISO string it is stored as, at any depth.
+   *
+   * Two things zod would let through are rejected as well. An object element
+   * carrying a field its schema does not declare: zod strips such a field,
+   * which is right for a write and wrong here, because `contains` compares an
+   * element whole and the stripped operand is not the element the caller
+   * described. A nullable field the operand omits, leaves undefined or sets to
+   * null is not rejected: the write removes a nulled field rather than storing
+   * NULL, so in all three spellings the element looked for lacks it, as the
+   * stored one does. A required field left undefined is rejected by the schema.
+   *
+   * An operand in another form than the elements' is passed through for
+   * {@link assertFragmentOperandShape} to reject, which names the form the
+   * elements are stored in. So is the ISO string on a list of dates: it is
+   * already the stored form, and is sent as written
+   * @param resolved - The resolved attribute path
+   * @param operand - The operand as the caller supplied it
+   * @param attr - The attribute key, for the error message
+   * @returns The operand as the table stores it
+   */
+  private toStoredElement(
+    resolved: ResolvedPath,
+    operand: DynamoScalarValue,
+    attr: string
+  ): DynamoNativeValue {
+    const {
+      elementForm,
+      elementValueSchema,
+      elementToStored,
+      elementUndeclaredField
+    } = resolved;
+
+    // Not a list, or a path whose field could not be resolved
+    if (elementValueSchema === undefined) return operand;
+
+    // A date is the one element declared in a form other than its stored one:
+    // the only string-stored element with a conversion
+    const isDateElement =
+      elementForm === "string" && elementToStored !== undefined;
+
+    if (isDateElement && typeof operand === "string") return operand;
+
+    const inElementForm =
+      operand instanceof Date
+        ? isDateElement
+        : storedFormOfOperand(operand) === elementForm;
+
+    if (!inElementForm) return operand;
+
+    // An invalid Date is still a Date, and converting one throws a RangeError
+    // from toISOString rather than reporting the attribute
+    const parsed = elementValueSchema.safeParse(operand);
+    if (!parsed.success) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and this operand is not a value the list's elements can hold`,
+        { cause: parsed.error.issues }
+      );
+    }
+
+    const undeclared = elementUndeclaredField?.(operand);
+    if (undeclared !== undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": $contains on a list looks for one of its elements, and "${undeclared}" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+      );
+    }
+
+    return elementToStored === undefined ? operand : elementToStored(operand);
+  }
+
+  /**
    * The remedy to append to a rejected value's error, for an attribute whose
    * stored form differs from its declared one.
    *
@@ -1251,6 +1520,39 @@ class FilterExpressionBuilder {
   }
 
   /**
+   * Rejects a whole-value operand carrying a field its schema does not declare,
+   * at any depth.
+   *
+   * The schema's validator strips such a field rather than rejecting it, and so
+   * does the conversion to the stored form — right for a value about to be
+   * written, wrong for one compared whole. The stripped operand is not the value
+   * the caller described: `{ city: "X", zip: "Y" }` would be sent as
+   * `{ city: "X" }`, and a write condition would hold against a row that holds
+   * no `zip` at all, letting through a write the caller meant to stop. Unless
+   * every field is declared, no stored value can equal the operand, so it is
+   * refused before anything is sent.
+   *
+   * Runs after {@link validateConditionValue}, which has accepted every declared
+   * field's value, so the walk only has undeclared fields left to find
+   * @param resolved - The resolved attribute path
+   * @param attr - The attribute key, for error messages
+   * @param value - The operand as the caller supplied it
+   */
+  private assertFieldsDeclared(
+    resolved: ResolvedPath,
+    attr: string,
+    value: unknown
+  ): void {
+    const undeclared = resolved.undeclaredField?.(value);
+
+    if (undeclared !== undefined) {
+      throw new FilterError(
+        `Invalid filter value for attribute "${attr}": "${undeclared}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+    }
+  }
+
+  /**
    * Resolves an attribute key (potentially a dot-path) into its DynamoDB expression components.
    *
    * For simple keys (e.g., "name"), resolves via the context's attribute resolver.
@@ -1278,7 +1580,8 @@ class FilterExpressionBuilder {
       type: valueSchema,
       serializers,
       objectSchema,
-      kind
+      kind,
+      nullable
     } = this.#resolveAttribute(topLevelKey, key);
 
     // The alias and each field name stand in an expression as a `#` token,
@@ -1293,7 +1596,12 @@ class FilterExpressionBuilder {
         placeholderKey: tableToken,
         valueSchema,
         toStored: serializers?.toTableAttribute,
-        storedForm: storedFormOfAttribute(kind)
+        ...(objectSchema !== undefined && {
+          undeclaredField: value =>
+            undeclaredFieldIn({ type: "object", fields: objectSchema }, value)
+        }),
+        storedForm: storedFormOfAttribute(kind),
+        nullable
       };
     }
 
@@ -1331,8 +1639,17 @@ class FilterExpressionBuilder {
 
     // The resolver answers for the top level attribute, so a nested value is
     // validated and converted as the field it names rather than as the object
-    // that contains it
-    const resolution = resolveFieldDef(objectSchema, parsed);
+    // that contains it. An attribute of a known kind without an object schema
+    // is a scalar, which no path continues below; one of an unknown kind is
+    // left to the walk, which abstains on it
+    const resolution: FieldResolution =
+      objectSchema === undefined && kind !== undefined
+        ? {
+            outcome: "pathPastScalar",
+            segment: topLevelKey,
+            field: parsed[0].name
+          }
+        : resolveFieldDef(objectSchema, parsed);
 
     // A path running *through* a list without naming an element reaches nothing
     // DynamoDB can address: it compiles, matches no row, and reports no error
@@ -1350,6 +1667,24 @@ class FilterExpressionBuilder {
       );
     }
 
+    // A field a declared object does not have names nothing a row can hold —
+    // a typo the types refuse, and one the service would answer with no rows,
+    // or with a failed guard indistinguishable from a real one
+    if (resolution.outcome === "undeclaredField") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.field}" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${resolution.declared.join(", ")}`
+      );
+    }
+
+    // Below a scalar there are no fields at all, declared or otherwise
+    if (resolution.outcome === "pathPastScalar") {
+      throw new FilterError(
+        `Invalid filter key "${key}": "${resolution.segment}" is not an object, so it has no field "${resolution.field}" and the condition can match nothing`
+      );
+    }
+
+    // A union variant the path does not name: the field may exist, so nothing
+    // here can judge it
     if (resolution.outcome === "unknown") {
       return { expressionPath, names, placeholderKey };
     }
@@ -1361,16 +1696,30 @@ class FilterExpressionBuilder {
       names,
       placeholderKey,
       storedForm: storedFormOfField(fieldDef),
-      // Not every field's schema describes the value a condition carries;
-      // where it does not, the stored form is still known and is what decides
-      // which operators apply
-      ...(fieldValidatesConditionValue(fieldDef) && {
-        valueSchema: fieldDefToZod(fieldDef),
-        // Only when the field converts: toStored doubles as the signal that a
-        // rejected value's remedy should point at the declared form
-        ...(fieldConverts(fieldDef) && {
-          toStored: value => toStoredFieldValue(fieldDef, value)
+      // An object field is never nullable, so its definition has no flag
+      nullable: fieldDef.type !== "object" && fieldDef.nullable === true,
+      ...(fieldDef.type === "array" && {
+        elementForm: storedFormOfField(fieldDef.items),
+        // A `$contains` operand is a whole element, so it is validated against
+        // the element's schema and converted as the element is written — see
+        // toStoredElement
+        elementValueSchema: fieldDefToZod(fieldDef.items),
+        elementUndeclaredField: element =>
+          undeclaredFieldIn(fieldDef.items, element),
+        ...(fieldConverts(fieldDef.items) && {
+          elementToStored: value => toStoredFieldValue(fieldDef.items, value)
         })
+      }),
+      // A whole-value operand is a whole value of the field — for a list, a
+      // whole list, which is what each element of an IN on it is — so it is
+      // validated, has its undeclared fields refused and is converted as the
+      // field is written, whatever the field's type
+      valueSchema: fieldDefToZod(fieldDef),
+      undeclaredField: value => undeclaredFieldIn(fieldDef, value),
+      // Only when the field converts: toStored doubles as the signal that a
+      // rejected value's remedy should point at the declared form
+      ...(fieldConverts(fieldDef) && {
+        toStored: value => toStoredFieldValue(fieldDef, value)
       })
     };
   }
@@ -1382,9 +1731,10 @@ class FilterExpressionBuilder {
    */
   private orFilter(filter: OrFilter): FilterExpression {
     // A block whose every condition was dropped contributes nothing — see
-    // orCondition, which is where the bare " OR " is prevented. An $or left
-    // with nothing compiles to nothing itself, which the caller assembling the
-    // command drops in turn
+    // orCondition, which is where the bare " OR " is prevented, and where a
+    // context that does not drop an empty $or rejects the block instead. An
+    // $or left with nothing compiles to nothing itself, which the caller
+    // assembling the command drops in turn
     const orFilter = filter.$or
       .map(block => this.orCondition(block))
       .reduce<FilterExpression>(
@@ -1406,8 +1756,19 @@ class FilterExpressionBuilder {
   private orCondition(andFilter: AndFilter): FilterExpression {
     const andParams = this.filterParams(andFilter);
 
-    // Nothing to join and nothing to parenthesize; orFilter drops these
-    if (andParams.expression === "") return { expression: "", values: {} };
+    if (andParams.expression === "") {
+      // A block with no conditions always holds. A filter drops it: there is
+      // nothing to join or parenthesize, and orFilter skips what it returns.
+      // A context that does not drop an empty $or rejects an empty block too:
+      // dropping the block would tighten the $or it was meant to satisfy,
+      // and keeping it would make the whole $or hold for every row
+      if (!this.#capabilities.dropEmptyOr) {
+        throw new FilterError(
+          `Invalid condition: a $or branch holds no conditions, and ${this.#capabilities.context} reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous`
+        );
+      }
+      return { expression: "", values: {} };
+    }
 
     // Grouped when the block binds more than one value, which stands in for
     // "the block has more than one condition". That substitution is sound only
@@ -1418,15 +1779,26 @@ class FilterExpressionBuilder {
     // needed. It over-triggers harmlessly, grouping a single multi-value
     // condition such as a $between or a composed comparison.
     //
-    // An arm that bound no value, or reused a placeholder, would break the
-    // substitution and silently drop the grouping — which inside an $or
-    // changes precedence, since AND binds tighter than OR. Parenthesizing
+    // The one arm that binds no value is null read as "not set", so each of
+    // those is counted alongside the values. It is reachable only where null
+    // means "not set" — every other context rejects null before this — so the
+    // count is unchanged everywhere else.
+    //
+    // An arm that bound no value uncounted, or reused a placeholder, would
+    // break the substitution and silently drop the grouping. Parenthesizing
     // unconditionally would remove the proxy entirely and is always valid;
     // it is not done only because it would rewrite every expression a
     // single-condition block produces
-    const multipleVals = Object.keys(andParams.values).length > 1;
+    const notSetConditions = Object.values(andFilter).filter(
+      value => value === null
+    ).length;
+    const multipleVals =
+      Object.keys(andParams.values).length + notSetConditions > 1;
+    // parenthesize leaves a block that is already one group as it is: an
+    // untyped caller's $or nested directly in this block compiles to one, and
+    // DynamoDB rejects a second pair around it
     const expression = multipleVals
-      ? `(${andParams.expression}) OR `
+      ? `${parenthesize(andParams.expression)} OR `
       : `${andParams.expression} OR `;
 
     return { expression, values: andParams.values };

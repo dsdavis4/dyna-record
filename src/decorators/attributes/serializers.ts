@@ -211,7 +211,10 @@ export function tableItemToObject(
  * objects and discriminated unions recurse through their schemas, arrays map each item,
  * and all other types pass through unchanged.
  */
-function convertFieldToEntityValue(fieldDef: FieldDef, val: unknown): unknown {
+export function convertFieldToEntityValue(
+  fieldDef: FieldDef,
+  val: unknown
+): unknown {
   switch (fieldDef.type) {
     case "date":
       return new Date(val as string);

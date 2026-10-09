@@ -1,19 +1,6 @@
 import type DynaRecord from "../../DynaRecord.js";
-import type { ForeignKey, NullableForeignKey, Optional } from "../../types.js";
+import type { ExtractForeignKeyTarget, Optional } from "../../types.js";
 import type { ForeignEntityAttribute } from "../types.js";
-
-type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
-  NullableForeignKey<T>
->;
-
-type NormalizedForeignKey<Value> = NonNullable<Value>;
-
-type ExtractForeignKeyTarget<Value> =
-  NormalizedForeignKey<Value> extends ForeignKey<infer Target>
-    ? Target
-    : NormalizedForeignKey<Value> extends NullableForeignKeyBrand<infer Target>
-      ? Target
-      : never;
 
 export interface BelongsToProps<
   T extends DynaRecord,

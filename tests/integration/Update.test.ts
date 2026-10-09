@@ -15,7 +15,7 @@ import {
   Desk,
   DuplicateFieldEntity,
   Employee,
-  type Festival,
+  Festival,
   Grade,
   Listing,
   MockTable,
@@ -39,12 +39,25 @@ import {
   Car,
   Vendor,
   type Discovery,
+  Category,
+  Accessory,
+  Author,
+  Book,
+  Founder,
+  Profile,
   mockEmbeddingProvider,
   mockEmbeddingProviderCalls,
   mockArticleEmbeddingProviderCalls
 } from "./mockModels.js";
-import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
+import {
+  TransactionCanceledException,
+  type CancellationReason
+} from "@aws-sdk/client-dynamodb";
+import {
+  ConditionalCheckFailedError,
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "../../src/dynamo-utils/index.js";
 import {
   ForeignKeyAttribute,
   BelongsTo,
@@ -53,21 +66,31 @@ import {
   HasOne,
   DateAttribute,
   IdAttribute,
+  ObjectAttribute,
   PartitionKeyAttribute,
   Searchable,
   SortKeyAttribute,
   StringAttribute,
   Table
 } from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
+} from "../../src/decorators/index.js";
 import { TitanTextEmbedV2 } from "../../src/embedding/types.js";
 import {
+  type EntityClass,
   type NullableForeignKey,
   type PartitionKey,
   type SortKey,
   type ForeignKey,
   type Searchable as SearchableText
 } from "../../src/types.js";
-import { NotFoundError, ValidationError } from "../../src/index.js";
+import {
+  FilterError,
+  NotFoundError,
+  ValidationError
+} from "../../src/index.js";
 import { createInstance } from "../../src/utils.js";
 import {
   type OtherTableEntityTableItem,
@@ -166,6 +189,106 @@ class MockInformation extends MockTable {
 
   @DateAttribute({ nullable: true })
   public someDate?: Date;
+}
+
+// A standalone typed foreign key — no BelongsTo backs it — to an entity with an
+// object attribute, so a write condition can guard the referenced Warehouse
+// under the key's `target`
+@Entity
+class WarehouseInspection extends MockTable {
+  declare readonly type: "WarehouseInspection";
+
+  @StringAttribute({ alias: "Inspector" })
+  public readonly inspector: string;
+
+  @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+  public readonly warehouseId: ForeignKey<Warehouse>;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NestedListsEntity extends MockTable {
+  declare readonly type: "NestedListsEntity";
+
+  @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+  public layout: InferObjectSchema<typeof nestedListsSchema>;
+}
+
+/**
+ * Nullable lists whose elements are not plain objects: a list of lists and a
+ * list of discriminated-union elements
+ */
+const nullableListsSchema = {
+  bays: {
+    type: "array",
+    items: { type: "array", items: { type: "number" } },
+    nullable: true
+  },
+  promos: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "kind",
+      variants: {
+        discount: { percent: { type: "number" }, endsAt: { type: "date" } },
+        bundle: {
+          sku: { type: "string" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NullableListsEntity extends MockTable {
+  declare readonly type: "NullableListsEntity";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ObjectAttribute({ alias: "Shelf", schema: nullableListsSchema })
+  public shelf: InferObjectSchema<typeof nullableListsSchema>;
 }
 
 describe("Update", () => {
@@ -2231,6 +2354,255 @@ describe("Update", () => {
                   TableName: "mock-table",
                   UpdateExpression:
                     "SET #UpdatedAt = :UpdatedAt, #addressAttribute.#street = :addressAttribute_street, #addressAttribute.#city = :addressAttribute_city, #addressAttribute.#geo.#lat = :addressAttribute_geo_lat, #addressAttribute.#geo.#lng = :addressAttribute_geo_lng, #addressAttribute.#geo.#accuracy = :addressAttribute_geo_accuracy, #addressAttribute.#scores = :addressAttribute_scores REMOVE #addressAttribute.#zip, #addressAttribute.#category"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  describe("a nullable field inside a list element set to null is left out of the stored element", () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date("2023-10-16T03:31:35.918Z"));
+    });
+
+    it("in a list nested in an object, in an object inside the element and in a list inside the element", async () => {
+      expect.assertions(4);
+
+      await NestedListsEntity.update("123", {
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: null,
+                placement: { aisle: "A1", bin: null },
+                restocks: [
+                  { at: new Date("2024-06-15T12:00:00.000Z"), note: null },
+                  { at: new Date("2024-06-16T12:00:00.000Z"), note: "late" }
+                ]
+              },
+              {
+                sku: "sku-2",
+                note: "kept",
+                placement: { aisle: "B2", bin: "7" },
+                restocks: []
+              }
+            ]
+          }
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Layout_section_entries": [
+                      {
+                        sku: "sku-1",
+                        placement: { aisle: "A1" },
+                        restocks: [
+                          { at: "2024-06-15T12:00:00.000Z" },
+                          { at: "2024-06-16T12:00:00.000Z", note: "late" }
+                        ]
+                      },
+                      {
+                        sku: "sku-2",
+                        note: "kept",
+                        placement: { aisle: "B2", bin: "7" },
+                        restocks: []
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "NestedListsEntity#123",
+                    SK: "NestedListsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Layout.#section.#entries = :Layout_section_entries"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("in a discriminated union variant inside a list", async () => {
+      expect.assertions(4);
+
+      await ArrayOfUnionsEntity.update("123", {
+        dashboard: {
+          widgets: [
+            {
+              type: "metric-card",
+              label: "Revenue",
+              value: 500,
+              format: "currency",
+              trend: null
+            },
+            {
+              type: "date-marker",
+              date: new Date("2024-06-15T12:00:00.000Z"),
+              label: null
+            }
+          ]
+        }
+      });
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Dashboard": "Dashboard",
+                    "#widgets": "widgets"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Dashboard_widgets": [
+                      {
+                        type: "metric-card",
+                        label: "Revenue",
+                        value: 500,
+                        format: "currency"
+                      },
+                      {
+                        type: "date-marker",
+                        date: "2024-06-15T12:00:00.000Z"
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "ArrayOfUnionsEntity#123",
+                    SK: "ArrayOfUnionsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Dashboard.#widgets = :Dashboard_widgets"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("through the instance method, which returns the element without the field", async () => {
+      expect.assertions(5);
+
+      const instance = createInstance(NestedListsEntity, {
+        pk: "NestedListsEntity#123" as PartitionKey,
+        sk: "NestedListsEntity" as SortKey,
+        id: "123",
+        type: "NestedListsEntity",
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: "old",
+                placement: { aisle: "A1", bin: "3" },
+                restocks: [
+                  { at: new Date("2024-06-14T12:00:00.000Z"), note: "old" }
+                ]
+              }
+            ]
+          }
+        },
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const updatedInstance = await instance.update({
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                note: null,
+                placement: { aisle: "A1", bin: null },
+                restocks: [
+                  { at: new Date("2024-06-15T12:00:00.000Z"), note: null }
+                ]
+              }
+            ]
+          }
+        }
+      });
+
+      expect(updatedInstance).toEqual({
+        ...instance,
+        layout: {
+          section: {
+            entries: [
+              {
+                sku: "sku-1",
+                placement: { aisle: "A1" },
+                restocks: [{ at: new Date("2024-06-15T12:00:00.000Z") }]
+              }
+            ]
+          }
+        },
+        updatedAt: new Date("2023-10-16T03:31:35.918Z")
+      });
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  ConditionExpression: "attribute_exists(PK)",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": "2023-10-16T03:31:35.918Z",
+                    ":Layout_section_entries": [
+                      {
+                        sku: "sku-1",
+                        placement: { aisle: "A1" },
+                        restocks: [{ at: "2024-06-15T12:00:00.000Z" }]
+                      }
+                    ]
+                  },
+                  Key: {
+                    PK: "NestedListsEntity#123",
+                    SK: "NestedListsEntity"
+                  },
+                  TableName: "mock-table",
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Layout.#section.#entries = :Layout_section_entries"
                 }
               }
             ]
@@ -11121,6 +11493,213 @@ describe("Update", () => {
           Logger.log("Testing types");
         });
       });
+      describe("a nullable field inside a list element", () => {
+        it("can be null, like a nullable field anywhere else in an update", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  actor: "buyer",
+                  // @ts-expect-no-error: note is nullable, null is allowed for updates (the element is stored without it)
+                  note: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("can be null in a list inside a nested object, in an object inside the element and in a list inside the element", async () => {
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-no-error: note is nullable, null is allowed in a list nested in an object
+                    note: null,
+                    // @ts-expect-no-error: bin is nullable, null is allowed in an object inside a list element
+                    placement: { aisle: "A1", bin: null },
+                    // @ts-expect-no-error: note is nullable, null is allowed in a list inside a list element
+                    restocks: [{ at: new Date(), note: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("can be null in a discriminated union variant inside a list", async () => {
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  value: 500,
+                  format: "currency",
+                  // @ts-expect-no-error: trend is nullable in the metric-card variant, null is allowed
+                  trend: null
+                },
+                {
+                  type: "date-marker",
+                  date: new Date(),
+                  // @ts-expect-no-error: label is nullable in the date-marker variant, null is allowed
+                  label: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not allow a non-nullable field inside a list element to be null", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  // @ts-expect-error: actor is non-nullable, cannot be null
+                  actor: null
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    // @ts-expect-error: sku is non-nullable, cannot be null
+                    sku: null,
+                    // @ts-expect-error: aisle is non-nullable, cannot be null
+                    placement: { aisle: null },
+                    // @ts-expect-error: at is non-nullable, cannot be null
+                    restocks: [{ at: null }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  // @ts-expect-error: value is non-nullable in the metric-card variant, cannot be null
+                  value: null,
+                  format: "currency"
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not allow the element itself to be null", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              // @ts-expect-error: list elements are not nullable
+              history: [null]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("does not accept wrong types for a nullable field inside a list element", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              history: [
+                {
+                  at: new Date(),
+                  actor: "buyer",
+                  // @ts-expect-error: note is a string
+                  note: 1
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-error: bin is a string
+                    placement: { aisle: "A1", bin: 2 },
+                    // @ts-expect-error: note is a string
+                    restocks: [{ at: new Date(), note: false }]
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfUnionsEntity.update("123", {
+            dashboard: {
+              widgets: [
+                {
+                  type: "metric-card",
+                  label: "Revenue",
+                  value: 500,
+                  format: "currency",
+                  // @ts-expect-error: "sideways" is not a trend value
+                  trend: "sideways"
+                }
+              ]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("still requires every non-nullable field of an element, since a list is replaced whole", async () => {
+          await MyClassWithAllAttributeTypes.update("123", {
+            objectAttribute: {
+              // @ts-expect-error: at is required in each element (lists are replaced whole, never merged)
+              history: [{ actor: "buyer", note: null }]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await NestedListsEntity.update("123", {
+            layout: {
+              section: {
+                entries: [
+                  {
+                    sku: "sku-1",
+                    // @ts-expect-error: aisle is required in an object inside an element
+                    placement: { bin: null },
+                    restocks: []
+                  }
+                ]
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+      });
     });
 
     describe("instance method", () => {
@@ -11930,6 +12509,7852 @@ describe("Update", () => {
           .catch(() => {
             Logger.log("Testing types");
           });
+      });
+      describe("a nullable field inside a list element", () => {
+        it("can be null, like a nullable field anywhere else in an update", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update({
+              objectAttribute: {
+                history: [
+                  {
+                    at: new Date(),
+                    actor: "buyer",
+                    // @ts-expect-no-error: note is nullable, null is allowed for updates (the element is stored without it)
+                    note: null
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("can be null in a list inside a nested object, in an object inside the element and in a list inside the element", async () => {
+          const instance = new NestedListsEntity();
+
+          await instance
+            .update({
+              layout: {
+                section: {
+                  entries: [
+                    {
+                      sku: "sku-1",
+                      // @ts-expect-no-error: note is nullable, null is allowed in a list nested in an object
+                      note: null,
+                      // @ts-expect-no-error: bin is nullable, null is allowed in an object inside a list element
+                      placement: { aisle: "A1", bin: null },
+                      // @ts-expect-no-error: note is nullable, null is allowed in a list inside a list element
+                      restocks: [{ at: new Date(), note: null }]
+                    }
+                  ]
+                }
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("can be null in a discriminated union variant inside a list", async () => {
+          const instance = new ArrayOfUnionsEntity();
+
+          await instance
+            .update({
+              dashboard: {
+                widgets: [
+                  {
+                    type: "metric-card",
+                    label: "Revenue",
+                    value: 500,
+                    format: "currency",
+                    // @ts-expect-no-error: trend is nullable in the metric-card variant, null is allowed
+                    trend: null
+                  },
+                  {
+                    type: "date-marker",
+                    date: new Date(),
+                    // @ts-expect-no-error: label is nullable in the date-marker variant, null is allowed
+                    label: null
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("does not allow a non-nullable field inside a list element to be null", async () => {
+          const instance = new NestedListsEntity();
+
+          await instance
+            .update({
+              layout: {
+                section: {
+                  entries: [
+                    {
+                      // @ts-expect-error: sku is non-nullable, cannot be null
+                      sku: null,
+                      // @ts-expect-error: aisle is non-nullable, cannot be null
+                      placement: { aisle: null },
+                      // @ts-expect-error: at is non-nullable, cannot be null
+                      restocks: [{ at: null }]
+                    }
+                  ]
+                }
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("does not accept wrong types for a nullable field inside a list element", async () => {
+          const instance = new ArrayOfUnionsEntity();
+
+          await instance
+            .update({
+              dashboard: {
+                widgets: [
+                  {
+                    type: "date-marker",
+                    date: new Date(),
+                    // @ts-expect-error: label is a string
+                    label: 3
+                  }
+                ]
+              }
+            })
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+      });
+    });
+
+    describe("write conditions", () => {
+      describe("static method", () => {
+        it("accepts every attribute kind with each operator it allows", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              // @ts-expect-no-error: each attribute takes the operators its kind supports
+              condition: {
+                stringAttribute: { $beginsWith: "a" },
+                dateAttribute: { $gte: new Date("2026-01-01") },
+                boolAttribute: true,
+                numberAttribute: { $between: [1, 10] },
+                enumAttribute: ["val-1", "val-2"],
+                foreignKeyAttribute: "customer-1",
+                nullableStringAttribute: { $contains: "a" },
+                nullableNumberAttribute: { $lte: 5 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts dot paths and list-index paths into object attributes", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a dot path names a nested object field
+                "objectAttribute.name": { $contains: "Jane" },
+                // @ts-expect-no-error: an array field takes $contains on its items
+                "objectAttribute.tags": { $contains: "vip" },
+                // @ts-expect-no-error: a list of dates takes a Date element, converted to the ISO string it is stored as
+                "objectAttribute.contactedAt": {
+                  $contains: new Date("2026-01-01")
+                },
+                // @ts-expect-no-error: a list of enums takes one of its members
+                "objectAttribute.roles": { $contains: "owner" },
+                // @ts-expect-no-error: a list of objects takes a whole element, named as declared
+                "objectAttribute.history": {
+                  $contains: { at: new Date("2026-01-01"), actor: "ann" }
+                },
+                // @ts-expect-no-error: dot paths reach nested objects at any depth
+                "addressAttribute.geo.lat": { $lt: 41 },
+                // @ts-expect-no-error: a list-index path names one array item
+                "addressAttribute.scores[0]": 5
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a $contains element the list cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: admin is not a member of the roles enum
+                "objectAttribute.roles": { $contains: "admin" },
+                // @ts-expect-error: actor is declared as a string
+                "objectAttribute.history": {
+                  $contains: { at: new Date("2026-01-01"), actor: 1 }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                "objectAttribute.history": {
+                  $contains: {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    // @ts-expect-error: an element has no actorId, so no element can equal this one
+                    actorId: "a-1"
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an attribute the entity does not declare", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: name is a Customer attribute, not an Order one
+                name: "Jane"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses type, which the write already fixes", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: type is not a condition key
+                type: "Order"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator the attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no prefix
+                boolAttribute: { $beginsWith: "t" },
+                // @ts-expect-error: a number has no substring
+                numberAttribute: { $contains: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts null on a nullable attribute, at any depth and inside $or", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: null means "not set" on a nullable attribute
+                nullableStringAttribute: null,
+                nullableDateAttribute: null,
+                nullableBoolAttribute: null,
+                nullableNumberAttribute: null,
+                nullableEnumAttribute: null,
+                nullableForeignKeyAttribute: null,
+                // @ts-expect-no-error: a nullable nested field takes null
+                "addressAttribute.zip": null,
+                "objectAttribute.deletedAt": null,
+                // @ts-expect-no-error: a $or branch takes null on a nullable field
+                $or: [
+                  { "addressAttribute.category": null },
+                  { nullableStringAttribute: null }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on a non-nullable attribute, at any depth", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: stringAttribute is not nullable
+                stringAttribute: null,
+                // @ts-expect-error: city is not nullable
+                "addressAttribute.city": null,
+                // @ts-expect-error: foreignKeyAttribute is not nullable
+                $or: [{ foreignKeyAttribute: null }]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null inside an IN array, nullable attribute or not", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds values; null is not one
+                enumAttribute: ["val-1", null],
+                // @ts-expect-error: null means "not set", which IN cannot express
+                nullableEnumAttribute: ["val-1", null]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts $or blocks on the entity's own attributes", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-no-error: each branch is a condition on this row
+                $or: [
+                  { orderDate: { $lt: new Date() } },
+                  { customerId: "customer-1", paymentMethodId: "pm-1" }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a relationship key inside $or (AE6)", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                $or: [
+                  { orderDate: new Date() },
+                  // @ts-expect-error: $or branches take the entity's own attributes only
+                  { customer: { name: "Jane" } }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses target inside $or", async () => {
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: $or branches hold conditions on this row only
+                $or: [{ organizationId: { target: { name: "Acme" } } }]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes a target condition on a BelongsTo and a HasOne", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-no-error: a BelongsTo takes a condition on the related row, $or included
+                customer: {
+                  name: "Jane",
+                  $or: [{ address: "A" }, { address: "B" }]
+                },
+                // @ts-expect-no-error: an empty target condition requires the target to exist
+                paymentMethod: {}
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: a HasOne takes a target condition, null on its nullable attributes
+                contactInformation: { phone: null, email: { $contains: "@" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes { id, condition } entries on a HasMany, a HasAndBelongsToMany and the parent side of a one-way HasMany", async () => {
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: a HasMany names each child it guards by id
+                orders: [
+                  {
+                    id: "order-1",
+                    condition: { orderDate: { $gte: new Date() } }
+                  },
+                  { id: "order-2", condition: {} }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Book.update(
+            "123",
+            { name: "Dune" },
+            {
+              condition: {
+                // @ts-expect-no-error: a HasAndBelongsToMany names each linked row by id
+                authors: [{ id: "author-1", condition: { name: "Jane" } }]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Organization.update(
+            "123",
+            { name: "Acme" },
+            {
+              condition: {
+                // @ts-expect-no-error: a one-way HasMany is guarded from its parent side
+                employees: [{ id: "employee-1", condition: { name: "Jane" } }],
+                founders: [{ id: "founder-1", condition: {} }]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses { id, condition } on a single-valued relationship", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: the library resolves a BelongsTo target itself
+                customer: { id: "customer-1", condition: { name: "Jane" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a plain condition on an array relationship", async () => {
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: a HasMany takes { id, condition } entries
+                orders: { orderDate: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an attribute the related entity does not declare", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: orderDate is an Order attribute, not a Customer one
+                customer: { orderDate: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                orders: [
+                  // @ts-expect-error: name is a Customer attribute, not an Order one
+                  { id: "order-1", condition: { name: "Jane" } }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a relationship key inside a target condition", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: a target condition names the related row's own attributes
+                customer: { orders: [{ id: "order-1", condition: {} }] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                orders: [
+                  // @ts-expect-error: nor the related entity's own relationships
+                  { id: "order-1", condition: { paymentMethod: {} } }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a target guard inside a target condition", async () => {
+          await Organization.update(
+            "123",
+            { name: "Acme" },
+            {
+              condition: {
+                founders: [
+                  {
+                    id: "founder-1",
+                    // @ts-expect-error: the related row's foreign key takes its own value only
+                    condition: { organizationId: { target: { name: "Acme" } } }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a malformed { id, condition } entry", async () => {
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                orders: [
+                  // @ts-expect-error: the entry names its related entity by id
+                  { condition: {} },
+                  // @ts-expect-error: the entry carries the condition to check
+                  { id: "order-2" },
+                  // @ts-expect-error: an entry holds id and condition only
+                  { id: "order-3", condition: {}, orderDate: new Date() }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes target on a typed standalone foreign key", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a ForeignKey<Customer> guards its Customer
+                foreignKeyAttribute: { target: { name: "Jane" } },
+                // @ts-expect-no-error: a NullableForeignKey<Customer> guards its Customer
+                nullableForeignKeyAttribute: { target: {} }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Profile.update(
+            "123",
+            { lastLogin: new Date() },
+            {
+              condition: {
+                // @ts-expect-no-error: the target condition is typed from the referenced entity
+                userId: { target: { name: { $beginsWith: "J" } } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes target on the child side of a one-way HasMany", async () => {
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: no BelongsTo backs the key, so it guards its target
+                organizationId: { target: { name: "Acme" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Employee.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: a nullable child-side key guards its target too
+                organizationId: { target: { name: "Acme" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("keeps a value condition on the key, with the guard's value in $or", async () => {
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: the key still takes a value condition
+                organizationId: "org-1"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-no-error: the guard sits on the key
+                organizationId: { target: { name: "Acme" } },
+                // @ts-expect-no-error: and the value condition moves into $or
+                $or: [{ organizationId: "org-1" }, { name: "Jane" }]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses target on a bare foreign key (AE18)", async () => {
+          @Entity
+          class LooseOrder extends MockTable {
+            declare readonly type: "LooseOrder";
+
+            @DateAttribute({ alias: "OrderDate" })
+            public readonly orderDate: Date;
+
+            // Widening the target to DynaRecord is what leaves the key bare:
+            // the decorator otherwise requires ForeignKey<Customer>
+            @ForeignKeyAttribute((): EntityClass<DynaRecord> => Customer, {
+              alias: "CustomerId"
+            })
+            public readonly customerId: ForeignKey;
+
+            @BelongsTo(() => Customer, { foreignKey: "customerId" })
+            public readonly customer: Customer;
+          }
+
+          await LooseOrder.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: customerId needs its target type to guard it
+                customerId: { target: { name: "Jane" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses target on a foreign key backing a BelongsTo", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                // @ts-expect-error: guard the Customer under the customer key
+                customerId: { target: { name: "Jane" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value condition and target on the same key (R33)", async () => {
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: a value condition alongside a guard goes in $or
+                organizationId: { target: { name: "Acme" }, $beginsWith: "org" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a target attribute the referenced entity does not declare", async () => {
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: lastFour is a PaymentMethod attribute
+                organizationId: { target: { lastFour: "1234" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("misclassifies a typed foreign key beside a HasOne to the same entity", async () => {
+          // Known limit: the types tell a BelongsTo from a HasOne only by whether
+          // a typed foreign key to the same entity exists. Here one does, so
+          // paymentMethod reads as a BelongsTo backed by backupPaymentMethodId
+          // and the key's target guard is refused. The condition compiler reads
+          // the relationship metadata and throws a FilterError for the shapes
+          // the types get wrong
+          @Entity
+          class Kiosk extends MockTable {
+            declare readonly type: "Kiosk";
+
+            @StringAttribute({ alias: "Name" })
+            public readonly name: string;
+
+            @ForeignKeyAttribute(() => PaymentMethod, {
+              alias: "BackupPaymentMethodId"
+            })
+            public readonly backupPaymentMethodId: ForeignKey<PaymentMethod>;
+
+            @HasOne(() => PaymentMethod, { foreignKey: "customerId" })
+            public readonly paymentMethod?: PaymentMethod;
+          }
+
+          await Kiosk.update(
+            "123",
+            { name: "Lobby" },
+            {
+              condition: {
+                // @ts-expect-error: known limit — read as backing a BelongsTo; the compiler decides at run time
+                backupPaymentMethodId: { target: { lastFour: "1234" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes condition beside referentialIntegrityCheck and forceEmbed", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              referentialIntegrityCheck: false,
+              forceEmbed: true,
+              // @ts-expect-no-error: condition sits beside update's existing options
+              condition: { orderDate: { $lt: new Date() }, customer: {} }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option update does not take", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: { orderDate: new Date() },
+              // @ts-expect-error: update has no such option
+              conditions: { orderDate: new Date() }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts each operator a nested field's type allows", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a nested date takes a Date comparison
+                "objectAttribute.createdDate": { $gte: new Date("2026-01-01") },
+                // @ts-expect-no-error: a nested enum takes an IN list of its values
+                "objectAttribute.status": ["active", "inactive"],
+                // @ts-expect-no-error: a nested number takes $between
+                "addressAttribute.geo.lat": { $between: [40, 42] },
+                // @ts-expect-no-error: a nested enum is stored as a string, so it takes a prefix
+                "addressAttribute.geo.accuracy": { $beginsWith: "pre" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a nested date is stored as an ISO string, so it takes a prefix
+                "objectAttribute.createdDate": { $beginsWith: "2026" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.update(
+            "123",
+            { name: "Inventory" },
+            {
+              condition: {
+                // @ts-expect-no-error: a field below a list index resolves to the element's field
+                "data.entries[0].price": { $lt: 10 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await DeepNestedEntity.update(
+            "123",
+            { name: "Settings" },
+            {
+              condition: {
+                // @ts-expect-no-error: the deepest field takes its own type
+                "data.level1.level2.level3.flag": false,
+                // @ts-expect-no-error: a nullable field deep in the schema takes null
+                "data.level1.tag": null
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a dot path naming no declared field, at each depth", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: objectAttribute declares no such field
+                "objectAttribute.nope": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: geo declares lat, lng and accuracy, not this
+                "addressAttribute.geo.nope": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.update(
+            "123",
+            { name: "Inventory" },
+            {
+              condition: {
+                // @ts-expect-error: an entries element declares sku and price, not this
+                "data.entries[0].nope": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await DeepNestedEntity.update(
+            "123",
+            { name: "Settings" },
+            {
+              condition: {
+                // @ts-expect-error: level3 declares flag and detail, not this
+                "data.level1.level2.level3.nope": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a list index on a field that is not a list, and a dot path into an attribute that is not an object", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: name is a string, not a list
+                "objectAttribute.name[0]": "J"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: geo is an object, not a list
+                "addressAttribute.geo[0]": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: stringAttribute is not an object attribute
+                "stringAttribute.x": "a"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: numberAttribute is not a list
+                "numberAttribute[0]": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value a nested field cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: name is a string
+                "objectAttribute.name": 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: geo.lat is a number
+                "addressAttribute.geo.lat": "41"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a scores item is a number
+                "addressAttribute.scores[0]": "5"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: tags holds strings
+                "objectAttribute.tags": { $contains: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: createdDate is a Date
+                "objectAttribute.createdDate": "2026-01-01"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: status takes active or inactive
+                "objectAttribute.status": "archived"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.update(
+            "123",
+            { name: "Inventory" },
+            {
+              condition: {
+                // @ts-expect-error: price is a number
+                "data.entries[0].price": "10"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await DeepNestedEntity.update(
+            "123",
+            { name: "Settings" },
+            {
+              condition: {
+                // @ts-expect-error: score is a number
+                "data.level1.level2.score": "5"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator a nested field cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a number has no prefix
+                "addressAttribute.geo.lat": { $beginsWith: "4" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a number has no substring
+                "addressAttribute.zip": { $contains: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a list has no ordering
+                "objectAttribute.tags": { $gt: "a" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a list has no prefix
+                "objectAttribute.tags": { $beginsWith: "v" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await DeepNestedEntity.update(
+            "123",
+            { name: "Settings" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no substring
+                "data.level1.level2.level3.flag": { $contains: true }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await DeepNestedEntity.update(
+            "123",
+            { name: "Settings" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no ordering
+                "data.level1.level2.level3.flag": { $gt: true }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a wrong operand for $between and comparisons at a nested path", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are numbers
+                "addressAttribute.geo.lat": { $between: [1, "2"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: $between takes a pair
+                "addressAttribute.geo.lat": { $between: [1] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: geo.lat compares against a number
+                "addressAttribute.geo.lat": { $gt: "40" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: createdDate compares against a Date
+                "objectAttribute.createdDate": { $gte: "2026-01-01" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ArrayOfObjectsEntity.update(
+            "123",
+            { name: "Inventory" },
+            {
+              condition: {
+                // @ts-expect-error: price compares against a number
+                "data.entries[0].price": { $lt: "10" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts every operator each attribute kind's stored form allows", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: comparisons compose with AND on a string
+                stringAttribute: { $gt: "a", $lte: "m" },
+                // @ts-expect-no-error: and on a number
+                numberAttribute: { $gte: 1, $lt: 10 },
+                // @ts-expect-no-error: a date is stored as an ISO string, so it takes a prefix
+                dateAttribute: { $beginsWith: "2026" },
+                // @ts-expect-no-error: an enum is stored as a string, so it takes a prefix
+                enumAttribute: { $beginsWith: "val" },
+                // @ts-expect-no-error: a foreign key is stored as a string, so it takes a prefix
+                foreignKeyAttribute: { $beginsWith: "customer-" },
+                // @ts-expect-no-error: a boolean takes an IN list
+                boolAttribute: [true, false],
+                // @ts-expect-no-error: a nullable date takes a Date comparison
+                nullableDateAttribute: { $lt: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a string takes $between
+                stringAttribute: { $between: ["a", "m"] },
+                // @ts-expect-no-error: a number takes equality
+                numberAttribute: 5,
+                // @ts-expect-no-error: a date takes a substring of its stored form
+                dateAttribute: { $contains: "-01-" },
+                // @ts-expect-no-error: an enum takes a substring
+                enumAttribute: { $contains: "1" },
+                // @ts-expect-no-error: a foreign key takes a comparison
+                foreignKeyAttribute: { $gt: "customer-1" },
+                // @ts-expect-no-error: a nullable boolean takes equality
+                nullableBoolAttribute: false,
+                // @ts-expect-no-error: a nullable enum takes one of its values
+                nullableEnumAttribute: "val-1"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a string takes an IN list
+                stringAttribute: ["a", "b"],
+                // @ts-expect-no-error: a number takes an IN list
+                numberAttribute: [1, 2],
+                // @ts-expect-no-error: a date takes $between with Date bounds
+                dateAttribute: {
+                  $between: [new Date("2026-01-01"), new Date("2026-12-31")]
+                },
+                // @ts-expect-no-error: an enum takes a comparison against its values
+                enumAttribute: { $gte: "val-1" },
+                // @ts-expect-no-error: a foreign key takes an IN list
+                foreignKeyAttribute: ["customer-1", "customer-2"],
+                // @ts-expect-no-error: a nullable foreign key takes a prefix
+                nullableForeignKeyAttribute: { $beginsWith: "customer-" },
+                // @ts-expect-no-error: a nullable number takes an IN list
+                nullableNumberAttribute: [1, 2]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a string takes equality
+                stringAttribute: "a",
+                // @ts-expect-no-error: a date takes equality with a Date
+                dateAttribute: new Date("2026-01-01")
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: a date takes an IN list of Dates
+                dateAttribute: [new Date("2026-01-01"), new Date("2026-02-01")],
+                // @ts-expect-no-error: a date takes composed Date comparisons
+                nullableDateAttribute: {
+                  $gte: new Date("2026-01-01"),
+                  $lt: new Date("2026-02-01")
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a string attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: stringAttribute is a string
+                stringAttribute: 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds strings
+                stringAttribute: ["a", 1]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a string compares against a string
+                stringAttribute: { $gt: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a Date is not a string operand
+                stringAttribute: { $gte: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are strings
+                stringAttribute: { $between: ["a", 1] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a prefix is a string
+                stringAttribute: { $beginsWith: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a substring is a scalar, not a Date
+                stringAttribute: { $contains: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a number attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: numberAttribute is a number
+                numberAttribute: "5"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds numbers
+                numberAttribute: [1, "2"]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a number compares against a number
+                numberAttribute: { $gt: "5" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a Date is not a number operand
+                numberAttribute: { $lte: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are numbers
+                numberAttribute: { $between: [1, "10"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: $between takes a pair
+                numberAttribute: { $between: [1] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a number has no prefix
+                numberAttribute: { $beginsWith: "1" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an operator object needs at least one operator
+                numberAttribute: {}
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a boolean attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: boolAttribute is a boolean
+                boolAttribute: "true"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds booleans
+                boolAttribute: [true, "false"]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no substring
+                boolAttribute: { $contains: true }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no ordering
+                boolAttribute: { $gt: false }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no range
+                boolAttribute: { $between: [false, true] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a date attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: dateAttribute is compared as a Date
+                dateAttribute: "2026-01-01"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds Dates
+                dateAttribute: ["2026-01-01"]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a date compares against a Date
+                dateAttribute: { $gte: "2026-01-01" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a date compares against a Date, not a number
+                dateAttribute: { $gt: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are Dates
+                dateAttribute: { $between: [new Date(), "2026-12-31"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a prefix is a fragment of the stored string, not a Date
+                dateAttribute: { $beginsWith: new Date() }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand an enum attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: val-3 is not one of the enum's values
+                enumAttribute: "val-3"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds the enum's values
+                enumAttribute: ["val-1", "val-3"]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a comparison operand is one of the enum's values
+                enumAttribute: { $gt: "val-3" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are the enum's values
+                enumAttribute: { $between: ["val-1", "val-3"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an enum compares against its values, not a number
+                enumAttribute: { $gte: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a prefix is a string
+                enumAttribute: { $beginsWith: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("accepts an enum range across two of its members", async () => {
+          // An enum is stored as a string, which DynamoDB orders
+          // lexicographically, so any two members bound a range
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: both bounds are members of the enum
+                enumAttribute: { $between: ["val-1", "val-2"] },
+                // @ts-expect-no-error: a nullable enum ranges across its members
+                nullableEnumAttribute: { $between: ["val-1", "val-2"] },
+                // @ts-expect-no-error: a nested enum ranges across its members
+                "objectAttribute.status": { $between: ["active", "inactive"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: composed comparisons may name different members
+                enumAttribute: { $gte: "val-1", $lte: "val-2" },
+                // @ts-expect-no-error: and composes across them
+                nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" },
+                // @ts-expect-no-error: a nullable nested enum composes across its members
+                "addressAttribute.category": { $gte: "home", $lte: "work" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-no-error: both bounds may be the same member
+                enumAttribute: { $between: ["val-1", "val-1"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an enum range bound the enum cannot hold", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: val-3 is not one of the enum's values, composed or not
+                enumAttribute: { $gte: "val-1", $lte: "val-3" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: archived is not one of the nested enum's values
+                "objectAttribute.status": { $between: ["active", "archived"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an enum is ranged by its values, not a number
+                enumAttribute: { $between: ["val-1", 2] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a range bound is never null, nullable enum or not
+                nullableEnumAttribute: { $between: [null, "val-2"] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: null means not set, which no ordering can compare
+                nullableEnumAttribute: { $gte: "val-1", $lte: null }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean is not one of the enum's values
+                enumAttribute: { $between: ["val-1", true] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a foreign key attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a foreign key is a string
+                foreignKeyAttribute: 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: an IN list holds strings
+                foreignKeyAttribute: [1]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a foreign key compares against a string
+                foreignKeyAttribute: { $gt: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: both bounds are strings
+                foreignKeyAttribute: { $between: ["a", 1] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a prefix is a string
+                foreignKeyAttribute: { $beginsWith: 1 }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Founder.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: the key's value is a string
+                organizationId: 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses each operator and operand a nullable attribute cannot take", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: nullableStringAttribute is a string
+                nullableStringAttribute: 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: null means not set, which no ordering can compare
+                nullableStringAttribute: { $gt: null }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a number has no prefix, nullable or not
+                nullableNumberAttribute: { $beginsWith: "1" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a range bound is never null
+                nullableNumberAttribute: { $between: [null, 5] }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a boolean has no ordering, nullable or not
+                nullableBoolAttribute: { $gt: true }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a nullable date compares against a Date
+                nullableDateAttribute: { $gte: "2026" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: val-3 is not one of the enum's values
+                nullableEnumAttribute: "val-3"
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: a nullable foreign key is a string
+                nullableForeignKeyAttribute: 1
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: null means not set, which no ordering can compare
+                nullableForeignKeyAttribute: { $gt: null }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("audits a BelongsTo target condition like the entity's own", async () => {
+          await Shipment.update(
+            "123",
+            { destination: "Dock 4" },
+            {
+              condition: {
+                // @ts-expect-no-error: the target condition resolves the related row's dot paths
+                warehouse: {
+                  "location.city": { $beginsWith: "Spring" },
+                  "location.zip": null,
+                  $or: [{ "location.state": "IL" }, { name: "Central" }]
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Shipment.update(
+            "123",
+            { destination: "Dock 4" },
+            {
+              condition: {
+                warehouse: {
+                  // @ts-expect-error: city is a string
+                  "location.city": 1
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Shipment.update(
+            "123",
+            { destination: "Dock 4" },
+            {
+              condition: {
+                warehouse: {
+                  // @ts-expect-error: a number has no prefix
+                  "location.zip": { $beginsWith: "9" }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Shipment.update(
+            "123",
+            { destination: "Dock 4" },
+            {
+              condition: {
+                warehouse: {
+                  // @ts-expect-error: location declares no such field
+                  "location.nope": "x"
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Shipment.update(
+            "123",
+            { destination: "Dock 4" },
+            {
+              condition: {
+                warehouse: {
+                  // @ts-expect-error: a string compares against a string
+                  name: { $gt: 1 }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("audits a { id, condition } entry's condition like the entity's own", async () => {
+          await Warehouse.update(
+            "123",
+            { name: "Central" },
+            {
+              condition: {
+                // @ts-expect-no-error: an entry's condition resolves the related row's dot paths
+                shipments: [
+                  {
+                    id: "shipment-1",
+                    condition: {
+                      "dimensions.weight": { $between: [1, 10] },
+                      "dimensions.label": null
+                    }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Warehouse.update(
+            "123",
+            { name: "Central" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "shipment-1",
+                    condition: {
+                      // @ts-expect-error: weight is a number
+                      "dimensions.weight": "5"
+                    }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Warehouse.update(
+            "123",
+            { name: "Central" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "shipment-1",
+                    condition: {
+                      // @ts-expect-error: a number has no substring
+                      "dimensions.weight": { $contains: 1 }
+                    }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Warehouse.update(
+            "123",
+            { name: "Central" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "shipment-1",
+                    condition: {
+                      // @ts-expect-error: dimensions declares no such field
+                      "dimensions.nope": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Warehouse.update(
+            "123",
+            { name: "Central" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "shipment-1",
+                    condition: {
+                      // @ts-expect-error: a string compares against a string
+                      destination: { $gt: 1 }
+                    }
+                  }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("audits a target guard's condition like the entity's own", async () => {
+          // A standalone foreign key to an entity with an object attribute, so the
+          // guard's target condition has dot paths to resolve
+          @Entity
+          class Delivery extends MockTable {
+            declare readonly type: "Delivery";
+
+            @StringAttribute({ alias: "Name" })
+            public readonly name: string;
+
+            @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+            public readonly warehouseId: ForeignKey<Warehouse>;
+          }
+
+          await Delivery.update(
+            "123",
+            { name: "Morning run" },
+            {
+              condition: {
+                // @ts-expect-no-error: the guard's condition resolves the referenced row's dot paths
+                warehouseId: {
+                  target: {
+                    "location.city": "Springfield",
+                    "location.zip": { $gte: 60000 }
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Delivery.update(
+            "123",
+            { name: "Morning run" },
+            {
+              condition: {
+                // @ts-expect-error: the guard's condition is typed from Warehouse: city is a string
+                warehouseId: {
+                  target: {
+                    "location.city": 1
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Delivery.update(
+            "123",
+            { name: "Morning run" },
+            {
+              condition: {
+                // @ts-expect-error: the guard's condition is typed from Warehouse: a number has no prefix
+                warehouseId: {
+                  target: {
+                    "location.zip": { $beginsWith: "6" }
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Delivery.update(
+            "123",
+            { name: "Morning run" },
+            {
+              condition: {
+                warehouseId: {
+                  target: {
+                    // @ts-expect-error: location declares no such field
+                    "location.nope": "x"
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Delivery.update(
+            "123",
+            { name: "Morning run" },
+            {
+              condition: {
+                // @ts-expect-error: the guard's condition is typed from Warehouse: both bounds are strings
+                warehouseId: {
+                  target: {
+                    name: { $between: ["a", 1] }
+                  }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value an attribute cannot hold inside $or", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              condition: {
+                $or: [
+                  // @ts-expect-error: orderDate is compared as a Date
+                  { orderDate: "2026-01-01" }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses on a HasOne what it refuses on a BelongsTo", async () => {
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: email and phone are ContactInformation attributes; name is not
+                contactInformation: { name: "Jane" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Customer.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: the library resolves a HasOne target itself
+                contactInformation: { id: "contact-1", condition: {} }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses on a HasAndBelongsToMany and a one-way HasMany what it refuses on a HasMany", async () => {
+          await Book.update(
+            "123",
+            { name: "Dune" },
+            {
+              condition: {
+                // @ts-expect-error: a HasAndBelongsToMany takes { id, condition } entries
+                authors: { name: "Jane" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Book.update(
+            "123",
+            { name: "Dune" },
+            {
+              condition: {
+                authors: [
+                  // @ts-expect-error: numPages is a Book attribute, not an Author one
+                  { id: "author-1", condition: { numPages: 100 } }
+                ]
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Organization.update(
+            "123",
+            { name: "Acme" },
+            {
+              condition: {
+                // @ts-expect-error: a one-way HasMany takes { id, condition } entries
+                employees: { name: "Jane" }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a target attribute the referenced entity does not declare, on every typed key", async () => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "val" },
+            {
+              condition: {
+                // @ts-expect-error: lastFour is a PaymentMethod attribute, and the key references a Customer
+                nullableForeignKeyAttribute: { target: { lastFour: "1234" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Employee.update(
+            "123",
+            { name: "Jane" },
+            {
+              condition: {
+                // @ts-expect-error: lastFour is a PaymentMethod attribute, and the key references an Organization
+                organizationId: { target: { lastFour: "1234" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option value of the wrong type", async () => {
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              // @ts-expect-error: referentialIntegrityCheck is a boolean
+              referentialIntegrityCheck: "no"
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              // @ts-expect-error: forceEmbed is a boolean
+              forceEmbed: "yes"
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await Order.update(
+            "123",
+            { orderDate: new Date() },
+            {
+              // @ts-expect-error: condition is an object of conditions
+              condition: "orderDate"
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        describe("a list-index path into a nullable list", () => {
+          // A nullable list is declared `Element[] | undefined`. These pin that an
+          // index into one types its element as an index into a list that is not
+          // nullable does, rather than falling back to the stored form
+          it("accepts a whole object element, named as declared, and an IN of them", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann"
+                  },
+                  // @ts-expect-no-error: the element's nullable field may be set
+                  "objectAttribute.history[1]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    note: "restocked"
+                  },
+                  // @ts-expect-no-error: an IN of whole elements
+                  "objectAttribute.history[2]": [
+                    { at: new Date("2026-01-01"), actor: "ann" },
+                    { at: new Date("2026-02-01"), actor: "bob" }
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ArrayOfObjectsEntity.update(
+              "123",
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the same on a nullable list of objects in another schema
+                  "data.backup[9]": { sku: "abc", price: 1 }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts a field below the index, in the field's own type and operators", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: actor is a string, so it takes a prefix
+                  "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                  // @ts-expect-no-error: an IN of strings
+                  "objectAttribute.history[1].actor": ["ann", "bob"],
+                  // @ts-expect-no-error: at is a date, compared as a Date
+                  "objectAttribute.history[0].at": {
+                    $gte: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: and ranged as one
+                  "objectAttribute.history[1].at": {
+                    $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                  },
+                  // @ts-expect-no-error: a nullable field below the index takes its type
+                  "objectAttribute.history[2].note": { $contains: "late" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ArrayOfObjectsEntity.update(
+              "123",
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-no-error: price is a number
+                  "data.backup[0].price": { $lt: 10 }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts null on a nullable field below the index, as not set", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                  "objectAttribute.history[0].note": null
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts an element of a nullable list of scalars in its own type", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a contactedAt element is a Date
+                  "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                  // @ts-expect-no-error: and is compared as one
+                  "objectAttribute.contactedAt[1]": {
+                    $lt: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: a roles element is one of the enum's members
+                  "objectAttribute.roles[0]": "owner"
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts an element that is itself a list, or a union variant", async () => {
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a bays element is a list of numbers, so it takes $contains on a number
+                  "shelf.bays[0]": { $contains: 3 },
+                  // @ts-expect-no-error: a promos element is a whole variant
+                  "shelf.promos[0]": {
+                    kind: "discount",
+                    percent: 10,
+                    endsAt: new Date("2026-03-31")
+                  },
+                  // @ts-expect-no-error: either variant
+                  "shelf.promos[1]": { kind: "bundle", sku: "KIT-1" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a whole element its schema cannot hold", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is declared as a string
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: 1
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: at is declared as a date, so it takes a Date
+                  "objectAttribute.history[0]": {
+                    at: "2026-01-01",
+                    actor: "ann"
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  "objectAttribute.history[0]": {
+                    at: new Date("2026-01-01"),
+                    actor: "ann",
+                    // @ts-expect-error: an element has no mood, so no element can equal this one
+                    mood: "calm"
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is required, so an element without it is no element
+                  "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ArrayOfObjectsEntity.update(
+              "123",
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-error: price is a number
+                  "data.backup[0]": { sku: "abc", price: "1" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an operator a whole element's stored form cannot carry", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an element is stored as a Map, which has no prefix
+                  "objectAttribute.history[0]": { $beginsWith: "a" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a Map has no ordering
+                  "objectAttribute.history[0]": { $gt: "a" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a Map holds no elements to contain
+                  "objectAttribute.history[0]": { $contains: "a" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on the element and on a field below it that is not nullable", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                  "objectAttribute.history[0]": null
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is not nullable
+                  "objectAttribute.history[0].actor": null
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a contactedAt element is not nullable
+                  "objectAttribute.contactedAt[0]": null
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a history element declares at, actor and note, not mood
+                  "objectAttribute.history[0].mood": "calm"
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is a string
+                  "objectAttribute.history[0].actor": 1
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: at is a date, so it compares against a Date
+                  "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a string has no $between of numbers
+                  "objectAttribute.history[0].actor": { $between: [1, 2] }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ArrayOfObjectsEntity.update(
+              "123",
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-error: price is a number
+                  "data.backup[0].price": { $lt: "10" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                  "objectAttribute.contactedAt[0]": "2026-01-01"
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: admin is not a member of the roles enum
+                  "objectAttribute.roles[0]": "admin"
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an element that is itself a list, or a union variant, in a shape it cannot hold", async () => {
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: a bays element holds numbers
+                  "shelf.bays[0]": { $contains: "3" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: percent is a number
+                  "shelf.promos[0]": {
+                    kind: "discount",
+                    percent: "10",
+                    endsAt: new Date("2026-03-31")
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  "shelf.promos[0]": {
+                    kind: "bundle",
+                    sku: "KIT-1",
+                    // @ts-expect-error: percent belongs to the discount variant, not bundle
+                    percent: 10
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("does not offer an index past the tenth, as for any list", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: indexes 0 to 9 are offered
+                  "objectAttribute.history[10].actor": "ann"
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole $contains element with null on a nullable field", () => {
+          // An element is stored without a nulled field, and contains compares an
+          // element whole, so null on a nullable field of the operand means the
+          // element looked for lacks it. These pin that the operand offers null
+          // there at every depth, and nowhere else
+          it("accepts null on a nullable field of the element, at every depth", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: null
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at: new Date("2026-01-01"), note: null }]
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-no-error: label is nullable in the bundle variant
+                  "shelf.promos": {
+                    $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on a field of the element that is not nullable", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is not nullable, so every element has one
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: null }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: aisle is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: null },
+                      restocks: []
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: placement is an object field, which is never nullable
+                  "layout.section.entries": {
+                    $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: restocks is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: null
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: a restocks element is never null
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [null]
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: a restocks element's at is not nullable
+                  "layout.section.entries": {
+                    $contains: {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [{ at: null }]
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: sku is not nullable in the bundle variant
+                  "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: the discriminator names the variant, so it is never null
+                  "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null as the whole element", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: $contains looks for an element, and no element is null
+                  "objectAttribute.history": { $contains: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: nor on a list of union variants
+                  "shelf.promos": { $contains: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: nor on a list of strings
+                  "objectAttribute.tags": { $contains: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: nor on a nullable list of dates
+                  "objectAttribute.contactedAt": { $contains: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is required, so an element without it is no element
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), note: null }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: note is a string when it is set
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: 1
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: null,
+                      // @ts-expect-error: mood is not a field a history element declares
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  "shelf.promos": {
+                    $contains: {
+                      kind: "discount",
+                      percent: 10,
+                      endsAt: new Date("2026-03-31"),
+                      // @ts-expect-error: label belongs to the bundle variant, not discount
+                      label: null
+                    }
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole value compared by equality or IN with null on a nullable field", () => {
+          // An object, or a list element named by an index, is compared whole
+          // by equality and IN, and a nulled field is stored by leaving it out.
+          // So null on a nullable field of the operand means the value compared
+          // lacks it: the expression builder drops the field, as it does in a
+          // $contains element. These pin that equality and IN offer null there
+          // at every depth, and nowhere else
+          it("accepts null on a nullable field of a whole value, at every depth", async () => {
+            const at = new Date("2026-01-01");
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                  "objectAttribute.history[0]": { at, actor: "ann", note: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                  "objectAttribute.history[0]": [
+                    { at, actor: "ann", note: null },
+                    { at, actor: "bo" }
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: "Denver",
+                    zip: null,
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: [],
+                    category: null
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the same in an IN of whole objects
+                  addressAttribute: [
+                    {
+                      street: "1 Main St",
+                      city: "Denver",
+                      zip: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [],
+                      category: null
+                    }
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                  objectAttribute: {
+                    name: "Ann",
+                    email: "ann@example.com",
+                    tags: [],
+                    status: "active",
+                    createdDate: at,
+                    deletedAt: null,
+                    contactedAt: null,
+                    roles: null,
+                    history: [{ at, actor: "ann", note: null }]
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                  "layout.section": {
+                    entries: [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-no-error: bin is nullable in an object field below an index
+                  "layout.section.entries[0].placement": {
+                    aisle: "A",
+                    bin: null
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                  "layout.section.entries[0]": [
+                    {
+                      sku: "MUG-1",
+                      note: null,
+                      placement: { aisle: "A", bin: null },
+                      restocks: [{ at, note: null }]
+                    }
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                  "shelf.promos[0]": {
+                    kind: "bundle",
+                    sku: "KIT-1",
+                    label: null
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                  "objectAttribute.history": [
+                    [{ at, actor: "ann", note: null }],
+                    []
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                  "layout.section.entries": [
+                    [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-no-error: an IN of whole lists of union variants
+                  "shelf.promos": [
+                    [{ kind: "bundle", sku: "KIT-1", label: null }]
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+            const at = new Date("2026-01-01");
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is not nullable, so every element has one
+                  "objectAttribute.history[0]": { at, actor: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                  "objectAttribute.history[0]": { at, note: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  "objectAttribute.history[0]": {
+                    at,
+                    actor: "ann",
+                    note: null,
+                    // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                    mood: "calm"
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN element is a whole element, and no element is null
+                  "objectAttribute.history[0]": [null]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: city is not nullable
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: null,
+                    geo: { lat: 1, lng: 2, accuracy: "precise" },
+                    scores: []
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: geo is an object field, which is never nullable
+                  addressAttribute: {
+                    street: "1 Main St",
+                    city: "Denver",
+                    geo: null,
+                    scores: []
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an element of a list inside the value is never null
+                  objectAttribute: {
+                    name: "Ann",
+                    email: "ann@example.com",
+                    tags: [],
+                    status: "active",
+                    createdDate: at,
+                    history: [null]
+                  }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NestedListsEntity.update(
+              "123",
+              { layout: { section: { entries: [] } } },
+              {
+                condition: {
+                  // @ts-expect-error: aisle is not nullable
+                  "layout.section.entries[0].placement": { aisle: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: the discriminator names the variant, so it is never null
+                  "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await NullableListsEntity.update(
+              "123",
+              { name: "Endcap" },
+              {
+                condition: {
+                  // @ts-expect-error: sku is not nullable in the bundle variant
+                  "shelf.promos[0]": { kind: "bundle", sku: null }
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                  "objectAttribute.history": [[{ at, actor: null }]]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an element of a list compared whole is never null
+                  "objectAttribute.history": [[null]]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await MyClassWithAllAttributeTypes.update(
+              "123",
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  "objectAttribute.history": [
+                    // @ts-expect-error: mood is not a field a history element declares
+                    [{ at, actor: "ann", mood: "calm" }]
+                  ]
+                }
+              }
+            ).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+      });
+
+      describe("instance method", () => {
+        it("accepts every attribute kind with each operator it allows", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                // @ts-expect-no-error: each attribute takes the operators its kind supports
+                condition: {
+                  stringAttribute: { $beginsWith: "a" },
+                  dateAttribute: { $gte: new Date("2026-01-01") },
+                  boolAttribute: true,
+                  numberAttribute: { $between: [1, 10] },
+                  enumAttribute: ["val-1", "val-2"],
+                  foreignKeyAttribute: "customer-1",
+                  nullableStringAttribute: { $contains: "a" },
+                  nullableNumberAttribute: { $lte: 5 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts dot paths and list-index paths into object attributes", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a dot path names a nested object field
+                  "objectAttribute.name": { $contains: "Jane" },
+                  // @ts-expect-no-error: an array field takes $contains on its items
+                  "objectAttribute.tags": { $contains: "vip" },
+                  // @ts-expect-no-error: a list of dates takes a Date element, converted to the ISO string it is stored as
+                  "objectAttribute.contactedAt": {
+                    $contains: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: a list of enums takes one of its members
+                  "objectAttribute.roles": { $contains: "owner" },
+                  // @ts-expect-no-error: a list of objects takes a whole element, named as declared
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: "ann" }
+                  },
+                  // @ts-expect-no-error: dot paths reach nested objects at any depth
+                  "addressAttribute.geo.lat": { $lt: 41 },
+                  // @ts-expect-no-error: a list-index path names one array item
+                  "addressAttribute.scores[0]": 5
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an attribute the entity does not declare", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: name is a Customer attribute, not an Order one
+                  name: "Jane"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses type, which the write already fixes", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: type is not a condition key
+                  type: "Order"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an operator the attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no prefix
+                  boolAttribute: { $beginsWith: "t" },
+                  // @ts-expect-error: a number has no substring
+                  numberAttribute: { $contains: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts null on a nullable attribute, at any depth and inside $or", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: null means "not set" on a nullable attribute
+                  nullableStringAttribute: null,
+                  nullableDateAttribute: null,
+                  nullableBoolAttribute: null,
+                  nullableNumberAttribute: null,
+                  nullableEnumAttribute: null,
+                  nullableForeignKeyAttribute: null,
+                  // @ts-expect-no-error: a nullable nested field takes null
+                  "addressAttribute.zip": null,
+                  "objectAttribute.deletedAt": null,
+                  // @ts-expect-no-error: a $or branch takes null on a nullable field
+                  $or: [
+                    { "addressAttribute.category": null },
+                    { nullableStringAttribute: null }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses null on a non-nullable attribute, at any depth", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: stringAttribute is not nullable
+                  stringAttribute: null,
+                  // @ts-expect-error: city is not nullable
+                  "addressAttribute.city": null,
+                  // @ts-expect-error: foreignKeyAttribute is not nullable
+                  $or: [{ foreignKeyAttribute: null }]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses null inside an IN array, nullable attribute or not", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds values; null is not one
+                  enumAttribute: ["val-1", null],
+                  // @ts-expect-error: null means "not set", which IN cannot express
+                  nullableEnumAttribute: ["val-1", null]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts $or blocks on the entity's own attributes", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-no-error: each branch is a condition on this row
+                  $or: [
+                    { orderDate: { $lt: new Date() } },
+                    { customerId: "customer-1", paymentMethodId: "pm-1" }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a relationship key inside $or (AE6)", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  $or: [
+                    { orderDate: new Date() },
+                    // @ts-expect-error: $or branches take the entity's own attributes only
+                    { customer: { name: "Jane" } }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses target inside $or", async () => {
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: $or branches hold conditions on this row only
+                  $or: [{ organizationId: { target: { name: "Acme" } } }]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("takes a target condition on a BelongsTo and a HasOne", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-no-error: a BelongsTo takes a condition on the related row, $or included
+                  customer: {
+                    name: "Jane",
+                    $or: [{ address: "A" }, { address: "B" }]
+                  },
+                  // @ts-expect-no-error: an empty target condition requires the target to exist
+                  paymentMethod: {}
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a HasOne takes a target condition, null on its nullable attributes
+                  contactInformation: { phone: null, email: { $contains: "@" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("takes { id, condition } entries on a HasMany, a HasAndBelongsToMany and the parent side of a one-way HasMany", async () => {
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a HasMany names each child it guards by id
+                  orders: [
+                    {
+                      id: "order-1",
+                      condition: { orderDate: { $gte: new Date() } }
+                    },
+                    { id: "order-2", condition: {} }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const book = new Book();
+
+          await book
+            .update(
+              { name: "Dune" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a HasAndBelongsToMany names each linked row by id
+                  authors: [{ id: "author-1", condition: { name: "Jane" } }]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const organization = new Organization();
+
+          await organization
+            .update(
+              { name: "Acme" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a one-way HasMany is guarded from its parent side
+                  employees: [
+                    { id: "employee-1", condition: { name: "Jane" } }
+                  ],
+                  founders: [{ id: "founder-1", condition: {} }]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses { id, condition } on a single-valued relationship", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: the library resolves a BelongsTo target itself
+                  customer: { id: "customer-1", condition: { name: "Jane" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a plain condition on an array relationship", async () => {
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: a HasMany takes { id, condition } entries
+                  orders: { orderDate: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an attribute the related entity does not declare", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: orderDate is an Order attribute, not a Customer one
+                  customer: { orderDate: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  orders: [
+                    // @ts-expect-error: name is a Customer attribute, not an Order one
+                    { id: "order-1", condition: { name: "Jane" } }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a relationship key inside a target condition", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: a target condition names the related row's own attributes
+                  customer: { orders: [{ id: "order-1", condition: {} }] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  orders: [
+                    // @ts-expect-error: nor the related entity's own relationships
+                    { id: "order-1", condition: { paymentMethod: {} } }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a target guard inside a target condition", async () => {
+          const organization = new Organization();
+
+          await organization
+            .update(
+              { name: "Acme" },
+              {
+                condition: {
+                  founders: [
+                    {
+                      id: "founder-1",
+                      condition: {
+                        // @ts-expect-error: the related row's foreign key takes its own value only
+                        organizationId: { target: { name: "Acme" } }
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a malformed { id, condition } entry", async () => {
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  orders: [
+                    // @ts-expect-error: the entry names its related entity by id
+                    { condition: {} },
+                    // @ts-expect-error: the entry carries the condition to check
+                    { id: "order-2" },
+                    // @ts-expect-error: an entry holds id and condition only
+                    { id: "order-3", condition: {}, orderDate: new Date() }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("takes target on a typed standalone foreign key", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a ForeignKey<Customer> guards its Customer
+                  foreignKeyAttribute: { target: { name: "Jane" } },
+                  // @ts-expect-no-error: a NullableForeignKey<Customer> guards its Customer
+                  nullableForeignKeyAttribute: { target: {} }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const profile = new Profile();
+
+          await profile
+            .update(
+              { lastLogin: new Date() },
+              {
+                condition: {
+                  // @ts-expect-no-error: the target condition is typed from the referenced entity
+                  userId: { target: { name: { $beginsWith: "J" } } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("takes target on the child side of a one-way HasMany", async () => {
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: no BelongsTo backs the key, so it guards its target
+                  organizationId: { target: { name: "Acme" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const employee = new Employee();
+
+          await employee
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a nullable child-side key guards its target too
+                  organizationId: { target: { name: "Acme" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("keeps a value condition on the key, with the guard's value in $or", async () => {
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the key still takes a value condition
+                  organizationId: "org-1"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the guard sits on the key
+                  organizationId: { target: { name: "Acme" } },
+                  // @ts-expect-no-error: and the value condition moves into $or
+                  $or: [{ organizationId: "org-1" }, { name: "Jane" }]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses target on a bare foreign key (AE18)", async () => {
+          @Entity
+          class LooseOrder extends MockTable {
+            declare readonly type: "LooseOrder";
+
+            @DateAttribute({ alias: "OrderDate" })
+            public readonly orderDate: Date;
+
+            // Widening the target to DynaRecord is what leaves the key bare:
+            // the decorator otherwise requires ForeignKey<Customer>
+            @ForeignKeyAttribute((): EntityClass<DynaRecord> => Customer, {
+              alias: "CustomerId"
+            })
+            public readonly customerId: ForeignKey;
+
+            @BelongsTo(() => Customer, { foreignKey: "customerId" })
+            public readonly customer: Customer;
+          }
+
+          const looseOrder = new LooseOrder();
+
+          await looseOrder
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: customerId needs its target type to guard it
+                  customerId: { target: { name: "Jane" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses target on a foreign key backing a BelongsTo", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: guard the Customer under the customer key
+                  customerId: { target: { name: "Jane" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a value condition and target on the same key (R33)", async () => {
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  organizationId: {
+                    // @ts-expect-error: a value condition alongside a guard goes in $or
+                    target: { name: "Acme" },
+                    $beginsWith: "org"
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a target attribute the referenced entity does not declare", async () => {
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: lastFour is a PaymentMethod attribute
+                  organizationId: { target: { lastFour: "1234" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("misclassifies a typed foreign key beside a HasOne to the same entity", async () => {
+          // Known limit: the types tell a BelongsTo from a HasOne only by whether
+          // a typed foreign key to the same entity exists. Here one does, so
+          // paymentMethod reads as a BelongsTo backed by backupPaymentMethodId
+          // and the key's target guard is refused. The condition compiler reads
+          // the relationship metadata and throws a FilterError for the shapes
+          // the types get wrong
+          @Entity
+          class Kiosk extends MockTable {
+            declare readonly type: "Kiosk";
+
+            @StringAttribute({ alias: "Name" })
+            public readonly name: string;
+
+            @ForeignKeyAttribute(() => PaymentMethod, {
+              alias: "BackupPaymentMethodId"
+            })
+            public readonly backupPaymentMethodId: ForeignKey<PaymentMethod>;
+
+            @HasOne(() => PaymentMethod, { foreignKey: "customerId" })
+            public readonly paymentMethod?: PaymentMethod;
+          }
+
+          const kiosk = new Kiosk();
+
+          await kiosk
+            .update(
+              { name: "Lobby" },
+              {
+                condition: {
+                  // @ts-expect-error: known limit — read as backing a BelongsTo; the compiler decides at run time
+                  backupPaymentMethodId: { target: { lastFour: "1234" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("takes condition beside referentialIntegrityCheck and forceEmbed", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                referentialIntegrityCheck: false,
+                forceEmbed: true,
+                // @ts-expect-no-error: condition sits beside update's existing options
+                condition: { orderDate: { $lt: new Date() }, customer: {} }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an option update does not take", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: { orderDate: new Date() },
+                // @ts-expect-error: update has no such option
+                conditions: { orderDate: new Date() }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("types the condition from the instance's own class", async () => {
+          const order = new Order();
+          const customer = new Customer();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  // @ts-expect-error: name is a Customer attribute, and this instance is an Order
+                  name: "Jane"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                // @ts-expect-no-error: the same key is accepted on a Customer instance
+                condition: { name: "Jane" }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts each operator a nested field's type allows", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a nested date takes a Date comparison
+                  "objectAttribute.createdDate": {
+                    $gte: new Date("2026-01-01")
+                  },
+                  // @ts-expect-no-error: a nested enum takes an IN list of its values
+                  "objectAttribute.status": ["active", "inactive"],
+                  // @ts-expect-no-error: a nested number takes $between
+                  "addressAttribute.geo.lat": { $between: [40, 42] },
+                  // @ts-expect-no-error: a nested enum is stored as a string, so it takes a prefix
+                  "addressAttribute.geo.accuracy": { $beginsWith: "pre" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a nested date is stored as an ISO string, so it takes a prefix
+                  "objectAttribute.createdDate": { $beginsWith: "2026" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+          await arrayOfObjectsEntity
+            .update(
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a field below a list index resolves to the element's field
+                  "data.entries[0].price": { $lt: 10 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const deepNestedEntity = new DeepNestedEntity();
+
+          await deepNestedEntity
+            .update(
+              { name: "Settings" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the deepest field takes its own type
+                  "data.level1.level2.level3.flag": false,
+                  // @ts-expect-no-error: a nullable field deep in the schema takes null
+                  "data.level1.tag": null
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a dot path naming no declared field, at each depth", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: objectAttribute declares no such field
+                  "objectAttribute.nope": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: geo declares lat, lng and accuracy, not this
+                  "addressAttribute.geo.nope": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+          await arrayOfObjectsEntity
+            .update(
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-error: an entries element declares sku and price, not this
+                  "data.entries[0].nope": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const deepNestedEntity = new DeepNestedEntity();
+
+          await deepNestedEntity
+            .update(
+              { name: "Settings" },
+              {
+                condition: {
+                  // @ts-expect-error: level3 declares flag and detail, not this
+                  "data.level1.level2.level3.nope": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a list index on a field that is not a list, and a dot path into an attribute that is not an object", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: name is a string, not a list
+                  "objectAttribute.name[0]": "J"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: geo is an object, not a list
+                  "addressAttribute.geo[0]": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: stringAttribute is not an object attribute
+                  "stringAttribute.x": "a"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: numberAttribute is not a list
+                  "numberAttribute[0]": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a value a nested field cannot hold", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: name is a string
+                  "objectAttribute.name": 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: geo.lat is a number
+                  "addressAttribute.geo.lat": "41"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a scores item is a number
+                  "addressAttribute.scores[0]": "5"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: tags holds strings
+                  "objectAttribute.tags": { $contains: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: createdDate is a Date
+                  "objectAttribute.createdDate": "2026-01-01"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: status takes active or inactive
+                  "objectAttribute.status": "archived"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+          await arrayOfObjectsEntity
+            .update(
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-error: price is a number
+                  "data.entries[0].price": "10"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const deepNestedEntity = new DeepNestedEntity();
+
+          await deepNestedEntity
+            .update(
+              { name: "Settings" },
+              {
+                condition: {
+                  // @ts-expect-error: score is a number
+                  "data.level1.level2.score": "5"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an operator a nested field cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a number has no prefix
+                  "addressAttribute.geo.lat": { $beginsWith: "4" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a number has no substring
+                  "addressAttribute.zip": { $contains: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a list has no ordering
+                  "objectAttribute.tags": { $gt: "a" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a list has no prefix
+                  "objectAttribute.tags": { $beginsWith: "v" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const deepNestedEntity = new DeepNestedEntity();
+
+          await deepNestedEntity
+            .update(
+              { name: "Settings" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no substring
+                  "data.level1.level2.level3.flag": { $contains: true }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await deepNestedEntity
+            .update(
+              { name: "Settings" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no ordering
+                  "data.level1.level2.level3.flag": { $gt: true }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a wrong operand for $between and comparisons at a nested path", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are numbers
+                  "addressAttribute.geo.lat": { $between: [1, "2"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: $between takes a pair
+                  "addressAttribute.geo.lat": { $between: [1] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: geo.lat compares against a number
+                  "addressAttribute.geo.lat": { $gt: "40" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: createdDate compares against a Date
+                  "objectAttribute.createdDate": { $gte: "2026-01-01" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+          await arrayOfObjectsEntity
+            .update(
+              { name: "Inventory" },
+              {
+                condition: {
+                  // @ts-expect-error: price compares against a number
+                  "data.entries[0].price": { $lt: "10" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts every operator each attribute kind's stored form allows", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: comparisons compose with AND on a string
+                  stringAttribute: { $gt: "a", $lte: "m" },
+                  // @ts-expect-no-error: and on a number
+                  numberAttribute: { $gte: 1, $lt: 10 },
+                  // @ts-expect-no-error: a date is stored as an ISO string, so it takes a prefix
+                  dateAttribute: { $beginsWith: "2026" },
+                  // @ts-expect-no-error: an enum is stored as a string, so it takes a prefix
+                  enumAttribute: { $beginsWith: "val" },
+                  // @ts-expect-no-error: a foreign key is stored as a string, so it takes a prefix
+                  foreignKeyAttribute: { $beginsWith: "customer-" },
+                  // @ts-expect-no-error: a boolean takes an IN list
+                  boolAttribute: [true, false],
+                  // @ts-expect-no-error: a nullable date takes a Date comparison
+                  nullableDateAttribute: { $lt: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a string takes $between
+                  stringAttribute: { $between: ["a", "m"] },
+                  // @ts-expect-no-error: a number takes equality
+                  numberAttribute: 5,
+                  // @ts-expect-no-error: a date takes a substring of its stored form
+                  dateAttribute: { $contains: "-01-" },
+                  // @ts-expect-no-error: an enum takes a substring
+                  enumAttribute: { $contains: "1" },
+                  // @ts-expect-no-error: a foreign key takes a comparison
+                  foreignKeyAttribute: { $gt: "customer-1" },
+                  // @ts-expect-no-error: a nullable boolean takes equality
+                  nullableBoolAttribute: false,
+                  // @ts-expect-no-error: a nullable enum takes one of its values
+                  nullableEnumAttribute: "val-1"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a string takes an IN list
+                  stringAttribute: ["a", "b"],
+                  // @ts-expect-no-error: a number takes an IN list
+                  numberAttribute: [1, 2],
+                  // @ts-expect-no-error: a date takes $between with Date bounds
+                  dateAttribute: {
+                    $between: [new Date("2026-01-01"), new Date("2026-12-31")]
+                  },
+                  // @ts-expect-no-error: an enum takes a comparison against its values
+                  enumAttribute: { $gte: "val-1" },
+                  // @ts-expect-no-error: a foreign key takes an IN list
+                  foreignKeyAttribute: ["customer-1", "customer-2"],
+                  // @ts-expect-no-error: a nullable foreign key takes a prefix
+                  nullableForeignKeyAttribute: { $beginsWith: "customer-" },
+                  // @ts-expect-no-error: a nullable number takes an IN list
+                  nullableNumberAttribute: [1, 2]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a string takes equality
+                  stringAttribute: "a",
+                  // @ts-expect-no-error: a date takes equality with a Date
+                  dateAttribute: new Date("2026-01-01")
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: a date takes an IN list of Dates
+                  dateAttribute: [
+                    new Date("2026-01-01"),
+                    new Date("2026-02-01")
+                  ],
+                  // @ts-expect-no-error: a date takes composed Date comparisons
+                  nullableDateAttribute: {
+                    $gte: new Date("2026-01-01"),
+                    $lt: new Date("2026-02-01")
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a string attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: stringAttribute is a string
+                  stringAttribute: 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds strings
+                  stringAttribute: ["a", 1]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a string compares against a string
+                  stringAttribute: { $gt: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a Date is not a string operand
+                  stringAttribute: { $gte: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are strings
+                  stringAttribute: { $between: ["a", 1] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a prefix is a string
+                  stringAttribute: { $beginsWith: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a substring is a scalar, not a Date
+                  stringAttribute: { $contains: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a number attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: numberAttribute is a number
+                  numberAttribute: "5"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds numbers
+                  numberAttribute: [1, "2"]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a number compares against a number
+                  numberAttribute: { $gt: "5" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a Date is not a number operand
+                  numberAttribute: { $lte: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are numbers
+                  numberAttribute: { $between: [1, "10"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: $between takes a pair
+                  numberAttribute: { $between: [1] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a number has no prefix
+                  numberAttribute: { $beginsWith: "1" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an operator object needs at least one operator
+                  numberAttribute: {}
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a boolean attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: boolAttribute is a boolean
+                  boolAttribute: "true"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds booleans
+                  boolAttribute: [true, "false"]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no substring
+                  boolAttribute: { $contains: true }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no ordering
+                  boolAttribute: { $gt: false }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no range
+                  boolAttribute: { $between: [false, true] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a date attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: dateAttribute is compared as a Date
+                  dateAttribute: "2026-01-01"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds Dates
+                  dateAttribute: ["2026-01-01"]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a date compares against a Date
+                  dateAttribute: { $gte: "2026-01-01" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a date compares against a Date, not a number
+                  dateAttribute: { $gt: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are Dates
+                  dateAttribute: { $between: [new Date(), "2026-12-31"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a prefix is a fragment of the stored string, not a Date
+                  dateAttribute: { $beginsWith: new Date() }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand an enum attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: val-3 is not one of the enum's values
+                  enumAttribute: "val-3"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds the enum's values
+                  enumAttribute: ["val-1", "val-3"]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a comparison operand is one of the enum's values
+                  enumAttribute: { $gt: "val-3" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are the enum's values
+                  enumAttribute: { $between: ["val-1", "val-3"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an enum compares against its values, not a number
+                  enumAttribute: { $gte: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a prefix is a string
+                  enumAttribute: { $beginsWith: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("accepts an enum range across two of its members", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          // An enum is stored as a string, which DynamoDB orders
+          // lexicographically, so any two members bound a range
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: both bounds are members of the enum
+                  enumAttribute: { $between: ["val-1", "val-2"] },
+                  // @ts-expect-no-error: a nullable enum ranges across its members
+                  nullableEnumAttribute: { $between: ["val-1", "val-2"] },
+                  // @ts-expect-no-error: a nested enum ranges across its members
+                  "objectAttribute.status": { $between: ["active", "inactive"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: composed comparisons may name different members
+                  enumAttribute: { $gte: "val-1", $lte: "val-2" },
+                  // @ts-expect-no-error: and composes across them
+                  nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" },
+                  // @ts-expect-no-error: a nullable nested enum composes across its members
+                  "addressAttribute.category": { $gte: "home", $lte: "work" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-no-error: both bounds may be the same member
+                  enumAttribute: { $between: ["val-1", "val-1"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an enum range bound the enum cannot hold", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: val-3 is not one of the enum's values, composed or not
+                  enumAttribute: { $gte: "val-1", $lte: "val-3" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: archived is not one of the nested enum's values
+                  "objectAttribute.status": { $between: ["active", "archived"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an enum is ranged by its values, not a number
+                  enumAttribute: { $between: ["val-1", 2] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a range bound is never null, nullable enum or not
+                  nullableEnumAttribute: { $between: [null, "val-2"] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: null means not set, which no ordering can compare
+                  nullableEnumAttribute: { $gte: "val-1", $lte: null }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean is not one of the enum's values
+                  enumAttribute: { $between: ["val-1", true] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a foreign key attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a foreign key is a string
+                  foreignKeyAttribute: 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: an IN list holds strings
+                  foreignKeyAttribute: [1]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a foreign key compares against a string
+                  foreignKeyAttribute: { $gt: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: both bounds are strings
+                  foreignKeyAttribute: { $between: ["a", 1] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a prefix is a string
+                  foreignKeyAttribute: { $beginsWith: 1 }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const founder = new Founder();
+
+          await founder
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: the key's value is a string
+                  organizationId: 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses each operator and operand a nullable attribute cannot take", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: nullableStringAttribute is a string
+                  nullableStringAttribute: 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: null means not set, which no ordering can compare
+                  nullableStringAttribute: { $gt: null }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a number has no prefix, nullable or not
+                  nullableNumberAttribute: { $beginsWith: "1" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a range bound is never null
+                  nullableNumberAttribute: { $between: [null, 5] }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a boolean has no ordering, nullable or not
+                  nullableBoolAttribute: { $gt: true }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a nullable date compares against a Date
+                  nullableDateAttribute: { $gte: "2026" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: val-3 is not one of the enum's values
+                  nullableEnumAttribute: "val-3"
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: a nullable foreign key is a string
+                  nullableForeignKeyAttribute: 1
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: null means not set, which no ordering can compare
+                  nullableForeignKeyAttribute: { $gt: null }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("audits a BelongsTo target condition like the entity's own", async () => {
+          const shipment = new Shipment();
+
+          await shipment
+            .update(
+              { destination: "Dock 4" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the target condition resolves the related row's dot paths
+                  warehouse: {
+                    "location.city": { $beginsWith: "Spring" },
+                    "location.zip": null,
+                    $or: [{ "location.state": "IL" }, { name: "Central" }]
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await shipment
+            .update(
+              { destination: "Dock 4" },
+              {
+                condition: {
+                  warehouse: {
+                    // @ts-expect-error: city is a string
+                    "location.city": 1
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await shipment
+            .update(
+              { destination: "Dock 4" },
+              {
+                condition: {
+                  warehouse: {
+                    // @ts-expect-error: a number has no prefix
+                    "location.zip": { $beginsWith: "9" }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await shipment
+            .update(
+              { destination: "Dock 4" },
+              {
+                condition: {
+                  warehouse: {
+                    // @ts-expect-error: location declares no such field
+                    "location.nope": "x"
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await shipment
+            .update(
+              { destination: "Dock 4" },
+              {
+                condition: {
+                  warehouse: {
+                    // @ts-expect-error: a string compares against a string
+                    name: { $gt: 1 }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("audits a { id, condition } entry's condition like the entity's own", async () => {
+          const warehouse = new Warehouse();
+
+          await warehouse
+            .update(
+              { name: "Central" },
+              {
+                condition: {
+                  // @ts-expect-no-error: an entry's condition resolves the related row's dot paths
+                  shipments: [
+                    {
+                      id: "shipment-1",
+                      condition: {
+                        "dimensions.weight": { $between: [1, 10] },
+                        "dimensions.label": null
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await warehouse
+            .update(
+              { name: "Central" },
+              {
+                condition: {
+                  shipments: [
+                    {
+                      id: "shipment-1",
+                      condition: {
+                        // @ts-expect-error: weight is a number
+                        "dimensions.weight": "5"
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await warehouse
+            .update(
+              { name: "Central" },
+              {
+                condition: {
+                  shipments: [
+                    {
+                      id: "shipment-1",
+                      condition: {
+                        // @ts-expect-error: a number has no substring
+                        "dimensions.weight": { $contains: 1 }
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await warehouse
+            .update(
+              { name: "Central" },
+              {
+                condition: {
+                  shipments: [
+                    {
+                      id: "shipment-1",
+                      condition: {
+                        // @ts-expect-error: dimensions declares no such field
+                        "dimensions.nope": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await warehouse
+            .update(
+              { name: "Central" },
+              {
+                condition: {
+                  shipments: [
+                    {
+                      id: "shipment-1",
+                      condition: {
+                        // @ts-expect-error: a string compares against a string
+                        destination: { $gt: 1 }
+                      }
+                    }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("audits a target guard's condition like the entity's own", async () => {
+          // A standalone foreign key to an entity with an object attribute, so the
+          // guard's target condition has dot paths to resolve
+          @Entity
+          class Delivery extends MockTable {
+            declare readonly type: "Delivery";
+
+            @StringAttribute({ alias: "Name" })
+            public readonly name: string;
+
+            @ForeignKeyAttribute(() => Warehouse, { alias: "WarehouseId" })
+            public readonly warehouseId: ForeignKey<Warehouse>;
+          }
+
+          const delivery = new Delivery();
+
+          await delivery
+            .update(
+              { name: "Morning run" },
+              {
+                condition: {
+                  // @ts-expect-no-error: the guard's condition resolves the referenced row's dot paths
+                  warehouseId: {
+                    target: {
+                      "location.city": "Springfield",
+                      "location.zip": { $gte: 60000 }
+                    }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await delivery
+            .update(
+              { name: "Morning run" },
+              {
+                condition: {
+                  // @ts-expect-error: the guard's condition is typed from Warehouse: city is a string
+                  warehouseId: {
+                    target: {
+                      "location.city": 1
+                    }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await delivery
+            .update(
+              { name: "Morning run" },
+              {
+                condition: {
+                  // @ts-expect-error: the guard's condition is typed from Warehouse: a number has no prefix
+                  warehouseId: {
+                    target: {
+                      "location.zip": { $beginsWith: "6" }
+                    }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await delivery
+            .update(
+              { name: "Morning run" },
+              {
+                condition: {
+                  warehouseId: {
+                    target: {
+                      // @ts-expect-error: location declares no such field
+                      "location.nope": "x"
+                    }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await delivery
+            .update(
+              { name: "Morning run" },
+              {
+                condition: {
+                  // @ts-expect-error: the guard's condition is typed from Warehouse: both bounds are strings
+                  warehouseId: {
+                    target: {
+                      name: { $between: ["a", 1] }
+                    }
+                  }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a value an attribute cannot hold inside $or", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                condition: {
+                  $or: [
+                    // @ts-expect-error: orderDate is compared as a Date
+                    { orderDate: "2026-01-01" }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses on a HasOne what it refuses on a BelongsTo", async () => {
+          const customer = new Customer();
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: email and phone are ContactInformation attributes; name is not
+                  contactInformation: { name: "Jane" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await customer
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: the library resolves a HasOne target itself
+                  contactInformation: { id: "contact-1", condition: {} }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses on a HasAndBelongsToMany and a one-way HasMany what it refuses on a HasMany", async () => {
+          const book = new Book();
+
+          await book
+            .update(
+              { name: "Dune" },
+              {
+                condition: {
+                  // @ts-expect-error: a HasAndBelongsToMany takes { id, condition } entries
+                  authors: { name: "Jane" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await book
+            .update(
+              { name: "Dune" },
+              {
+                condition: {
+                  authors: [
+                    // @ts-expect-error: numPages is a Book attribute, not an Author one
+                    { id: "author-1", condition: { numPages: 100 } }
+                  ]
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const organization = new Organization();
+
+          await organization
+            .update(
+              { name: "Acme" },
+              {
+                condition: {
+                  // @ts-expect-error: a one-way HasMany takes { id, condition } entries
+                  employees: { name: "Jane" }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses a target attribute the referenced entity does not declare, on every typed key", async () => {
+          const instance = new MyClassWithAllAttributeTypes();
+
+          await instance
+            .update(
+              { stringAttribute: "val" },
+              {
+                condition: {
+                  // @ts-expect-error: lastFour is a PaymentMethod attribute, and the key references a Customer
+                  nullableForeignKeyAttribute: { target: { lastFour: "1234" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          const employee = new Employee();
+
+          await employee
+            .update(
+              { name: "Jane" },
+              {
+                condition: {
+                  // @ts-expect-error: lastFour is a PaymentMethod attribute, and the key references an Organization
+                  organizationId: { target: { lastFour: "1234" } }
+                }
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        it("refuses an option value of the wrong type", async () => {
+          const order = new Order();
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                // @ts-expect-error: referentialIntegrityCheck is a boolean
+                referentialIntegrityCheck: "no"
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                // @ts-expect-error: forceEmbed is a boolean
+                forceEmbed: "yes"
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+
+          await order
+            .update(
+              { orderDate: new Date() },
+              {
+                // @ts-expect-error: condition is an object of conditions
+                condition: "orderDate"
+              }
+            )
+            .catch(() => {
+              Logger.log("Testing types");
+            });
+        });
+
+        describe("a list-index path into a nullable list", () => {
+          // A nullable list is declared `Element[] | undefined`. These pin that an
+          // index into one types its element as an index into a list that is not
+          // nullable does, rather than falling back to the stored form
+          it("accepts a whole object element, named as declared, and an IN of them", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann"
+                    },
+                    // @ts-expect-no-error: the element's nullable field may be set
+                    "objectAttribute.history[1]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: "restocked"
+                    },
+                    // @ts-expect-no-error: an IN of whole elements
+                    "objectAttribute.history[2]": [
+                      { at: new Date("2026-01-01"), actor: "ann" },
+                      { at: new Date("2026-02-01"), actor: "bob" }
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await arrayOfObjectsEntity
+              .update(
+                { name: "Inventory" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: the same on a nullable list of objects in another schema
+                    "data.backup[9]": { sku: "abc", price: 1 }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("accepts a field below the index, in the field's own type and operators", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: actor is a string, so it takes a prefix
+                    "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                    // @ts-expect-no-error: an IN of strings
+                    "objectAttribute.history[1].actor": ["ann", "bob"],
+                    // @ts-expect-no-error: at is a date, compared as a Date
+                    "objectAttribute.history[0].at": {
+                      $gte: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: and ranged as one
+                    "objectAttribute.history[1].at": {
+                      $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                    },
+                    // @ts-expect-no-error: a nullable field below the index takes its type
+                    "objectAttribute.history[2].note": { $contains: "late" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await arrayOfObjectsEntity
+              .update(
+                { name: "Inventory" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: price is a number
+                    "data.backup[0].price": { $lt: 10 }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("accepts null on a nullable field below the index, as not set", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                    "objectAttribute.history[0].note": null
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("accepts an element of a nullable list of scalars in its own type", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: a contactedAt element is a Date
+                    "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                    // @ts-expect-no-error: and is compared as one
+                    "objectAttribute.contactedAt[1]": {
+                      $lt: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: a roles element is one of the enum's members
+                    "objectAttribute.roles[0]": "owner"
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("accepts an element that is itself a list, or a union variant", async () => {
+            const nullableListsEntity = new NullableListsEntity();
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: a bays element is a list of numbers, so it takes $contains on a number
+                    "shelf.bays[0]": { $contains: 3 },
+                    // @ts-expect-no-error: a promos element is a whole variant
+                    "shelf.promos[0]": {
+                      kind: "discount",
+                      percent: 10,
+                      endsAt: new Date("2026-03-31")
+                    },
+                    // @ts-expect-no-error: either variant
+                    "shelf.promos[1]": { kind: "bundle", sku: "KIT-1" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses a whole element its schema cannot hold", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is declared as a string
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: 1
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: at is declared as a date, so it takes a Date
+                    "objectAttribute.history[0]": {
+                      at: "2026-01-01",
+                      actor: "ann"
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      // @ts-expect-error: an element has no mood, so no element can equal this one
+                      mood: "calm"
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await arrayOfObjectsEntity
+              .update(
+                { name: "Inventory" },
+                {
+                  condition: {
+                    // @ts-expect-error: price is a number
+                    "data.backup[0]": { sku: "abc", price: "1" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses an operator a whole element's stored form cannot carry", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: an element is stored as a Map, which has no prefix
+                    "objectAttribute.history[0]": { $beginsWith: "a" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a Map has no ordering
+                    "objectAttribute.history[0]": { $gt: "a" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a Map holds no elements to contain
+                    "objectAttribute.history[0]": { $contains: "a" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses null on the element and on a field below it that is not nullable", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                    "objectAttribute.history[0]": null
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is not nullable
+                    "objectAttribute.history[0].actor": null
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a contactedAt element is not nullable
+                    "objectAttribute.contactedAt[0]": null
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            const arrayOfObjectsEntity = new ArrayOfObjectsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a history element declares at, actor and note, not mood
+                    "objectAttribute.history[0].mood": "calm"
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is a string
+                    "objectAttribute.history[0].actor": 1
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: at is a date, so it compares against a Date
+                    "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a string has no $between of numbers
+                    "objectAttribute.history[0].actor": { $between: [1, 2] }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await arrayOfObjectsEntity
+              .update(
+                { name: "Inventory" },
+                {
+                  condition: {
+                    // @ts-expect-error: price is a number
+                    "data.backup[0].price": { $lt: "10" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                    "objectAttribute.contactedAt[0]": "2026-01-01"
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: admin is not a member of the roles enum
+                    "objectAttribute.roles[0]": "admin"
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses an element that is itself a list, or a union variant, in a shape it cannot hold", async () => {
+            const nullableListsEntity = new NullableListsEntity();
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: a bays element holds numbers
+                    "shelf.bays[0]": { $contains: "3" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: percent is a number
+                    "shelf.promos[0]": {
+                      kind: "discount",
+                      percent: "10",
+                      endsAt: new Date("2026-03-31")
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    "shelf.promos[0]": {
+                      kind: "bundle",
+                      sku: "KIT-1",
+                      // @ts-expect-error: percent belongs to the discount variant, not bundle
+                      percent: 10
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("does not offer an index past the tenth, as for any list", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: indexes 0 to 9 are offered
+                    "objectAttribute.history[10].actor": "ann"
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+        });
+
+        describe("a whole $contains element with null on a nullable field", () => {
+          // An element is stored without a nulled field, and contains compares an
+          // element whole, so null on a nullable field of the operand means the
+          // element looked for lacks it. These pin that the operand offers null
+          // there at every depth, and nowhere else
+          it("accepts null on a nullable field of the element, at every depth", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nestedListsEntity = new NestedListsEntity();
+            const nullableListsEntity = new NullableListsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at: new Date("2026-01-01"), note: null }]
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant
+                    "shelf.promos": {
+                      $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses null on a field of the element that is not nullable", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nestedListsEntity = new NestedListsEntity();
+            const nullableListsEntity = new NullableListsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), actor: null }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: null },
+                        restocks: []
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: placement is an object field, which is never nullable
+                    "layout.section.entries": {
+                      $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: restocks is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: null
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: a restocks element is never null
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [null]
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: a restocks element's at is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [{ at: null }]
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses null as the whole element", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nullableListsEntity = new NullableListsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: $contains looks for an element, and no element is null
+                    "objectAttribute.history": { $contains: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: nor on a list of union variants
+                    "shelf.promos": { $contains: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: nor on a list of strings
+                    "objectAttribute.tags": { $contains: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: nor on a nullable list of dates
+                    "objectAttribute.contactedAt": { $contains: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nullableListsEntity = new NullableListsEntity();
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), note: null }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: note is a string when it is set
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: 1
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null,
+                        // @ts-expect-error: mood is not a field a history element declares
+                        mood: "calm"
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    "shelf.promos": {
+                      $contains: {
+                        kind: "discount",
+                        percent: 10,
+                        endsAt: new Date("2026-03-31"),
+                        // @ts-expect-error: label belongs to the bundle variant, not discount
+                        label: null
+                      }
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+        });
+
+        describe("a whole value compared by equality or IN with null on a nullable field", () => {
+          // An object, or a list element named by an index, is compared whole
+          // by equality and IN, and a nulled field is stored by leaving it out.
+          // So null on a nullable field of the operand means the value compared
+          // lacks it: the expression builder drops the field, as it does in a
+          // $contains element. These pin that equality and IN offer null there
+          // at every depth, and nowhere else
+          it("accepts null on a nullable field of a whole value, at every depth", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nestedListsEntity = new NestedListsEntity();
+            const nullableListsEntity = new NullableListsEntity();
+            const at = new Date("2026-01-01");
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": [
+                      { at, actor: "ann", note: null },
+                      { at, actor: "bo" }
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      zip: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [],
+                      category: null
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: the same in an IN of whole objects
+                    addressAttribute: [
+                      {
+                        street: "1 Main St",
+                        city: "Denver",
+                        zip: null,
+                        geo: { lat: 1, lng: 2, accuracy: "precise" },
+                        scores: [],
+                        category: null
+                      }
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      deletedAt: null,
+                      contactedAt: null,
+                      roles: null,
+                      history: [{ at, actor: "ann", note: null }]
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                    "layout.section": {
+                      entries: [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-no-error: bin is nullable in an object field below an index
+                    "layout.section.entries[0].placement": {
+                      aisle: "A",
+                      bin: null
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                    "layout.section.entries[0]": [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                    "shelf.promos[0]": {
+                      kind: "bundle",
+                      sku: "KIT-1",
+                      label: null
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                    "objectAttribute.history": [
+                      [{ at, actor: "ann", note: null }],
+                      []
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                    "layout.section.entries": [
+                      [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-no-error: an IN of whole lists of union variants
+                    "shelf.promos": [
+                      [{ kind: "bundle", sku: "KIT-1", label: null }]
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+
+          it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+            const instance = new MyClassWithAllAttributeTypes();
+            const nestedListsEntity = new NestedListsEntity();
+            const nullableListsEntity = new NullableListsEntity();
+            const at = new Date("2026-01-01");
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history[0]": { at, actor: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                    "objectAttribute.history[0]": { at, note: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null,
+                      // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                      mood: "calm"
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: an IN element is a whole element, and no element is null
+                    "objectAttribute.history[0]": [null]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: city is not nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: []
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: geo is an object field, which is never nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      geo: null,
+                      scores: []
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: an element of a list inside the value is never null
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      history: [null]
+                    }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nestedListsEntity
+              .update(
+                { layout: { section: { entries: [] } } },
+                {
+                  condition: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries[0].placement": { aisle: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await nullableListsEntity
+              .update(
+                { name: "Endcap" },
+                {
+                  condition: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos[0]": { kind: "bundle", sku: null }
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                    "objectAttribute.history": [[{ at, actor: null }]]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    // @ts-expect-error: an element of a list compared whole is never null
+                    "objectAttribute.history": [[null]]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+
+            await instance
+              .update(
+                { stringAttribute: "val" },
+                {
+                  condition: {
+                    "objectAttribute.history": [
+                      // @ts-expect-error: mood is not a field a history element declares
+                      [{ at, actor: "ann", mood: "calm" }]
+                    ]
+                  }
+                }
+              )
+              .catch(() => {
+                Logger.log("Testing types");
+              });
+          });
+        });
       });
     });
   });
@@ -13764,5 +22189,3542 @@ describe("Update searchable entities (vector write path)", () => {
         }
       ]
     ]);
+  });
+});
+
+// Two attributes whose aliases collide with each other's numbered value
+// placeholders: the update binds `:Line` and `:Line1`, so a condition on `line`
+// must not bind `:Line1`
+@Entity
+class ShippingLabel extends MockTable {
+  declare readonly type: "ShippingLabel";
+
+  @StringAttribute({ alias: "Line" })
+  public readonly line: string;
+
+  @StringAttribute({ alias: "Line1" })
+  public readonly line1: string;
+}
+
+describe("Update with write conditions", () => {
+  const now = "2023-10-16T03:31:35.918Z";
+
+  /**
+   * Makes the transaction write fail with the given cancellation reasons. Every
+   * other command resolves as the shared mocks resolve it
+   */
+  const cancelTransactWrite = (reasons: CancellationReason[]): void => {
+    mockSend.mockImplementation((command: { name: string }) => {
+      if (command.name === "TransactWriteCommand") {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: reasons,
+          $metadata: {}
+        });
+      }
+    });
+  };
+
+  /**
+   * Runs an update expected to fail and returns its error
+   */
+  const failureOf = async (update: () => Promise<unknown>): Promise<any> => {
+    try {
+      await update();
+    } catch (e: unknown) {
+      return e;
+    }
+    throw new Error("Expected the update to fail");
+  };
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date(now));
+  });
+
+  afterEach(() => {
+    mockSend.mockReset();
+    mockQuery.mockReset();
+    mockTransactGetItems.mockReset();
+    vi.clearAllMocks();
+    mockEmbeddingProviderCalls.length = 0;
+  });
+
+  describe("a condition on the entity's own row", () => {
+    const guardedUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: { PK: "MockInformation#123", SK: "MockInformation" },
+        UpdateExpression: "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+        ConditionExpression: "attribute_exists(PK) AND (#State = :wc1_State1)",
+        ExpressionAttributeNames: {
+          "#Email": "Email",
+          "#State": "State",
+          "#UpdatedAt": "UpdatedAt"
+        },
+        ExpressionAttributeValues: {
+          ":Email": "new@example.com",
+          ":UpdatedAt": now,
+          ":wc1_State1": "CO"
+        },
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+      }
+    };
+
+    it("ANDs the condition onto the canonical update in parentheses", async () => {
+      expect.assertions(3);
+
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { state: "CO" } }
+      );
+
+      // An entity without relationships reads nothing for a self condition
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a failed condition as a WriteConditionFailedError naming the self row (AE1)", async () => {
+      expect.assertions(5);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "MockInformation#123" },
+            SK: { S: "MockInformation" },
+            Email: { S: "old@example.com" },
+            State: { S: "NY" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+          { entity: "MockInformation", id: "123", guards: [{ kind: "self" }] }
+        )
+      ]);
+      expect(e.errors[0]).toBeInstanceOf(WriteConditionFailedError);
+      expect({
+        entity: e.errors[0].entity,
+        id: e.errors[0].id,
+        guards: e.errors[0].guards
+      }).toEqual({
+        entity: "MockInformation",
+        id: "123",
+        guards: [{ kind: "self" }]
+      });
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("passes a TransactionConflict-only cancellation through unchanged (AE1)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([{ Code: "TransactionConflict" }]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionCanceledException);
+      expect(e.CancellationReasons).toEqual([{ Code: "TransactionConflict" }]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a missing row as not-found, not as a failed condition (AE10)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([{ Code: "ConditionalCheckFailed" }]);
+
+      const e = await failureOf(
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { state: "CO" } }
+          )
+      );
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: MockInformation with ID '123' does not exist"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("keeps a $or inside its own parentheses after the existence check", async () => {
+      expect.assertions(1);
+
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { $or: [{ state: "CO" }, { phone: "555-0100" }] } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#State = :wc1_State1 OR #Phone = :wc1_Phone2)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#Phone": "Phone",
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": now,
+                    ":wc1_Phone2": "555-0100",
+                    ":wc1_State1": "CO"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("sends a $or of one block naming two attributes in one pair of parentheses", async () => {
+      expect.assertions(2);
+
+      // A second pair, `attribute_exists(PK) AND ((… AND …))`, is rejected by
+      // DynamoDB: "The expression has redundant parentheses"
+      await MockInformation.update(
+        "123",
+        { email: "new@example.com" },
+        { condition: { $or: [{ state: "CO", phone: "555-0100" }] } }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression:
+                    "SET #Email = :Email, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#State = :wc1_State1 AND #Phone = :wc1_Phone2)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#Phone": "Phone",
+                    "#State": "State",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Email": "new@example.com",
+                    ":UpdatedAt": now,
+                    ":wc1_Phone2": "555-0100",
+                    ":wc1_State1": "CO"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    describe("a claim guarded by null as 'not set' or an expired date (AE11)", () => {
+      const claim = async (): Promise<void> => {
+        await MockInformation.update(
+          "123",
+          { state: "CO" },
+          {
+            condition: {
+              $or: [{ phone: null }, { someDate: { $lt: new Date(now) } }]
+            }
+          }
+        );
+      };
+
+      const claimCommand = [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                UpdateExpression:
+                  "SET #State = :State, #UpdatedAt = :UpdatedAt",
+                ConditionExpression:
+                  "attribute_exists(PK) AND (attribute_not_exists(#Phone) OR #someDate < :wc1_someDate1)",
+                ExpressionAttributeNames: {
+                  "#Phone": "Phone",
+                  "#State": "State",
+                  "#UpdatedAt": "UpdatedAt",
+                  "#someDate": "someDate"
+                },
+                ExpressionAttributeValues: {
+                  ":State": "CO",
+                  ":UpdatedAt": now,
+                  ":wc1_someDate1": now
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ];
+
+      it("compiles null and the date comparison into one guarded update", async () => {
+        expect.assertions(1);
+
+        await claim();
+
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [claimCommand[0]]
+        ]);
+      });
+
+      it("attributes a lost claim to the self condition", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "MockInformation#123" },
+              SK: { S: "MockInformation" },
+              Phone: { S: "555-0100" },
+              someDate: { S: "2023-10-17T00:00:00.000Z" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(claim);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+            {
+              entity: "MockInformation",
+              id: "123",
+              guards: [{ kind: "self" }]
+            }
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [claimCommand[0]]
+        ]);
+      });
+    });
+
+    it("sends a guarded touch that bumps updatedAt when the payload is empty", async () => {
+      expect.assertions(1);
+
+      await MockInformation.update(
+        "123",
+        {},
+        { condition: { email: "old@example.com" } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "MockInformation#123", SK: "MockInformation" },
+                  UpdateExpression: "SET #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Email = :wc1_Email1)",
+                  ExpressionAttributeNames: {
+                    "#Email": "Email",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": now,
+                    ":wc1_Email1": "old@example.com"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("keeps update and condition placeholders distinct when aliases collide", async () => {
+      expect.assertions(1);
+
+      await ShippingLabel.update(
+        "123",
+        { line: "1 Main St", line1: "Suite 2" },
+        { condition: { line: "9 Old Rd" } }
+      );
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "ShippingLabel#123", SK: "ShippingLabel" },
+                  UpdateExpression:
+                    "SET #Line = :Line, #Line1 = :Line1, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Line = :wc1_Line1)",
+                  ExpressionAttributeNames: {
+                    "#Line": "Line",
+                    "#Line1": "Line1",
+                    "#UpdatedAt": "UpdatedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Line": "1 Main St",
+                    ":Line1": "Suite 2",
+                    ":UpdatedAt": now,
+                    ":wc1_Line1": "9 Old Rd"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    describe("instance method", () => {
+      const instance = createInstance(MockInformation, {
+        pk: "MockInformation#123" as PartitionKey,
+        sk: "MockInformation" as SortKey,
+        id: "123",
+        type: "MockInformation",
+        address: "11 Some St",
+        email: "old@example.com",
+        state: "CO",
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      it("passes the condition through and returns the updated instance", async () => {
+        expect.assertions(2);
+
+        const updated = await instance.update(
+          { email: "new@example.com" },
+          { condition: { state: "CO" } }
+        );
+
+        expect(updated).toEqual({
+          ...instance,
+          email: "new@example.com",
+          updatedAt: new Date(now)
+        });
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [guardedUpdate] }]
+        ]);
+      });
+
+      it("leaves the instance unmodified when the condition fails", async () => {
+        expect.assertions(3);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "MockInformation#123" },
+              SK: { S: "MockInformation" },
+              State: { S: "NY" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(
+          async () =>
+            await instance.update(
+              { email: "new@example.com" },
+              { condition: { state: "CO" } }
+            )
+        );
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on MockInformation with ID '123': its own row",
+            {
+              entity: "MockInformation",
+              id: "123",
+              guards: [{ kind: "self" }]
+            }
+          )
+        ]);
+        expect(instance).toEqual({
+          pk: "MockInformation#123",
+          sk: "MockInformation",
+          id: "123",
+          type: "MockInformation",
+          address: "11 Some St",
+          email: "old@example.com",
+          state: "CO",
+          createdAt: new Date("2023-10-01"),
+          updatedAt: new Date("2023-10-02")
+        });
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [guardedUpdate] }]
+        ]);
+      });
+
+      it("types the condition from the instance's class", async () => {
+        await instance
+          .update(
+            {},
+            {
+              condition: {
+                // @ts-expect-error not an attribute of MockInformation
+                notAnAttribute: "x"
+              }
+            }
+          )
+          .catch(() => {
+            Logger.log("Testing types");
+          });
+
+        await MockInformation.update(
+          "123",
+          {},
+          {
+            condition: {
+              // @ts-expect-error email is not nullable, so null is not offered
+              email: null
+            }
+          }
+        ).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+    });
+  });
+
+  describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
+    const update = async (): Promise<void> => {
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.name": "Jane",
+            "addressAttribute.scores[0]": { $gt: 5 },
+            "addressAttribute.zip": null
+          }
+        }
+      );
+    };
+
+    const guardedUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: {
+          PK: "MyClassWithAllAttributeTypes#123",
+          SK: "MyClassWithAllAttributeTypes"
+        },
+        UpdateExpression:
+          "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+        ConditionExpression:
+          "attribute_exists(PK) AND (#objectAttribute.#name = :wc1_objectAttributename1 AND #addressAttribute.#scores[0] > :wc1_addressAttributescores02 AND attribute_not_exists(#addressAttribute.#zip))",
+        ExpressionAttributeNames: {
+          "#stringAttribute": "stringAttribute",
+          "#UpdatedAt": "UpdatedAt",
+          "#objectAttribute": "objectAttribute",
+          "#name": "name",
+          "#addressAttribute": "addressAttribute",
+          "#scores": "scores",
+          "#zip": "zip"
+        },
+        ExpressionAttributeValues: {
+          ":stringAttribute": "new",
+          ":UpdatedAt": now,
+          ":wc1_objectAttributename1": "Jane",
+          ":wc1_addressAttributescores02": 5
+        },
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+      }
+    };
+
+    it("ANDs the nested paths onto the canonical update", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("reports a failed nested condition as a WriteConditionFailedError naming the self row", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "MyClassWithAllAttributeTypes#123" },
+            SK: { S: "MyClassWithAllAttributeTypes" },
+            objectAttribute: { M: { name: { S: "John" } } }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on MyClassWithAllAttributeTypes with ID '123': its own row",
+          {
+            entity: "MyClassWithAllAttributeTypes",
+            id: "123",
+            guards: [{ kind: "self" }]
+          }
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: [guardedUpdate] }]
+      ]);
+    });
+
+    it("rejects a path the schema does not declare before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error country is not a field of the address schema
+                "addressAttribute.country": "US"
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: street, city, zip, geo, scores, category'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects a $contains operand that is not an element of the list before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error tags holds strings
+                "objectAttribute.tags": { $contains: 1 }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.tags": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("converts a Date $contains operand on a list of dates to the ISO string its elements are stored as", async () => {
+      expect.assertions(2);
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.contactedAt": {
+              $contains: new Date("2023-01-01T00:00:00.000Z")
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#contactedAt, :wc1_objectAttributecontactedAt1))",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#contactedAt": "contactedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributecontactedAt1":
+                      "2023-01-01T00:00:00.000Z"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("converts a whole $contains element of a list of objects to its stored form, nested dates included", async () => {
+      expect.assertions(2);
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.history": {
+              $contains: {
+                at: new Date("2023-01-01T00:00:00.000Z"),
+                actor: "ann"
+              }
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#history, :wc1_objectAttributehistory1))",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributehistory1": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole $contains element, so it equals the element as stored", async () => {
+      expect.assertions(2);
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.history": {
+              $contains: {
+                at: new Date("2023-01-01T00:00:00.000Z"),
+                actor: "ann",
+                note: null
+              }
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#objectAttribute.#history, :wc1_objectAttributehistory1))",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributehistory1": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole $contains element at every depth", async () => {
+      expect.assertions(2);
+
+      await NestedListsEntity.update(
+        "123",
+        {},
+        {
+          condition: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                note: null,
+                placement: { aisle: "A", bin: null },
+                restocks: [
+                  { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+                  { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+                ]
+              }
+            }
+          }
+        }
+      );
+      await NullableListsEntity.update(
+        "123",
+        { name: "Endcap" },
+        {
+          condition: {
+            "shelf.promos": {
+              $contains: { kind: "bundle", sku: "KIT-1", label: null }
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactWriteCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "NestedListsEntity#123", SK: "NestedListsEntity" },
+                  UpdateExpression: "SET #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#Layout.#section.#entries, :wc1_Layoutsectionentries1))",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": now,
+                    ":wc1_Layoutsectionentries1": {
+                      sku: "MUG-1",
+                      placement: { aisle: "A" },
+                      restocks: [
+                        { at: "2023-01-01T00:00:00.000Z" },
+                        { at: "2023-01-02T00:00:00.000Z", note: "late" }
+                      ]
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "NullableListsEntity#123",
+                    SK: "NullableListsEntity"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (contains(#Shelf.#promos, :wc1_Shelfpromos1))",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Shelf": "Shelf",
+                    "#promos": "promos"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "Endcap",
+                    ":UpdatedAt": now,
+                    ":wc1_Shelfpromos1": { kind: "bundle", sku: "KIT-1" }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole value compared by equality or IN, so it equals the value as stored", async () => {
+      expect.assertions(2);
+
+      const at = new Date("2023-01-01T00:00:00.000Z");
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.history[0]": { at, actor: "ann", note: null },
+            addressAttribute: [
+              {
+                street: "1 Main St",
+                city: "Denver",
+                zip: null,
+                geo: { lat: 1, lng: 2, accuracy: "precise" },
+                scores: [],
+                category: null
+              },
+              {
+                street: "9 Elm St",
+                city: "Boise",
+                zip: 83702,
+                geo: { lat: 1, lng: 2, accuracy: "precise" },
+                scores: [1],
+                category: "work"
+              }
+            ],
+            objectAttribute: {
+              name: "Ann",
+              email: "ann@example.com",
+              tags: [],
+              status: "active",
+              createdDate: at,
+              deletedAt: null,
+              contactedAt: null,
+              roles: null,
+              history: [{ at, actor: "ann", note: null }]
+            }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#objectAttribute.#history[0] = :wc1_objectAttributehistory01 AND #addressAttribute IN (:wc1_addressAttribute2,:wc1_addressAttribute3) AND #objectAttribute = :wc1_objectAttribute4)",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history",
+                    "#addressAttribute": "addressAttribute"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributehistory01": {
+                      at: "2023-01-01T00:00:00.000Z",
+                      actor: "ann"
+                    },
+                    ":wc1_addressAttribute2": {
+                      street: "1 Main St",
+                      city: "Denver",
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: []
+                    },
+                    ":wc1_addressAttribute3": {
+                      street: "9 Elm St",
+                      city: "Boise",
+                      zip: 83702,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [1],
+                      category: "work"
+                    },
+                    ":wc1_objectAttribute4": {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: "2023-01-01T00:00:00.000Z",
+                      history: [
+                        { at: "2023-01-01T00:00:00.000Z", actor: "ann" }
+                      ]
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("leaves a nulled nullable field out of a whole value compared by equality or IN at every depth", async () => {
+      expect.assertions(2);
+
+      await NestedListsEntity.update(
+        "123",
+        {},
+        {
+          condition: {
+            "layout.section": {
+              entries: [
+                {
+                  sku: "MUG-1",
+                  note: null,
+                  placement: { aisle: "A", bin: null },
+                  restocks: [
+                    { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+                    { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+                  ]
+                }
+              ]
+            },
+            "layout.section.entries[0].placement": [
+              { aisle: "A", bin: null },
+              { aisle: "B", bin: "7" }
+            ]
+          }
+        }
+      );
+      await NullableListsEntity.update(
+        "123",
+        { name: "Endcap" },
+        {
+          condition: {
+            "shelf.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([
+        [{ name: "TransactWriteCommand" }],
+        [{ name: "TransactWriteCommand" }]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "NestedListsEntity#123", SK: "NestedListsEntity" },
+                  UpdateExpression: "SET #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Layout.#section = :wc1_Layoutsection1 AND #Layout.#section.#entries[0].#placement IN (:wc1_Layoutsectionentries0placement2,:wc1_Layoutsectionentries0placement3))",
+                  ExpressionAttributeNames: {
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Layout": "Layout",
+                    "#section": "section",
+                    "#entries": "entries",
+                    "#placement": "placement"
+                  },
+                  ExpressionAttributeValues: {
+                    ":UpdatedAt": now,
+                    ":wc1_Layoutsection1": {
+                      entries: [
+                        {
+                          sku: "MUG-1",
+                          placement: { aisle: "A" },
+                          restocks: [
+                            { at: "2023-01-01T00:00:00.000Z" },
+                            { at: "2023-01-02T00:00:00.000Z", note: "late" }
+                          ]
+                        }
+                      ]
+                    },
+                    ":wc1_Layoutsectionentries0placement2": { aisle: "A" },
+                    ":wc1_Layoutsectionentries0placement3": {
+                      aisle: "B",
+                      bin: "7"
+                    }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ],
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "NullableListsEntity#123",
+                    SK: "NullableListsEntity"
+                  },
+                  UpdateExpression:
+                    "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Shelf.#promos[0] = :wc1_Shelfpromos01)",
+                  ExpressionAttributeNames: {
+                    "#Name": "Name",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#Shelf": "Shelf",
+                    "#promos": "promos"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Name": "Endcap",
+                    ":UpdatedAt": now,
+                    ":wc1_Shelfpromos01": { kind: "bundle", sku: "KIT-1" }
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("converts each list of an IN of whole lists to the form the table stores it", async () => {
+      expect.assertions(2);
+
+      const at = new Date("2023-01-01T00:00:00.000Z");
+
+      await MyClassWithAllAttributeTypes.update(
+        "123",
+        { stringAttribute: "new" },
+        {
+          condition: {
+            "objectAttribute.history": [
+              [
+                { at, actor: "ann", note: null },
+                { at, actor: "bo", note: "late" }
+              ],
+              []
+            ],
+            "objectAttribute.contactedAt": [[at]]
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "MyClassWithAllAttributeTypes#123",
+                    SK: "MyClassWithAllAttributeTypes"
+                  },
+                  UpdateExpression:
+                    "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#objectAttribute.#history IN (:wc1_objectAttributehistory1,:wc1_objectAttributehistory2) AND #objectAttribute.#contactedAt IN (:wc1_objectAttributecontactedAt3))",
+                  ExpressionAttributeNames: {
+                    "#stringAttribute": "stringAttribute",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#objectAttribute": "objectAttribute",
+                    "#history": "history",
+                    "#contactedAt": "contactedAt"
+                  },
+                  ExpressionAttributeValues: {
+                    ":stringAttribute": "new",
+                    ":UpdatedAt": now,
+                    ":wc1_objectAttributehistory1": [
+                      { at: "2023-01-01T00:00:00.000Z", actor: "ann" },
+                      {
+                        at: "2023-01-01T00:00:00.000Z",
+                        actor: "bo",
+                        note: "late"
+                      }
+                    ],
+                    ":wc1_objectAttributehistory2": [],
+                    ":wc1_objectAttributecontactedAt3": [
+                      "2023-01-01T00:00:00.000Z"
+                    ]
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("rejects an undeclared field in an IN of whole lists before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                "objectAttribute.history": [
+                  // @ts-expect-error mood is not a field a history element declares
+                  [{ at: new Date(0), actor: "ann", mood: "calm" }]
+                ]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.history": "[0].mood" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects an element of the wrong type in an IN of whole lists before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error a tags element is a string
+                "objectAttribute.tags": [[1]]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.tags": the value does not match the attribute\'s type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("rejects a $contains element outside the enum of a list of enums before sending anything", async () => {
+      expect.assertions(3);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                // @ts-expect-error admin is not a member of the roles enum
+                "objectAttribute.roles": { $contains: "admin" }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a BelongsTo guard", () => {
+    const petQuery = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK2",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: { ":PK2": "Pet#123", ":Type1": "Pet" },
+        FilterExpression: "#Type IN (:Type1)",
+        ConsistentRead: true
+      }
+    ];
+
+    const storedPet = (ownerId?: string): MockTableEntityTableItem<Pet> => ({
+      PK: "Pet#123",
+      SK: "Pet",
+      Id: "123",
+      Type: "Pet",
+      Name: "Mock Pet",
+      OwnerId: ownerId,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    });
+
+    describe("when the foreign key is unchanged (AE7)", () => {
+      const update = async (): Promise<void> => {
+        await Pet.update(
+          "123",
+          { name: "Fido" },
+          { condition: { owner: { name: "Jane" } } }
+        );
+      };
+
+      const sentItems = [
+        {
+          // The owner was resolved from the earlier read, so the foreign key
+          // is pinned to it
+          Update: {
+            TableName: "mock-table",
+            Key: { PK: "Pet#123", SK: "Pet" },
+            UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+            ConditionExpression:
+              "attribute_exists(PK) AND (#OwnerId = :wc2_OwnerId)",
+            ExpressionAttributeNames: {
+              "#Name": "Name",
+              "#OwnerId": "OwnerId",
+              "#UpdatedAt": "UpdatedAt"
+            },
+            ExpressionAttributeValues: {
+              ":Name": "Fido",
+              ":UpdatedAt": now,
+              ":wc2_OwnerId": "456"
+            },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+          }
+        },
+        {
+          Update: {
+            TableName: "mock-table",
+            Key: { PK: "Person#456", SK: "Pet#123" },
+            UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+            ConditionExpression: "attribute_exists(PK)",
+            ExpressionAttributeNames: {
+              "#Name": "Name",
+              "#UpdatedAt": "UpdatedAt"
+            },
+            ExpressionAttributeValues: { ":Name": "Fido", ":UpdatedAt": now }
+          }
+        },
+        {
+          ConditionCheck: {
+            TableName: "mock-table",
+            Key: { PK: "Person#456", SK: "Person" },
+            ConditionExpression:
+              "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+            ExpressionAttributeNames: { "#Name": "Name" },
+            ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+          }
+        }
+      ];
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedPet("456")] });
+      });
+
+      it("checks the stored parent and pins the foreign key on the entity's own row", async () => {
+        expect.assertions(4);
+
+        await update();
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([petQuery]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a failed guard as a WriteConditionFailedError naming the relationship", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Person#456" },
+              SK: { S: "Person" },
+              Name: { S: "Bob" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on Pet with ID '123': relationship 'owner'",
+            {
+              entity: "Pet",
+              id: "123",
+              guards: [{ kind: "relationship", name: "owner" }]
+            }
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a concurrent foreign key change, not the guard, even when the old parent also fails the guard", async () => {
+        expect.assertions(3);
+
+        cancelTransactWrite([
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Pet#123" },
+              SK: { S: "Pet" },
+              OwnerId: { S: "999" }
+            }
+          },
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Person#456" },
+              SK: { S: "Person" },
+              Name: { S: "Bob" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Pet with ID '123' no longer references Person with ID '456': its foreign key 'ownerId' was changed by a concurrent write"
+          )
+        ]);
+        expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("reports a missing parent as a referential-integrity failure", async () => {
+        expect.assertions(1);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" }
+        ]);
+
+        const e = await failureOf(update);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Person with ID '456' does not exist"
+          )
+        ]);
+      });
+
+      it("sends a $or of one block naming two attributes in one pair of parentheses on the parent check", async () => {
+        expect.assertions(2);
+
+        // A second pair, `… AND (attribute_exists(PK) AND ((… AND …)))`, is
+        // rejected by DynamoDB: "The expression has redundant parentheses"
+        await Pet.update(
+          "123",
+          { name: "Fido" },
+          {
+            condition: {
+              owner: {
+                $or: [
+                  {
+                    name: "Jane",
+                    createdAt: { $lt: new Date("2024-01-01T00:00:00.000Z") }
+                  }
+                ]
+              }
+            }
+          }
+        );
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                sentItems[0],
+                sentItems[1],
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#456", SK: "Person" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1 AND #CreatedAt < :wc1_CreatedAt2))",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#CreatedAt": "CreatedAt"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_Name1": "Jane",
+                      ":wc1_CreatedAt2": "2024-01-01T00:00:00.000Z"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    describe("when the update changes the foreign key", () => {
+      const update = async (
+        referentialIntegrityCheck: boolean
+      ): Promise<void> => {
+        await Pet.update(
+          "123",
+          { name: "Fido", ownerId: "789" },
+          { referentialIntegrityCheck, condition: { owner: { name: "Jane" } } }
+        );
+      };
+
+      const canonicalUpdate = {
+        // The new parent comes from the payload, so nothing is pinned
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Pet#123", SK: "Pet" },
+          UpdateExpression:
+            "SET #Name = :Name, #OwnerId = :OwnerId, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#OwnerId": "OwnerId",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: {
+            ":Name": "Fido",
+            ":OwnerId": "789",
+            ":UpdatedAt": now
+          }
+        }
+      };
+      const deleteOldLink = {
+        Delete: {
+          TableName: "mock-table",
+          Key: { PK: "Person#456", SK: "Pet#123" }
+        }
+      };
+      const guardedNewParentCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Person#789", SK: "Person" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+      const putNewLink = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Person#789",
+            SK: "Pet#123",
+            Id: "123",
+            Type: "Pet",
+            Name: "Fido",
+            OwnerId: "789",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: now
+          }
+        }
+      };
+      const putNewParentCopy = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_exists(PK)",
+          Item: {
+            PK: "Pet#123",
+            SK: "Person",
+            Id: "789",
+            Type: "Person",
+            Name: "Jane",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        }
+      };
+
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedPet("456")] });
+        mockTransactGetItems.mockResolvedValue({
+          Responses: [
+            {
+              Item: {
+                PK: "Person#789",
+                SK: "Person",
+                Id: "789",
+                Type: "Person",
+                Name: "Jane",
+                CreatedAt: "2023-01-01T00:00:00.000Z",
+                UpdatedAt: "2023-01-02T00:00:00.000Z"
+              }
+            }
+          ]
+        });
+      });
+
+      it("merges the guard into the new parent's integrity check", async () => {
+        expect.assertions(4);
+
+        await update(true);
+
+        expect(mockedQueryCommand.mock.calls).toEqual([petQuery]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Get: {
+                    TableName: "mock-table",
+                    Key: { PK: "Person#789", SK: "Person" }
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                canonicalUpdate,
+                deleteOldLink,
+                guardedNewParentCheck,
+                putNewLink,
+                putNewParentCopy
+              ]
+            }
+          ]
+        ]);
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactGetCommand" }],
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+      });
+
+      it("adds its own check on the new parent when integrity checks are off, which still fails on a missing parent (R18)", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" }
+        ]);
+
+        const e = await failureOf(async () => {
+          await update(false);
+        });
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Person with ID '789' does not exist"
+          )
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                canonicalUpdate,
+                deleteOldLink,
+                putNewLink,
+                putNewParentCopy,
+                guardedNewParentCheck
+              ]
+            }
+          ]
+        ]);
+      });
+    });
+
+    it("fails before sending when the stored foreign key is not set (AE8)", async () => {
+      expect.assertions(4);
+
+      mockQuery.mockResolvedValue({ Items: [storedPet()] });
+
+      const e = await failureOf(
+        async () =>
+          await Pet.update(
+            "123",
+            { name: "Fido" },
+            { condition: { owner: { name: "Jane" } } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(TransactionWriteFailedError);
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "Write condition failed on Pet with ID '123': relationship 'owner' references no Person",
+          {
+            entity: "Pet",
+            id: "123",
+            guards: [{ kind: "relationship", name: "owner" }]
+          }
+        )
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+
+    it("throws a FilterError before any read when the payload clears the foreign key (AE16)", async () => {
+      expect.assertions(2);
+
+      const e = await failureOf(
+        async () =>
+          await Pet.update(
+            "123",
+            { ownerId: null },
+            { condition: { owner: { name: "Jane" } } }
+          )
+      );
+
+      expect(e).toBeInstanceOf(FilterError);
+      expect(mockSend.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a HasOne guard", () => {
+    const customer = {
+      PK: "Customer#123",
+      SK: "Customer",
+      Id: "123",
+      Type: "Customer",
+      Name: "Mock Customer",
+      Address: "11 Some St",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const contactInformationCopy = {
+      PK: "Customer#123",
+      SK: "ContactInformation",
+      Id: "ci1",
+      Type: "ContactInformation",
+      Email: "jane@example.com",
+      CustomerId: "123",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const customerQuery = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK5",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: {
+          ":PK5": "Customer#123",
+          ":Type1": "Customer",
+          ":Type2": "Order",
+          ":Type3": "PaymentMethod",
+          ":Type4": "ContactInformation"
+        },
+        FilterExpression: "#Type IN (:Type1,:Type2,:Type3,:Type4)",
+        ConsistentRead: true
+      }
+    ];
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+    };
+
+    const update = async (): Promise<void> => {
+      await Customer.update(
+        "123",
+        { name: "New Name" },
+        { condition: { contactInformation: { email: "jane@example.com" } } }
+      );
+    };
+
+    const sentItems = [
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#123", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      },
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "ContactInformation#ci1", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      },
+      {
+        // The child found through the earlier read must still reference
+        // this Customer
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "ContactInformation#ci1", SK: "ContactInformation" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (#Email = :wc1_Email1))",
+          ExpressionAttributeNames: {
+            "#CustomerId": "CustomerId",
+            "#Email": "Email"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_Email1": "jane@example.com",
+            ":wc2_CustomerId": "123"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      }
+    ];
+
+    it("checks the child row with the child foreign key pinned", async () => {
+      expect.assertions(2);
+
+      mockQuery.mockResolvedValue({
+        Items: [customer, contactInformationCopy]
+      });
+
+      await update();
+
+      expect(mockedQueryCommand.mock.calls).toEqual([customerQuery]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a child that moved to another parent as not-associated", async () => {
+      expect.assertions(1);
+
+      mockQuery.mockResolvedValue({
+        Items: [customer, contactInformationCopy]
+      });
+      cancelTransactWrite([
+        { Code: "None" },
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "ContactInformation#ci1" },
+            SK: { S: "ContactInformation" },
+            Email: { S: "jane@example.com" },
+            CustomerId: { S: "456" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: ContactInformation with ID 'ci1' is not associated with Customer with ID '123' through 'contactInformation'"
+        )
+      ]);
+    });
+
+    it("fails before sending when the entity has no child", async () => {
+      expect.assertions(3);
+
+      mockQuery.mockResolvedValue({ Items: [customer] });
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "Write condition failed on Customer with ID '123': relationship 'contactInformation' references no ContactInformation",
+          {
+            entity: "Customer",
+            id: "123",
+            guards: [{ kind: "relationship", name: "contactInformation" }]
+          }
+        )
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    });
+  });
+
+  describe("a HasMany guard", () => {
+    const update = async (): Promise<void> => {
+      await Customer.update(
+        "123",
+        { name: "New Name" },
+        {
+          condition: {
+            orders: [
+              {
+                id: "o1",
+                condition: { orderDate: { $lt: new Date(now) } }
+              }
+            ]
+          }
+        }
+      );
+    };
+
+    const sentItems = [
+      {
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#123", SK: "Customer" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+        }
+      },
+      {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Order#o1", SK: "Order" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1))",
+          ExpressionAttributeNames: {
+            "#CustomerId": "CustomerId",
+            "#OrderDate": "OrderDate"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_OrderDate1": now,
+            ":wc2_CustomerId": "123"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      }
+    ];
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [
+          {
+            PK: "Customer#123",
+            SK: "Customer",
+            Id: "123",
+            Type: "Customer",
+            Name: "Mock Customer",
+            Address: "11 Some St",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+    });
+
+    it("checks the named child with its foreign key pinned to this entity", async () => {
+      expect.assertions(1);
+
+      await update();
+
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports an id belonging to another parent as not-related, even when its row meets the guard (AE4)", async () => {
+      expect.assertions(3);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Order#o1" },
+            SK: { S: "Order" },
+            CustomerId: { S: "456" },
+            OrderDate: { S: "2023-01-01T00:00:00.000Z" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Order with ID 'o1' is not associated with Customer with ID '123' through 'orders'"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a related child failing the guard with the relationship and id", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Order#o1" },
+            SK: { S: "Order" },
+            CustomerId: { S: "123" },
+            OrderDate: { S: "2023-10-17T00:00:00.000Z" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on Customer with ID '123': relationship 'orders' (ID 'o1')",
+          {
+            entity: "Customer",
+            id: "123",
+            guards: [{ kind: "relationship", name: "orders", id: "o1" }]
+          }
+        )
+      ]);
+    });
+  });
+
+  it("guards a uni-directional HasMany child that the earlier read does not return", async () => {
+    expect.assertions(3);
+
+    mockQuery.mockResolvedValue({
+      Items: [
+        {
+          PK: "Organization#123",
+          SK: "Organization",
+          Id: "123",
+          Type: "Organization",
+          Name: "Mock Organization",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        }
+      ]
+    });
+
+    await Organization.update(
+      "123",
+      { name: "New Name" },
+      { condition: { founders: [{ id: "f1", condition: { name: "Ada" } }] } }
+    );
+
+    expect(mockSend.mock.calls).toEqual([
+      [{ name: "QueryCommand" }],
+      [{ name: "TransactWriteCommand" }]
+    ]);
+    // Uni-directional children are not read
+    expect(mockedQueryCommand.mock.calls).toEqual([
+      [
+        {
+          TableName: "mock-table",
+          KeyConditionExpression: "#PK = :PK3",
+          ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+          ExpressionAttributeValues: {
+            ":PK3": "Organization#123",
+            ":Type1": "Organization",
+            ":Type2": "User"
+          },
+          FilterExpression: "#Type IN (:Type1,:Type2)",
+          ConsistentRead: true
+        }
+      ]
+    ]);
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Organization#123", SK: "Organization" },
+                UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+                ConditionExpression: "attribute_exists(PK)",
+                ExpressionAttributeNames: {
+                  "#Name": "Name",
+                  "#UpdatedAt": "UpdatedAt"
+                },
+                ExpressionAttributeValues: {
+                  ":Name": "New Name",
+                  ":UpdatedAt": now
+                }
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "mock-table",
+                Key: { PK: "Founder#f1", SK: "Founder" },
+                ConditionExpression:
+                  "attribute_exists(PK) AND (#OrganizationId = :wc2_OrganizationId) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                ExpressionAttributeNames: {
+                  "#Name": "Name",
+                  "#OrganizationId": "OrganizationId"
+                },
+                ExpressionAttributeValues: {
+                  ":wc1_Name1": "Ada",
+                  ":wc2_OrganizationId": "123"
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  describe("a HasAndBelongsToMany guard", () => {
+    const author = {
+      PK: "Author#123",
+      SK: "Author",
+      Id: "123",
+      Type: "Author",
+      Name: "Mock Author",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const bookCopy = {
+      PK: "Author#123",
+      SK: "Book#b1",
+      Id: "b1",
+      Type: "Book",
+      Name: "Mock Book",
+      NumPages: 100,
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "New Name", ":UpdatedAt": now }
+    };
+    const canonicalUpdate = {
+      Update: {
+        TableName: "mock-table",
+        Key: { PK: "Author#123", SK: "Author" },
+        ConditionExpression: "attribute_exists(PK)",
+        ...expression
+      }
+    };
+
+    const update = async (bookId: string): Promise<void> => {
+      await Author.update(
+        "123",
+        { name: "New Name" },
+        { condition: { books: [{ id: bookId, condition: { numPages: 100 } }] } }
+      );
+    };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ Items: [author, bookCopy] });
+    });
+
+    it("merges membership into the link-row update and checks the partner row", async () => {
+      expect.assertions(2);
+
+      await update("b1");
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK3",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK3": "Author#123",
+              ":Type1": "Author",
+              ":Type2": "Book"
+            },
+            FilterExpression: "#Type IN (:Type1,:Type2)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              canonicalUpdate,
+              {
+                // The link row in the partner's partition must still exist
+                // and hold this Author
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Author#123" },
+                  UpdateExpression: expression.UpdateExpression,
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                  ExpressionAttributeNames: {
+                    ...expression.ExpressionAttributeNames,
+                    "#Id": "Id"
+                  },
+                  ExpressionAttributeValues: {
+                    ...expression.ExpressionAttributeValues,
+                    ":wc2_Id": "123"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Book" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (attribute_exists(PK) AND (#NumPages = :wc1_NumPages1))",
+                  ExpressionAttributeNames: { "#NumPages": "NumPages" },
+                  ExpressionAttributeValues: { ":wc1_NumPages1": 100 },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+
+    it("reports a partner without a link as not-related, not as the guard", async () => {
+      expect.assertions(2);
+
+      cancelTransactWrite([
+        { Code: "None" },
+        { Code: "None" },
+        { Code: "ConditionalCheckFailed" },
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Book#b2" },
+            SK: { S: "Book" },
+            NumPages: { N: "50" }
+          }
+        }
+      ]);
+
+      const e = await failureOf(async () => {
+        await update("b2");
+      });
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Book with ID 'b2' is not linked to Author with ID '123' through 'books'"
+        )
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              canonicalUpdate,
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b1", SK: "Author#123" },
+                  ConditionExpression: "attribute_exists(PK)",
+                  ...expression
+                }
+              },
+              {
+                // No link row is queued for an unrelated id, so membership
+                // gets a check of its own
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b2", SK: "Author#123" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                  ExpressionAttributeNames: { "#Id": "Id" },
+                  ExpressionAttributeValues: { ":wc2_Id": "123" },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              },
+              {
+                ConditionCheck: {
+                  TableName: "mock-table",
+                  Key: { PK: "Book#b2", SK: "Book" },
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (attribute_exists(PK) AND (#NumPages = :wc1_NumPages1))",
+                  ExpressionAttributeNames: { "#NumPages": "NumPages" },
+                  ExpressionAttributeValues: { ":wc1_NumPages1": 100 },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
+  });
+
+  it("guards a self-referential HasAndBelongsToMany partner through its link row", async () => {
+    expect.assertions(1);
+
+    mockQuery.mockResolvedValue({
+      Items: [
+        {
+          PK: "Accessory#a1",
+          SK: "Accessory",
+          Id: "a1",
+          Type: "Accessory",
+          Name: "Charger",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        },
+        {
+          PK: "Accessory#a1",
+          SK: "Accessory#a2",
+          Id: "a2",
+          Type: "Accessory",
+          Name: "Cable",
+          CreatedAt: "2023-01-01T00:00:00.000Z",
+          UpdatedAt: "2023-01-02T00:00:00.000Z"
+        }
+      ]
+    });
+
+    await Accessory.update(
+      "a1",
+      { name: "Fast Charger" },
+      {
+        condition: {
+          compatibleAccessories: [{ id: "a2", condition: { name: "Cable" } }]
+        }
+      }
+    );
+
+    const expression = {
+      UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: { "#Name": "Name", "#UpdatedAt": "UpdatedAt" },
+      ExpressionAttributeValues: { ":Name": "Fast Charger", ":UpdatedAt": now }
+    };
+
+    expect(mockTransactWriteCommand.mock.calls).toEqual([
+      [
+        {
+          TransactItems: [
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a1", SK: "Accessory" },
+                ConditionExpression: "attribute_exists(PK)",
+                ...expression
+              }
+            },
+            {
+              Update: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a2", SK: "Accessory#a1" },
+                UpdateExpression: expression.UpdateExpression,
+                ConditionExpression: "attribute_exists(PK) AND (#Id = :wc2_Id)",
+                ExpressionAttributeNames: {
+                  ...expression.ExpressionAttributeNames,
+                  "#Id": "Id"
+                },
+                ExpressionAttributeValues: {
+                  ...expression.ExpressionAttributeValues,
+                  ":wc2_Id": "a1"
+                },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            },
+            {
+              ConditionCheck: {
+                TableName: "mock-table",
+                Key: { PK: "Accessory#a2", SK: "Accessory" },
+                ConditionExpression:
+                  "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                ExpressionAttributeNames: { "#Name": "Name" },
+                ExpressionAttributeValues: { ":wc1_Name1": "Cable" },
+                ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+              }
+            }
+          ]
+        }
+      ]
+    ]);
+  });
+
+  describe("a self-referential HasMany guard whose id is the entity's own", () => {
+    const update = async (): Promise<void> => {
+      await Category.update(
+        "c1",
+        { name: "Kitchen" },
+        {
+          condition: {
+            subcategories: [{ id: "c1", condition: { name: "Home" } }]
+          }
+        }
+      );
+    };
+
+    const sentItems = [
+      {
+        // The child row is the entity's own row, so the pin and the guard
+        // merge onto the canonical update
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Category#c1", SK: "Category" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression:
+            "attribute_exists(PK) AND (#ParentCategoryId = :wc2_ParentCategoryId) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#ParentCategoryId": "ParentCategoryId",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: {
+            ":Name": "Kitchen",
+            ":UpdatedAt": now,
+            ":wc1_Name1": "Home",
+            ":wc2_ParentCategoryId": "c1"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      },
+      {
+        // The Category is its own parent, so its link copy in the parent's
+        // partition is updated too
+        Update: {
+          TableName: "mock-table",
+          Key: { PK: "Category#c1", SK: "Category#c1" },
+          UpdateExpression: "SET #Name = :Name, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#Name": "Name",
+            "#UpdatedAt": "UpdatedAt"
+          },
+          ExpressionAttributeValues: { ":Name": "Kitchen", ":UpdatedAt": now }
+        }
+      }
+    ];
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({
+        Items: [
+          {
+            PK: "Category#c1",
+            SK: "Category",
+            Id: "c1",
+            Type: "Category",
+            Name: "Home",
+            ParentCategoryId: "c1",
+            CreatedAt: "2023-01-01T00:00:00.000Z",
+            UpdatedAt: "2023-01-02T00:00:00.000Z"
+          }
+        ]
+      });
+    });
+
+    it("merges into the canonical update", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+            ExpressionAttributeValues: {
+              ":PK2": "Category#c1",
+              ":Type1": "Category"
+            },
+            FilterExpression: "#Type IN (:Type1)",
+            ConsistentRead: true
+          }
+        ]
+      ]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports its own missing row as not-found", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        { Code: "ConditionalCheckFailed" },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Category with ID 'c1' does not exist"
+        )
+      ]);
+    });
+  });
+
+  describe("a foreign key target guard on an entity without relationships (R24)", () => {
+    const storedEntity = {
+      PK: "MyClassWithAllAttributeTypes#123",
+      SK: "MyClassWithAllAttributeTypes",
+      Id: "123",
+      Type: "MyClassWithAllAttributeTypes",
+      stringAttribute: "old",
+      foreignKeyAttribute: "c1",
+      nullableForeignKeyAttribute: "c1",
+      CreatedAt: "2023-01-01T00:00:00.000Z",
+      UpdatedAt: "2023-01-02T00:00:00.000Z"
+    };
+    const forcedRead = [
+      {
+        TableName: "mock-table",
+        KeyConditionExpression: "#PK = :PK2",
+        ExpressionAttributeNames: { "#PK": "PK", "#Type": "Type" },
+        ExpressionAttributeValues: {
+          ":PK2": "MyClassWithAllAttributeTypes#123",
+          ":Type1": "MyClassWithAllAttributeTypes"
+        },
+        FilterExpression: "#Type IN (:Type1)",
+        ConsistentRead: true
+      }
+    ];
+
+    describe("when the payload does not set the foreign key", () => {
+      beforeEach(() => {
+        mockQuery.mockResolvedValue({ Items: [storedEntity] });
+      });
+
+      it("reads the entity's own row consistently, then checks the stored parent with the foreign key pinned", async () => {
+        expect.assertions(4);
+
+        await MyClassWithAllAttributeTypes.update(
+          "123",
+          { stringAttribute: "new" },
+          { condition: { foreignKeyAttribute: { target: { name: "Jane" } } } }
+        );
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "QueryCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockedQueryCommand.mock.calls).toEqual([forcedRead]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                {
+                  Update: {
+                    TableName: "mock-table",
+                    Key: {
+                      PK: "MyClassWithAllAttributeTypes#123",
+                      SK: "MyClassWithAllAttributeTypes"
+                    },
+                    UpdateExpression:
+                      "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#foreignKeyAttribute = :wc2_foreignKeyAttribute)",
+                    ExpressionAttributeNames: {
+                      "#UpdatedAt": "UpdatedAt",
+                      "#foreignKeyAttribute": "foreignKeyAttribute",
+                      "#stringAttribute": "stringAttribute"
+                    },
+                    ExpressionAttributeValues: {
+                      ":UpdatedAt": now,
+                      ":stringAttribute": "new",
+                      ":wc2_foreignKeyAttribute": "c1"
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Customer#c1", SK: "Customer" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      describe("two guards on the same parent row with the same attribute", () => {
+        const update = async (): Promise<void> => {
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                foreignKeyAttribute: { target: { name: "Jane" } },
+                nullableForeignKeyAttribute: { target: { name: "Janet" } }
+              }
+            }
+          );
+        };
+
+        const sentItems = [
+          {
+            Update: {
+              TableName: "mock-table",
+              Key: {
+                PK: "MyClassWithAllAttributeTypes#123",
+                SK: "MyClassWithAllAttributeTypes"
+              },
+              UpdateExpression:
+                "SET #stringAttribute = :stringAttribute, #UpdatedAt = :UpdatedAt",
+              ConditionExpression:
+                "attribute_exists(PK) AND (#foreignKeyAttribute = :wc3_foreignKeyAttribute) AND (#nullableForeignKeyAttribute = :wc4_nullableForeignKeyAttribute)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#foreignKeyAttribute": "foreignKeyAttribute",
+                "#nullableForeignKeyAttribute": "nullableForeignKeyAttribute",
+                "#stringAttribute": "stringAttribute"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": now,
+                ":stringAttribute": "new",
+                ":wc3_foreignKeyAttribute": "c1",
+                ":wc4_nullableForeignKeyAttribute": "c1"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            // Both guards merge into one check with distinct placeholders
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Customer#c1", SK: "Customer" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1)) AND (attribute_exists(PK) AND (#Name = :wc2_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "Jane",
+                ":wc2_Name1": "Janet"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ];
+
+        it("merges into one item with distinct placeholders", async () => {
+          expect.assertions(1);
+
+          await update();
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+
+        it("names both guards when the row's check fails", async () => {
+          expect.assertions(2);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            {
+              Code: "ConditionalCheckFailed",
+              Item: {
+                PK: { S: "Customer#c1" },
+                SK: { S: "Customer" },
+                Name: { S: "Jane" }
+              }
+            }
+          ]);
+
+          const e = await failureOf(update);
+
+          expect(e.errors).toEqual([
+            new WriteConditionFailedError(
+              "ConditionalCheckFailed: Write condition failed on MyClassWithAllAttributeTypes with ID '123': foreign key 'foreignKeyAttribute', foreign key 'nullableForeignKeyAttribute'",
+              {
+                entity: "MyClassWithAllAttributeTypes",
+                id: "123",
+                guards: [
+                  { kind: "foreignKey", name: "foreignKeyAttribute" },
+                  { kind: "foreignKey", name: "nullableForeignKeyAttribute" }
+                ]
+              }
+            )
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+      });
+    });
+
+    describe("when the payload sets the foreign key", () => {
+      const canonicalUpdate = {
+        Update: {
+          TableName: "mock-table",
+          Key: {
+            PK: "MyClassWithAllAttributeTypes#123",
+            SK: "MyClassWithAllAttributeTypes"
+          },
+          UpdateExpression:
+            "SET #foreignKeyAttribute = :foreignKeyAttribute, #UpdatedAt = :UpdatedAt",
+          ConditionExpression: "attribute_exists(PK)",
+          ExpressionAttributeNames: {
+            "#UpdatedAt": "UpdatedAt",
+            "#foreignKeyAttribute": "foreignKeyAttribute"
+          },
+          ExpressionAttributeValues: {
+            ":UpdatedAt": now,
+            ":foreignKeyAttribute": "c2"
+          }
+        }
+      };
+      const guardedParentCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Customer#c2", SK: "Customer" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+
+      it.each([true, false])(
+        "reads nothing and guards the new parent in one check (referentialIntegrityCheck: %s)",
+        async referentialIntegrityCheck => {
+          expect.assertions(2);
+
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { foreignKeyAttribute: "c2" },
+            {
+              referentialIntegrityCheck,
+              condition: { foreignKeyAttribute: { target: { name: "Jane" } } }
+            }
+          );
+
+          // With integrity checks on, the guard merges into the library's
+          // check on the parent; off, it adds the same check itself
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: [canonicalUpdate, guardedParentCheck] }]
+          ]);
+        }
+      );
+    });
+  });
+
+  describe("a searchable entity", () => {
+    const listingTableItem = {
+      PK: "Listing#123",
+      SK: "Listing",
+      Id: "123",
+      Type: "Listing",
+      Description: "The very same description",
+      Category: "Mugs",
+      StoreId: "456",
+      CreatedAt: "2023-10-01T00:00:00.000Z",
+      UpdatedAt: "2023-10-02T00:00:00.000Z"
+    };
+    const expression = {
+      UpdateExpression:
+        "SET #Description = :Description, #UpdatedAt = :UpdatedAt",
+      ExpressionAttributeNames: {
+        "#Description": "Description",
+        "#UpdatedAt": "UpdatedAt"
+      },
+      ExpressionAttributeValues: {
+        ":Description": "The very same description",
+        ":UpdatedAt": now
+      }
+    };
+    const sentItems = [
+      {
+        // The searchable-value pin is registered with the transaction, so a
+        // changed value is attributed as a concurrent change
+        Update: {
+          TableName: "search-table",
+          Key: { PK: "Listing#123", SK: "Listing" },
+          UpdateExpression: expression.UpdateExpression,
+          ConditionExpression:
+            "attribute_exists(PK) AND (#Description = :wc2_Description) AND (#Category = :wc1_Category1)",
+          ExpressionAttributeNames: {
+            ...expression.ExpressionAttributeNames,
+            "#Category": "Category"
+          },
+          ExpressionAttributeValues: {
+            ...expression.ExpressionAttributeValues,
+            ":wc1_Category1": "Mugs",
+            ":wc2_Description": "The very same description"
+          },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      },
+      {
+        Update: {
+          TableName: "search-table",
+          Key: { PK: "Store#456", SK: "Listing#123" },
+          ConditionExpression: "attribute_exists(PK)",
+          ...expression
+        }
+      }
+    ];
+
+    const update = async (): Promise<void> => {
+      await Listing.update(
+        "123",
+        { description: "The very same description" },
+        { condition: { category: "Mugs" } }
+      );
+    };
+
+    beforeEach(() => {
+      mockQuery.mockResolvedValue({ Items: [listingTableItem] });
+    });
+
+    it("keeps the searchable-value pin alongside the consumer condition", async () => {
+      expect.assertions(2);
+
+      await update();
+
+      expect(mockEmbeddingProviderCalls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [{ TransactItems: sentItems }]
+      ]);
+    });
+
+    it("reports a changed searchable value with the pin's message, not the condition error", async () => {
+      expect.assertions(2);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Listing#123" },
+            SK: { S: "Listing" },
+            Description: { S: "A newer description" },
+            Category: { S: "Plates" }
+          }
+        },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new ConditionalCheckFailedError(
+          "ConditionalCheckFailed: Listing with ID '123' does not exist or its searchable value was changed by a concurrent write — retry the update"
+        )
+      ]);
+      expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+    });
+
+    it("reports a failed condition when the searchable value still holds", async () => {
+      expect.assertions(1);
+
+      cancelTransactWrite([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: {
+            PK: { S: "Listing#123" },
+            SK: { S: "Listing" },
+            Description: { S: "The very same description" },
+            Category: { S: "Plates" }
+          }
+        },
+        { Code: "None" }
+      ]);
+
+      const e = await failureOf(update);
+
+      expect(e.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on Listing with ID '123': its own row",
+          { entity: "Listing", id: "123", guards: [{ kind: "self" }] }
+        )
+      ]);
+    });
+  });
+  describe("a $or branch that holds no conditions", () => {
+    // An empty branch always holds. Kept, it sent `attribute_exists(PK) AND ()`,
+    // which DynamoDB rejects; dropped beside another branch, it tightened the
+    // guard to that branch. Either way the guard was not the one written
+    const emptyBranchError = new FilterError(
+      "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+    );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${emptyBranchError.message}`,
+        { cause: emptyBranchError }
+      );
+
+    it.each<[string, () => Promise<unknown>, FilterError]>([
+      [
+        "alone on the entity's own row",
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { $or: [{}] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "beside a branch that holds conditions",
+        async () =>
+          await MockInformation.update(
+            "123",
+            { email: "new@example.com" },
+            { condition: { $or: [{}, { state: "CO" }] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "on an instance update",
+        async () =>
+          await createInstance(MockInformation, {
+            pk: "MockInformation#123" as PartitionKey,
+            sk: "MockInformation" as SortKey,
+            id: "123",
+            type: "MockInformation",
+            address: "9 Example Ave",
+            email: "example@example.com",
+            createdAt: new Date("2023-10-01"),
+            updatedAt: new Date("2023-10-02")
+          }).update(
+            { email: "new@example.com" },
+            { condition: { $or: [{ state: "CO" }, {}] } }
+          ),
+        emptyBranchError
+      ],
+      [
+        "in a BelongsTo guard",
+        async () =>
+          await Pet.update(
+            "123",
+            { name: "New Name" },
+            { condition: { owner: { $or: [{}] } } }
+          ),
+        located('"owner"')
+      ],
+      [
+        "in a HasOne guard",
+        async () =>
+          await Customer.update(
+            "123",
+            { name: "New Name" },
+            { condition: { contactInformation: { $or: [{}] } } }
+          ),
+        located('"contactInformation"')
+      ],
+      [
+        "in a HasMany entry's condition",
+        async () =>
+          await Customer.update(
+            "123",
+            { name: "New Name" },
+            {
+              condition: {
+                orders: [{ id: "o1", condition: { $or: [{}] } }]
+              }
+            }
+          ),
+        located('"orders" entry "o1"')
+      ],
+      [
+        "in a HasAndBelongsToMany entry's condition",
+        async () =>
+          await Book.update(
+            "123",
+            { name: "New Name" },
+            {
+              condition: {
+                authors: [{ id: "456", condition: { $or: [{}] } }]
+              }
+            }
+          ),
+        located('"authors" entry "456"')
+      ],
+      [
+        "in a foreign key's target",
+        async () =>
+          await Employee.update(
+            "123",
+            { name: "New Name" },
+            { condition: { organizationId: { target: { $or: [{}] } } } }
+          ),
+        located('"organizationId" target')
+      ]
+    ])(
+      "rejects an empty branch %s before sending anything",
+      async (_, update, expected) => {
+        expect.assertions(3);
+
+        const e = await failureOf(update);
+
+        expect(e).toEqual(expected);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      }
+    );
+  });
+
+  describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+    // Before this was refused, the operand was converted to its stored form,
+    // which strips a field the schema does not declare: `{ ..., region: "west" }`
+    // was sent as `{ ... }`, so the guard held against a row holding no region
+    // at all and let through the write the caller meant to stop
+    const undeclared = (attr: string, path: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+      );
+    // A guard on another row wraps the builder's error in one naming where
+    // the guard sits in the condition
+    const located = (location: string, error: FilterError): FilterError =>
+      new FilterError(
+        `Invalid write condition for ${location}: ${error.message}`,
+        {
+          cause: error
+        }
+      );
+
+    const address = {
+      street: "1 Main St",
+      city: "Denver",
+      geo: { lat: 39.7, lng: -104.9, accuracy: "precise" as const },
+      scores: [1]
+    };
+    const location = { city: "Denver", state: "CO" };
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses one at the top level of an own-row object attribute before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: {
+                  ...address,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("addressAttribute", "region"));
+      expectNothingSent();
+    });
+
+    it("refuses one inside a nested object, a nested list element, an IN element and a dot-path object field", async () => {
+      expect.assertions(8);
+
+      const nested = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: {
+                  ...address,
+                  geo: {
+                    ...address.geo,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    alt: 1600
+                  }
+                }
+              }
+            }
+          )
+      );
+      const inList = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                objectAttribute: {
+                  name: "Jane",
+                  email: "jane@example.com",
+                  tags: [],
+                  status: "active",
+                  createdDate: new Date("2023-01-01T00:00:00.000Z"),
+                  history: [
+                    {
+                      at: new Date("2023-01-02T00:00:00.000Z"),
+                      actor: "ann",
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      mood: "calm"
+                    }
+                  ]
+                }
+              }
+            }
+          )
+      );
+      const inElement = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                addressAttribute: [
+                  address,
+                  {
+                    ...address,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                ]
+              }
+            }
+          )
+      );
+      const dotPath = await failureOf(
+        async () =>
+          await MyClassWithAllAttributeTypes.update(
+            "123",
+            { stringAttribute: "new" },
+            {
+              condition: {
+                "addressAttribute.geo": {
+                  ...address.geo,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  alt: 1600
+                }
+              }
+            }
+          )
+      );
+
+      expect(nested).toEqual(undeclared("addressAttribute", "geo.alt"));
+      expect(inList).toEqual(undeclared("objectAttribute", "history[0].mood"));
+      expect(inElement).toEqual(undeclared("addressAttribute", "region"));
+      expect(dotPath).toEqual(undeclared("addressAttribute.geo", "alt"));
+      expectNothingSent();
+    });
+
+    it("refuses one through the instance method, leaving the instance unmodified", async () => {
+      expect.assertions(6);
+
+      const instance = createInstance(Warehouse, {
+        pk: "Warehouse#w1" as PartitionKey,
+        sk: "Warehouse" as SortKey,
+        id: "w1",
+        type: "Warehouse",
+        name: "Central",
+        location,
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+
+      const e = await failureOf(
+        async () =>
+          await instance.update(
+            { name: "North" },
+            {
+              condition: {
+                location: {
+                  ...location,
+                  // @ts-expect-error: a plain JavaScript caller's undeclared field
+                  region: "west"
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(undeclared("location", "region"));
+      expect(instance).toEqual({
+        pk: "Warehouse#w1",
+        sk: "Warehouse",
+        id: "w1",
+        type: "Warehouse",
+        name: "Central",
+        location,
+        createdAt: new Date("2023-10-01"),
+        updatedAt: new Date("2023-10-02")
+      });
+      expectNothingSent();
+    });
+
+    it("refuses one in a BelongsTo guard's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Shipment.update(
+            "s1",
+            { destination: "Boise" },
+            {
+              condition: {
+                warehouse: {
+                  location: {
+                    ...location,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        located('"warehouse"', undeclared("location", "region"))
+      );
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasMany entry's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Warehouse.update(
+            "w1",
+            { name: "North" },
+            {
+              condition: {
+                shipments: [
+                  {
+                    id: "s1",
+                    condition: {
+                      dimensions: {
+                        weight: 2,
+                        unit: "kg",
+                        // @ts-expect-error: a plain JavaScript caller's undeclared field
+                        fragile: true
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        located('"shipments" entry "s1"', undeclared("dimensions", "fragile"))
+      );
+      expectNothingSent();
+    });
+
+    it("refuses one in a HasAndBelongsToMany entry's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await Festival.update(
+            "f1",
+            { name: "Summer" },
+            {
+              condition: {
+                sponsors: [
+                  {
+                    id: "sp1",
+                    condition: {
+                      inventory: {
+                        quantity: 3,
+                        location: "Bay 4",
+                        // @ts-expect-error: a plain JavaScript caller's undeclared field
+                        reserved: 1
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        located('"sponsors" entry "sp1"', undeclared("inventory", "reserved"))
+      );
+      expectNothingSent();
+    });
+
+    it("refuses one in a foreign key target guard's condition before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await WarehouseInspection.update(
+            "i1",
+            { warehouseId: "w2" },
+            {
+              condition: {
+                warehouseId: {
+                  target: {
+                    location: {
+                      ...location,
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      region: "west"
+                    }
+                  }
+                }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(
+        located('"warehouseId" target', undeclared("location", "region"))
+      );
+      expectNothingSent();
+    });
+  });
+
+  describe("a range whose bounds are different kinds on a path into a union variant (R30)", () => {
+    // A path into a union variant resolves to no field, so no schema
+    // validates its bounds. Before this was refused, a $between across a
+    // string and a number was sent and rejected by DynamoDB with a
+    // ValidationException, and a composed range across them was sent, could
+    // never hold, and failed as the row's own guard
+    const mixed = (operators: string, kinds: string): FilterError =>
+      new FilterError(
+        `Invalid filter value for attribute "payment.method.cardNumber": ${operators} bound a range with ${kinds}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`
+      );
+
+    const expectNothingSent = (): void => {
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+      expect(mockTransactGetCommand.mock.calls).toEqual([]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+    };
+
+    it("refuses a $between of a string and a number before anything is sent", async () => {
+      expect.assertions(5);
+
+      const e = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's string and number
+                "payment.method.cardNumber": { $between: ["4000", 4999] }
+              }
+            }
+          )
+      );
+
+      expect(e).toEqual(mixed("$between", "a string and a number"));
+      expectNothingSent();
+    });
+
+    it("refuses a composed range across kinds, in either order, before anything is sent", async () => {
+      expect.assertions(6);
+
+      const stringToNumber = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's string to number
+                "payment.method.cardNumber": { $gte: "4000", $lte: 4999 }
+              }
+            }
+          )
+      );
+      const numberToString = await failureOf(
+        async () =>
+          await DiscriminatedUnionEntity.update(
+            "du-1",
+            { payment: { amount: 300 } },
+            {
+              condition: {
+                // @ts-expect-error: a plain JavaScript caller's number to string
+                "payment.method.cardNumber": { $gt: 4000, $lt: "4999" }
+              }
+            }
+          )
+      );
+
+      expect(stringToNumber).toEqual(
+        mixed("$gte and $lte", "a string and a number")
+      );
+      expect(numberToString).toEqual(
+        mixed("$gt and $lt", "a number and a string")
+      );
+      expectNothingSent();
+    });
+
+    it("still sends a range whose bounds share a kind, unjudged", async () => {
+      expect.assertions(2);
+
+      await DiscriminatedUnionEntity.update(
+        "du-1",
+        { payment: { amount: 300 } },
+        {
+          condition: {
+            "payment.method.cardNumber": { $between: ["4000", "4999"] }
+          }
+        }
+      );
+
+      expect(mockSend.mock.calls).toEqual([[{ name: "TransactWriteCommand" }]]);
+      expect(mockTransactWriteCommand.mock.calls).toEqual([
+        [
+          {
+            TransactItems: [
+              {
+                Update: {
+                  TableName: "mock-table",
+                  Key: {
+                    PK: "DiscriminatedUnionEntity#du-1",
+                    SK: "DiscriminatedUnionEntity"
+                  },
+                  UpdateExpression:
+                    "SET #UpdatedAt = :UpdatedAt, #Payment.#amount = :Payment_amount",
+                  ConditionExpression:
+                    "attribute_exists(PK) AND (#Payment.#method.#cardNumber BETWEEN :wc1_PaymentmethodcardNumber1 AND :wc1_PaymentmethodcardNumber2)",
+                  ExpressionAttributeNames: {
+                    "#Payment": "Payment",
+                    "#UpdatedAt": "UpdatedAt",
+                    "#amount": "amount",
+                    "#cardNumber": "cardNumber",
+                    "#method": "method"
+                  },
+                  ExpressionAttributeValues: {
+                    ":Payment_amount": 300,
+                    ":UpdatedAt": now,
+                    ":wc1_PaymentmethodcardNumber1": "4000",
+                    ":wc1_PaymentmethodcardNumber2": "4999"
+                  },
+                  ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                }
+              }
+            ]
+          }
+        ]
+      ]);
+    });
   });
 });

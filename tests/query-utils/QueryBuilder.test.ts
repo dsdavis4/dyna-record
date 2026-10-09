@@ -15,6 +15,7 @@ import type {
   InferObjectSchema
 } from "../../src/decorators/index.js";
 import type { ForeignKey, PartitionKey, SortKey } from "../../src/types.js";
+import { FilterError } from "../../src/errors.js";
 
 @Table({
   name: "mock-table",
@@ -472,7 +473,7 @@ describe("QueryBuilder", () => {
     });
   });
 
-  it("throws the invalid filter key error when a filter key is not an attribute of the entity", () => {
+  it("throws a FilterError when a filter key is not an attribute of the entity", () => {
     expect.assertions(1);
 
     const queryBuilder = new QueryBuilder({
@@ -484,8 +485,10 @@ describe("QueryBuilder", () => {
     });
 
     expect(() => queryBuilder.build()).toThrow(
-      'Invalid filter key "someBadKey.city": attribute "someBadKey" does not exist on this entity. ' +
-        "Valid attributes are: id, type, createdAt, updatedAt, name, roomId, meta, pk, sk"
+      new FilterError(
+        'Invalid filter key "someBadKey.city": attribute "someBadKey" does not exist on this entity. ' +
+          "Valid attributes are: id, type, createdAt, updatedAt, name, roomId, meta, pk, sk"
+      )
     );
   });
 

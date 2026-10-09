@@ -1,5 +1,7 @@
 import type DynaRecord from "../../DynaRecord.js";
+import type { AllowNullInWholeValue } from "../../types.js";
 import type { EntityDefinedAttributes } from "../types.js";
+import type { WriteCondition } from "../WriteCondition/index.js";
 
 /**
  * Extracts the keys of properties in type `T` that are explicitly allowed to be `undefined`.
@@ -20,11 +22,16 @@ type NullableProperties<T> = {
  *   matching the partial update semantics (only provided fields are modified).
  * - Nullable fields at any nesting depth receive `| null` during updates.
  *
- * Primitives, `Date`, arrays, and functions pass through unchanged.
+ * Arrays resolve through {@link AllowNullInWholeValue}: a list is written whole
+ * (`SET`, never a document path), so nothing inside it becomes `Partial` and
+ * every non-nullable field of an element is still required, while a nullable
+ * field at any depth inside an element takes `null`, as it does everywhere else
+ * in an update; the element is stored without that field.
+ *
+ * Primitives, `Date`, and functions pass through unchanged.
  */
 type AllowNullForNullableValue<T> = T extends
   | Date
-  | readonly unknown[]
   | string
   | number
   | boolean
@@ -32,9 +39,11 @@ type AllowNullForNullableValue<T> = T extends
   | undefined
   | ((...args: unknown[]) => unknown)
   ? T
-  : T extends Record<string, unknown>
-    ? Partial<AllowNullForNullable<T>>
-    : T;
+  : T extends readonly unknown[]
+    ? AllowNullInWholeValue<T>
+    : T extends Record<string, unknown>
+      ? Partial<AllowNullForNullable<T>>
+      : T;
 
 /**
  * Transforms a type `T` by allowing `null` as an additional type for its nullable properties.
@@ -58,25 +67,54 @@ type AllowNullForNullable<T> = {
  * For `@ObjectAttribute` fields, all nested fields are `Partial` — you only need to provide the
  * fields you want to change. Omitted fields are preserved in DynamoDB via document path expressions.
  *
+ * A list is written whole, so each element of a list of objects keeps its required fields, while a
+ * nullable field inside an element takes `null` and the element is stored without it.
+ *
+ * @typeParam T - The entity being updated.
+ *
  * @example
- * await MockModel.update("123", {
- *   nonNullableAttr: "new val", // Sets new value
- *   nullableAttr: null // Remove the value. This will throw a compile time error if the property is not nullable
- * })
+ * ```typescript
+ * await Customer.update("customer-1", {
+ *   name: "Jane Smith", // Sets new value
+ *   phone: null // Removes the value. A compile error if the attribute is not nullable
+ * });
+ * ```
  *
  * @example Partial ObjectAttribute update
- * await MockModel.update("123", {
+ * ```typescript
+ * await Store.update("store-1", {
  *   address: { street: "456 Oak Ave" } // Only updates street, preserves other fields
- * })
+ * });
+ * ```
+ *
+ * @example A nullable field inside a list element
+ * ```typescript
+ * // Replaces the contacts; Sam's is stored without a phone
+ * await Store.update("store-1", {
+ *   address: { contacts: [{ name: "Sam", phone: null }] }
+ * });
+ * ```
  */
 export type UpdateOptions<T extends DynaRecord> = Partial<
   AllowNullForNullable<EntityDefinedAttributes<T>>
 >;
 
 /**
- * Options for update operations
+ * Options for the static and instance `update` methods ({@link DynaRecord.update}).
+ *
+ * @typeParam T - The entity being updated.
+ *
+ * @example
+ * ```typescript
+ * // Cancel an Order only while it is still pending and its Customer is active
+ * const options: UpdateOperationOptions<Order> = {
+ *   condition: { status: "pending", customer: { status: "active" } }
+ * };
+ *
+ * await Order.update("order-1", { status: "cancelled" }, options);
+ * ```
  */
-export interface UpdateOperationOptions {
+export interface UpdateOperationOptions<T extends DynaRecord = DynaRecord> {
   /**
    * Whether to perform referential integrity checks for foreign key references.
    * When `true` (default), condition checks are added to verify that referenced entities exist.
@@ -93,6 +131,13 @@ export interface UpdateOperationOptions {
    * @default false
    */
   forceEmbed?: boolean;
+  /**
+   * A guard on the entity's own row and on its related rows, checked in the
+   * same transaction as the update: the entity is updated only if every part
+   * holds. A relationship guard still requires its row to exist when
+   * `referentialIntegrityCheck` is `false`. See {@link WriteCondition}.
+   */
+  condition?: WriteCondition<T>;
 }
 
 /**

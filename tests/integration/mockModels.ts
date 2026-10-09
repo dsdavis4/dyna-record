@@ -55,7 +55,25 @@ export const contactSchema = {
   tags: { type: "array", items: { type: "string" } },
   status: { type: "enum", values: ["active", "inactive"] },
   createdDate: { type: "date" },
-  deletedAt: { type: "date", nullable: true }
+  deletedAt: { type: "date", nullable: true },
+  contactedAt: { type: "array", items: { type: "date" }, nullable: true },
+  roles: {
+    type: "array",
+    items: { type: "enum", values: ["owner", "viewer"] },
+    nullable: true
+  },
+  history: {
+    type: "array",
+    items: {
+      type: "object",
+      fields: {
+        at: { type: "date" },
+        actor: { type: "string" },
+        note: { type: "string", nullable: true }
+      }
+    },
+    nullable: true
+  }
 } as const satisfies ObjectSchema;
 
 @Table({
@@ -798,6 +816,62 @@ class SponsorFestival extends JoinTable<Sponsor, Festival> {
   public readonly festivalId: ForeignKey;
 }
 
+// Self-referential HasMany: a Category's subcategories are Categories. The
+// HasMany is uni-directional because a self-referential BelongsTo is not
+// supported
+@Entity
+class Category extends MockTable {
+  declare readonly type: "Category";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => Category, {
+    alias: "ParentCategoryId",
+    nullable: true
+  })
+  public readonly parentCategoryId?: NullableForeignKey<Category>;
+
+  @HasMany(() => Category, {
+    foreignKey: "parentCategoryId",
+    uniDirectional: true
+  })
+  public readonly subcategories: Category[];
+}
+
+// Self-referential HasAndBelongsToMany: an Accessory is compatible with other
+// Accessories, linked through the CompatibleAccessory join table
+@Entity
+class Accessory extends MockTable {
+  declare readonly type: "Accessory";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Accessory, {
+    targetKey: "compatibleWith",
+    through: () => ({
+      joinTable: CompatibleAccessory,
+      foreignKey: "accessoryId"
+    })
+  })
+  public readonly compatibleAccessories: Accessory[];
+
+  @HasAndBelongsToMany(() => Accessory, {
+    targetKey: "compatibleAccessories",
+    through: () => ({
+      joinTable: CompatibleAccessory,
+      foreignKey: "compatibleAccessoryId"
+    })
+  })
+  public readonly compatibleWith: Accessory[];
+}
+
+class CompatibleAccessory extends JoinTable<Accessory, Accessory> {
+  public readonly accessoryId: ForeignKey<Accessory>;
+  public readonly compatibleAccessoryId: ForeignKey<Accessory>;
+}
+
 export const paymentSchema = {
   method: {
     type: "discriminatedUnion",
@@ -1137,6 +1211,9 @@ export {
   Sponsor,
   Festival,
   SponsorFestival,
+  Category,
+  Accessory,
+  CompatibleAccessory,
   ArrayOfUnionsEntity,
   DiscriminatedUnionEntity,
   Vendor,

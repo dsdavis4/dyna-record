@@ -4,10 +4,16 @@ import {
   keyConditionCapabilities,
   queryFilterCapabilities,
   searchFilterCapabilities,
-  type FilterAttributeResolver
+  writeConditionCapabilities,
+  type FilterAttributeResolver,
+  type FilterExpressionBuilderProps
 } from "../../src/filter-utils/index.js";
 import { FilterError } from "../../src/errors.js";
-import { dateSerializer } from "../../src/decorators/attributes/serializers.js";
+import {
+  createObjectSerializer,
+  dateSerializer
+} from "../../src/decorators/attributes/serializers.js";
+import { objectSchemaToZod } from "../../src/decorators/attributes/fieldZod.js";
 import type { Serializers } from "../../src/metadata/types.js";
 import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
 import type { AttributeKind } from "../../src/metadata/types.js";
@@ -19,6 +25,35 @@ import type {
   KeyConditions
 } from "../../src/filter-utils/index.js";
 
+/**
+ * An object attribute declared the way `@ObjectAttribute` registers one: its
+ * zod schema, its serializers and its object schema. A whole value of it, or of
+ * a field holding an object, is compared whole — see the whole-value object
+ * operand tests
+ */
+const addressSchema = {
+  city: { type: "string" },
+  zip: { type: "string", nullable: true },
+  geo: {
+    type: "object",
+    fields: { lat: { type: "number" }, surveyedAt: { type: "date" } }
+  },
+  lines: {
+    type: "array",
+    items: { type: "object", fields: { sku: { type: "string" } } },
+    nullable: true
+  },
+  channel: {
+    type: "discriminatedUnion",
+    discriminator: "kind",
+    variants: {
+      email: { address: { type: "string" } },
+      sms: { phone: { type: "string" } }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
 const attributes: Record<
   string,
   {
@@ -27,6 +62,7 @@ const attributes: Record<
     kind?: AttributeKind;
     serializers?: Serializers;
     objectSchema?: ObjectSchema;
+    nullable?: boolean;
   }
 > = {
   pk: { alias: "PK", type: z.string(), kind: "string" },
@@ -40,7 +76,39 @@ const attributes: Record<
   // No kind: this library models no binary attribute kind, so a binary value
   // is reachable only where the form could not be resolved
   thumbnail: { alias: "Thumbnail", type: z.instanceof(Uint8Array) },
-  discount: { alias: "Discount", type: z.number().nullable(), kind: "number" },
+  discount: {
+    alias: "Discount",
+    type: z.number().nullable(),
+    kind: "number",
+    nullable: true
+  },
+  status: { alias: "Status", type: z.string(), kind: "string" },
+  // An enum is stored as a string, so its members order lexicographically
+  tier: {
+    alias: "Tier",
+    type: z.enum(["bronze", "gold", "silver"]),
+    kind: "enum"
+  },
+  holder: {
+    alias: "Holder",
+    type: z.string().nullable(),
+    kind: "string",
+    nullable: true
+  },
+  // An alias that is not the attribute's name, so the name map shows which
+  // one an expression references
+  phone: {
+    alias: "phone_number",
+    type: z.string().nullable(),
+    kind: "string",
+    nullable: true
+  },
+  leaseExpiresAt: {
+    alias: "LeaseExpiresAt",
+    type: z.date(),
+    kind: "date",
+    serializers: dateSerializer
+  },
   meta: {
     alias: "Meta",
     type: z.object({}),
@@ -51,8 +119,22 @@ const attributes: Record<
       "odd name": { type: "string" },
       "odd-name": { type: "string" },
       label: { type: "string" },
+      location: { type: "string" },
+      note: { type: "string", nullable: true },
       recordedAt: { type: "date" },
       tags: { type: "array", items: { type: "string" } },
+      scores: { type: "array", items: { type: "number" } },
+      seenAt: { type: "array", items: { type: "date" } },
+      // A union variant's fields are not visible to the schema walker, so a
+      // path below this field is one dyna-record cannot judge
+      channel: {
+        type: "discriminatedUnion",
+        discriminator: "kind",
+        variants: {
+          email: { address: { type: "string" } },
+          sms: { phone: { type: "string" } }
+        }
+      },
       nested: {
         type: "object",
         fields: { deepAt: { type: "date" }, count: { type: "number" } }
@@ -62,6 +144,112 @@ const attributes: Record<
         items: { type: "object", fields: { at: { type: "date" } } }
       }
     } as const satisfies ObjectSchema
+  },
+  // Lists whose elements are validated and converted as whole values when a
+  // $contains operand names one: an enum, a scalar, an object carrying a
+  // nested date, a nullable field and a nested object, and a union
+  lists: {
+    alias: "Lists",
+    type: z.object({}),
+    kind: "object",
+    objectSchema: {
+      roles: {
+        type: "array",
+        items: { type: "enum", values: ["owner", "viewer"] }
+      },
+      scores: { type: "array", items: { type: "number" } },
+      flags: { type: "array", items: { type: "boolean" } },
+      audit: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            at: { type: "date" },
+            actor: { type: "string" },
+            note: { type: "string", nullable: true },
+            source: { type: "object", fields: { seenAt: { type: "date" } } }
+          }
+        }
+      },
+      batches: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            lines: {
+              type: "array",
+              items: { type: "object", fields: { sku: { type: "string" } } }
+            }
+          }
+        }
+      },
+      widgets: {
+        type: "array",
+        items: {
+          type: "discriminatedUnion",
+          discriminator: "kind",
+          variants: {
+            marker: { at: { type: "date" } },
+            text: { body: { type: "string" } }
+          }
+        }
+      },
+      // A nullable field at every depth below an element's top: a nested
+      // object's, an element's of a list within the element, a nullable list
+      // within the element, and a union variant's
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            },
+            lines: {
+              type: "array",
+              items: { type: "object", fields: { sku: { type: "string" } } },
+              nullable: true
+            }
+          }
+        }
+      },
+      promos: {
+        type: "array",
+        items: {
+          type: "discriminatedUnion",
+          discriminator: "kind",
+          variants: {
+            discount: { percent: { type: "number" } },
+            bundle: {
+              sku: { type: "string" },
+              label: { type: "string", nullable: true }
+            }
+          }
+        }
+      }
+    } as const satisfies ObjectSchema
+  },
+  address: {
+    alias: "Address",
+    type: objectSchemaToZod(addressSchema),
+    kind: "object",
+    serializers: createObjectSerializer(addressSchema),
+    objectSchema: addressSchema
   },
   // Declared as a Date, stored as an ISO string — the pairing the whole
   // declared-form/stored-form split exists for
@@ -116,6 +304,19 @@ const typedQueryBuilder = (): FilterExpressionBuilder =>
   new FilterExpressionBuilder({
     capabilities: queryFilterCapabilities,
     resolveAttribute: typedResolver
+  });
+
+/**
+ * Write-condition builder over the typed resolver, so a condition is validated
+ * and converted as a query filter's is
+ */
+const writeConditionBuilder = (
+  props: Partial<FilterExpressionBuilderProps> = {}
+): FilterExpressionBuilder =>
+  new FilterExpressionBuilder({
+    capabilities: writeConditionCapabilities,
+    resolveAttribute: typedResolver,
+    ...props
   });
 
 describe("FilterExpressionBuilder", () => {
@@ -313,13 +514,14 @@ describe("FilterExpressionBuilder", () => {
     it("leaves a nested value alone when the path cannot be resolved", () => {
       expect.assertions(1);
 
-      // A segment naming no declared field has no field definition, so the
-      // value is written as stored
+      // A segment below a discriminated union names a field of a variant the
+      // walk does not follow, so it has no field definition and the value is
+      // written as stored
       expect(
-        queryBuilderInstance().filterParams({ "meta.missing.deeper": iso })
+        queryBuilderInstance().filterParams({ "meta.channel.deeper": iso })
       ).toEqual({
-        expression: "#Meta.#missing.#deeper = :Metamissingdeeper1",
-        values: { Metamissingdeeper1: iso }
+        expression: "#Meta.#channel.#deeper = :Metachanneldeeper1",
+        values: { Metachanneldeeper1: iso }
       });
     });
   });
@@ -505,6 +707,37 @@ describe("FilterExpressionBuilder", () => {
           CreatedAt2: "2023-12-31T23:59:59.999Z"
         }
       });
+    });
+
+    it("compiles an enum $between across two members, validating each bound", () => {
+      expect.assertions(3);
+
+      expect(
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["bronze", "gold"] }
+        })
+      ).toEqual({
+        expression: "#Tier BETWEEN :Tier1 AND :Tier2",
+        values: { Tier1: "bronze", Tier2: "gold" }
+      });
+      expect(() =>
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["bronze", "platinum"] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "tier": the value does not match the attribute\'s type'
+        )
+      );
+      expect(() =>
+        typedQueryBuilder().filterParams({
+          tier: { $between: ["copper", "gold"] }
+        })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "tier": the value does not match the attribute\'s type'
+        )
+      );
     });
 
     it("parenthesizes a multi-operand condition inside an $or block", () => {
@@ -861,17 +1094,17 @@ describe("FilterExpressionBuilder", () => {
 
       // DynamoDB has no Number for NaN or Infinity, so no row can hold one for
       // a comparison to order against. An attribute with a schema never gets
-      // here (zod's number() rejects both); a path naming no field has none
+      // here (zod's number() rejects both); a path into a union variant has none
       const message = "cannot order this value";
 
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $gt: Number.NaN }
+          "meta.channel.unknown.at": { $gt: Number.NaN }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $between: [1, Number.POSITIVE_INFINITY] }
+          "meta.channel.unknown.at": { $between: [1, Number.POSITIVE_INFINITY] }
         })
       ).toThrow(message);
     });
@@ -929,7 +1162,7 @@ describe("FilterExpressionBuilder", () => {
       );
       expect(() =>
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": [{ $gt: 1 }]
+          "meta.channel.unknown.at": [{ $gt: 1 }]
         })
       ).toThrow("an IN element names comparison");
     });
@@ -1007,11 +1240,13 @@ describe("FilterExpressionBuilder", () => {
       expect(
         queryBuilderInstance().filterParams({
           // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
-          "meta.history": { $contains: { at: "2023" } }
+          "meta.history": {
+            $contains: { at: new Date("2023-01-01T00:00:00.000Z") }
+          }
         })
       ).toEqual({
         expression: "contains(#Meta.#history, :Metahistory1)",
-        values: { Metahistory1: { at: "2023" } }
+        values: { Metahistory1: { at: "2023-01-01T00:00:00.000Z" } }
       });
 
       // Where the form is a String, a substring is still what it compares
@@ -1243,11 +1478,11 @@ describe("FilterExpressionBuilder", () => {
 
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown": { $gt: "x" }
+          "meta.channel.unknown": { $gt: "x" }
         })
       ).toEqual({
-        expression: "#Meta.#unknown > :Metaunknown1",
-        values: { Metaunknown1: "x" }
+        expression: "#Meta.#channel.#unknown > :Metachannelunknown1",
+        values: { Metachannelunknown1: "x" }
       });
     });
 
@@ -1265,6 +1500,250 @@ describe("FilterExpressionBuilder", () => {
           'Invalid filter value for attribute "meta.tags": $gt does not apply to a value stored as a list. DynamoDB orders String, Number and Binary values; a Boolean, a Map and a List have no ordering, so the comparison can never hold'
         )
       );
+    });
+  });
+
+  describe("a range's bounds are one kind of value", () => {
+    // The condition types build a range per comparable kind — strings,
+    // numbers, bigints, Dates or binary — so its bounds never mix two. A path
+    // into a union variant resolves to no field, so nothing validates its
+    // operands against a schema, and a plain JavaScript caller's mixed pair
+    // would reach DynamoDB: a $between there is rejected with a
+    // ValidationException, and a composed range can never hold. The bounds
+    // alone are enough to refuse it, before anything is sent
+    const mixed = (attr: string, operators: string, kinds: string): string =>
+      `Invalid filter value for attribute "${attr}": ${operators} bound a range with ${kinds}. A range's bounds are one kind of value — all strings, all numbers, all bigints, all Dates or all binary — and a range across kinds is one DynamoDB either rejects or can never satisfy`;
+
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("refuses a $between whose bounds are different kinds on a path whose field is unresolved, naming the path", () => {
+        expect.assertions(5);
+
+        const path = "meta.channel.address";
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string and number
+            [path]: { $between: ["4000", 4999] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a string and a number"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number and string
+            [path]: { $between: [4000, "4999"] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a number and a string"))
+        );
+        // A bigint is stored as a Number, but the types keep it a kind of its
+        // own, and so does this check
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number and bigint
+            [path]: { $between: [1, 5n] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "a number and a bigint"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's binary and string
+            [path]: { $between: [new Uint8Array([1]), "b"] }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$between", "binary and a string"))
+        );
+        // Deeper below the variant's field the path is no more resolved
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string and number
+            "meta.channel.address.zip": { $between: ["80000", 89999] }
+          })
+        ).toThrow(
+          new FilterError(
+            mixed(
+              "meta.channel.address.zip",
+              "$between",
+              "a string and a number"
+            )
+          )
+        );
+      });
+
+      it("refuses a composed range whose bounds are different kinds on a path whose field is unresolved, in either order", () => {
+        expect.assertions(3);
+
+        const path = "meta.channel.address";
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's string to number
+            [path]: { $gte: "4000", $lte: 4999 }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$gte and $lte", "a string and a number"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's number to string
+            [path]: { $gt: 4000, $lt: "4999" }
+          })
+        ).toThrow(
+          new FilterError(mixed(path, "$gt and $lt", "a number and a string"))
+        );
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error a plain JavaScript caller's three kinds
+            [path]: { $gt: "1", $lt: 5n, $lte: 6 }
+          })
+        ).toThrow(
+          new FilterError(
+            mixed(
+              path,
+              "$gt and $lt and $lte",
+              "a string, a bigint and a number"
+            )
+          )
+        );
+      });
+
+      it("refuses a mixed range inside an $or branch", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            $or: [
+              { name: "Scale-A" },
+              // @ts-expect-error a plain JavaScript caller's mixed pair
+              { "meta.channel.address": { $between: ["4000", 4999] } }
+            ]
+          })
+        ).toThrow(
+          new FilterError(
+            mixed("meta.channel.address", "$between", "a string and a number")
+          )
+        );
+      });
+
+      it.each<
+        [
+          string,
+          FilterParams,
+          ReturnType<FilterExpressionBuilder["filterParams"]>
+        ]
+      >([
+        [
+          "two strings",
+          { "meta.channel.address": { $between: ["4000", "4999"] } },
+          {
+            expression:
+              "#Meta.#channel.#address BETWEEN :Metachanneladdress1 AND :Metachanneladdress2",
+            values: { Metachanneladdress1: "4000", Metachanneladdress2: "4999" }
+          }
+        ],
+        [
+          "two numbers",
+          { "meta.channel.address": { $between: [4000, 4999] } },
+          {
+            expression:
+              "#Meta.#channel.#address BETWEEN :Metachanneladdress1 AND :Metachanneladdress2",
+            values: { Metachanneladdress1: 4000, Metachanneladdress2: 4999 }
+          }
+        ],
+        [
+          "a composed range of two strings",
+          { "meta.channel.address": { $gte: "4000", $lte: "4999" } },
+          {
+            expression:
+              "#Meta.#channel.#address >= :Metachanneladdress1 AND #Meta.#channel.#address <= :Metachanneladdress2",
+            values: { Metachanneladdress1: "4000", Metachanneladdress2: "4999" }
+          }
+        ],
+        [
+          "a composed range of two numbers",
+          { "meta.channel.address": { $gt: 4000, $lt: 4999 } },
+          {
+            expression:
+              "#Meta.#channel.#address > :Metachanneladdress1 AND #Meta.#channel.#address < :Metachanneladdress2",
+            values: { Metachanneladdress1: 4000, Metachanneladdress2: 4999 }
+          }
+        ]
+      ])(
+        "still sends a range of %s on a path whose field is unresolved, unjudged",
+        (_, condition, compiled) => {
+          expect.assertions(1);
+
+          expect(builder().filterParams(condition)).toEqual(compiled);
+        }
+      );
+
+      it("still sends a range of two Dates on a date attribute and a date field", () => {
+        expect.assertions(2);
+
+        // A Date is a kind of its own, though it is sent as the ISO string
+        // it is stored as
+        const start = new Date("2023-01-01T00:00:00.000Z");
+        const end = new Date("2023-12-31T00:00:00.000Z");
+        expect(
+          builder().filterParams({ createdAt: { $between: [start, end] } })
+        ).toEqual({
+          expression: "#CreatedAt BETWEEN :CreatedAt1 AND :CreatedAt2",
+          values: {
+            CreatedAt1: "2023-01-01T00:00:00.000Z",
+            CreatedAt2: "2023-12-31T00:00:00.000Z"
+          }
+        });
+        expect(
+          builder().filterParams({
+            "meta.recordedAt": { $gte: start, $lt: end }
+          })
+        ).toEqual({
+          expression:
+            "#Meta.#recordedAt >= :MetarecordedAt1 AND #Meta.#recordedAt < :MetarecordedAt2",
+          values: {
+            MetarecordedAt1: "2023-01-01T00:00:00.000Z",
+            MetarecordedAt2: "2023-12-31T00:00:00.000Z"
+          }
+        });
+      });
+    });
+
+    it("refuses a mixed range on a resolved attribute whose resolver supplies no type", () => {
+      expect.assertions(1);
+
+      // Without a zod type nothing validates the bounds against the
+      // attribute, so this check is the one that refuses them
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed pair
+          price: { $between: ["1", 5] }
+        })
+      ).toThrow(
+        new FilterError(mixed("price", "$between", "a string and a number"))
+      );
+    });
+
+    it("keeps refusing a mixed range on a resolved field as a value its type does not hold", () => {
+      expect.assertions(2);
+
+      // Validation against the field's schema answers first, as it did before
+      // this check existed
+      const message =
+        'Invalid filter value for attribute "meta.nested.count": the value does not match the attribute\'s type';
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed pair
+          "meta.nested.count": { $between: ["1", 5] }
+        })
+      ).toThrow(new FilterError(message));
+      expect(() =>
+        queryBuilderInstance().filterParams({
+          // @ts-expect-error a plain JavaScript caller's mixed range
+          "meta.nested.count": { $gte: 1, $lte: "5" }
+        })
+      ).toThrow(new FilterError(message));
     });
   });
 
@@ -1305,7 +1784,7 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error $ne is not a supported operator
-          "meta.unknown.at": { $ne: 5 }
+          "meta.channel.unknown.at": { $ne: 5 }
         })
       ).toThrow("$ne is not a supported operator");
     });
@@ -1464,6 +1943,1110 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({
         expression: "contains(#Name, :Name1)",
         values: { Name1: "cal" }
+      });
+    });
+  });
+
+  describe("dot paths naming nothing the schema declares", () => {
+    const metaFields =
+      "odd name, odd-name, label, location, note, recordedAt, tags, scores, seenAt, channel, nested, history";
+
+    // The same paths are rejected wherever a dot path is accepted: a query
+    // filter answers them with no rows, and a write condition with a failed
+    // guard indistinguishable from a real one
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it.each([
+        [
+          "below the attribute",
+          "meta.nope",
+          `Invalid filter key "meta.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${metaFields}`
+        ],
+        [
+          "inside a nested object",
+          "meta.nested.nope",
+          'Invalid filter key "meta.nested.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: deepAt, count'
+        ],
+        [
+          "inside an element of a list of objects",
+          "meta.history[0].nope",
+          'Invalid filter key "meta.history[0].nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: at'
+        ],
+        [
+          "with an index of its own",
+          "meta.nope[0]",
+          `Invalid filter key "meta.nope[0]": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: ${metaFields}`
+        ]
+      ])("rejects a field undeclared %s", (_, key, message) => {
+        expect.assertions(1);
+
+        expect(() => builder().filterParams({ [key]: "x" })).toThrow(
+          new FilterError(message)
+        );
+      });
+
+      it.each([
+        [
+          "a top level attribute",
+          "name.x",
+          'Invalid filter key "name.x": "name" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a nested field",
+          "meta.label.x",
+          'Invalid filter key "meta.label.x": "label" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a field inside a nested object",
+          "meta.nested.count.x",
+          'Invalid filter key "meta.nested.count.x": "count" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "an element of a list of scalars",
+          "meta.tags[0].x",
+          'Invalid filter key "meta.tags[0].x": "tags[0]" is not an object, so it has no field "x" and the condition can match nothing'
+        ]
+      ])("rejects a path continuing past %s", (_, key, message) => {
+        expect.assertions(1);
+
+        expect(() => builder().filterParams({ [key]: "x" })).toThrow(
+          new FilterError(message)
+        );
+      });
+
+      it("rejects the path before judging its operator or operand", () => {
+        expect.assertions(2);
+
+        expect(() =>
+          builder().filterParams({ "meta.nope": { $contains: "x" } })
+        ).toThrow('Invalid filter key "meta.nope": "nope" is not a field');
+        expect(() =>
+          builder().filterParams({ $or: [{ "name.x": { $gt: 1 } }] })
+        ).toThrow('Invalid filter key "name.x": "name" is not an object');
+      });
+
+      it("still abstains on a path into a discriminated union variant", () => {
+        expect.assertions(2);
+
+        // The variants' fields are invisible to the schema walker, so a field
+        // it cannot find there may well exist: the value is written as stored
+        // and no guard judges it
+        expect(
+          builder().filterParams({ "meta.channel.address": { $gt: 1 } })
+        ).toEqual({
+          expression: "#Meta.#channel.#address > :Metachanneladdress1",
+          values: { Metachanneladdress1: 1 }
+        });
+        expect(
+          builder().filterParams({ "meta.channel.nope.deeper": "x" })
+        ).toEqual({
+          expression: "#Meta.#channel.#nope.#deeper = :Metachannelnopedeeper1",
+          values: { Metachannelnopedeeper1: "x" }
+        });
+      });
+
+      it("keeps compiling the declared paths", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            "meta.nested.count": 1,
+            "meta.history[0].at": new Date("2023-01-01T00:00:00.000Z")
+          })
+        ).toEqual({
+          expression:
+            "#Meta.#nested.#count = :Metanestedcount1 AND #Meta.#history[0].#at = :Metahistory0at2",
+          values: {
+            Metanestedcount1: 1,
+            Metahistory0at2: "2023-01-01T00:00:00.000Z"
+          }
+        });
+      });
+    });
+  });
+
+  describe("$contains on a list takes one of its elements", () => {
+    describe.each([
+      { context: "a query filter", builder: queryBuilderInstance },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it.each([
+        ["a number on a list of strings", "meta.tags", 1, "string"],
+        ["a boolean on a list of strings", "meta.tags", true, "string"],
+        ["a string on a list of numbers", "meta.scores", "1", "number"],
+        ["a boolean on a list of numbers", "meta.scores", true, "number"],
+        ["a string on a list of objects", "meta.history", "x", "map"],
+        ["a number on a list of dates", "meta.seenAt", 1, "string"],
+        ["a boolean on a list of dates", "meta.seenAt", true, "string"]
+      ])("rejects %s", (_, key, operand, form) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({ [key]: { $contains: operand } })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${key}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${form}, which this operand is not`
+          )
+        );
+      });
+
+      it("converts a Date on a list of dates to the stored ISO string", () => {
+        expect.assertions(1);
+
+        // The operand is a whole element, so it is named as the field declares
+        // its elements and converted as an element is stored
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers a Date on a list of dates
+            "meta.seenAt": { $contains: new Date("2023-01-01T00:00:00.000Z") }
+          })
+        ).toEqual({
+          expression: "contains(#Meta.#seenAt, :MetaseenAt1)",
+          values: { MetaseenAt1: "2023-01-01T00:00:00.000Z" }
+        });
+      });
+
+      it("rejects an invalid Date on a list of dates", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers a Date on a list of dates
+            "meta.seenAt": { $contains: new Date("not a date") }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "meta.seenAt": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        ["a list of strings", "meta.tags", "string"],
+        ["a list of numbers", "meta.scores", "number"]
+      ])("rejects a Date on %s", (_, key, form) => {
+        expect.assertions(1);
+
+        expect(() =>
+          // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass a Date
+          builder().filterParams({
+            [key]: { $contains: new Date("2023-01-01T00:00:00.000Z") }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${key}": $contains on a list looks for one of its elements, and this list's elements are stored as a ${form}, which this operand is not`
+          )
+        );
+      });
+
+      it("keeps an operand of the list's element type", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            "meta.tags": { $contains: "vip" },
+            "meta.scores": { $contains: 5 },
+            "meta.seenAt": { $contains: "2023-01-01T00:00:00.000Z" },
+            // @ts-expect-error ContainsFilter's operand type is a scalar; the runtime takes a List element
+            "meta.history": {
+              $contains: { at: new Date("2023-01-01T00:00:00.000Z") }
+            }
+          })
+        ).toEqual({
+          expression:
+            "contains(#Meta.#tags, :Metatags1) AND contains(#Meta.#scores, :Metascores2) AND contains(#Meta.#seenAt, :MetaseenAt3) AND contains(#Meta.#history, :Metahistory4)",
+          values: {
+            Metatags1: "vip",
+            Metascores2: 5,
+            MetaseenAt3: "2023-01-01T00:00:00.000Z",
+            Metahistory4: { at: "2023-01-01T00:00:00.000Z" }
+          }
+        });
+      });
+
+      it("takes a member on a list of enums", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({ "lists.roles": { $contains: "owner" } })
+        ).toEqual({
+          expression: "contains(#Lists.#roles, :Listsroles1)",
+          values: { Listsroles1: "owner" }
+        });
+      });
+
+      it("rejects a string outside the enum on a list of enums", () => {
+        expect.assertions(1);
+
+        // Stored as a string, so the form check passes it — but no element can
+        // hold it, and DynamoDB answers the test with nothing
+        expect(() =>
+          builder().filterParams({ "lists.roles": { $contains: "admin" } })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it("validates an element of a list of scalars against the element's schema", () => {
+        expect.assertions(4);
+
+        expect(
+          builder().filterParams({
+            "lists.scores": { $contains: 5 },
+            "lists.flags": { $contains: false }
+          })
+        ).toEqual({
+          expression:
+            "contains(#Lists.#scores, :Listsscores1) AND contains(#Lists.#flags, :Listsflags2)",
+          values: { Listsscores1: 5, Listsflags2: false }
+        });
+
+        // A number no element can hold: the element schema rejects what a
+        // write of the field rejects
+        const rejection = new FilterError(
+          'Invalid filter value for attribute "lists.scores": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        );
+
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: NaN } })
+        ).toThrow(rejection);
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: Infinity } })
+        ).toThrow(rejection);
+        expect(() =>
+          builder().filterParams({ "lists.scores": { $contains: 5n } })
+        ).toThrow(rejection);
+      });
+
+      it("converts an element of a list of objects to its stored form, nested dates included", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.audit": {
+              $contains: {
+                at: new Date("2023-01-01T00:00:00.000Z"),
+                actor: "ann",
+                note: "restocked",
+                source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+              }
+            }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#audit, :Listsaudit1)",
+          values: {
+            Listsaudit1: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "ann",
+              note: "restocked",
+              source: { seenAt: "2023-01-02T00:00:00.000Z" }
+            }
+          }
+        });
+      });
+
+      it("leaves a nullable field the element omits, nulls or leaves undefined absent from it", () => {
+        expect.assertions(1);
+
+        // The write removes a nulled field rather than storing NULL, so the
+        // element looked for lacks it in all three spellings, as the stored
+        // one does
+        const element = (note?: null): Record<string, unknown> => ({
+          at: new Date("2023-01-01T00:00:00.000Z"),
+          actor: "ann",
+          ...(note !== undefined && { note }),
+          source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+        });
+        const stored = {
+          at: "2023-01-01T00:00:00.000Z",
+          actor: "ann",
+          source: { seenAt: "2023-01-02T00:00:00.000Z" }
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.audit": { $contains: element() },
+            $or: [
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.audit": { $contains: element(null) } },
+              {
+                // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+                "lists.audit": { $contains: { ...element(), note: undefined } }
+              }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "(contains(#Lists.#audit, :Listsaudit1) OR contains(#Lists.#audit, :Listsaudit2)) AND (contains(#Lists.#audit, :Listsaudit3))",
+          values: {
+            Listsaudit1: stored,
+            Listsaudit2: stored,
+            Listsaudit3: stored
+          }
+        });
+      });
+
+      it("leaves a nulled nullable field out of the element at every depth", () => {
+        expect.assertions(1);
+
+        // contains compares the element whole, and the write stores each of
+        // these elements without its nulled fields, so the bound element
+        // lacks them too: in a nested object, in an element of a list within
+        // the element, as a nullable list itself, and in a union variant
+        const restocked: Record<string, unknown> = {
+          sku: "MUG-1",
+          placement: { aisle: "A", bin: null },
+          restocks: [
+            { at: new Date("2023-01-01T00:00:00.000Z"), note: null },
+            { at: new Date("2023-01-02T00:00:00.000Z"), note: "late" }
+          ],
+          lines: null
+        };
+        const bundled: Record<string, unknown> = {
+          sku: "MUG-2",
+          placement: { aisle: "B", bin: null },
+          restocks: [],
+          lines: [{ sku: "KIT-1" }]
+        };
+        const bundle: Record<string, unknown> = {
+          kind: "bundle",
+          sku: "KIT-1",
+          label: null
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.entries": { $contains: restocked },
+            $or: [
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.entries": { $contains: bundled } },
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              { "lists.promos": { $contains: bundle } }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "(contains(#Lists.#entries, :Listsentries1) OR contains(#Lists.#promos, :Listspromos2)) AND (contains(#Lists.#entries, :Listsentries3))",
+          values: {
+            Listsentries1: {
+              sku: "MUG-2",
+              placement: { aisle: "B" },
+              restocks: [],
+              lines: [{ sku: "KIT-1" }]
+            },
+            Listspromos2: { kind: "bundle", sku: "KIT-1" },
+            Listsentries3: {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [
+                { at: "2023-01-01T00:00:00.000Z" },
+                { at: "2023-01-02T00:00:00.000Z", note: "late" }
+              ]
+            }
+          }
+        });
+      });
+
+      it.each([
+        [
+          "a non-nullable field of a nested object",
+          {
+            sku: "MUG-1",
+            placement: { aisle: null },
+            restocks: []
+          }
+        ],
+        [
+          "an object field, which is never nullable",
+          { sku: "MUG-1", placement: null, restocks: [] }
+        ],
+        [
+          "a list that is not nullable",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: null }
+        ],
+        [
+          "an element of a list within the element",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: [null] }
+        ],
+        [
+          "a non-nullable field of an element of a list within the element",
+          {
+            sku: "MUG-1",
+            placement: { aisle: "A" },
+            restocks: [{ at: null }]
+          }
+        ]
+      ])("rejects null on %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.entries": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.entries": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        [
+          "a non-nullable field of a union variant",
+          { kind: "bundle", sku: null }
+        ],
+        ["the discriminator", { kind: null, sku: "KIT-1" }]
+      ])("rejects null on %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.promos": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.promos": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it("rejects null as the element itself", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({ "lists.entries": { $contains: null } })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.entries": $contains takes a single value to look for, and null is not one'
+          )
+        );
+      });
+
+      it.each([
+        [
+          "a field of the wrong type",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: 1,
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a date field written as its stored string",
+          {
+            at: "2023-01-01T00:00:00.000Z",
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a nested date that is not a valid Date",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("not a date") }
+          }
+        ],
+        [
+          "a required field it omits",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ],
+        [
+          "a required field it leaves undefined",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: undefined,
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") }
+          }
+        ]
+      ])("rejects an element of a list of objects with %s", (_, operand) => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.audit": { $contains: operand }
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "lists.audit": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+          )
+        );
+      });
+
+      it.each([
+        [
+          "at the top of the element",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z") },
+            actorId: "a-1"
+          },
+          "actorId"
+        ],
+        [
+          "inside a nested object",
+          {
+            at: new Date("2023-01-01T00:00:00.000Z"),
+            actor: "ann",
+            source: { seenAt: new Date("2023-01-02T00:00:00.000Z"), by: "x" }
+          },
+          "source.by"
+        ]
+      ])(
+        "rejects a field the element does not declare %s",
+        (_, operand, path) => {
+          expect.assertions(1);
+
+          // contains() compares a list of maps element by element, whole, so an
+          // operand carrying a field no element has can never equal one.
+          // Stripping it instead would look for an element the caller did not
+          // describe
+          expect(() =>
+            builder().filterParams({
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              "lists.audit": { $contains: operand }
+            })
+          ).toThrow(
+            new FilterError(
+              `Invalid filter value for attribute "lists.audit": $contains on a list looks for one of its elements, and "${path}" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+            )
+          );
+        }
+      );
+
+      it("names an undeclared field inside a list an element holds by its index", () => {
+        expect.assertions(2);
+
+        expect(
+          builder().filterParams({
+            "lists.batches": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+              $contains: { lines: [{ sku: "a" }, { sku: "b" }] }
+            }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#batches, :Listsbatches1)",
+          values: { Listsbatches1: { lines: [{ sku: "a" }, { sku: "b" }] } }
+        });
+
+        expect(() =>
+          builder().filterParams({
+            "lists.batches": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              $contains: { lines: [{ sku: "a" }, { sku: "b", qty: 1 }] }
+            }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "lists.batches": $contains on a list looks for one of its elements, and "lines[1].qty" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+          )
+        );
+      });
+
+      it("validates and converts an element of a list of discriminated unions", () => {
+        expect.assertions(4);
+
+        const marker = {
+          kind: "marker",
+          at: new Date("2023-01-01T00:00:00.000Z")
+        };
+
+        expect(
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; an entity's typed filter offers the element
+            "lists.widgets": { $contains: marker }
+          })
+        ).toEqual({
+          expression: "contains(#Lists.#widgets, :Listswidgets1)",
+          values: {
+            Listswidgets1: { kind: "marker", at: "2023-01-01T00:00:00.000Z" }
+          }
+        });
+
+        const cannotHold = new FilterError(
+          'Invalid filter value for attribute "lists.widgets": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        );
+
+        // A variant the union does not declare
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.widgets": { $contains: { kind: "chart", body: "x" } }
+          })
+        ).toThrow(cannotHold);
+
+        // A field of another variant's type
+        expect(() =>
+          builder().filterParams({
+            // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+            "lists.widgets": { $contains: { kind: "text", body: 1 } }
+          })
+        ).toThrow(cannotHold);
+
+        // A field the named variant does not declare, though another does
+        expect(() =>
+          builder().filterParams({
+            "lists.widgets": {
+              // @ts-expect-error ContainsFilter's operand type is a scalar; a plain JavaScript caller can pass any object
+              $contains: { kind: "text", body: "x", at: new Date(0) }
+            }
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "lists.widgets": $contains on a list looks for one of its elements, and "at" is not a field the list's elements declare. contains compares an element whole, so no element can equal this operand`
+          )
+        );
+      });
+
+      it("keeps any scalar operand's String rule unchanged", () => {
+        expect.assertions(1);
+
+        // A String-stored attribute takes a substring, judged as before
+        expect(
+          builder().filterParams({ "meta.label": { $contains: "ware" } })
+        ).toEqual({
+          expression: "contains(#Meta.#label, :Metalabel1)",
+          values: { Metalabel1: "ware" }
+        });
+      });
+    });
+  });
+
+  describe("a whole-value object operand carries only declared fields", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      // Every case but the one under test declares its required fields, so the
+      // schema accepts it and only the undeclared field is left to reject
+      const geo = { lat: 39.7, surveyedAt: new Date(0) };
+
+      it("compiles an object operand whose every field is declared as before", () => {
+        expect.assertions(1);
+
+        expect(
+          builder().filterParams({
+            address: {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              city: "Denver",
+              geo: {
+                lat: 39.7,
+                surveyedAt: new Date("2023-01-01T00:00:00.000Z")
+              },
+              lines: [{ sku: "a" }],
+              channel: { kind: "email", address: "a@example.com" }
+            },
+            "address.geo": [
+              { lat: 1, surveyedAt: new Date("2023-01-02T00:00:00.000Z") },
+              { lat: 2, surveyedAt: new Date("2023-01-03T00:00:00.000Z") }
+            ]
+          })
+        ).toEqual({
+          expression:
+            "#Address = :Address1 AND #Address.#geo IN (:Addressgeo2,:Addressgeo3)",
+          values: {
+            Address1: {
+              city: "Denver",
+              geo: { lat: 39.7, surveyedAt: "2023-01-01T00:00:00.000Z" },
+              lines: [{ sku: "a" }],
+              channel: { kind: "email", address: "a@example.com" }
+            },
+            Addressgeo2: { lat: 1, surveyedAt: "2023-01-02T00:00:00.000Z" },
+            Addressgeo3: { lat: 2, surveyedAt: "2023-01-03T00:00:00.000Z" }
+          }
+        });
+      });
+
+      it.each<[string, string, unknown, string]>([
+        [
+          "at the top level of an object attribute",
+          "address",
+          { city: "Denver", geo, region: "west" },
+          "region"
+        ],
+        [
+          "inside a nested object",
+          "address",
+          {
+            city: "Denver",
+            geo: { lat: 39.7, surveyedAt: new Date(0), alt: 1600 }
+          },
+          "geo.alt"
+        ],
+        [
+          "inside an element of a nested list of objects",
+          "address",
+          {
+            city: "Denver",
+            geo,
+            lines: [{ sku: "a" }, { sku: "b", qty: 1 }]
+          },
+          "lines[1].qty"
+        ],
+        [
+          "inside a union variant, though another variant declares it",
+          "address",
+          {
+            city: "Denver",
+            geo,
+            channel: { kind: "email", address: "a@example.com", phone: "1" }
+          },
+          "channel.phone"
+        ],
+        [
+          "in an IN element",
+          "address",
+          [
+            { city: "Denver", geo },
+            { city: "Boise", geo, region: "west" }
+          ],
+          "region"
+        ],
+        [
+          "on an object field a dot path names",
+          "address.geo",
+          { lat: 39.7, surveyedAt: new Date(0), alt: 1600 },
+          "alt"
+        ],
+        [
+          "in an IN element on an object field a dot path names",
+          "address.geo",
+          [
+            { lat: 1, surveyedAt: new Date(0) },
+            { lat: 2, surveyedAt: new Date(0), alt: 1600 }
+          ],
+          "alt"
+        ],
+        [
+          "on a union field a dot path names",
+          "address.channel",
+          { kind: "sms", phone: "1", address: "a" },
+          "address"
+        ]
+      ])("rejects an undeclared field %s", (_, attr, operand, path) => {
+        expect.assertions(1);
+
+        // Converting to the stored form would strip the field, and the
+        // stripped operand would equal a stored value the caller's does not
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any object
+          builder().filterParams({ [attr]: operand })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+          )
+        );
+      });
+
+      it("rejects an undeclared field inside an $or block", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          builder().filterParams({
+            $or: [
+              { "address.city": "Boise" },
+              // @ts-expect-error a plain JavaScript caller can pass any object
+              { address: { city: "Denver", geo, region: "west" } }
+            ]
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+          )
+        );
+      });
+    });
+  });
+
+  describe("a whole value compared by equality or IN leaves a nulled nullable field out", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("binds the value without the field at every depth, as the write stores it", () => {
+        expect.assertions(1);
+
+        // Equality and IN compare an object, or a list element named by an
+        // index, whole, and the write stores it without its nulled fields, so
+        // the bound value lacks them too: an object attribute's own, a nested
+        // object's, a nullable list's, an element's of a list within the
+        // value, and a union variant's
+        const at = new Date("2023-01-01T00:00:00.000Z");
+        const surveyedAt = new Date("2023-01-02T00:00:00.000Z");
+
+        expect(
+          builder().filterParams({
+            address: {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              city: "Denver",
+              zip: null,
+              geo: { lat: 39.7, surveyedAt },
+              lines: null,
+              channel: null
+            },
+            "lists.audit[0]": [
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              { at, actor: "ann", note: null, source: { seenAt: at } },
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              { at, actor: "bo", note: "late", source: { seenAt: at } }
+            ],
+            "lists.entries[0]": {
+              // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+              sku: "MUG-1",
+              placement: { aisle: "A", bin: null },
+              restocks: [{ at, note: null }],
+              lines: null
+            },
+            // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+            "lists.entries[0].placement": { aisle: "A", bin: null },
+            // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
+            "lists.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+          })
+        ).toEqual({
+          expression:
+            "#Address = :Address1 AND #Lists.#audit[0] IN (:Listsaudit02,:Listsaudit03) AND #Lists.#entries[0] = :Listsentries04 AND #Lists.#entries[0].#placement = :Listsentries0placement5 AND #Lists.#promos[0] = :Listspromos06",
+          values: {
+            Address1: {
+              city: "Denver",
+              geo: { lat: 39.7, surveyedAt: "2023-01-02T00:00:00.000Z" }
+            },
+            Listsaudit02: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "ann",
+              source: { seenAt: "2023-01-01T00:00:00.000Z" }
+            },
+            Listsaudit03: {
+              at: "2023-01-01T00:00:00.000Z",
+              actor: "bo",
+              note: "late",
+              source: { seenAt: "2023-01-01T00:00:00.000Z" }
+            },
+            Listsentries04: {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [{ at: "2023-01-01T00:00:00.000Z" }]
+            },
+            Listsentries0placement5: { aisle: "A" },
+            Listspromos06: { kind: "bundle", sku: "KIT-1" }
+          }
+        });
+      });
+
+      it.each<[string, string, unknown]>([
+        [
+          "a non-nullable field of an indexed element",
+          "lists.audit[0]",
+          { at: new Date(0), actor: null, source: { seenAt: new Date(0) } }
+        ],
+        [
+          "an object field, which is never nullable",
+          "address",
+          { city: "Denver", geo: null }
+        ],
+        [
+          "an element of a list within the value",
+          "lists.entries[0]",
+          { sku: "MUG-1", placement: { aisle: "A" }, restocks: [null] }
+        ],
+        [
+          "the discriminator of an indexed union element",
+          "lists.promos[0]",
+          { kind: null, sku: "KIT-1" }
+        ]
+      ])("rejects null on %s", (_, attr, operand) => {
+        expect.assertions(1);
+
+        // Leaving such a field out would not describe a value the schema can
+        // hold, so null there is still a value of the wrong type
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any object
+          builder().filterParams({ [attr]: operand })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": the value does not match the attribute's type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)`
+          )
+        );
+      });
+    });
+  });
+
+  describe("an IN of whole lists is validated and converted like any whole value", () => {
+    describe.each([
+      { context: "a query filter", builder: typedQueryBuilder },
+      { context: "a write condition", builder: () => writeConditionBuilder() }
+    ])("in $context", ({ builder }) => {
+      it("binds each list in the form the table stores it, without its nulled fields", () => {
+        expect.assertions(1);
+
+        // Each IN element on a list is a whole list, compared whole: its dates
+        // are converted and its nulled fields dropped, at every depth, as the
+        // write stores the list
+        const at = new Date("2023-01-01T00:00:00.000Z");
+        const seenAt = new Date("2023-01-02T00:00:00.000Z");
+
+        const filter: Record<string, unknown> = {
+          "lists.audit": [
+            [
+              { at, actor: "ann", note: null, source: { seenAt } },
+              { at, actor: "bo", note: "late", source: { seenAt } }
+            ],
+            []
+          ],
+          "meta.seenAt": [[at, seenAt]],
+          "lists.entries": [
+            [
+              {
+                sku: "MUG-1",
+                placement: { aisle: "A", bin: null },
+                restocks: [{ at, note: null }],
+                lines: null
+              }
+            ]
+          ],
+          "lists.promos": [[{ kind: "bundle", sku: "KIT-1", label: null }]]
+        };
+
+        expect(
+          // @ts-expect-error the entity-level type offers an IN of lists; the builder's own FilterParams does not
+          builder().filterParams(filter)
+        ).toEqual({
+          expression:
+            "#Lists.#audit IN (:Listsaudit1,:Listsaudit2) AND #Meta.#seenAt IN (:MetaseenAt3) AND #Lists.#entries IN (:Listsentries4) AND #Lists.#promos IN (:Listspromos5)",
+          values: {
+            Listsaudit1: [
+              {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "ann",
+                source: { seenAt: "2023-01-02T00:00:00.000Z" }
+              },
+              {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "bo",
+                note: "late",
+                source: { seenAt: "2023-01-02T00:00:00.000Z" }
+              }
+            ],
+            Listsaudit2: [],
+            MetaseenAt3: [
+              "2023-01-01T00:00:00.000Z",
+              "2023-01-02T00:00:00.000Z"
+            ],
+            Listsentries4: [
+              {
+                sku: "MUG-1",
+                placement: { aisle: "A" },
+                restocks: [{ at: "2023-01-01T00:00:00.000Z" }]
+              }
+            ],
+            Listspromos5: [{ kind: "bundle", sku: "KIT-1" }]
+          }
+        });
+      });
+
+      it.each<[string, string, unknown, string]>([
+        [
+          "at the top of an element",
+          "lists.audit",
+          [
+            {
+              at: new Date(0),
+              actor: "ann",
+              source: { seenAt: new Date(0) },
+              mood: "calm"
+            }
+          ],
+          "[0].mood"
+        ],
+        [
+          "in a nested object of a later element",
+          "lists.entries",
+          [
+            { sku: "MUG-1", placement: { aisle: "A" }, restocks: [] },
+            { sku: "MUG-2", placement: { aisle: "B", shelf: 3 }, restocks: [] }
+          ],
+          "[1].placement.shelf"
+        ],
+        [
+          "in an element of a list within an element",
+          "lists.entries",
+          [
+            {
+              sku: "MUG-1",
+              placement: { aisle: "A" },
+              restocks: [{ at: new Date(0), by: "ann" }]
+            }
+          ],
+          "[0].restocks[0].by"
+        ],
+        [
+          "in a union variant, though another variant declares it",
+          "lists.promos",
+          [{ kind: "bundle", sku: "KIT-1", percent: 10 }],
+          "[0].percent"
+        ]
+      ])(
+        "rejects an undeclared field %s, naming its path",
+        (_, attr, list, path) => {
+          expect.assertions(1);
+
+          // Converting the list would strip the field, and the stripped list
+          // would equal a stored one the caller's does not
+          expect(() =>
+            // @ts-expect-error a plain JavaScript caller can pass any object
+            builder().filterParams({ [attr]: [list] })
+          ).toThrow(
+            new FilterError(
+              `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+            )
+          );
+        }
+      );
+
+      it.each<[string, string, unknown]>([
+        ["a string on a list of numbers", "lists.scores", ["1"]],
+        ["a non-member on a list of enums", "lists.roles", ["admin"]],
+        ["a number on a list of dates", "meta.seenAt", [1]],
+        [
+          "a field of the wrong type in an element",
+          "lists.audit",
+          [{ at: 5, actor: "ann", source: { seenAt: new Date(0) } }]
+        ],
+        [
+          "null on a field that is not nullable",
+          "lists.audit",
+          [{ at: new Date(0), actor: null, source: { seenAt: new Date(0) } }]
+        ],
+        ["null as an element", "lists.audit", [null]],
+        [
+          "an element of a variant the union does not declare",
+          "lists.promos",
+          [{ kind: "gift", sku: "KIT-1" }]
+        ]
+      ])("rejects %s in a listed list", (_, attr, list) => {
+        expect.assertions(1);
+
+        expect(() =>
+          // @ts-expect-error a plain JavaScript caller can pass any value
+          builder().filterParams({ [attr]: [list] })
+        ).toThrow(
+          new FilterError(
+            `Invalid filter value for attribute "${attr}": the value does not match the attribute's type. A filter names an attribute as the entity declares it, and this one is stored in a different form — pass its declared value ($beginsWith matches the stored form by prefix)`
+          )
+        );
       });
     });
   });
@@ -1677,8 +3260,8 @@ describe("FilterExpressionBuilder", () => {
     it("still rejects an unorderable operand where the field cannot be resolved", () => {
       expect.assertions(3);
 
-      // The attribute-side gate abstains here on purpose: a path naming no
-      // declared field has no field definition, so dyna-record cannot know the
+      // The attribute-side gate abstains here on purpose: a path into a union
+      // variant has no field definition, so dyna-record cannot know the
       // stored form. The value is then all there is to go on, and it is enough —
       // without this the condition compiles and can never match
       const message =
@@ -1687,19 +3270,19 @@ describe("FilterExpressionBuilder", () => {
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean operand is a plain JavaScript caller
-          "meta.unknown.at": { $gt: true }
+          "meta.channel.unknown.at": { $gt: true }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a boolean pair is a plain JavaScript caller
-          "meta.unknown.at": { $between: [true, false] }
+          "meta.channel.unknown.at": { $between: [true, false] }
         })
       ).toThrow(message);
       expect(() =>
         queryBuilderInstance().filterParams({
           // @ts-expect-error a Map operand is a plain JavaScript caller
-          "meta.unknown.at": { $gt: { a: 1 } }
+          "meta.channel.unknown.at": { $gt: { a: 1 } }
         })
       ).toThrow(message);
     });
@@ -1711,11 +3294,11 @@ describe("FilterExpressionBuilder", () => {
       // beyond what DynamoDB can order
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $gte: "2023-01-01T00:00:00.000Z" }
+          "meta.channel.unknown.at": { $gte: "2023-01-01T00:00:00.000Z" }
         })
       ).toEqual({
-        expression: "#Meta.#unknown.#at >= :Metaunknownat1",
-        values: { Metaunknownat1: "2023-01-01T00:00:00.000Z" }
+        expression: "#Meta.#channel.#unknown.#at >= :Metachannelunknownat1",
+        values: { Metachannelunknownat1: "2023-01-01T00:00:00.000Z" }
       });
     });
 
@@ -1726,19 +3309,21 @@ describe("FilterExpressionBuilder", () => {
       // — the same reason such a value is left unvalidated
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown": { $beginsWith: "x" }
+          "meta.channel.unknown": { $beginsWith: "x" }
         })
       ).toEqual({
-        expression: "begins_with(#Meta.#unknown, :Metaunknown1)",
-        values: { Metaunknown1: "x" }
+        expression:
+          "begins_with(#Meta.#channel.#unknown, :Metachannelunknown1)",
+        values: { Metachannelunknown1: "x" }
       });
       expect(
         queryBuilderInstance().filterParams({
-          "meta.unknown.at": { $beginsWith: "2023" }
+          "meta.channel.unknown.at": { $beginsWith: "2023" }
         })
       ).toEqual({
-        expression: "begins_with(#Meta.#unknown.#at, :Metaunknownat1)",
-        values: { Metaunknownat1: "2023" }
+        expression:
+          "begins_with(#Meta.#channel.#unknown.#at, :Metachannelunknownat1)",
+        values: { Metachannelunknownat1: "2023" }
       });
     });
 
@@ -1916,7 +3501,10 @@ describe("FilterExpressionBuilder", () => {
         composedComparisons: false,
         between: true,
         nestedPaths: false,
-        singleConditionPerAttribute: false
+        singleConditionPerAttribute: false,
+        dropUndefinedConditions: false,
+        nullMeansNotSet: false,
+        dropEmptyOr: false
       });
     });
   });
@@ -1940,6 +3528,7 @@ describe("FilterExpressionBuilder", () => {
       "query filters": string;
       "key conditions": string;
       "search filters": string;
+      "write conditions": string;
     }> = [
       {
         operand: "equality",
@@ -1947,7 +3536,8 @@ describe("FilterExpressionBuilder", () => {
         capability: null,
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "compiles"
+        "search filters": "compiles",
+        "write conditions": "compiles"
       },
       {
         operand: "IN array",
@@ -1957,7 +3547,8 @@ describe("FilterExpressionBuilder", () => {
         // A key condition compares one value per key; a filter is applied after
         // the read, where a set membership test is fine
         "key conditions": "IN conditions (array values) are not supported",
-        "search filters": "IN conditions (array values) are not supported"
+        "search filters": "IN conditions (array values) are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "single comparison",
@@ -1967,7 +3558,8 @@ describe("FilterExpressionBuilder", () => {
         // The sort key takes a comparator, which is what makes a key range
         // narrow the read rather than discard rows after it
         "key conditions": "compiles",
-        "search filters": "Comparison conditions are not supported"
+        "search filters": "Comparison conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "composed comparisons",
@@ -1978,7 +3570,8 @@ describe("FilterExpressionBuilder", () => {
         // $between
         "key conditions": "Composed comparisons are not supported",
         // Rejected one step earlier, by the comparison capability
-        "search filters": "Comparison conditions are not supported"
+        "search filters": "Comparison conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$between",
@@ -1986,7 +3579,8 @@ describe("FilterExpressionBuilder", () => {
         capability: "between",
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "$between conditions are not supported"
+        "search filters": "$between conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$beginsWith",
@@ -1994,7 +3588,8 @@ describe("FilterExpressionBuilder", () => {
         capability: "beginsWith",
         "query filters": "compiles",
         "key conditions": "compiles",
-        "search filters": "$beginsWith conditions are not supported"
+        "search filters": "$beginsWith conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$contains",
@@ -2003,7 +3598,8 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // contains is not among the key condition functions
         "key conditions": "$contains conditions are not supported",
-        "search filters": "$contains conditions are not supported"
+        "search filters": "$contains conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "$or block",
@@ -2012,7 +3608,8 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // A key condition is a single conjunction selecting what to read
         "key conditions": "$or conditions are not supported",
-        "search filters": "$or conditions are not supported"
+        "search filters": "$or conditions are not supported",
+        "write conditions": "compiles"
       },
       {
         operand: "nested path",
@@ -2021,7 +3618,58 @@ describe("FilterExpressionBuilder", () => {
         "query filters": "compiles",
         // A document path is not a key, and not a search schema attribute
         "key conditions": "Nested attribute paths are not supported",
-        "search filters": "Nested attribute paths are not supported"
+        "search filters": "Nested attribute paths are not supported",
+        "write conditions": "compiles"
+      },
+      {
+        operand: "null",
+        condition: { discount: null },
+        capability: "nullMeansNotSet",
+        // dyna-record removes a nulled attribute rather than storing NULL, so
+        // no row holds one for a read to match
+        "query filters": "a condition cannot compare against null",
+        "key conditions": "a condition cannot compare against null",
+        "search filters": "a condition cannot compare against null",
+        // The same removal is why a guard reads null as "not set":
+        // attribute_not_exists matches exactly the rows a nulled write leaves
+        "write conditions": "compiles"
+      },
+      {
+        operand: "undefined",
+        condition: { name: undefined },
+        capability: "dropUndefinedConditions",
+        // Dropping a filter condition widens the result set within the
+        // partition the key conditions already scoped
+        "query filters": "compiles",
+        // Dropping a key condition would widen the read to the whole partition
+        "key conditions": "the condition has no value",
+        "search filters": "compiles",
+        // Dropping a guard's condition would loosen what the write requires
+        "write conditions": "the condition has no value"
+      },
+      {
+        operand: "empty $or",
+        condition: { $or: [] },
+        capability: "dropEmptyOr",
+        "query filters": "compiles",
+        // Rejected by the or capability, which comes first
+        "key conditions": "$or conditions are not supported",
+        "search filters": "$or conditions are not supported",
+        // An $or of nothing asks for nothing, and dropping it from a guard
+        // would loosen it
+        "write conditions": "$or has no condition blocks"
+      },
+      {
+        operand: "empty $or branch",
+        condition: { $or: [{}, { name: "Scale-A" }] },
+        capability: "dropEmptyOr",
+        "query filters": "compiles",
+        // Rejected by the or capability, which comes first
+        "key conditions": "$or conditions are not supported",
+        "search filters": "$or conditions are not supported",
+        // An empty branch always holds, so dropping it would tighten the guard
+        // and keeping it would make the whole $or vacuous
+        "write conditions": "a $or branch holds no conditions"
       }
     ];
 
@@ -2046,6 +3694,11 @@ describe("FilterExpressionBuilder", () => {
         capabilities: searchFilterCapabilities,
         compile: (condition: FilterParams) =>
           searchBuilderInstance().filterParams(condition)
+      },
+      "write conditions": {
+        capabilities: writeConditionCapabilities,
+        compile: (condition: FilterParams) =>
+          writeConditionBuilder().filterParams(condition)
       }
     } as const;
 
@@ -2122,9 +3775,13 @@ describe("FilterExpressionBuilder", () => {
           "$or block",
           "IN array",
           "composed comparisons",
+          "empty $or",
+          "empty $or branch",
           "equality",
           "nested path",
-          "single comparison"
+          "null",
+          "single comparison",
+          "undefined"
         ].sort()
       );
     });
@@ -2266,7 +3923,7 @@ describe("FilterExpressionBuilder", () => {
       // Not a judgement dyna-record can make: it cannot resolve the field, so
       // it constrains nothing — the behavior such a path has always had
       {
-        attribute: "meta.unknown",
+        attribute: "meta.channel.unknown",
         storedForm: "unresolved",
         sample: "x",
         $beginsWith: "compiles",
@@ -2462,17 +4119,18 @@ describe("FilterExpressionBuilder", () => {
       expect.assertions(2);
 
       // This was the only guard that judged what it could not see. A path
-      // naming no field resolves to no definition, and the field it names may
+      // into a union variant resolves to no definition, and the field it names may
       // well be a Map — on which a whole-object equality is legitimate, as the
       // resolved case already allows
       expect(
         queryBuilderInstance().filterParams({
           // @ts-expect-error the entity-level type offers this; the builder's own FilterParams does not
-          "meta.unknown.nested": { a: 1 }
+          "meta.channel.unknown.nested": { a: 1 }
         })
       ).toEqual({
-        expression: "#Meta.#unknown.#nested = :Metaunknownnested1",
-        values: { Metaunknownnested1: { a: 1 } }
+        expression:
+          "#Meta.#channel.#unknown.#nested = :Metachannelunknownnested1",
+        values: { Metachannelunknownnested1: { a: 1 } }
       });
 
       // Where the form IS resolved and cannot hold an object, it still judges
@@ -2580,6 +4238,40 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({ expression: "", values: {} });
     });
 
+    it("drops an $or branch that holds no conditions, keeping the others", () => {
+      expect.assertions(4);
+
+      // A filter that drops an always-true branch narrows nothing it was not
+      // already narrowing within the partition; write conditions reject it
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{}, { name: "Scale-A" }]
+        })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ $or: [] }, { name: "Scale-A" }]
+        })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      expect(
+        queryBuilderInstance().filterParams({ $or: [{}], name: "Scale-A" })
+      ).toEqual({
+        expression: "#Name = :Name1",
+        values: { Name1: "Scale-A" }
+      });
+      // Every branch empty leaves nothing, which assembly drops
+      expect(queryBuilderInstance().filterParams({ $or: [{}] })).toEqual({
+        expression: "",
+        values: {}
+      });
+    });
+
     it("groups both halves when both carry conditions", () => {
       expect.assertions(1);
 
@@ -2591,6 +4283,124 @@ describe("FilterExpressionBuilder", () => {
       ).toEqual({
         expression: "(#Category = :Category1) AND (#Name = :Name2)",
         values: { Category1: "books", Name2: "Scale-A" }
+      });
+    });
+
+    describe("an $or of one block that binds several values", () => {
+      it("is not wrapped again when it is itself the whole block of an enclosing $or", () => {
+        expect.assertions(1);
+
+        // Only an untyped caller can nest an $or directly in an $or block. The
+        // inner block is already one group, so the enclosing block must not
+        // wrap it again: `((…))` is rejected by DynamoDB
+        expect(
+          queryBuilderInstance().filterParams({
+            // @ts-expect-error: an $or block cannot hold an $or; this is the untyped caller's shape
+            $or: [{ $or: [{ name: "Scale-A", category: "books" }] }]
+          })
+        ).toEqual({
+          expression: "(#Name = :Name1 AND #Category = :Category2)",
+          values: { Name1: "Scale-A", Category2: "books" }
+        });
+      });
+
+      it("is one group as the whole filter, as before", () => {
+        expect.assertions(2);
+
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ name: "Scale-A", category: "books" }]
+          })
+        ).toEqual({
+          expression: "(#Name = :Name1 AND #Category = :Category2)",
+          values: { Name1: "Scale-A", Category2: "books" }
+        });
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ price: { $between: [1, 20] } }]
+          })
+        ).toEqual({
+          expression: "(#Price BETWEEN :Price1 AND :Price2)",
+          values: { Price1: 1, Price2: 20 }
+        });
+      });
+
+      it("keeps that one group beside sibling conditions, with no redundant parentheses", () => {
+        expect.assertions(3);
+
+        // The block's own grouping already isolates it. Wrapping it again sent
+        // `((#Name = :Name1 AND #Category = :Category2)) AND (#Price = :Price3)`,
+        // which DynamoDB rejects: "The expression has redundant parentheses"
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ name: "Scale-A", category: "books" }],
+            price: 5
+          })
+        ).toEqual({
+          expression:
+            "(#Name = :Name1 AND #Category = :Category2) AND (#Price = :Price3)",
+          values: { Name1: "Scale-A", Category2: "books", Price3: 5 }
+        });
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [{ price: { $between: [1, 20] } }],
+            name: "Scale-A"
+          })
+        ).toEqual({
+          expression:
+            "(#Price BETWEEN :Price1 AND :Price2) AND (#Name = :Name3)",
+          values: { Price1: 1, Price2: 20, Name3: "Scale-A" }
+        });
+        // A block emptied by dropped conditions leaves one block, so the same
+        // holds
+        expect(
+          queryBuilderInstance().filterParams({
+            $or: [
+              { name: "Scale-A", category: "books" },
+              { status: undefined }
+            ],
+            price: 5
+          })
+        ).toEqual({
+          expression:
+            "(#Name = :Name1 AND #Category = :Category2) AND (#Price = :Price3)",
+          values: { Name1: "Scale-A", Category2: "books", Price3: 5 }
+        });
+      });
+
+      it("keeps the same group beside sibling conditions in write conditions", () => {
+        expect.assertions(1);
+
+        expect(
+          writeConditionBuilder().filterParams({
+            $or: [{ holder: null, phone: null }],
+            status: "open"
+          })
+        ).toEqual({
+          expression:
+            "(attribute_not_exists(#Holder) AND attribute_not_exists(#phone_number)) AND (#Status = :Status1)",
+          values: { Status1: "open" }
+        });
+      });
+    });
+
+    it("groups an $or of several blocks as a whole beside sibling conditions", () => {
+      expect.assertions(1);
+
+      expect(
+        queryBuilderInstance().filterParams({
+          $or: [{ name: "Scale-A", category: "books" }, { status: "open" }],
+          price: 5
+        })
+      ).toEqual({
+        expression:
+          "((#Name = :Name1 AND #Category = :Category2) OR #Status = :Status3) AND (#Price = :Price4)",
+        values: {
+          Name1: "Scale-A",
+          Category2: "books",
+          Status3: "open",
+          Price4: 5
+        }
       });
     });
   });
@@ -2662,6 +4472,287 @@ describe("FilterExpressionBuilder", () => {
       ).toThrow(
         'Invalid key condition for attribute "name": the condition has no value'
       );
+    });
+  });
+
+  describe("write conditions", () => {
+    it.each<{ operand: string; condition: FilterParams }>([
+      { operand: "equality", condition: { name: "Scale-A" } },
+      { operand: "IN array", condition: { name: ["Scale-A", "Scale-B"] } },
+      { operand: "$beginsWith", condition: { name: { $beginsWith: "Scale" } } },
+      { operand: "$contains", condition: { name: { $contains: "cal" } } },
+      { operand: "$gt", condition: { price: { $gt: 10 } } },
+      { operand: "$gte", condition: { price: { $gte: 10 } } },
+      { operand: "$lt", condition: { price: { $lt: 10 } } },
+      { operand: "$lte", condition: { price: { $lte: 10 } } },
+      {
+        operand: "$between",
+        condition: {
+          createdAt: {
+            $between: [new Date("2026-01-01"), new Date("2026-12-31")]
+          }
+        }
+      },
+      {
+        operand: "$or",
+        condition: {
+          $or: [{ status: "pending" }, { price: { $gte: 5, $lt: 10 } }],
+          name: "Scale-A"
+        }
+      },
+      { operand: "dot path", condition: { "meta.label": "warehouse" } }
+    ])("compiles $operand exactly as a query filter does", ({ condition }) => {
+      expect.assertions(1);
+
+      expect(writeConditionBuilder().filterParams(condition)).toEqual(
+        typedQueryBuilder().filterParams(condition)
+      );
+    });
+
+    it("rejects a condition set to undefined rather than dropping it", () => {
+      expect.assertions(2);
+
+      // Dropping it would quietly loosen the guard
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          status: undefined,
+          name: "Scale-A"
+        })
+      ).toThrow(FilterError);
+      expect(() =>
+        writeConditionBuilder().filterParams({ status: undefined })
+      ).toThrow(
+        'Invalid filter value for attribute "status": the condition has no value'
+      );
+    });
+
+    it("rejects a condition set to undefined inside an $or block", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({
+          $or: [{ name: "Scale-A" }, { status: undefined }]
+        })
+      ).toThrow(
+        'Invalid filter value for attribute "status": the condition has no value'
+      );
+    });
+
+    it("compiles null on a nullable attribute to attribute_not_exists, binding no value", () => {
+      expect.assertions(2);
+
+      const builder = writeConditionBuilder();
+
+      // The alias, not the attribute's name, is what the expression references
+      expect(builder.filterParams({ phone: null })).toEqual({
+        expression: "attribute_not_exists(#phone_number)",
+        values: {}
+      });
+      expect(builder.expressionAttributeNames([], { phone: null })).toEqual({
+        "#phone_number": "phone_number"
+      });
+    });
+
+    it("rejects null on an attribute that is not nullable", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ status: null })
+      ).toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "status": null means "not set" in write conditions, which only an attribute declared nullable can be'
+        )
+      );
+    });
+
+    it("compiles null on a nullable nested field through its dot path", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({ "meta.note": null })
+      ).toEqual({
+        expression: "attribute_not_exists(#Meta.#note)",
+        values: {}
+      });
+    });
+
+    it("rejects null on a nested field that is not nullable", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ "meta.label": null })
+      ).toThrow(
+        'Invalid filter value for attribute "meta.label": null means "not set" in write conditions, which only an attribute declared nullable can be'
+      );
+    });
+
+    it("compiles a not-set branch beside a converted comparison in an $or", () => {
+      expect.assertions(1);
+
+      const now = new Date("2026-10-04T12:00:00.000Z");
+
+      expect(
+        writeConditionBuilder().filterParams({
+          $or: [{ holder: null }, { leaseExpiresAt: { $lt: now } }]
+        })
+      ).toEqual({
+        expression:
+          "attribute_not_exists(#Holder) OR #LeaseExpiresAt < :LeaseExpiresAt1",
+        values: { LeaseExpiresAt1: "2026-10-04T12:00:00.000Z" }
+      });
+    });
+
+    it("compiles an $or whose only block is not-set conditions to an expression with no values", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({ $or: [{ holder: null }] })
+      ).toEqual({ expression: "attribute_not_exists(#Holder)", values: {} });
+    });
+
+    it("groups an $or block of several not-set conditions, which bind no values", () => {
+      expect.assertions(1);
+
+      expect(
+        writeConditionBuilder().filterParams({
+          $or: [{ holder: null, phone: null }, { status: "open" }]
+        })
+      ).toEqual({
+        expression:
+          "(attribute_not_exists(#Holder) AND attribute_not_exists(#phone_number)) OR #Status = :Status1",
+        values: { Status1: "open" }
+      });
+    });
+
+    it("rejects an empty $or", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ $or: [], status: "open" })
+      ).toThrow(
+        new FilterError(
+          "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks"
+        )
+      );
+    });
+
+    describe("a $or branch that holds no conditions", () => {
+      const emptyBranchError = new FilterError(
+        "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+      );
+
+      it.each<{ shape: string; condition: FilterParams }>([
+        { shape: "alone", condition: { $or: [{}] } },
+        {
+          shape: "beside a branch that holds conditions",
+          condition: { $or: [{}, { status: "open" }] }
+        },
+        {
+          shape: "after a branch that holds conditions",
+          condition: { $or: [{ status: "open" }, {}] }
+        },
+        {
+          shape: "beside a condition outside the $or",
+          condition: { $or: [{}], status: "open" }
+        }
+      ])("rejects an empty branch $shape", ({ condition }) => {
+        expect.assertions(1);
+
+        expect(() => writeConditionBuilder().filterParams(condition)).toThrow(
+          emptyBranchError
+        );
+      });
+
+      it("rejects an empty branch inside a nested $or", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            // @ts-expect-error: an $or block cannot hold an $or; this is the untyped caller's shape
+            $or: [{ $or: [{}] }, { status: "open" }]
+          })
+        ).toThrow(emptyBranchError);
+      });
+
+      it("rejects a branch holding only an empty nested $or as an empty $or", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            $or: [{ $or: [] }, { status: "open" }]
+          })
+        ).toThrow(
+          new FilterError(
+            "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks"
+          )
+        );
+      });
+
+      it("rejects a branch whose every condition is undefined by the condition's key", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          writeConditionBuilder().filterParams({
+            $or: [{ name: undefined }, { status: "open" }]
+          })
+        ).toThrow(
+          new FilterError(
+            'Invalid filter value for attribute "name": the condition has no value, and write conditions reject one rather than dropping it — dropping it would loosen what the condition checks'
+          )
+        );
+      });
+    });
+
+    it("rejects null inside an IN list", () => {
+      expect.assertions(1);
+
+      expect(() =>
+        writeConditionBuilder().filterParams({ holder: ["worker-1", null] })
+      ).toThrow(
+        'Invalid filter value for attribute "holder": an IN list cannot carry null. null means "not set" in write conditions, which is its own condition — write it as an $or block'
+      );
+    });
+
+    it("prefixes value placeholders, leaving attribute names unchanged", () => {
+      expect.assertions(3);
+
+      const builder = writeConditionBuilder({
+        valuePlaceholderPrefix: "cond_"
+      });
+      const condition: FilterParams = {
+        $or: [{ holder: null }, { name: { $beginsWith: "Scale" } }],
+        price: { $between: [1, 5] }
+      };
+
+      const compiled = builder.filterParams(condition);
+
+      expect(compiled).toEqual({
+        expression:
+          "(attribute_not_exists(#Holder) OR begins_with(#Name, :cond_Name1)) AND (#Price BETWEEN :cond_Price2 AND :cond_Price3)",
+        values: { cond_Name1: "Scale", cond_Price2: 1, cond_Price3: 5 }
+      });
+      expect(builder.expressionAttributeValues(compiled.values)).toEqual({
+        ":cond_Name1": "Scale",
+        ":cond_Price2": 1,
+        ":cond_Price3": 5
+      });
+      expect(builder.expressionAttributeNames([], condition)).toEqual({
+        "#Holder": "Holder",
+        "#Name": "Name",
+        "#Price": "Price"
+      });
+    });
+
+    it("declares the query filter vocabulary with write semantics", () => {
+      expect.assertions(1);
+
+      expect(writeConditionCapabilities).toEqual({
+        ...queryFilterCapabilities,
+        context: "write conditions",
+        dropUndefinedConditions: false,
+        nullMeansNotSet: true,
+        dropEmptyOr: false
+      });
     });
   });
 

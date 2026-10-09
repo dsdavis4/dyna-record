@@ -49,6 +49,31 @@ export type NullableForeignKey<T extends DynaRecord = DynaRecord> = Optional<
 >;
 
 /**
+ * The branded string a {@link NullableForeignKey} holds when set, without the
+ * `undefined` it is declared with, so its target can be inferred from it.
+ *
+ * @typeParam T - The entity the foreign key references.
+ */
+type NullableForeignKeyBrand<T extends DynaRecord> = NonNullable<
+  NullableForeignKey<T>
+>;
+
+/**
+ * The entity a {@link ForeignKey} or {@link NullableForeignKey} attribute
+ * references, read from its declared type: `Customer` for
+ * `ForeignKey<Customer>`, and {@link DynaRecord} for a bare `ForeignKey`.
+ * Resolves to `never` for a value that is not a foreign key.
+ *
+ * @typeParam Value - The attribute's declared type.
+ */
+export type ExtractForeignKeyTarget<Value> =
+  NonNullable<Value> extends ForeignKey<infer Target>
+    ? Target
+    : NonNullable<Value> extends NullableForeignKeyBrand<infer Target>
+      ? Target
+      : never;
+
+/**
  * Represents a foreign key property on an entity within a DynaRecord model
  */
 export type ForeignKeyProperty = keyof DynaRecord & ForeignKey;
@@ -237,6 +262,61 @@ export type Optional<T> = T | undefined;
  * A utility type for making a type nullable, allowing it to be null.
  */
 export type Nullable<T> = T | null;
+
+/**
+ * A value written whole, as the entity declares it, with `null` offered on
+ * each nullable field at any depth inside it: an object's own fields, a nested
+ * object's, an element's of a list within it, and a discriminated union
+ * variant's.
+ *
+ * dyna-record stores a nulled field by leaving it out rather than storing
+ * DynamoDB's NULL, so `null` on such a field reads as "not set". That is one
+ * rule for every value that is handled whole rather than field by field:
+ *
+ * - an element of a list in an update payload, which is written whole, so the
+ *   element is stored without the field;
+ * - a filter or write condition operand compared whole: an equality value, an
+ *   `IN` element, and a whole-element `$contains` operand. The expression
+ *   builder leaves the field out of the bound value, which then equals a value
+ *   stored without it, exactly as omitting the field does.
+ *
+ * Nothing else widens. A field that is not nullable stays required and
+ * non-null, nothing becomes optional, an object field is never nullable, an
+ * element of a list within the value is never `null`, and neither is the value
+ * itself.
+ *
+ * Distributes over a union, so each variant offers `null` on its own nullable
+ * fields. A scalar, a `Date` and a function pass through unchanged.
+ *
+ * @typeParam T - The value's type, as the entity declares it.
+ *
+ * @example
+ * ```typescript
+ * // A line item declared { sku: string; note?: string }
+ * type LineItemOperand = AllowNullInWholeValue<{ sku: string; note?: string }>;
+ * // { sku: string; note?: string | null }
+ *
+ * const sameLine: LineItemOperand = { sku: "MUG-1", note: null }; // no note
+ * ```
+ */
+export type AllowNullInWholeValue<T> = T extends
+  | Date
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ((...args: unknown[]) => unknown)
+  ? T
+  : T extends readonly unknown[]
+    ? { [I in keyof T]: AllowNullInWholeValue<T[I]> }
+    : T extends Record<string, unknown>
+      ? {
+          [K in keyof T]: undefined extends T[K]
+            ? AllowNullInWholeValue<NonNullable<T[K]>> | null | undefined
+            : AllowNullInWholeValue<T[K]>;
+        }
+      : T;
 
 /**
  * Represents a lookup object to access relationship metadata by related entity name for DynaRecord models.

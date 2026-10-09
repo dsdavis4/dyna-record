@@ -9,6 +9,7 @@ import type {
   DynamoNativeValue,
   DynamoScalarValue,
   LibraryBrandToValue,
+  AllowNullInWholeValue,
   Optional
 } from "../types.js";
 
@@ -227,29 +228,49 @@ export type BetweenFilter<V> = Record<"$between", readonly [V, V]>;
  * comparisons through its stored form, as an ISO string that orders
  * chronologically.
  *
- * Each branch tests `V` directly so the conditional distributes, for the same
- * reason {@link BeginsWithConditionFor} does: an unresolved dot path takes the
- * whole scalar union and stays unconstrained. Distribution is also what
- * excludes `null` and `boolean` without an explicit `Exclude` — neither extends
- * the comparable set, so both fall to the final branch.
+ * The operands are built per comparable kind, not per member of `V`. Composed
+ * comparisons may name different values, so an enum's literal union must stay
+ * whole: `{ $gte: "val-1", $lte: "val-2" }` is a range across two members,
+ * which DynamoDB orders as strings. Building one filter per member — what a
+ * conditional distributing over `V` does — would require every operand to be
+ * the same member. Each kind keeps its own filter, so a union spanning kinds,
+ * as an unresolved dot path's whole scalar union does, never pairs a string
+ * operand with a number one. `null` and `boolean` are in no comparable kind,
+ * so they are excluded without an explicit `Exclude`.
  *
- * The set is spelled out here rather than reusing `OrderedFilterValue`, which
- * names the same values. (A code reference rather than a link: that type is
- * internal, so it has no page on the docs site to point at.) In the true branch TypeScript narrows the type
- * parameter to `V & CheckedType`, so checking against the whole union gives
- * `ComparisonFilter<OrderedFilterValue & V>` — an intersection it cannot reduce
- * when `V` is still generic, as it is in `QueryKeyConditionValue`. Checking
- * against one narrow type per branch keeps that intersection meaningful. The
- * difference is invisible at concrete instantiations and only appears through a
- * generic, so a reviewer who tries the collapse should test it there.
+ * Each kind is drawn out with `Extract` rather than by testing `V` against the
+ * whole comparable set. (`OrderedFilterValue` names the same values; a code
+ * reference rather than a link because that type is internal, so it has no
+ * page on the docs site to point at.) A test against the whole set narrows the
+ * type parameter to `V & CheckedType` in the true branch — an intersection
+ * TypeScript cannot reduce while `V` is still generic, as it is in
+ * `QueryKeyConditionValue`. One narrow type per kind keeps the operands
+ * meaningful there. The difference is invisible at concrete instantiations and
+ * only appears through a generic, so a reviewer who tries the collapse should
+ * test it there.
  *
  * @typeParam V - The attribute's declared type.
  */
-export type ComparisonConditionFor<V> = V extends Date
-  ? ComparisonFilter<V>
-  : V extends string | number | bigint | Uint8Array
-    ? ComparisonFilter<V>
-    : never;
+export type ComparisonConditionFor<V> =
+  | ComparisonOfKind<Extract<V, Date>>
+  | ComparisonOfKind<Extract<V, string>>
+  | ComparisonOfKind<Extract<V, number>>
+  | ComparisonOfKind<Extract<V, bigint>>
+  | ComparisonOfKind<Extract<V, Uint8Array>>;
+
+/**
+ * The {@link ComparisonFilter} over every value of one comparable kind, or
+ * `never` when `V` declares none of that kind.
+ *
+ * The test is wrapped in a tuple so it does not distribute: the operands are
+ * the kind's whole union, which is what lets composed comparisons name two
+ * different members of an enum.
+ *
+ * @typeParam Operand - The values of `V` of one comparable kind.
+ */
+type ComparisonOfKind<Operand> = [Operand] extends [never]
+  ? never
+  : ComparisonFilter<Operand>;
 
 /**
  * A single comparison, offered only where DynamoDB can order the attribute's
@@ -272,15 +293,39 @@ export type SingleComparisonConditionFor<V> = V extends Date
  * form.
  *
  * `BETWEEN` is a pair of comparisons, so it takes exactly the operands
- * {@link ComparisonConditionFor} does.
+ * {@link ComparisonConditionFor} does, built the same way: per comparable
+ * kind, so both bounds may be any two members of an enum while a string bound
+ * never pairs with a number one. DynamoDB requires both bounds to share a type.
  *
  * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // An enum is stored as a string, so any two members bound a range,
+ * // ordered lexicographically
+ * filter: { status: { $between: ["cancelled", "pending"] } }
+ *
+ * // The same range composed from two comparisons
+ * filter: { status: { $gte: "cancelled", $lte: "pending" } }
+ * ```
  */
-export type BetweenConditionFor<V> = V extends Date
-  ? BetweenFilter<V>
-  : V extends string | number | bigint | Uint8Array
-    ? BetweenFilter<V>
-    : never;
+export type BetweenConditionFor<V> =
+  | BetweenOfKind<Extract<V, Date>>
+  | BetweenOfKind<Extract<V, string>>
+  | BetweenOfKind<Extract<V, number>>
+  | BetweenOfKind<Extract<V, bigint>>
+  | BetweenOfKind<Extract<V, Uint8Array>>;
+
+/**
+ * The {@link BetweenFilter} over every value of one comparable kind, or `never`
+ * when `V` declares none of that kind. Non-distributive for the reason
+ * `ComparisonOfKind` is.
+ *
+ * @typeParam Operand - The values of `V` of one comparable kind.
+ */
+type BetweenOfKind<Operand> = [Operand] extends [never]
+  ? never
+  : BetweenFilter<Operand>;
 
 /**
  * `$beginsWith`, offered only where the table stores the attribute in a form
@@ -322,6 +367,11 @@ export type BeginsWithConditionFor<V> = V extends Date
  * is what lets the member test keep the field's own type instead of widening
  * to any scalar.
  *
+ * The element is written as {@link AllowNullInWholeValue} describes, which
+ * offers `null` on its nullable fields: `contains` compares an element whole,
+ * and the expression builder leaves a nulled field out of the bound element,
+ * as the element is stored.
+ *
  * Distributes for the same reason {@link BeginsWithConditionFor} does.
  *
  * @typeParam V - The attribute's declared type.
@@ -331,7 +381,7 @@ export type ContainsConditionFor<V> = V extends Date
   : V extends string
     ? ContainsFilter
     : V extends readonly (infer Element)[]
-      ? Record<"$contains", Element>
+      ? Record<"$contains", AllowNullInWholeValue<Element>>
       : never;
 
 /**
@@ -351,7 +401,8 @@ export type ContainsConditionFor<V> = V extends Date
  * - A **whole value** of the attribute — an equality value, every `IN` element,
  *   every {@link ComparisonFilter} operand, both {@link BetweenFilter} bounds.
  *   Named the way the entity declares the attribute, so a date attribute takes
- *   a `Date`. Validated and converted.
+ *   a `Date`, and an object compared whole takes `null` on a nullable field
+ *   (see {@link EqualityConditionFor}). Validated and converted.
  * - A **fragment** of the stored form — {@link BeginsWithFilter}'s prefix, and
  *   {@link ContainsFilter}'s substring. There is no "Date that starts with
  *   2026", so these stay strings and scalars whatever the attribute declares,
@@ -368,7 +419,7 @@ export type FilterConditionFor<V> =
   | ComparisonConditionFor<V>
   | BetweenConditionFor<V>
   | EqualityConditionFor<V>
-  | V[];
+  | InConditionFor<V>;
 
 /**
  * The equality condition, which an array-typed field does not offer.
@@ -377,14 +428,67 @@ export type FilterConditionFor<V> =
  * as a list of values to compare against rather than as the list itself — the
  * two are indistinguishable, and the builder resolves the ambiguity in `IN`'s
  * favour. Offering `V` there would advertise a whole-list equality the
- * compilation cannot express. The `IN` form for such a field is `V[]`, a list
- * of lists.
+ * compilation cannot express. The `IN` form for such a field is a list of
+ * lists: see {@link InConditionFor}.
+ *
+ * The value is compared whole, so it is written as
+ * {@link AllowNullInWholeValue} describes: an object, or a list element named
+ * by an index, takes `null` on a nullable field at any depth. dyna-record
+ * stores a nulled field by leaving it out, and the expression builder leaves it
+ * out of the bound value too, so the operand equals the value as stored.
  *
  * Distributes for the same reason the operator gates do.
  *
  * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // A shipping address whose nullable `zip` is not set
+ * filter: { shippingAddress: { street: "1 Main St", city: "Denver", zip: null } }
+ *
+ * // The first line item of an order, without a note
+ * filter: { "details.lineItems[0]": { sku: "MUG-1", quantity: 2, note: null } }
+ * ```
  */
-export type EqualityConditionFor<V> = V extends readonly unknown[] ? never : V;
+export type EqualityConditionFor<V> = V extends readonly unknown[]
+  ? never
+  : AllowNullInWholeValue<V>;
+
+/**
+ * The `IN` condition: a list of values the attribute is compared against, each
+ * a whole value of it.
+ *
+ * Each element is written as an equality value is, so an object element takes
+ * `null` on a nullable field at any depth (see {@link EqualityConditionFor}).
+ * On an array-typed field each element is a whole list, which is the form the
+ * equality condition cannot take there; its elements take `null` on their
+ * nullable fields the same way, and the expression builder converts each list
+ * as the write stores it.
+ *
+ * @typeParam V - The attribute's declared type.
+ *
+ * @example
+ * ```typescript
+ * // Either of two addresses, the second without a zip
+ * filter: {
+ *   shippingAddress: [
+ *     { street: "1 Main St", city: "Denver", zip: "80202" },
+ *     { street: "9 Elm St", city: "Boise", zip: null }
+ *   ]
+ * }
+ *
+ * // An order whose line items are exactly these, the second without a note
+ * filter: {
+ *   "details.lineItems": [
+ *     [
+ *       { sku: "MUG-1", quantity: 2, note: "gift" },
+ *       { sku: "KET-1", quantity: 1, note: null }
+ *     ]
+ *   ]
+ * }
+ * ```
+ */
+export type InConditionFor<V> = Array<AllowNullInWholeValue<V>>;
 
 /**
  * Every condition a filter key accepts, over the values a caller may write.
@@ -412,7 +516,7 @@ export type FilterTypes = FilterConditionFor<FilterValue>;
 /**
  * The conditions a key accepts when it names no single declared field — a dot
  * path descending into a discriminated union variant, which one path does not
- * identify, or naming a field the schema does not declare.
+ * identify.
  *
  * The expression builder neither validates nor converts such a value, so it has
  * to be written the way the table stores it.
@@ -469,7 +573,8 @@ export type AndOrFilter = FilterParams & OrFilter;
 export type FilterContext =
   | "query filters"
   | "search filters"
-  | "key conditions";
+  | "key conditions"
+  | "write conditions";
 
 /**
  * Declares the filter vocabulary a context supports. The
@@ -510,6 +615,39 @@ export interface FilterCapabilities {
   between: boolean;
   nestedPaths: boolean;
   singleConditionPerAttribute: boolean;
+  /**
+   * Whether a condition explicitly set to `undefined` is dropped rather than
+   * rejected.
+   *
+   * A filter may drop it: filter keys are optional, so forwarding an optional
+   * input is the ordinary way to build one, and dropping a condition only
+   * widens what a read returns. A write condition may not — dropping one would
+   * quietly loosen the guard on the write.
+   */
+  dropUndefinedConditions: boolean;
+  /**
+   * Whether `null` means "not set", compiling to `attribute_not_exists` on an
+   * attribute or nested field declared nullable.
+   *
+   * dyna-record removes a nulled attribute rather than storing DynamoDB's
+   * NULL, so no row holds one for an equality to match. A read rejects `null`
+   * for that reason; a write condition gives it the meaning the removal leaves
+   * behind — the attribute is absent. On an attribute that is not nullable it
+   * is still rejected, because such an attribute is always set.
+   */
+  nullMeansNotSet: boolean;
+  /**
+   * Whether an `$or` with no condition blocks, or a block with no conditions,
+   * is dropped rather than rejected.
+   *
+   * An empty `$or` asks for nothing. A filter drops it, which widens the read;
+   * a write condition rejects it, because dropping it would loosen the guard.
+   *
+   * An empty block always holds. A filter drops it, keeping the other blocks;
+   * a write condition rejects it, because dropping it would tighten the `$or`
+   * and keeping it would make the whole `$or` hold for every row.
+   */
+  dropEmptyOr: boolean;
 }
 
 /**
@@ -540,6 +678,12 @@ export interface FilterAttribute {
    * validated and converted as that field rather than as the whole object.
    */
   objectSchema?: ObjectSchema;
+  /**
+   * Whether the attribute is declared nullable. Read where `null` means "not
+   * set" (see {@link FilterCapabilities.nullMeansNotSet}); a context that
+   * rejects `null` outright has no use for it.
+   */
+  nullable?: boolean;
 }
 
 /**

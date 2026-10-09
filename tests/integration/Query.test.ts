@@ -7,10 +7,12 @@ import {
   ArrayOfObjectsEntity,
   DeepNestedEntity,
   DiscriminatedUnionEntity,
+  DuplicateFieldEntity,
   ArrayOfUnionsEntity,
   Employee,
   Festival,
   Founder,
+  MockTable,
   MyClassWithAllAttributeTypes,
   Order,
   PaymentMethod,
@@ -28,9 +30,18 @@ import {
 } from "./utils.js";
 import {
   type QueryResults,
-  type EntityAttributesInstance
+  type EntityAttributesInstance,
+  type TypedFilterParams,
+  type SKScopedFilterParams
 } from "../../src/operations/index.js";
 import Logger from "../../src/Logger.js";
+import { FilterError } from "../../src/errors.js";
+import type { FilterParams } from "../../src/filter-utils/index.js";
+import { Entity, ObjectAttribute } from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
+} from "../../src/decorators/index.js";
 
 const mockSend = vi.fn();
 const mockQuery = vi.fn();
@@ -63,6 +74,89 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+/**
+ * Nullable lists whose elements are not plain objects: a list of lists and a
+ * list of discriminated-union elements
+ */
+const nullableListsSchema = {
+  bays: {
+    type: "array",
+    items: { type: "array", items: { type: "number" } },
+    nullable: true
+  },
+  promos: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "kind",
+      variants: {
+        discount: { percent: { type: "number" }, endsAt: { type: "date" } },
+        bundle: {
+          sku: { type: "string" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NullableListsEntity extends MockTable {
+  declare readonly type: "NullableListsEntity";
+
+  @ObjectAttribute({ alias: "Shelf", schema: nullableListsSchema })
+  public shelf: InferObjectSchema<typeof nullableListsSchema>;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+@Entity
+class NestedListsEntity extends MockTable {
+  declare readonly type: "NestedListsEntity";
+
+  @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+  public layout: InferObjectSchema<typeof nestedListsSchema>;
+}
 
 describe("Query", () => {
   afterEach(() => {
@@ -429,6 +523,86 @@ describe("Query", () => {
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
     });
 
+    it("can filter using $contains with a Date on a nested List of dates", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.contactedAt": {
+            $contains: new Date("2023-01-01T00:00:00.000Z")
+          }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "contains(#objectAttribute.#contactedAt, :objectAttributecontactedAt1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#contactedAt": "contactedAt"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributecontactedAt1": "2023-01-01T00:00:00.000Z",
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
+    it("can filter using $contains with a whole element on a nested List of objects", async () => {
+      expect.assertions(5);
+
+      const results = await MyClassWithAllAttributeTypes.query("123", {
+        filter: {
+          "objectAttribute.history": {
+            $contains: {
+              at: new Date("2023-01-01T00:00:00.000Z"),
+              actor: "ann"
+            }
+          }
+        }
+      });
+
+      expect(results).toEqual([expectedEntity]);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toBeInstanceOf(MyClassWithAllAttributeTypes);
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "mock-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression:
+              "contains(#objectAttribute.#history, :objectAttributehistory1)",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#objectAttribute": "objectAttribute",
+              "#history": "history"
+            },
+            ExpressionAttributeValues: {
+              ":objectAttributehistory1": {
+                at: "2023-01-01T00:00:00.000Z",
+                actor: "ann"
+              },
+              ":PK2": "MyClassWithAllAttributeTypes#123"
+            },
+            ConsistentRead: false
+          }
+        ]
+      ]);
+      expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+
     it("can filter using $contains on a top-level string attribute", async () => {
       expect.assertions(5);
 
@@ -764,6 +938,148 @@ describe("Query", () => {
         ]
       ]);
       expect(mockSend.mock.calls).toEqual([[{ name: "QueryCommand" }]]);
+    });
+  });
+
+  describe("a filter rejected before sending", () => {
+    it("rejects a $contains element outside the enum of a nested List of enums before sending anything", async () => {
+      expect.assertions(3);
+
+      await expect(
+        // @ts-expect-error: admin is not a member of the roles enum
+        MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.roles": { $contains: "admin" } }
+        })
+      ).rejects.toThrow(
+        new FilterError(
+          'Invalid filter value for attribute "objectAttribute.roles": $contains on a list looks for one of its elements, and this operand is not a value the list\'s elements can hold'
+        )
+      );
+      expect(mockSend.mock.calls).toEqual([]);
+      expect(mockedQueryCommand.mock.calls).toEqual([]);
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare", () => {
+      // Before this was refused, the operand was converted to its stored form,
+      // which strips a field the schema does not declare: `{ ..., region: "west" }`
+      // was sent as `{ ... }` and matched rows the caller's operand does not
+      // describe
+      const undeclared = (attr: string, path: string): FilterError =>
+        new FilterError(
+          `Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+        );
+
+      const geo = { lat: 39.7, lng: -104.9, accuracy: "precise" as const };
+
+      it("rejects one at the top level of an object attribute, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not a field the location declares
+          Warehouse.query("w1", {
+            filter: {
+              location: { city: "Denver", state: "CO", region: "west" }
+            }
+          })
+        ).rejects.toThrow(undeclared("location", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("rejects one inside a nested object, in an IN element and inside an $or block, sending no QueryCommand", async () => {
+        expect.assertions(5);
+
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: {
+              addressAttribute: {
+                street: "1 Main St",
+                city: "Denver",
+                geo: { ...geo, alt: 1600 },
+                scores: [1]
+              }
+            }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute", "geo.alt"));
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: { "addressAttribute.geo": [geo, { ...geo, alt: 1600 }] }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute.geo", "alt"));
+        await expect(
+          // @ts-expect-error: alt is not a field the geo declares
+          MyClassWithAllAttributeTypes.query("123", {
+            filter: {
+              $or: [
+                { stringAttribute: "a" },
+                { "addressAttribute.geo": { ...geo, alt: 1600 } }
+              ]
+            }
+          })
+        ).rejects.toThrow(undeclared("addressAttribute.geo", "alt"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+    });
+    describe("a filter key the entity does not declare", () => {
+      // The partition's attributes, which the query builder resolves a filter
+      // key against: the Warehouse's own and those of its Shipments
+      const unknownKey = (key: string, attribute: string): FilterError =>
+        new FilterError(
+          `Invalid filter key "${key}": attribute "${attribute}" does not exist on this entity. Valid attributes are: id, type, createdAt, updatedAt, destination, dimensions, warehouseId, pk, sk, name, location`
+        );
+
+      it("throws a FilterError for an undeclared attribute, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not an attribute of the partition
+          Warehouse.query("w1", { filter: { region: "west" } })
+        ).rejects.toEqual(unknownKey("region", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for a dot path whose attribute is undeclared, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: colour is not an attribute of the partition
+          Warehouse.query("w1", { filter: { "colour.shade": "red" } })
+        ).rejects.toEqual(unknownKey("colour.shade", "colour"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for an undeclared attribute inside an $or block, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        await expect(
+          // @ts-expect-error: region is not an attribute of the partition
+          Warehouse.query("w1", {
+            filter: { $or: [{ name: "Main" }, { region: "west" }] }
+          })
+        ).rejects.toEqual(unknownKey("region", "region"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError for an $or nested directly in an $or block, sending no QueryCommand", async () => {
+        expect.assertions(3);
+
+        // Only an untyped caller can write this: the block's key "$or" names
+        // no attribute, so it is refused like any other undeclared key
+        await expect(
+          // @ts-expect-error: an $or block takes attribute keys, not another $or
+          Warehouse.query("w1", {
+            filter: { $or: [{ $or: [{ name: "Main" }] }] }
+          })
+        ).rejects.toEqual(unknownKey("$or", "$or"));
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
+      });
     });
   });
 
@@ -1302,8 +1618,10 @@ describe("Query", () => {
               ":Type5": "PaymentMethod",
               ":CreatedAt3": "2021-09-15T"
             },
+            // The one $or block is one group already; a second pair around it
+            // is rejected by DynamoDB as redundant parentheses
             FilterExpression:
-              "((#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3))) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)",
+              "(#Address IN (:Address1,:Address2) AND begins_with(#CreatedAt, :CreatedAt3)) AND (#Type IN (:Type4,:Type5) AND #Name = :Name6)",
             ConsistentRead: false
           }
         ]
@@ -2151,6 +2469,22 @@ describe("Query", () => {
           // @ts-expect-no-error: $beginsWith is a valid condition on an indexed attribute
           await Customer.query(
             { name: { $beginsWith: "Test" } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("accepts a $between across two members of an enum index attribute", async () => {
+          // @ts-expect-no-error: both bounds are declared members
+          await MyClassWithAllAttributeTypes.query(
+            { enumAttribute: { $between: ["val-1", "val-2"] } },
+            { indexName: "MyIndex" }
+          ).catch(() => {});
+        });
+
+        it("rejects a $between bound an enum index attribute does not declare", async () => {
+          // @ts-expect-error: "val-3" is not a declared member
+          await MyClassWithAllAttributeTypes.query(
+            { enumAttribute: { $between: ["val-1", "val-3"] } },
             { indexName: "MyIndex" }
           ).catch(() => {});
         });
@@ -3161,6 +3495,15 @@ describe("Query", () => {
             );
           });
 
+          it("accepts a string pair for $between", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds are strings
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableStringAttribute: { $between: ["A", "M"] } }
+              })
+            );
+          });
+
           it("rejects a number operand", async () => {
             await swallow(
               // @ts-expect-error: a number is not a string
@@ -3186,6 +3529,114 @@ describe("Query", () => {
               })
             );
           });
+
+          it("accepts a range whose bounds are two different members", async () => {
+            // An enum is stored as a string, which DynamoDB orders
+            // lexicographically, so any two members bound a range
+            await swallow(
+              // @ts-expect-no-error: both bounds are declared members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-2"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: composed comparisons may name different members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-1", $lte: "val-2" } }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nullable enum's range takes its members too
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  nullableEnumAttribute: { $between: ["val-1", "val-2"] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: and composes across them
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  nullableEnumAttribute: { $gt: "val-1", $lt: "val-2" }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nested enum field ranges across its members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.status": { $between: ["active", "inactive"] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: a nullable nested enum composes across its members
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "addressAttribute.category": { $gte: "home", $lte: "work" }
+                }
+              })
+            );
+          });
+
+          it("still accepts a range on a single member", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds may be the same member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-1"] } }
+              })
+            );
+          });
+
+          it("rejects a range bound the enum does not declare", async () => {
+            await swallow(
+              // @ts-expect-error: "val-3" is not a declared member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", "val-3"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "val-3" is not a declared member, composed or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $gte: "val-1", $lte: "val-3" } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: "archived" is not a declared member of the nested enum
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.status": { $between: ["active", "archived"] }
+                }
+              })
+            );
+          });
+
+          it("rejects a numeric, null or boolean range bound", async () => {
+            await swallow(
+              // @ts-expect-error: an enum is ranged by its members, not a number
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", 2] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: a range bound is never null, nullable enum or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableEnumAttribute: { $between: [null, "val-2"] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: null is not a comparison operand, composed or not
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableEnumAttribute: { $gte: "val-1", $lte: null } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: a boolean is not a member
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { enumAttribute: { $between: ["val-1", true] } }
+              })
+            );
+          });
         });
 
         describe("a boolean attribute", () => {
@@ -3203,6 +3654,21 @@ describe("Query", () => {
               // @ts-expect-error: and a string is not a boolean either
               MyClassWithAllAttributeTypes.query("123", {
                 filter: { boolAttribute: { $gte: "true" } }
+              })
+            );
+          });
+
+          it("offers no range across its two values", async () => {
+            await swallow(
+              // @ts-expect-error: a boolean has no ordering for a range to use
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { boolAttribute: { $between: [false, true] } }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: nor for composed comparisons
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { nullableBoolAttribute: { $gte: false, $lte: true } }
               })
             );
           });
@@ -3236,6 +3702,41 @@ describe("Query", () => {
               MyClassWithAllAttributeTypes.query("123", {
                 filter: {
                   nullableDateAttribute: { $between: [null, new Date()] }
+                }
+              })
+            );
+          });
+        });
+
+        describe("a path whose field the type cannot resolve", () => {
+          // A dot path into a discriminated union variant takes the stored
+          // form, which spans several kinds. A range is formed within one
+          // kind: DynamoDB requires both BETWEEN bounds to share a type
+          it("accepts a range whose bounds share a kind", async () => {
+            await swallow(
+              // @ts-expect-no-error: both bounds are strings
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $between: ["4000", "4999"] }
+                }
+              })
+            );
+          });
+
+          it("rejects a range whose bounds are different kinds", async () => {
+            await swallow(
+              // @ts-expect-error: a string and a number bound no range
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $between: ["4000", 4999] }
+                }
+              })
+            );
+            await swallow(
+              // @ts-expect-error: nor do composed comparisons across kinds
+              DiscriminatedUnionEntity.query("123", {
+                filter: {
+                  "payment.method.cardNumber": { $gte: "4000", $lte: 4999 }
                 }
               })
             );
@@ -3365,6 +3866,63 @@ describe("Query", () => {
             );
           });
 
+          it("takes a Date as the $contains element of a nested list of dates", async () => {
+            // @ts-expect-no-error: an element of a list of dates is a whole value, named as declared
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.contactedAt": {
+                    $contains: new Date("2026-01-01")
+                  }
+                }
+              })
+            );
+          });
+
+          it("takes a member as the $contains element of a nested list of enums", async () => {
+            // @ts-expect-no-error: an element of a list of enums is one of its members
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.roles": { $contains: "owner" } }
+              })
+            );
+          });
+
+          it("rejects a $contains element outside the enum of a nested list of enums", async () => {
+            await swallow(
+              // @ts-expect-error: admin is not a member of the roles enum
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "objectAttribute.roles": { $contains: "admin" } }
+              })
+            );
+          });
+
+          it("takes a whole element as the $contains element of a nested list of objects", async () => {
+            // @ts-expect-no-error: an element of a list of objects is a whole value, named as declared
+            await swallow(
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: "ann" }
+                  }
+                }
+              })
+            );
+          });
+
+          it("rejects a $contains element of a nested list of objects with a field of the wrong type", async () => {
+            await swallow(
+              // @ts-expect-error: actor is declared as a string
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: { at: new Date("2026-01-01"), actor: 1 }
+                  }
+                }
+              })
+            );
+          });
+
           it("rejects $beginsWith on a nested number field", async () => {
             await swallow(
               // @ts-expect-error: lat is declared as a number, so it stores as one
@@ -3478,6 +4036,626 @@ describe("Query", () => {
               })
             );
           });
+        });
+
+        describe("whole-value object operands", () => {
+          const location = { city: "Denver", state: "CO" };
+          const geo = { lat: 39.7, lng: -104.9, accuracy: "precise" as const };
+
+          it("takes an object operand whose every field is declared", async () => {
+            await swallow(
+              // @ts-expect-no-error: location is an object of declared fields
+              Warehouse.query("w1", { filter: { location } })
+            );
+            await swallow(
+              // @ts-expect-no-error: a dot path names an object field, compared whole
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo": geo }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: every IN element is an object of declared fields
+              Warehouse.query("w1", {
+                filter: { location: [location, { ...location, zip: 80202 }] }
+              })
+            );
+            await swallow(
+              // @ts-expect-no-error: the key-conditions overload takes the same operand
+              Warehouse.query(
+                { pk: "Warehouse#w1" },
+                { filter: { location, $or: [{ location }] } }
+              )
+            );
+          });
+
+          it("still narrows the results by type beside an object operand", async () => {
+            const results = await Warehouse.query("w1", {
+              filter: { type: "Warehouse", location }
+            });
+
+            // @ts-expect-no-error: the type filter narrows the results to Warehouse
+            const _exact: Array<EntityAttributesInstance<Warehouse>> = results;
+
+            Logger.log(_exact);
+          });
+
+          it("rejects an undeclared field in an object attribute's operand", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: { location: { ...location, region: "west" } }
+              })
+            );
+          });
+
+          it("rejects an undeclared field in a dot-path object field's operand", async () => {
+            await swallow(
+              // @ts-expect-error: alt is not a field the geo declares
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: { "addressAttribute.geo": { ...geo, alt: 1600 } }
+              })
+            );
+          });
+
+          it("rejects an undeclared field inside a nested object of the operand", async () => {
+            await swallow(
+              // @ts-expect-error: extra is not a field nested1 declares
+              DuplicateFieldEntity.query("123", {
+                filter: {
+                  duplicateFieldObj: {
+                    name: "n",
+                    nested1: { name: "n", value: 1, extra: 1 },
+                    nested2: { name: "n", value: 2 }
+                  }
+                }
+              })
+            );
+          });
+
+          it("rejects an undeclared field in an IN element", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: {
+                  location: [location, { ...location, region: "west" }]
+                }
+              })
+            );
+          });
+
+          it("rejects an undeclared field inside an $or block", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query("w1", {
+                filter: { $or: [{ location: { ...location, region: "west" } }] }
+              })
+            );
+          });
+
+          it("rejects an undeclared field through the key-conditions overload", async () => {
+            await swallow(
+              // @ts-expect-error: region is not a field the location declares
+              Warehouse.query(
+                { pk: "Warehouse#w1" },
+                { filter: { location: { ...location, region: "west" } } }
+              )
+            );
+          });
+
+          it("still takes a filter typed as FilterParams rather than written as a literal", async () => {
+            const filter: FilterParams = { name: "Central" };
+
+            await swallow(
+              // @ts-expect-no-error: an index signature names no key to look up, so the filter keeps its own type
+              Warehouse.query("w1", { filter })
+            );
+          });
+
+          it("rejects an undeclared key beside a declared one", async () => {
+            await swallow(
+              // @ts-expect-error: region is not an attribute of the partition
+              Warehouse.query("w1", { filter: { location, region: "west" } })
+            );
+          });
+
+          it("rejects an undeclared field in a whole $contains element of a nested list of objects", async () => {
+            await swallow(
+              // @ts-expect-error: mood is not a field a history element declares
+              MyClassWithAllAttributeTypes.query("123", {
+                filter: {
+                  "objectAttribute.history": {
+                    $contains: {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      mood: "calm"
+                    }
+                  }
+                }
+              })
+            );
+          });
+        });
+      });
+
+      describe("a filter typed as the declared filter type rather than written as a literal", () => {
+        // A filter held in a parameter, a property or a const a hoisted
+        // function reads keeps its declared type rather than the value
+        // assigned to it. TypedFilterParams is a union, one member per entity
+        // of the partition and per form of `type`, so every member has to be
+        // accepted, and the results are the whole partition, as they were
+        // before object operands were checked for undeclared fields
+        type CustomerPartitionResults = Array<
+          | EntityAttributesInstance<Customer>
+          | EntityAttributesInstance<Order>
+          | EntityAttributesInstance<PaymentMethod>
+          | EntityAttributesInstance<ContactInformation>
+        >;
+
+        const declared: TypedFilterParams<Customer> = { type: "Order" };
+
+        async function queryByIdWithHoistedConst(): Promise<void> {
+          // @ts-expect-no-error: a const read in a hoisted function keeps its declared type, which is accepted
+          const result = await Customer.query("123", { filter: declared });
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        }
+
+        async function queryByKeysWithHoistedConst(): Promise<void> {
+          // @ts-expect-no-error: the key-conditions overload takes the declared type too
+          const result = await Customer.query(
+            { pk: "Customer#123" },
+            { filter: declared }
+          );
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        }
+
+        async function queryBySkWithHoistedConst(): Promise<void> {
+          // @ts-expect-no-error: a $beginsWith prefix past the entity name's boundary does not narrow (the delimiter is not known to the types), so the declared type is accepted
+          const result = await Customer.query("123", {
+            filter: declared,
+            skCondition: { $beginsWith: "Order#" }
+          });
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call, and a prefix past the entity name's boundary does not narrow either: the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        }
+
+        it("takes a function parameter of the declared type by id", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Customer>
+          ): Promise<void> => {
+            // @ts-expect-no-error: every member of the declared union is a filter the query takes
+            const result = await Customer.query("123", { filter });
+
+            // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+            const _exact: CustomerPartitionResults = result;
+            // @ts-expect-error: NOT assignable to just one entity — not narrowed
+            const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+            Logger.log(_exact, _notNarrowed);
+          };
+
+          await queryWith({ type: "Order" });
+        });
+
+        it("takes a function parameter of the declared type by key conditions", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Customer>
+          ): Promise<void> => {
+            // @ts-expect-no-error: the key-conditions overload takes the declared type too
+            const result = await Customer.query(
+              { pk: "Customer#123" },
+              { filter }
+            );
+
+            // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+            const _exact: CustomerPartitionResults = result;
+            // @ts-expect-error: NOT assignable to just one entity — not narrowed
+            const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+            Logger.log(_exact, _notNarrowed);
+          };
+
+          await queryWith({ name: "Central" });
+        });
+
+        it("takes a function parameter of the declared type beside an skCondition", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Customer>
+          ): Promise<void> => {
+            // @ts-expect-no-error: a $beginsWith prefix past the entity name's boundary does not narrow (the delimiter is not known to the types), so the declared type is accepted
+            const result = await Customer.query("123", {
+              filter,
+              skCondition: { $beginsWith: "Order#" }
+            });
+
+            // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call, and a prefix past the entity name's boundary does not narrow either: the results are the whole partition; use `satisfies` to keep narrowing
+            const _exact: CustomerPartitionResults = result;
+            // @ts-expect-error: NOT assignable to just one entity — not narrowed
+            const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+            Logger.log(_exact, _notNarrowed);
+          };
+
+          await queryWith({ $or: [{ type: "Order" }, { name: "Central" }] });
+        });
+
+        it("takes a property of the declared type by id", async () => {
+          const options: { filter: TypedFilterParams<Customer> } = {
+            filter: { type: "Order" }
+          };
+
+          // @ts-expect-no-error: a property keeps its declared type, which is accepted
+          const result = await Customer.query("123", {
+            filter: options.filter
+          });
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        });
+
+        it("takes a property of the declared type by key conditions", async () => {
+          const options: { filter: TypedFilterParams<Customer> } = {
+            filter: { type: "Order" }
+          };
+
+          // @ts-expect-no-error: the key-conditions overload takes the declared type too
+          const result = await Customer.query(
+            { pk: "Customer#123" },
+            { filter: options.filter }
+          );
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call and the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        });
+
+        it("takes a property of the declared type beside an skCondition", async () => {
+          const options: { filter: TypedFilterParams<Customer> } = {
+            filter: { type: "Order" }
+          };
+
+          // @ts-expect-no-error: a $beginsWith prefix past the entity name's boundary does not narrow (the delimiter is not known to the types), so the declared type is accepted
+          const result = await Customer.query("123", {
+            filter: options.filter,
+            skCondition: { $beginsWith: "Order#" }
+          });
+
+          // @ts-expect-no-error: the annotation widens the filter to the declared union, so `type` is not known at the call, and a prefix past the entity name's boundary does not narrow either: the results are the whole partition; use `satisfies` to keep narrowing
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        });
+
+        it("takes a const of the declared type read in a hoisted function by id", async () => {
+          await queryByIdWithHoistedConst();
+        });
+
+        it("takes a const of the declared type read in a hoisted function by key conditions", async () => {
+          await queryByKeysWithHoistedConst();
+        });
+
+        it("takes a const of the declared type read in a hoisted function beside an skCondition", async () => {
+          await queryBySkWithHoistedConst();
+        });
+
+        it("keeps narrowing for a filter checked with satisfies, by id", async () => {
+          // satisfies checks the literal against the declared type and keeps
+          // the literal's own type, so `type` is known at the call
+          const filter = {
+            type: "Order"
+          } satisfies TypedFilterParams<Customer>;
+
+          // @ts-expect-no-error: a filter checked with satisfies is accepted
+          const result = await Customer.query("123", { filter });
+
+          // @ts-expect-no-error: satisfies keeps the literal, so type narrows the results to Order
+          const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+          // @ts-expect-error: Customer excluded by the type the literal keeps
+          const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_narrowed, _noCustomer);
+        });
+
+        it("keeps narrowing for a filter checked with satisfies, by key conditions", async () => {
+          const filter = {
+            type: "Order"
+          } satisfies TypedFilterParams<Customer>;
+
+          // @ts-expect-no-error: the key-conditions overload takes it too
+          const result = await Customer.query(
+            { pk: "Customer#123" },
+            { filter }
+          );
+
+          // @ts-expect-no-error: satisfies keeps the literal, so type narrows the results to Order
+          const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+          // @ts-expect-error: Customer excluded by the type the literal keeps
+          const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_narrowed, _noCustomer);
+        });
+
+        it("keeps narrowing for a filter checked with satisfies, beside a prefix past the entity name", async () => {
+          const filter = {
+            type: "Order"
+          } satisfies TypedFilterParams<Customer>;
+
+          // @ts-expect-no-error: a prefix past the entity name's boundary leaves the filter unscoped, and the literal is accepted
+          const result = await Customer.query("123", {
+            filter,
+            skCondition: { $beginsWith: "Order#" }
+          });
+
+          // @ts-expect-no-error: the prefix does not narrow, but the type the literal keeps does
+          const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+          // @ts-expect-error: Customer excluded by the type the literal keeps
+          const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_narrowed, _noCustomer);
+        });
+
+        it("keeps narrowing for a filter checked with satisfies, beside an skCondition naming its entity", async () => {
+          const filter = {
+            type: "Order"
+          } satisfies TypedFilterParams<Customer>;
+
+          // @ts-expect-no-error: the literal names only Order, which skCondition "Order" scopes the filter to
+          const result = await Customer.query("123", {
+            filter,
+            skCondition: "Order"
+          });
+
+          // @ts-expect-no-error: both the type and the skCondition narrow the results to Order
+          const _narrowed: Array<EntityAttributesInstance<Order>> = result;
+          // @ts-expect-error: Customer excluded
+          const _noCustomer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_narrowed, _noCustomer);
+        });
+
+        it("still refuses with satisfies what a literal filter refuses", async () => {
+          // satisfies is where the literal is checked, so the refusal lands
+          // there, on the offending property
+          const location = { city: "Denver", state: "CO" };
+          const undeclaredKey = {
+            // @ts-expect-error: region is not an attribute of the partition
+            region: "west"
+          } satisfies TypedFilterParams<Customer>;
+          const mistyped = {
+            // @ts-expect-error: name is a string
+            name: 1
+          } satisfies TypedFilterParams<Customer>;
+          const undeclaredField = {
+            // @ts-expect-error: region is not a field the location declares
+            location: { ...location, region: "west" }
+          } satisfies TypedFilterParams<Warehouse>;
+
+          // @ts-expect-error: the call refuses the undeclared key too
+          await Customer.query("123", { filter: undeclaredKey }).catch(
+            () => {}
+          );
+          // @ts-expect-error: the call refuses the mistyped value too
+          await Customer.query("123", { filter: mistyped }).catch(() => {});
+          Logger.log(undeclaredField);
+        });
+
+        it("takes a parameter of the filter type an skCondition scopes, narrowed by it", async () => {
+          const queryWith = async (
+            filter: SKScopedFilterParams<Customer, "Order">
+          ): Promise<void> => {
+            // @ts-expect-no-error: the filter type the skCondition scopes to Order is accepted whole
+            const result = await Customer.query("123", {
+              filter,
+              skCondition: "Order"
+            });
+
+            // @ts-expect-no-error: the skCondition narrows the results to Order
+            const _exact: Array<EntityAttributesInstance<Order>> = result;
+            // @ts-expect-error: Customer excluded by the skCondition
+            const _noCustomer: Array<EntityAttributesInstance<Customer>> =
+              result;
+
+            Logger.log(_exact, _noCustomer);
+          };
+
+          await queryWith({ orderDate: { $gt: new Date("2026-01-01") } });
+        });
+
+        it("takes a parameter of the filter type an skCondition scopes, by key conditions naming its entity", async () => {
+          const queryWith = async (
+            filter: SKScopedFilterParams<Customer, "Order">
+          ): Promise<void> => {
+            // @ts-expect-no-error: every member of the scoped type names Order, which the key conditions' sort key selects
+            const result = await Customer.query(
+              { pk: "Customer#123", sk: "Order" },
+              { filter }
+            );
+
+            // @ts-expect-no-error: every member's type is Order, so the results narrow to Order
+            const _exact: Array<EntityAttributesInstance<Order>> = result;
+            // @ts-expect-error: Customer excluded
+            const _noCustomer: Array<EntityAttributesInstance<Customer>> =
+              result;
+
+            Logger.log(_exact, _noCustomer);
+          };
+
+          await queryWith({ orderDate: { $gt: new Date("2026-01-01") } });
+        });
+
+        it("rejects a parameter of the filter type one skCondition scopes beside another", async () => {
+          const queryWith = async (
+            filter: SKScopedFilterParams<Customer, "Order">
+          ): Promise<void> => {
+            // @ts-expect-error: skCondition "PaymentMethod" scopes the filter to PaymentMethod, and a filter scoped to Order cannot match a PaymentMethod row
+            await Customer.query("123", {
+              filter,
+              skCondition: "PaymentMethod"
+            });
+          };
+
+          await queryWith({ type: "Order" });
+        });
+
+        it("takes a variable typed as FilterParams by key conditions", async () => {
+          const filter: FilterParams = { name: "Central" };
+
+          // @ts-expect-no-error: an index signature names no key to look up, so the filter keeps its own type
+          const result = await Customer.query(
+            { pk: "Customer#123" },
+            { filter }
+          );
+
+          // @ts-expect-no-error: an index signature names no key the results narrow by, so the results are the whole partition
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        });
+
+        it("takes a variable typed as FilterParams by id", async () => {
+          const filter: FilterParams = { name: "Central" };
+
+          // @ts-expect-no-error: an index signature names no key to look up, so the filter keeps its own type
+          const result = await Customer.query("123", { filter });
+
+          // @ts-expect-no-error: an index signature names no key the results narrow by, so the results are the whole partition
+          const _exact: CustomerPartitionResults = result;
+          // @ts-expect-error: NOT assignable to just one entity — not narrowed
+          const _notNarrowed: Array<EntityAttributesInstance<Order>> = result;
+
+          Logger.log(_exact, _notNarrowed);
+        });
+
+        it("takes a filter chosen by a conditional expression of literals", async () => {
+          const byType = true as boolean;
+
+          // @ts-expect-no-error: each branch is a filter the query takes
+          await Customer.query("123", {
+            filter: byType ? { type: "Order" } : { name: "Central" }
+          });
+        });
+
+        it("rejects a parameter typed as another partition's filter", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Sponsor>
+          ): Promise<void> => {
+            // @ts-expect-error: Sponsor's partition is not Customer's
+            await Customer.query("123", { filter });
+          };
+
+          await queryWith({ type: "Sponsor" });
+        });
+
+        it("rejects a parameter typed as another partition's filter by key conditions", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Sponsor>
+          ): Promise<void> => {
+            // @ts-expect-error: Sponsor's partition is not Customer's
+            await Customer.query({ pk: "Customer#123" }, { filter });
+          };
+
+          await queryWith({ type: "Sponsor" });
+        });
+
+        it("rejects the whole partition's declared type beside an skCondition that scopes it", async () => {
+          const queryWith = async (
+            filter: TypedFilterParams<Customer>
+          ): Promise<void> => {
+            // @ts-expect-error: skCondition "Order" scopes the filter to Order, and the declared partition-wide union also offers other entities' keys and `type` values that cannot match an Order row; type the filter with SKScopedFilterParams<Customer, "Order"> instead
+            await Customer.query("123", { filter, skCondition: "Order" });
+          };
+
+          await queryWith({ type: "Order" });
+        });
+
+        it("still rejects a literal naming an undeclared key", async () => {
+          // @ts-expect-error: region is not an attribute of the partition
+          await Customer.query("123", { filter: { region: "west" } }).catch(
+            () => {}
+          );
+          // @ts-expect-error: region is not an attribute of the partition
+          await Customer.query(
+            { pk: "Customer#123" },
+            { filter: { region: "west" } }
+          ).catch(() => {});
+          // @ts-expect-error: region is not an attribute of the partition
+          await Customer.query("123", {
+            filter: { region: "west" },
+            skCondition: { $beginsWith: "Order#" }
+          }).catch(() => {});
+        });
+
+        it("still rejects a literal with a mistyped value", async () => {
+          // @ts-expect-error: name is a string
+          await Customer.query("123", { filter: { name: 1 } }).catch(() => {});
+          // @ts-expect-error: name is a string
+          await Customer.query(
+            { pk: "Customer#123" },
+            { filter: { name: 1 } }
+          ).catch(() => {});
+          // @ts-expect-error: name is a string
+          await Customer.query("123", {
+            filter: { name: 1 },
+            skCondition: { $beginsWith: "Order#" }
+          }).catch(() => {});
+        });
+
+        it("still rejects a literal with an undeclared field in an object operand", async () => {
+          const location = { city: "Denver", state: "CO" };
+
+          // @ts-expect-error: region is not a field the location declares
+          await Warehouse.query("w1", {
+            filter: { location: { ...location, region: "west" } }
+          }).catch(() => {});
+          // @ts-expect-error: region is not a field the location declares
+          await Warehouse.query(
+            { pk: "Warehouse#w1" },
+            { filter: { location: { ...location, region: "west" } } }
+          ).catch(() => {});
+          // @ts-expect-error: region is not a field the location declares
+          await Warehouse.query("w1", {
+            filter: { location: { ...location, region: "west" } },
+            skCondition: "Warehouse"
+          }).catch(() => {});
+        });
+
+        it("rejects an undeclared field in an object operand of a conditional expression's branch", async () => {
+          const location = { city: "Denver", state: "CO" };
+          const byLocation = true as boolean;
+
+          // @ts-expect-error: region is not a field the location declares
+          await Warehouse.query("w1", {
+            filter: byLocation
+              ? { location: { ...location, region: "west" } }
+              : { name: "Central" }
+          }).catch(() => {});
         });
       });
 
@@ -3716,10 +4894,21 @@ describe("Query", () => {
       });
 
       it("rejects invalid dot-paths", async () => {
-        // @ts-expect-error: location.nonExistent is not a valid dot-path
-        await Warehouse.query("123", {
-          filter: { "location.nonExistent": "value" }
-        });
+        expect.assertions(2);
+
+        // The type refuses it, and so does the runtime: the path names nothing
+        // a row can hold, so the filter would silently return no rows
+        await expect(
+          // @ts-expect-error: location.nonExistent is not a valid dot-path
+          Warehouse.query("123", {
+            filter: { "location.nonExistent": "value" }
+          })
+        ).rejects.toEqual(
+          new FilterError(
+            'Invalid filter key "location.nonExistent": "nonExistent" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: city, state, zip'
+          )
+        );
+        expect(mockedQueryCommand.mock.calls).toEqual([]);
       });
 
       it("works for entities with no relationships", async () => {
@@ -4593,6 +5782,823 @@ describe("Query", () => {
         ).rejects.toThrow(
           'Invalid filter key "data.title[0]": "title[0]" indexes "title", which does not hold a list'
         );
+      });
+    });
+
+    describe("list index dot-path keys into a nullable list", () => {
+      // A nullable list is declared `Element[] | undefined`. These pin that an
+      // index into one types its element as the same index into a list that
+      // is not nullable does, rather than falling back to the stored form
+      it("accepts a whole object element, named as declared", async () => {
+        // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at: new Date("2026-01-01"),
+              actor: "ann"
+            }
+          }
+        });
+        // @ts-expect-no-error: the element's nullable field may be set
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at: new Date("2026-01-01"),
+              actor: "ann",
+              note: "restocked"
+            }
+          }
+        });
+        // @ts-expect-no-error: an IN of whole elements
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": [
+              { at: new Date("2026-01-01"), actor: "ann" },
+              { at: new Date("2026-01-02"), actor: "bob" }
+            ]
+          }
+        });
+        // @ts-expect-no-error: the same on a nullable list of objects in another schema
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.backup[9]": { sku: "abc", price: 1 } }
+        });
+      });
+
+      it("accepts a field below the index, in the field's own type and operators", async () => {
+        // @ts-expect-no-error: actor is a string
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].actor": "ann" }
+        });
+        // @ts-expect-no-error: a string takes a prefix
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].actor": { $beginsWith: "a" } }
+        });
+        // @ts-expect-no-error: an IN of strings
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].actor": ["ann", "bob"] }
+        });
+        // @ts-expect-no-error: at is a date, compared as a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0].at": { $gte: new Date("2026-01-01") }
+          }
+        });
+        // @ts-expect-no-error: and ranged as one
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0].at": {
+              $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+            }
+          }
+        });
+        // @ts-expect-no-error: a date is stored as an ISO string, so it takes a prefix
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].at": { $beginsWith: "2026" } }
+        });
+        // @ts-expect-no-error: a nullable field below the index takes its type
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].note": { $contains: "late" } }
+        });
+        // @ts-expect-no-error: price is a number
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.backup[0].price": { $lt: 10 } }
+        });
+      });
+
+      it("accepts an element of a nullable list of scalars in its own type", async () => {
+        // @ts-expect-no-error: a contactedAt element is a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.contactedAt[0]": new Date("2026-01-01") }
+        });
+        // @ts-expect-no-error: and is compared as one
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.contactedAt[0]": { $lt: new Date("2026-01-01") }
+          }
+        });
+        // @ts-expect-no-error: a roles element is one of the enum's members
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.roles[0]": "owner" }
+        });
+      });
+
+      it("accepts an element that is itself a list, or a union variant", async () => {
+        // @ts-expect-no-error: a bays element is a list of numbers, so it takes $contains on a number
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.bays[0]": { $contains: 3 } }
+        });
+        // @ts-expect-no-error: a promos element is a whole variant
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos[0]": {
+              kind: "discount",
+              percent: 10,
+              endsAt: new Date("2026-03-31")
+            }
+          }
+        });
+        // @ts-expect-no-error: either variant
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.promos[0]": { kind: "bundle", sku: "KIT-1" } }
+        });
+      });
+
+      it("refuses a whole element its schema cannot hold", async () => {
+        // @ts-expect-error: actor is declared as a string
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at: new Date("2026-01-01"),
+              actor: 1
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: at is declared as a date, so it takes a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at: "2026-01-01",
+              actor: "ann"
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: an element has no mood, so no element can equal this one
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at: new Date("2026-01-01"),
+              actor: "ann",
+              mood: "calm"
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: actor is required, so an element without it is no element
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: price is a number
+        await ArrayOfObjectsEntity.query("123", {
+          filter: {
+            "data.backup[0]": { sku: "abc", price: "1" }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses an operator a whole element's stored form cannot carry", async () => {
+        // @ts-expect-error: an element is stored as a Map, which has no prefix
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": { $beginsWith: "a" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a Map has no ordering
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": { $gt: "a" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a Map holds no elements to contain
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": { $contains: "a" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+        // @ts-expect-error: a history element declares at, actor and note, not mood
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].mood": "calm" }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: actor is a string
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].actor": 1 }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: at is a date, so it compares against a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].at": { $gte: "2026-01-01" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a string has no $between of numbers
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].actor": { $between: [1, 2] } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a query filter has no null, which a write condition reads as "not set"
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0].note": null }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: price is a number
+        await ArrayOfObjectsEntity.query("123", {
+          filter: { "data.backup[0].price": { $lt: "10" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+        // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.contactedAt[0]": "2026-01-01" }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: admin is not a member of the roles enum
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.roles[0]": "admin" }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses an element that is itself a list, or a union variant, in a shape it cannot hold", async () => {
+        // @ts-expect-error: a bays element holds numbers
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.bays[0]": { $contains: "3" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: percent is a number
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos[0]": {
+              kind: "discount",
+              percent: "10",
+              endsAt: new Date("2026-03-31")
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: percent belongs to the discount variant, not bundle
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos[0]": {
+              kind: "bundle",
+              sku: "KIT-1",
+              percent: 10
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("does not offer an index past the tenth, as for any list", async () => {
+        // @ts-expect-error: indexes 0 to 9 are offered
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[10].actor": "ann" }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+    });
+
+    describe("a whole $contains element with null on a nullable field", () => {
+      // An element is stored without a nulled field, and contains compares an
+      // element whole, so null on a nullable field of the operand means the
+      // element looked for lacks it. These pin that the operand offers null
+      // there at every depth, and nowhere else
+      it("accepts null on a nullable field of the element, at every depth", async () => {
+        // @ts-expect-no-error: note is nullable, so the element looked for has no note
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": {
+              $contains: {
+                at: new Date("2026-01-01"),
+                actor: "ann",
+                note: null
+              }
+            }
+          }
+        });
+        // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                note: null,
+                placement: { aisle: "A", bin: null },
+                restocks: [{ at: new Date("2026-01-01"), note: null }]
+              }
+            }
+          }
+        });
+        // @ts-expect-no-error: label is nullable in the bundle variant
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos": {
+              $contains: { kind: "bundle", sku: "KIT-1", label: null }
+            }
+          }
+        });
+      });
+
+      it("refuses null on a field of the element that is not nullable", async () => {
+        // @ts-expect-error: actor is not nullable, so every element has one
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": {
+              $contains: { at: new Date("2026-01-01"), actor: null }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: aisle is not nullable
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                placement: { aisle: null },
+                restocks: []
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: placement is an object field, which is never nullable
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: { sku: "MUG-1", placement: null, restocks: [] }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: restocks is not nullable
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                placement: { aisle: "A" },
+                restocks: null
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a restocks element is never null
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                placement: { aisle: "A" },
+                restocks: [null]
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a restocks element's at is not nullable
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": {
+              $contains: {
+                sku: "MUG-1",
+                placement: { aisle: "A" },
+                restocks: [{ at: null }]
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: sku is not nullable in the bundle variant
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: the discriminator names the variant, so it is never null
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("refuses null as the whole element", async () => {
+        // @ts-expect-error: $contains looks for an element, and no element is null
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history": { $contains: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: nor on a list of union variants
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.promos": { $contains: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: nor on a list of strings
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.tags": { $contains: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: nor on a nullable list of dates
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.contactedAt": { $contains: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: a query filter has no null, on the list as anywhere else
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history": null }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+
+      it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+        // @ts-expect-error: actor is required, so an element without it is no element
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": {
+              $contains: { at: new Date("2026-01-01"), note: null }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: note is a string when it is set
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": {
+              $contains: { at: new Date("2026-01-01"), actor: "ann", note: 1 }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: mood is not a field a history element declares
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": {
+              $contains: {
+                at: new Date("2026-01-01"),
+                actor: "ann",
+                note: null,
+                mood: "calm"
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: label belongs to the bundle variant, not discount
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos": {
+              $contains: {
+                kind: "discount",
+                percent: 10,
+                endsAt: new Date("2026-03-31"),
+                label: null
+              }
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+      });
+    });
+
+    describe("a whole value compared by equality or IN with null on a nullable field", () => {
+      // An object, or a list element named by an index, is compared whole by
+      // equality and IN, and a nulled field is stored by leaving it out. So
+      // null on a nullable field of the operand means the value compared lacks
+      // it: the expression builder drops the field, as it does in a $contains
+      // element. These pin that equality and IN offer null there at every
+      // depth, and nowhere else
+      it("accepts null on a nullable field of a whole value, at every depth", async () => {
+        const at = new Date("2026-01-01");
+
+        // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": { at, actor: "ann", note: null }
+          }
+        });
+
+        // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": [
+              { at, actor: "ann", note: null },
+              { at, actor: "bo" }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            addressAttribute: {
+              street: "1 Main St",
+              city: "Denver",
+              zip: null,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: [],
+              category: null
+            }
+          }
+        });
+
+        // @ts-expect-no-error: the same in an IN of whole objects
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            addressAttribute: [
+              {
+                street: "1 Main St",
+                city: "Denver",
+                zip: null,
+                geo: { lat: 1, lng: 2, accuracy: "precise" },
+                scores: [],
+                category: null
+              }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            objectAttribute: {
+              name: "Ann",
+              email: "ann@example.com",
+              tags: [],
+              status: "active",
+              createdDate: at,
+              deletedAt: null,
+              contactedAt: null,
+              roles: null,
+              history: [{ at, actor: "ann", note: null }]
+            }
+          }
+        });
+
+        // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section": {
+              entries: [
+                {
+                  sku: "MUG-1",
+                  note: null,
+                  placement: { aisle: "A", bin: null },
+                  restocks: [{ at, note: null }]
+                }
+              ]
+            }
+          }
+        });
+
+        // @ts-expect-no-error: bin is nullable in an object field below an index
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries[0].placement": { aisle: "A", bin: null }
+          }
+        });
+
+        // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries[0]": [
+              {
+                sku: "MUG-1",
+                note: null,
+                placement: { aisle: "A", bin: null },
+                restocks: [{ at, note: null }]
+              }
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos[0]": { kind: "bundle", sku: "KIT-1", label: null }
+          }
+        });
+
+        // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": [[{ at, actor: "ann", note: null }], []]
+          }
+        });
+
+        // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+        await NestedListsEntity.query("123", {
+          filter: {
+            "layout.section.entries": [
+              [
+                {
+                  sku: "MUG-1",
+                  note: null,
+                  placement: { aisle: "A", bin: null },
+                  restocks: [{ at, note: null }]
+                }
+              ]
+            ]
+          }
+        });
+
+        // @ts-expect-no-error: an IN of whole lists of union variants
+        await NullableListsEntity.query("123", {
+          filter: {
+            "shelf.promos": [[{ kind: "bundle", sku: "KIT-1", label: null }]]
+          }
+        });
+      });
+
+      it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+        const at = new Date("2026-01-01");
+
+        // @ts-expect-error: actor is not nullable, so every element has one
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": { at, actor: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": { at, note: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history[0]": {
+              at,
+              actor: "ann",
+              note: null,
+              mood: "calm"
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: an IN element is a whole element, and no element is null
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history[0]": [null] }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: city is not nullable
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            addressAttribute: {
+              street: "1 Main St",
+              city: null,
+              geo: { lat: 1, lng: 2, accuracy: "precise" },
+              scores: []
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: geo is an object field, which is never nullable
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            addressAttribute: {
+              street: "1 Main St",
+              city: "Denver",
+              geo: null,
+              scores: []
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: an element of a list inside the value is never null
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            objectAttribute: {
+              name: "Ann",
+              email: "ann@example.com",
+              tags: [],
+              status: "active",
+              createdDate: at,
+              history: [null]
+            }
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: aisle is not nullable
+        await NestedListsEntity.query("123", {
+          filter: { "layout.section.entries[0].placement": { aisle: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: the discriminator names the variant, so it is never null
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.promos[0]": { kind: null, sku: "KIT-1" } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: sku is not nullable in the bundle variant
+        await NullableListsEntity.query("123", {
+          filter: { "shelf.promos[0]": { kind: "bundle", sku: null } }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: actor is not nullable in an element of a list compared whole
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history": [[{ at, actor: null }]] }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: an element of a list compared whole is never null
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: { "objectAttribute.history": [[null]] }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
+
+        // @ts-expect-error: mood is not a field a history element declares
+        await MyClassWithAllAttributeTypes.query("123", {
+          filter: {
+            "objectAttribute.history": [[{ at, actor: "ann", mood: "calm" }]]
+          }
+        }).catch(() => {
+          Logger.log("Testing types");
+        });
       });
     });
 

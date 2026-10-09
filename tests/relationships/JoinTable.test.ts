@@ -1,8 +1,13 @@
 import {
+  type Accessory,
   type Author,
   AuthorBook,
   type Book,
+  CompatibleAccessory,
   type Course,
+  type Customer,
+  MockTable,
+  type MyClassWithAllAttributeTypes,
   type Student,
   StudentCourse,
   type User,
@@ -13,13 +18,35 @@ import {
   TransactWriteCommand,
   TransactGetCommand
 } from "@aws-sdk/lib-dynamodb";
-import { TransactionCanceledException } from "@aws-sdk/client-dynamodb";
-import { ConditionalCheckFailedError } from "../../src/dynamo-utils/index.js";
+import {
+  TransactionCanceledException,
+  type CancellationReason
+} from "@aws-sdk/client-dynamodb";
+import {
+  ConditionalCheckFailedError,
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "../../src/dynamo-utils/index.js";
 import {
   type MockTableEntityTableItem,
   type OtherTableEntityTableItem
 } from "../integration/utils.js";
 import { NotFoundError } from "../../src/index.js";
+import { FilterError } from "../../src/errors.js";
+import {
+  Entity,
+  EnumAttribute,
+  HasAndBelongsToMany,
+  NumberAttribute,
+  ObjectAttribute,
+  StringAttribute
+} from "../../src/decorators/index.js";
+import type {
+  InferObjectSchema,
+  ObjectSchema
+} from "../../src/decorators/index.js";
+import { JoinTable } from "../../src/relationships/index.js";
+import type { ForeignKey } from "../../src/types.js";
 import Logger from "../../src/Logger.js";
 
 const mockTransactWriteCommand = vi.mocked(TransactWriteCommand);
@@ -68,6 +95,154 @@ vi.mock("@aws-sdk/lib-dynamodb", () => {
     })
   };
 });
+
+// The shared join tables declare bare foreign keys, which take no guards. This
+// one declares its keys with their target types, so its links can be guarded
+@Entity
+class Product extends MockTable {
+  declare readonly type: "Product";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @NumberAttribute({ alias: "Price" })
+  public readonly price: number;
+
+  @HasAndBelongsToMany(() => Supplier, {
+    targetKey: "products",
+    through: () => ({ joinTable: ProductSupplier, foreignKey: "productId" })
+  })
+  public readonly suppliers: Supplier[];
+}
+
+@Entity
+class Supplier extends MockTable {
+  declare readonly type: "Supplier";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @EnumAttribute({ alias: "Status", values: ["active", "suspended"] })
+  public readonly status: "active" | "suspended";
+
+  @HasAndBelongsToMany(() => Product, {
+    targetKey: "suppliers",
+    through: () => ({ joinTable: ProductSupplier, foreignKey: "supplierId" })
+  })
+  public readonly products: Product[];
+}
+
+class ProductSupplier extends JoinTable<Product, Supplier> {
+  public readonly productId: ForeignKey<Product>;
+  public readonly supplierId: ForeignKey<Supplier>;
+}
+
+// A join table whose target carries an object attribute, so a target guard can
+// compare it whole
+const depotAddressSchema = {
+  city: { type: "string" },
+  zip: { type: "string", nullable: true }
+} as const satisfies ObjectSchema;
+
+@Entity
+class Kiosk extends MockTable {
+  declare readonly type: "Kiosk";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Depot, {
+    targetKey: "kiosks",
+    through: () => ({ joinTable: KioskDepot, foreignKey: "kioskId" })
+  })
+  public readonly depots: Depot[];
+}
+
+@Entity
+class Depot extends MockTable {
+  declare readonly type: "Depot";
+
+  @ObjectAttribute({ alias: "Address", schema: depotAddressSchema })
+  public readonly address: InferObjectSchema<typeof depotAddressSchema>;
+
+  @HasAndBelongsToMany(() => Kiosk, {
+    targetKey: "depots",
+    through: () => ({ joinTable: KioskDepot, foreignKey: "depotId" })
+  })
+  public readonly kiosks: Kiosk[];
+}
+
+class KioskDepot extends JoinTable<Kiosk, Depot> {
+  public readonly kioskId: ForeignKey<Kiosk>;
+  public readonly depotId: ForeignKey<Depot>;
+}
+
+/**
+ * Lists of objects below the attribute's root: a list inside a nested object
+ * field, whose elements hold a nested object and a list of objects of their
+ * own, each with a nullable field
+ */
+const nestedListsSchema = {
+  section: {
+    type: "object",
+    fields: {
+      entries: {
+        type: "array",
+        items: {
+          type: "object",
+          fields: {
+            sku: { type: "string" },
+            note: { type: "string", nullable: true },
+            placement: {
+              type: "object",
+              fields: {
+                aisle: { type: "string" },
+                bin: { type: "string", nullable: true }
+              }
+            },
+            restocks: {
+              type: "array",
+              items: {
+                type: "object",
+                fields: {
+                  at: { type: "date" },
+                  note: { type: "string", nullable: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+} as const satisfies ObjectSchema;
+
+/**
+ * Nullable lists whose elements are not plain objects: a list of lists and a
+ * list of discriminated-union elements
+ */
+const nullableListsSchema = {
+  bays: {
+    type: "array",
+    items: { type: "array", items: { type: "number" } },
+    nullable: true
+  },
+  promos: {
+    type: "array",
+    items: {
+      type: "discriminatedUnion",
+      discriminator: "kind",
+      variants: {
+        discount: { percent: { type: "number" }, endsAt: { type: "date" } },
+        bundle: {
+          sku: { type: "string" },
+          label: { type: "string", nullable: true }
+        }
+      }
+    },
+    nullable: true
+  }
+} as const satisfies ObjectSchema;
 
 describe("JoinTable", () => {
   afterEach(() => {
@@ -574,10 +749,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 is already linked to Book with ID 2"
+            "ConditionalCheckFailed: Author with ID '1' is already linked to Book with ID '2'"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 is already linked to Author with ID 1"
+            "ConditionalCheckFailed: Book with ID '2' is already linked to Author with ID '1'"
           )
         ]);
       }
@@ -738,10 +913,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 does not exist"
+            "ConditionalCheckFailed: Author with ID '1' does not exist"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 does not exist"
+            "ConditionalCheckFailed: Book with ID '2' does not exist"
           )
         ]);
       }
@@ -870,10 +1045,10 @@ describe("JoinTable", () => {
         expect(e.constructor.name).toEqual("TransactionWriteFailedError");
         expect(e.errors).toEqual([
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Author with ID 1 is not linked to Book with ID 2"
+            "ConditionalCheckFailed: Author with ID '1' is not linked to Book with ID '2'"
           ),
           new ConditionalCheckFailedError(
-            "ConditionalCheckFailed: Book with ID 2 is not linked to Author with ID 1"
+            "ConditionalCheckFailed: Book with ID '2' is not linked to Author with ID '1'"
           )
         ]);
       }
@@ -979,6 +1154,1287 @@ describe("JoinTable", () => {
             }
           ]
         ]);
+      });
+    });
+  });
+
+  describe("write conditions", () => {
+    const product: MockTableEntityTableItem<Product> = {
+      PK: "Product#p1",
+      SK: "Product",
+      Id: "p1",
+      Type: "Product",
+      Name: "Mug",
+      Price: 12,
+      CreatedAt: "2024-02-27T03:19:52.667Z",
+      UpdatedAt: "2024-02-27T03:19:52.667Z"
+    };
+
+    const supplier: MockTableEntityTableItem<Supplier> = {
+      PK: "Supplier#s1",
+      SK: "Supplier",
+      Id: "s1",
+      Type: "Supplier",
+      Name: "Acme",
+      Status: "active",
+      CreatedAt: "2021-10-15T08:31:15.148Z",
+      UpdatedAt: "2022-10-15T08:31:15.148Z"
+    };
+
+    const keys = { productId: "p1", supplierId: "s1" };
+
+    const preReadGet = [
+      [
+        {
+          TransactItems: [
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Supplier#s1", SK: "Supplier" }
+              }
+            },
+            {
+              Get: {
+                TableName: "mock-table",
+                Key: { PK: "Product#p1", SK: "Product" }
+              }
+            }
+          ]
+        }
+      ]
+    ];
+
+    // The Supplier denormalized into the Product's partition
+    const supplierLinkPut = {
+      Put: {
+        TableName: "mock-table",
+        ConditionExpression: "attribute_not_exists(PK)",
+        Item: { ...supplier, PK: "Product#p1", SK: "Supplier#s1" }
+      }
+    };
+
+    // The Product denormalized into the Supplier's partition
+    const productLinkPut = {
+      Put: {
+        TableName: "mock-table",
+        ConditionExpression: "attribute_not_exists(PK)",
+        Item: { ...product, PK: "Supplier#s1", SK: "Product#p1" }
+      }
+    };
+
+    const productCheck = {
+      ConditionCheck: {
+        TableName: "mock-table",
+        Key: { PK: "Product#p1", SK: "Product" },
+        ConditionExpression: "attribute_exists(PK)"
+      }
+    };
+
+    const supplierCheck = {
+      ConditionCheck: {
+        TableName: "mock-table",
+        Key: { PK: "Supplier#s1", SK: "Supplier" },
+        ConditionExpression: "attribute_exists(PK)"
+      }
+    };
+
+    const productLinkDelete = {
+      Delete: {
+        TableName: "mock-table",
+        Key: { PK: "Product#p1", SK: "Supplier#s1" },
+        ConditionExpression: "attribute_exists(PK)"
+      }
+    };
+
+    const supplierLinkDelete = {
+      Delete: {
+        TableName: "mock-table",
+        Key: { PK: "Supplier#s1", SK: "Product#p1" },
+        ConditionExpression: "attribute_exists(PK)"
+      }
+    };
+
+    const cancelTransactWrite = (reasons: CancellationReason[]): void => {
+      mockTransactWriteItems.mockImplementationOnce(() => {
+        throw new TransactionCanceledException({
+          message: "MockMessage",
+          CancellationReasons: reasons,
+          $metadata: {}
+        });
+      });
+    };
+
+    /**
+     * Runs a write expected to fail and returns its error
+     */
+    const failureOf = async (write: () => Promise<unknown>): Promise<any> => {
+      try {
+        await write();
+      } catch (e: unknown) {
+        return e;
+      }
+      throw new Error("Expected the write to fail");
+    };
+
+    afterEach(() => {
+      mockTransactWriteItems.mockReset();
+    });
+
+    describe("on create", () => {
+      beforeEach(() => {
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: product }, { Item: supplier }]
+        });
+      });
+
+      describe("an unconditioned create", () => {
+        const unconditionedItems = [
+          productLinkPut,
+          supplierCheck,
+          supplierLinkPut,
+          productCheck
+        ];
+
+        it("sends exactly today's commands without options", async () => {
+          expect.assertions(3);
+
+          await ProductSupplier.create(keys);
+
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual(preReadGet);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: unconditionedItems }]
+          ]);
+        });
+
+        it("sends exactly today's command for an empty condition (R29)", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(keys, { condition: {} });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: unconditionedItems }]
+          ]);
+        });
+
+        it("sends exactly today's command with only referentialIntegrityCheck: false", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(keys, {
+            referentialIntegrityCheck: false
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: [productLinkPut, supplierLinkPut] }]
+          ]);
+        });
+      });
+
+      describe("a target guard (AE9)", () => {
+        const create = async (): Promise<void> => {
+          await ProductSupplier.create(keys, {
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+        };
+
+        const sentItems = [
+          productLinkPut,
+          {
+            // One check on the Supplier's row carries both the library's
+            // existence check and the guard
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Supplier#s1", SK: "Supplier" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Status = :wc1_Status1))",
+              ExpressionAttributeNames: { "#Status": "Status" },
+              ExpressionAttributeValues: { ":wc1_Status1": "active" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          supplierLinkPut,
+          productCheck
+        ];
+
+        it("merges into the referenced entity's referential-integrity check", async () => {
+          expect.assertions(3);
+
+          await create();
+
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual(preReadGet);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+
+        it("reports a failed guard as a WriteConditionFailedError naming the foreign key, writing neither link row", async () => {
+          expect.assertions(6);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            {
+              Code: "ConditionalCheckFailed",
+              Item: {
+                PK: { S: "Supplier#s1" },
+                SK: { S: "Supplier" },
+                Status: { S: "suspended" }
+              }
+            },
+            { Code: "None" },
+            { Code: "None" }
+          ]);
+
+          const e = await failureOf(create);
+
+          expect(e).toBeInstanceOf(TransactionWriteFailedError);
+          expect(e.message).toEqual("Failed Conditional Checks");
+          expect(e.errors).toEqual([
+            new WriteConditionFailedError(
+              "ConditionalCheckFailed: Write condition failed on ProductSupplier with ID 'productId=p1, supplierId=s1': foreign key 'supplierId'",
+              {
+                entity: "ProductSupplier",
+                id: "productId=p1, supplierId=s1",
+                guards: [{ kind: "foreignKey", name: "supplierId" }]
+              }
+            )
+          ]);
+          expect(e.errors[0].guards).toEqual([
+            { kind: "foreignKey", name: "supplierId" }
+          ]);
+          expect(e.cause.CancellationReasons[1]).toEqual({
+            Code: "ConditionalCheckFailed"
+          });
+          // Both link rows were in the one cancelled transaction
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+
+        it("reports an entity deleted after the pre-read as a referential-integrity failure, not the guard", async () => {
+          expect.assertions(2);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
+            { Code: "None" }
+          ]);
+
+          const e = await failureOf(create);
+
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
+            )
+          ]);
+          expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+        });
+
+        it("reports an existing link with the link row's own message", async () => {
+          expect.assertions(2);
+
+          cancelTransactWrite([
+            { Code: "ConditionalCheckFailed" },
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "None" }
+          ]);
+
+          const e = await failureOf(create);
+
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Supplier with ID 's1' is already linked to Product with ID 'p1'"
+            )
+          ]);
+          expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+        });
+
+        it("passes a TransactionConflict-only cancellation through unchanged", async () => {
+          expect.assertions(3);
+
+          const reasons = [
+            { Code: "None" },
+            { Code: "TransactionConflict" },
+            { Code: "None" },
+            { Code: "None" }
+          ];
+          cancelTransactWrite(reasons);
+
+          const e = await failureOf(create);
+
+          expect(e).toBeInstanceOf(TransactionCanceledException);
+          expect(e.CancellationReasons).toEqual(reasons);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+      });
+
+      it("merges a guard on each foreign key into each entity's integrity check", async () => {
+        expect.assertions(1);
+
+        await ProductSupplier.create(keys, {
+          condition: {
+            productId: {
+              target: {
+                price: { $lt: 20 },
+                $or: [{ name: "Mug" }, { name: "Cup" }]
+              }
+            },
+            supplierId: { target: {} }
+          }
+        });
+
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                productLinkPut,
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Supplier#s1", SK: "Supplier" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK))",
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                },
+                supplierLinkPut,
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Product#p1", SK: "Product" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND ((#Name = :wc1_Name1 OR #Name = :wc1_Name2) AND (#Price < :wc1_Price3)))",
+                    ExpressionAttributeNames: {
+                      "#Name": "Name",
+                      "#Price": "Price"
+                    },
+                    ExpressionAttributeValues: {
+                      ":wc1_Name1": "Mug",
+                      ":wc1_Name2": "Cup",
+                      ":wc1_Price3": 20
+                    },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      describe("with referentialIntegrityCheck: false (R18)", () => {
+        const create = async (): Promise<void> => {
+          await ProductSupplier.create(keys, {
+            referentialIntegrityCheck: false,
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+        };
+
+        const sentItems = [
+          productLinkPut,
+          supplierLinkPut,
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Supplier#s1", SK: "Supplier" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Status = :wc1_Status1))",
+              ExpressionAttributeNames: { "#Status": "Status" },
+              ExpressionAttributeValues: { ":wc1_Status1": "active" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ];
+
+        it("adds its own check on the referenced entity's row", async () => {
+          expect.assertions(1);
+
+          await create();
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: sentItems }]
+          ]);
+        });
+
+        it("reports an entity deleted after the pre-read as a referential-integrity failure (R27)", async () => {
+          expect.assertions(2);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            { Code: "None" },
+            { Code: "ConditionalCheckFailed" }
+          ]);
+
+          const e = await failureOf(create);
+
+          expect(e.errors).toEqual([
+            new ConditionalCheckFailedError(
+              "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
+            )
+          ]);
+          expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+        });
+
+        it("reports a failed guard naming the foreign key", async () => {
+          expect.assertions(1);
+
+          cancelTransactWrite([
+            { Code: "None" },
+            { Code: "None" },
+            {
+              Code: "ConditionalCheckFailed",
+              Item: {
+                PK: { S: "Supplier#s1" },
+                SK: { S: "Supplier" },
+                Status: { S: "suspended" }
+              }
+            }
+          ]);
+
+          const e = await failureOf(create);
+
+          expect(e.errors).toEqual([
+            new WriteConditionFailedError(
+              "ConditionalCheckFailed: Write condition failed on ProductSupplier with ID 'productId=p1, supplierId=s1': foreign key 'supplierId'",
+              {
+                entity: "ProductSupplier",
+                id: "productId=p1, supplierId=s1",
+                guards: [{ kind: "foreignKey", name: "supplierId" }]
+              }
+            )
+          ]);
+        });
+      });
+    });
+
+    describe("a missing entity at the pre-read", () => {
+      it.each([true, false])(
+        "throws NotFoundError before any guard is sent (referentialIntegrityCheck: %s)",
+        async referentialIntegrityCheck => {
+          expect.assertions(2);
+
+          mockTransactGetItems.mockResolvedValueOnce({
+            Responses: [{ Item: product }]
+          });
+
+          const e = await failureOf(async () => {
+            await ProductSupplier.create(keys, {
+              referentialIntegrityCheck,
+              condition: { supplierId: { target: { status: "active" } } }
+            });
+          });
+
+          expect(e).toEqual(
+            new NotFoundError("Entities not found: (Supplier: s1)")
+          );
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+        }
+      );
+    });
+
+    // DynamoDB's TransactGetItems returns one Responses entry per Get, in Get
+    // order (Supplier, then Product), with `{}` for an item that does not exist
+    describe("a missing entity in DynamoDB's real pre-read response shape (R27)", () => {
+      describe.each([
+        [
+          "the first entity is missing",
+          [{ Item: supplier }, {}],
+          "Entities not found: (Product: p1)"
+        ],
+        [
+          "the second entity is missing",
+          [{}, { Item: product }],
+          "Entities not found: (Supplier: s1)"
+        ],
+        [
+          "both entities are missing",
+          [{}, {}],
+          "Entities not found: (Supplier: s1), (Product: p1)"
+        ]
+      ])("when %s", (_missing, responses, message) => {
+        describe.each([
+          ["without a condition", undefined],
+          [
+            "with a condition",
+            {
+              productId: { target: { name: "Mug" } },
+              supplierId: { target: { status: "active" as const } }
+            }
+          ]
+        ])("%s", (_label, condition) => {
+          it.each([true, false])(
+            "throws NotFoundError and sends only the pre-read (referentialIntegrityCheck: %s)",
+            async referentialIntegrityCheck => {
+              expect.assertions(4);
+
+              mockTransactGetItems.mockResolvedValueOnce({
+                Responses: responses
+              });
+
+              const e = await failureOf(async () => {
+                await ProductSupplier.create(keys, {
+                  referentialIntegrityCheck,
+                  condition
+                });
+              });
+
+              expect(e).toEqual(new NotFoundError(message));
+              expect(mockSend.mock.calls).toEqual([
+                [{ name: "TransactGetCommand" }]
+              ]);
+              expect(mockTransactGetCommand.mock.calls).toEqual(preReadGet);
+              expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+            }
+          );
+        });
+      });
+    });
+
+    describe("on a self-referential join table", () => {
+      const accessory = (id: string): MockTableEntityTableItem<Accessory> => ({
+        PK: `Accessory#${id}`,
+        SK: "Accessory",
+        Id: id,
+        Type: "Accessory",
+        Name: `Accessory-${id}`,
+        CreatedAt: "2024-02-27T03:19:52.667Z",
+        UpdatedAt: "2024-02-27T03:19:52.667Z"
+      });
+
+      const accessoryCheck = (
+        id: string,
+        placeholder: string,
+        name: string
+      ): Record<string, unknown> => ({
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: `Accessory#${id}`, SK: "Accessory" },
+          ConditionExpression: `attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = ${placeholder}))`,
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { [placeholder]: name },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      });
+
+      const linkPut = (
+        partitionId: string,
+        linkedId: string
+      ): Record<string, unknown> => ({
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            ...accessory(linkedId),
+            PK: `Accessory#${partitionId}`,
+            SK: `Accessory#${linkedId}`
+          }
+        }
+      });
+
+      const create = async (): Promise<void> => {
+        await CompatibleAccessory.create(
+          { accessoryId: "a1", compatibleAccessoryId: "a2" },
+          {
+            condition: {
+              accessoryId: { target: { name: "Accessory-a1" } },
+              compatibleAccessoryId: { target: { name: "Accessory-a2" } }
+            }
+          }
+        );
+      };
+
+      beforeEach(() => {
+        mockTransactGetItems.mockResolvedValueOnce({
+          Responses: [{ Item: accessory("a1") }, { Item: accessory("a2") }]
+        });
+      });
+
+      it("linking two different ids with both keys guarded checks both rows", async () => {
+        expect.assertions(1);
+
+        await create();
+
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                linkPut("a2", "a1"),
+                accessoryCheck("a2", ":wc2_Name1", "Accessory-a2"),
+                linkPut("a1", "a2"),
+                accessoryCheck("a1", ":wc1_Name1", "Accessory-a1")
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("names the foreign key whose entity failed its guard", async () => {
+        expect.assertions(1);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Accessory#a2" },
+              SK: { S: "Accessory" },
+              Name: { S: "Renamed" }
+            }
+          },
+          { Code: "None" },
+          { Code: "None" }
+        ]);
+
+        const e = await failureOf(create);
+
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on CompatibleAccessory with ID 'accessoryId=a1, compatibleAccessoryId=a2': foreign key 'compatibleAccessoryId'",
+            {
+              entity: "CompatibleAccessory",
+              id: "accessoryId=a1, compatibleAccessoryId=a2",
+              guards: [{ kind: "foreignKey", name: "compatibleAccessoryId" }]
+            }
+          )
+        ]);
+      });
+    });
+
+    // Caller-supplied ids (`@IdAttribute`) let entities of different types
+    // share an id string. Each partition must still receive a copy of the
+    // other entity, never of itself
+    describe("linking two entities of different types that share an id (R15)", () => {
+      const sharedProduct: MockTableEntityTableItem<Product> = {
+        ...product,
+        PK: "Product#shared",
+        Id: "shared"
+      };
+
+      const sharedSupplier: MockTableEntityTableItem<Supplier> = {
+        ...supplier,
+        PK: "Supplier#shared",
+        Id: "shared"
+      };
+
+      const sharedKeys = { productId: "shared", supplierId: "shared" };
+
+      // The Supplier denormalized into the Product's partition
+      const sharedSupplierLinkPut = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Product#shared",
+            SK: "Supplier#shared",
+            Id: "shared",
+            Type: "Supplier",
+            Name: "Acme",
+            Status: "active",
+            CreatedAt: "2021-10-15T08:31:15.148Z",
+            UpdatedAt: "2022-10-15T08:31:15.148Z"
+          }
+        }
+      };
+
+      // The Product denormalized into the Supplier's partition
+      const sharedProductLinkPut = {
+        Put: {
+          TableName: "mock-table",
+          ConditionExpression: "attribute_not_exists(PK)",
+          Item: {
+            PK: "Supplier#shared",
+            SK: "Product#shared",
+            Id: "shared",
+            Type: "Product",
+            Name: "Mug",
+            Price: 12,
+            CreatedAt: "2024-02-27T03:19:52.667Z",
+            UpdatedAt: "2024-02-27T03:19:52.667Z"
+          }
+        }
+      };
+
+      const sharedProductCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Product#shared", SK: "Product" },
+          ConditionExpression: "attribute_exists(PK)"
+        }
+      };
+
+      const sharedSupplierGuardCheck = {
+        ConditionCheck: {
+          TableName: "mock-table",
+          Key: { PK: "Supplier#shared", SK: "Supplier" },
+          ConditionExpression:
+            "attribute_exists(PK) AND (attribute_exists(PK) AND (#Status = :wc1_Status1))",
+          ExpressionAttributeNames: { "#Status": "Status" },
+          ExpressionAttributeValues: { ":wc1_Status1": "active" },
+          ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+        }
+      };
+
+      const sharedPreReadGet = [
+        [
+          {
+            TransactItems: [
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Supplier#shared", SK: "Supplier" }
+                }
+              },
+              {
+                Get: {
+                  TableName: "mock-table",
+                  Key: { PK: "Product#shared", SK: "Product" }
+                }
+              }
+            ]
+          }
+        ]
+      ];
+
+      describe("when both entities exist", () => {
+        // DynamoDB's real response shape: one entry per Get, in Get order
+        beforeEach(() => {
+          mockTransactGetItems.mockResolvedValueOnce({
+            Responses: [{ Item: sharedSupplier }, { Item: sharedProduct }]
+          });
+        });
+
+        it("denormalizes each entity into the other's partition", async () => {
+          expect.assertions(3);
+
+          await ProductSupplier.create(sharedKeys);
+
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }],
+            [{ name: "TransactWriteCommand" }]
+          ]);
+          expect(mockTransactGetCommand.mock.calls).toEqual(sharedPreReadGet);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  {
+                    ConditionCheck: {
+                      TableName: "mock-table",
+                      Key: { PK: "Supplier#shared", SK: "Supplier" },
+                      ConditionExpression: "attribute_exists(PK)"
+                    }
+                  },
+                  sharedSupplierLinkPut,
+                  sharedProductCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with a target guard", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  sharedSupplierGuardCheck,
+                  sharedSupplierLinkPut,
+                  sharedProductCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with referentialIntegrityCheck: false and a target guard", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            referentialIntegrityCheck: false,
+            condition: { supplierId: { target: { status: "active" } } }
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [
+              {
+                TransactItems: [
+                  sharedProductLinkPut,
+                  sharedSupplierLinkPut,
+                  sharedSupplierGuardCheck
+                ]
+              }
+            ]
+          ]);
+        });
+
+        it("denormalizes each entity into the other's partition with referentialIntegrityCheck: false", async () => {
+          expect.assertions(1);
+
+          await ProductSupplier.create(sharedKeys, {
+            referentialIntegrityCheck: false
+          });
+
+          expect(mockTransactWriteCommand.mock.calls).toEqual([
+            [{ TransactItems: [sharedProductLinkPut, sharedSupplierLinkPut] }]
+          ]);
+        });
+      });
+
+      describe.each([
+        [
+          "the Product is missing",
+          [{ Item: sharedSupplier }, {}],
+          "Entities not found: (Product: shared)"
+        ],
+        [
+          "the Supplier is missing",
+          [{}, { Item: sharedProduct }],
+          "Entities not found: (Supplier: shared)"
+        ]
+      ])("when %s", (_missing, responses, message) => {
+        it("throws NotFoundError naming only the missing entity and sends only the pre-read", async () => {
+          expect.assertions(3);
+
+          mockTransactGetItems.mockResolvedValueOnce({ Responses: responses });
+
+          const e = await failureOf(async () => {
+            await ProductSupplier.create(sharedKeys);
+          });
+
+          expect(e).toEqual(new NotFoundError(message));
+          expect(mockSend.mock.calls).toEqual([
+            [{ name: "TransactGetCommand" }]
+          ]);
+          expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+        });
+      });
+    });
+
+    describe("on delete", () => {
+      const remove = async (): Promise<void> => {
+        await ProductSupplier.delete(keys, {
+          condition: { supplierId: { target: { status: "active" } } }
+        });
+      };
+
+      const sentItems = [
+        supplierLinkDelete,
+        productLinkDelete,
+        {
+          ConditionCheck: {
+            TableName: "mock-table",
+            Key: { PK: "Supplier#s1", SK: "Supplier" },
+            ConditionExpression:
+              "attribute_exists(PK) AND (attribute_exists(PK) AND (#Status = :wc1_Status1))",
+            ExpressionAttributeNames: { "#Status": "Status" },
+            ExpressionAttributeValues: { ":wc1_Status1": "active" },
+            ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+          }
+        }
+      ];
+
+      it("sends exactly today's command when unconditioned, with or without an empty condition", async () => {
+        expect.assertions(2);
+
+        await ProductSupplier.delete(keys);
+        await ProductSupplier.delete(keys, { condition: {} });
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }],
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: [supplierLinkDelete, productLinkDelete] }],
+          [{ TransactItems: [supplierLinkDelete, productLinkDelete] }]
+        ]);
+      });
+
+      it("adds a check on the referenced entity's row, with no read", async () => {
+        expect.assertions(2);
+
+        await remove();
+
+        expect(mockSend.mock.calls).toEqual([
+          [{ name: "TransactWriteCommand" }]
+        ]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [{ TransactItems: sentItems }]
+        ]);
+      });
+
+      it("checks both entities when both keys are guarded", async () => {
+        expect.assertions(1);
+
+        await ProductSupplier.delete(keys, {
+          condition: {
+            productId: { target: { name: { $beginsWith: "M" } } },
+            supplierId: { target: {} }
+          }
+        });
+
+        expect(mockTransactWriteCommand.mock.calls).toEqual([
+          [
+            {
+              TransactItems: [
+                supplierLinkDelete,
+                productLinkDelete,
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Product#p1", SK: "Product" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK) AND (begins_with(#Name, :wc1_Name1)))",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "M" },
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                },
+                {
+                  ConditionCheck: {
+                    TableName: "mock-table",
+                    Key: { PK: "Supplier#s1", SK: "Supplier" },
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (attribute_exists(PK))",
+                    ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+                  }
+                }
+              ]
+            }
+          ]
+        ]);
+      });
+
+      it("reports a failed guard naming the foreign key", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          {
+            Code: "ConditionalCheckFailed",
+            Item: {
+              PK: { S: "Supplier#s1" },
+              SK: { S: "Supplier" },
+              Status: { S: "suspended" }
+            }
+          }
+        ]);
+
+        const e = await failureOf(remove);
+
+        expect(e).toBeInstanceOf(TransactionWriteFailedError);
+        expect(e.errors).toEqual([
+          new WriteConditionFailedError(
+            "ConditionalCheckFailed: Write condition failed on ProductSupplier with ID 'productId=p1, supplierId=s1': foreign key 'supplierId'",
+            {
+              entity: "ProductSupplier",
+              id: "productId=p1, supplierId=s1",
+              guards: [{ kind: "foreignKey", name: "supplierId" }]
+            }
+          )
+        ]);
+      });
+
+      it("still reports a missing link as not linked", async () => {
+        expect.assertions(1);
+
+        cancelTransactWrite([
+          { Code: "ConditionalCheckFailed" },
+          { Code: "ConditionalCheckFailed" },
+          { Code: "None" }
+        ]);
+
+        const e = await failureOf(remove);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Supplier with ID 's1' is not linked to Product with ID 'p1'"
+          ),
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Product with ID 'p1' is not linked to Supplier with ID 's1'"
+          )
+        ]);
+      });
+
+      it("reports a missing guarded entity as a referential-integrity failure (R27)", async () => {
+        expect.assertions(2);
+
+        cancelTransactWrite([
+          { Code: "None" },
+          { Code: "None" },
+          { Code: "ConditionalCheckFailed" }
+        ]);
+
+        const e = await failureOf(remove);
+
+        expect(e.errors).toEqual([
+          new ConditionalCheckFailedError(
+            "ConditionalCheckFailed: Supplier with ID 's1' does not exist"
+          )
+        ]);
+        expect(e.errors[0]).not.toBeInstanceOf(WriteConditionFailedError);
+      });
+
+      it("passes a TransactionConflict-only cancellation through unchanged", async () => {
+        expect.assertions(2);
+
+        const reasons = [
+          { Code: "TransactionConflict" },
+          { Code: "None" },
+          { Code: "None" }
+        ];
+        cancelTransactWrite(reasons);
+
+        const e = await failureOf(remove);
+
+        expect(e).toBeInstanceOf(TransactionCanceledException);
+        expect(e.CancellationReasons).toEqual(reasons);
+      });
+    });
+
+    describe("an invalid condition", () => {
+      it("throws a FilterError before any read for a key that is not a foreign key of the join table", async () => {
+        expect.assertions(3);
+
+        const e = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: a plain JavaScript caller's unknown key
+            condition: { storeId: { target: {} } }
+          });
+        });
+
+        expect(e).toBeInstanceOf(FilterError);
+        expect(e.message).toEqual(
+          `Invalid write condition key "storeId": it is not a foreign key of ProductSupplier. Valid keys are: productId, supplierId`
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError before any read for a value that is not a target guard", async () => {
+        expect.assertions(5);
+
+        const value = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: a plain JavaScript caller's value condition on the key
+            condition: { supplierId: "s1" }
+          });
+        });
+        const besideTarget = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: a plain JavaScript caller's value condition beside the guard
+              supplierId: { target: {}, $beginsWith: "s" }
+            }
+          });
+        });
+
+        expect(value).toBeInstanceOf(FilterError);
+        expect(value.message).toEqual(
+          `Invalid write condition for "supplierId": a join-table foreign key takes a target guard, { target: condition }, on the entity it references`
+        );
+        expect(besideTarget).toBeInstanceOf(FilterError);
+        expect(besideTarget.message).toEqual(
+          `Invalid write condition for "supplierId": a foreign key holds either a condition on its own value or a target guard, never both (found $beginsWith beside target). Put the value condition in a $or branch`
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError before any read for an empty $or, null in IN, an undefined operand and an attribute the target does not declare (R29, R6)", async () => {
+        expect.assertions(5);
+
+        const emptyOr = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            condition: { supplierId: { target: { $or: [] } } }
+          });
+        });
+        const nullInIn = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: a plain JavaScript caller's null inside IN
+            condition: { supplierId: { target: { name: ["Acme", null] } } }
+          });
+        });
+        const maybeName: string | undefined = undefined;
+        const undefinedOperand = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            condition: { supplierId: { target: { name: maybeName } } }
+          });
+        });
+        const otherEntity = await failureOf(async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: a plain JavaScript caller's Product attribute on the Supplier
+            condition: { supplierId: { target: { price: 12 } } }
+          });
+        });
+
+        expect(emptyOr).toBeInstanceOf(FilterError);
+        expect(nullInIn).toBeInstanceOf(FilterError);
+        expect(undefinedOperand).toBeInstanceOf(FilterError);
+        expect(otherEntity).toBeInstanceOf(FilterError);
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError on delete before anything is sent", async () => {
+        expect.assertions(4);
+
+        const unknownKey = await failureOf(async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-error: a plain JavaScript caller's join table property
+            condition: { type1: { target: {} } }
+          });
+        });
+        const malformed = await failureOf(async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-error: a plain JavaScript caller's guard without target
+            condition: { productId: { name: "Mug" } }
+          });
+        });
+        const emptyOr = await failureOf(async () => {
+          await ProductSupplier.delete(keys, {
+            condition: { productId: { target: { $or: [] } } }
+          });
+        });
+
+        expect(unknownKey).toBeInstanceOf(FilterError);
+        expect(malformed).toBeInstanceOf(FilterError);
+        expect(emptyOr).toBeInstanceOf(FilterError);
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it.each<[string, () => Promise<unknown>, string]>([
+        [
+          "alone in a create's target",
+          async () =>
+            await ProductSupplier.create(keys, {
+              condition: { supplierId: { target: { $or: [{}] } } }
+            }),
+          "supplierId"
+        ],
+        [
+          "beside a branch that holds conditions in a create's target",
+          async () =>
+            await ProductSupplier.create(keys, {
+              condition: {
+                supplierId: { target: { $or: [{}, { name: "Acme" }] } }
+              }
+            }),
+          "supplierId"
+        ],
+        [
+          "in a delete's target",
+          async () =>
+            await ProductSupplier.delete(keys, {
+              condition: { productId: { target: { $or: [{}] } } }
+            }),
+          "productId"
+        ]
+      ])(
+        "throws a FilterError before anything is sent for a $or branch that holds no conditions %s",
+        async (_, write, foreignKey) => {
+          expect.assertions(2);
+
+          const e = await failureOf(write);
+          const emptyBranch = new FilterError(
+            "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous"
+          );
+
+          expect(e).toEqual(
+            new FilterError(
+              `Invalid write condition for "${foreignKey}" target: ${emptyBranch.message}`,
+              { cause: emptyBranch }
+            )
+          );
+          expect(mockSend.mock.calls).toEqual([]);
+        }
+      );
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+      // Before this was refused, the operand was converted to its stored form,
+      // which strips a field the schema does not declare: `{ ..., region: "west" }`
+      // was sent as `{ ... }`, so the guard held against a Depot holding no
+      // region at all and let through the link the caller meant to stop
+      const undeclared = new FilterError(
+        'Invalid filter value for attribute "address": "region" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand'
+      );
+      // The target guard wraps the builder's error in one naming its key
+      const located = new FilterError(
+        `Invalid write condition for "depotId" target: ${undeclared.message}`,
+        { cause: undeclared }
+      );
+      const depotKeys = { kioskId: "k1", depotId: "d1" };
+      const address = { city: "Denver", zip: "80202" };
+
+      it("throws a FilterError on create before anything is sent", async () => {
+        expect.assertions(4);
+
+        const e = await failureOf(async () => {
+          await KioskDepot.create(depotKeys, {
+            condition: {
+              depotId: {
+                target: {
+                  address: {
+                    ...address,
+                    // @ts-expect-error: a plain JavaScript caller's undeclared field
+                    region: "west"
+                  }
+                }
+              }
+            }
+          });
+        });
+
+        expect(e).toEqual(located);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
+      });
+
+      it("throws a FilterError on delete before anything is sent, including inside an IN element", async () => {
+        expect.assertions(4);
+
+        const e = await failureOf(async () => {
+          await KioskDepot.delete(depotKeys, {
+            condition: {
+              depotId: {
+                target: {
+                  address: [
+                    address,
+                    {
+                      ...address,
+                      // @ts-expect-error: a plain JavaScript caller's undeclared field
+                      region: "west"
+                    }
+                  ]
+                }
+              }
+            }
+          });
+        });
+
+        expect(e).toEqual(located);
+        expect(mockSend.mock.calls).toEqual([]);
+        expect(mockTransactGetCommand.mock.calls).toEqual([]);
+        expect(mockTransactWriteCommand.mock.calls).toEqual([]);
       });
     });
   });
@@ -1102,6 +2558,3447 @@ describe("JoinTable", () => {
 
         // @ts-expect-error: Invalid key value
         await AuthorBook.delete({ authorId: null, bookId: "456" });
+      });
+    });
+
+    describe("write conditions", () => {
+      // A join table whose typed foreign keys reference the entity with every
+      // attribute kind and a Customer, so a target condition can be audited
+      // across every kind. Type-only, never registered: its calls reject at
+      // run time, which each call's .catch absorbs
+      class SourceCustomer extends JoinTable<
+        MyClassWithAllAttributeTypes,
+        Customer
+      > {
+        declare readonly sourceId: ForeignKey<MyClassWithAllAttributeTypes>;
+        declare readonly customerId: ForeignKey<Customer>;
+      }
+
+      const keys = { productId: "p1", supplierId: "s1" };
+      const sourceKeys = { sourceId: "s1", customerId: "c1" };
+
+      // A target whose lists hold elements with a nullable field at every
+      // depth, and a join table to it that is type-only, as SourceCustomer is
+      @Entity
+      class ListsTarget extends MockTable {
+        declare readonly type: "ListsTarget";
+
+        @ObjectAttribute({ alias: "Layout", schema: nestedListsSchema })
+        public readonly layout: InferObjectSchema<typeof nestedListsSchema>;
+
+        @ObjectAttribute({ alias: "Shelf", schema: nullableListsSchema })
+        public readonly shelf: InferObjectSchema<typeof nullableListsSchema>;
+      }
+
+      class ListsCustomer extends JoinTable<ListsTarget, Customer> {
+        declare readonly listsId: ForeignKey<ListsTarget>;
+        declare readonly customerId: ForeignKey<Customer>;
+      }
+
+      const listsKeys = { listsId: "l1", customerId: "c1" };
+
+      describe("create", () => {
+        it("takes target on each typed foreign key, against its own entity", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-no-error: a ForeignKey<Product> guards its Product
+              productId: { target: { price: { $lt: 20 } } },
+              // @ts-expect-no-error: a ForeignKey<Supplier> guards its Supplier
+              supplierId: { target: { status: "active" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await CompatibleAccessory.create(
+            { accessoryId: "a1", compatibleAccessoryId: "a2" },
+            {
+              condition: {
+                // @ts-expect-no-error: a self-referential join table guards either key
+                accessoryId: { target: { name: "Lamp" } },
+                // @ts-expect-no-error: both keys reference an Accessory
+                compatibleAccessoryId: {
+                  target: { name: { $beginsWith: "L" } }
+                }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-no-error: one key guarded alone
+            condition: { supplierId: { target: { name: "Acme" } } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes an empty target, which requires the entity to exist, and an empty condition", async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-no-error: {} guards only that each entity exists
+            condition: { productId: { target: {} }, supplierId: { target: {} } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-no-error: an empty condition guards nothing
+            condition: {}
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes every operator each attribute kind allows in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: each attribute takes the operators its kind supports
+              sourceId: {
+                target: {
+                  stringAttribute: { $beginsWith: "a" },
+                  dateAttribute: { $gte: new Date("2026-01-01") },
+                  boolAttribute: true,
+                  numberAttribute: { $between: [1, 10] },
+                  enumAttribute: ["val-1", "val-2"],
+                  foreignKeyAttribute: "customer-1",
+                  nullableStringAttribute: { $contains: "a" },
+                  nullableNumberAttribute: { $lte: 5 }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: comparisons, IN lists and stored-form prefixes per kind
+              sourceId: {
+                target: {
+                  stringAttribute: { $gt: "a", $lte: "m" },
+                  numberAttribute: [1, 2],
+                  dateAttribute: { $beginsWith: "2026" },
+                  enumAttribute: { $beginsWith: "val" },
+                  foreignKeyAttribute: { $gt: "customer-1" },
+                  boolAttribute: [true, false],
+                  nullableDateAttribute: {
+                    $between: [new Date("2026-01-01"), new Date("2026-12-31")]
+                  },
+                  nullableForeignKeyAttribute: { $beginsWith: "customer-" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes an enum range across two of its members in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: both bounds are members of the enum, at the top level and nested
+              sourceId: {
+                target: {
+                  enumAttribute: { $between: ["val-1", "val-2"] },
+                  nullableEnumAttribute: { $gte: "val-1", $lte: "val-2" },
+                  "objectAttribute.status": {
+                    $between: ["active", "inactive"]
+                  },
+                  "addressAttribute.category": { $gt: "home", $lt: "work" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes dot paths and list-index paths in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: dot paths reach the target's nested fields at any depth
+              sourceId: {
+                target: {
+                  "objectAttribute.name": { $contains: "Jane" },
+                  "objectAttribute.tags": { $contains: "vip" },
+                  "addressAttribute.geo.lat": { $lt: 41 },
+                  "addressAttribute.scores[0]": 5
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes null on a nullable target attribute, at any depth and inside $or", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: null means "not set" on a nullable attribute
+              sourceId: {
+                target: {
+                  nullableStringAttribute: null,
+                  nullableDateAttribute: null,
+                  nullableBoolAttribute: null,
+                  nullableNumberAttribute: null,
+                  nullableEnumAttribute: null,
+                  nullableForeignKeyAttribute: null,
+                  "addressAttribute.zip": null,
+                  "objectAttribute.deletedAt": null,
+                  $or: [
+                    { "addressAttribute.category": null },
+                    { nullableStringAttribute: null }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes $or within a target, on that entity's own attributes", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: $or combines blocks on the Customer's row
+              customerId: {
+                target: {
+                  address: "1 Main St",
+                  $or: [{ name: "Jane" }, { name: { $beginsWith: "J" } }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes referentialIntegrityCheck beside condition, either alone, or no options", async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-no-error: both options together
+            referentialIntegrityCheck: false,
+            condition: { supplierId: { target: { status: "active" } } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-no-error: condition alone
+            condition: { productId: { target: {} } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          // @ts-expect-no-error: the options argument may be empty
+          await ProductSupplier.create(keys, {}).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          // @ts-expect-no-error: the options argument is optional
+          await ProductSupplier.create(keys).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses target on a bare foreign key (AE18)", async () => {
+          await StudentCourse.create(
+            { studentId: "st1", courseId: "c1" },
+            {
+              condition: {
+                // @ts-expect-error: courseId needs its target type to guard it
+                courseId: { target: { name: "Algebra" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await AuthorBook.create(
+            { authorId: "a1", bookId: "b1" },
+            {
+              condition: {
+                // @ts-expect-error: even an existence-only guard needs the target type
+                authorId: { target: {} }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value condition on a foreign key", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: a join table key takes a target guard only
+              supplierId: "s1"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: nor an operator on its value
+              supplierId: { $beginsWith: "s" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: nor a value condition beside the guard
+              supplierId: { target: { status: "active" }, $beginsWith: "s" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a key that is not a foreign key of the join table", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: type1 is the join table's own property, not a foreign key
+              type1: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: type2 is the join table's own property, not a foreign key
+              type2: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: storeId is not a key of the join table
+              storeId: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: $or never spans the two rows a join table links
+              $or: [{ supplierId: { target: {} } }]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an attribute the referenced entity does not declare", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: status is a Supplier attribute, and productId references a Product
+              productId: { target: { status: "active" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              // @ts-expect-error: stringAttribute is on the other entity, not the Customer
+              customerId: { target: { stringAttribute: "a" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await CompatibleAccessory.create(
+            { accessoryId: "a1", compatibleAccessoryId: "a2" },
+            {
+              condition: {
+                // @ts-expect-error: price is a Product attribute, not an Accessory one
+                accessoryId: { target: { price: 12 } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses type in a target", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: the target's type is fixed by the foreign key's target type
+              supplierId: { target: { type: "Supplier" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a dot path naming no declared field, at each depth", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: objectAttribute declares no such field
+                  "objectAttribute.nope": 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: geo declares lat, lng and accuracy, not this
+                  "addressAttribute.geo.nope": 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: stringAttribute is not an object attribute
+                  "stringAttribute.x": "a"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: name is a string, not a list
+                  "objectAttribute.name[0]": "J"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value an attribute cannot hold in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: stringAttribute is a string
+                  stringAttribute: 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: numberAttribute is a number
+                  numberAttribute: "5"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: dateAttribute is compared as a Date
+                  dateAttribute: "2026-01-01"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: enumAttribute takes val-1 or val-2
+                  enumAttribute: "val-3"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: boolAttribute is a boolean
+                  boolAttribute: "true"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: geo.lat is a number
+                  "addressAttribute.geo.lat": "41"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  $or: [
+                    // @ts-expect-error: a $or branch is typed the same way
+                    { numberAttribute: "5" }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an operator an attribute cannot take in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a boolean has no prefix
+                  boolAttribute: { $beginsWith: "t" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a number has no substring
+                  numberAttribute: { $contains: 1 }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a boolean has no ordering
+                  boolAttribute: { $gt: true }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a list has no ordering
+                  "objectAttribute.tags": { $gt: "a" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a bad range operand in a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: both bounds are numbers
+                  numberAttribute: { $between: [1, "10"] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: $between takes a pair
+                  numberAttribute: { $between: [1] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a date compares against a Date
+                  dateAttribute: { $gte: "2026-01-01" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: val-3 is not one of the enum's values
+                  enumAttribute: { $between: ["val-1", "val-3"] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: archived is not one of the nested enum's values
+                  "objectAttribute.status": { $gte: "active", $lte: "archived" }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a range bound is never null, nullable enum or not
+                  nullableEnumAttribute: { $between: [null, "val-2"] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null on a non-nullable target attribute, at any depth", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: stringAttribute is not nullable
+                  stringAttribute: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: city is not nullable
+                  "addressAttribute.city": null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              customerId: {
+                target: {
+                  $or: [
+                    // @ts-expect-error: a Customer's name is not nullable
+                    { name: null }
+                  ]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses null inside an IN array in a target, nullable attribute or not", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: an IN list holds values; null is not one
+                  enumAttribute: ["val-1", null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: null means "not set", which IN cannot express
+                  nullableEnumAttribute: ["val-1", null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a relationship key inside a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              customerId: {
+                target: {
+                  // @ts-expect-error: a target names the referenced entity's own attributes, not its relationships
+                  orders: [{ id: "order-1", condition: {} }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              supplierId: {
+                target: {
+                  // @ts-expect-error: nor its HasAndBelongsToMany
+                  products: [{ id: "p1", condition: {} }]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a nested guard inside a target", async () => {
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: the referenced entity's foreign key takes its own value only
+                  foreignKeyAttribute: { target: {} }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.create(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a nullable one too
+                  nullableForeignKeyAttribute: { target: { name: "Jane" } }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a malformed guard shape", async () => {
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: a guard wraps its condition in target
+              supplierId: { status: "active" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: target holds a condition object, not an id
+              supplierId: { target: "s1" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: target holds a condition object, not null
+              supplierId: { target: null }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: the keys argument already names the row, so a guard takes no id
+              supplierId: { id: "s1", condition: { status: "active" } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: a key takes one guard, not a list
+              supplierId: [{ target: {} }]
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            condition: {
+              // @ts-expect-error: a key takes a guard, not null
+              supplierId: null
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option create does not take", async () => {
+          await ProductSupplier.create(keys, {
+            condition: { supplierId: { target: {} } },
+            // @ts-expect-error: create has no such option
+            conditions: { supplierId: { target: {} } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: a join table link embeds nothing
+            forceEmbed: true
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option value of the wrong type", async () => {
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: referentialIntegrityCheck is a boolean
+            referentialIntegrityCheck: "no"
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: condition is an object of guards
+            condition: "x"
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.create(keys, {
+            // @ts-expect-error: condition is one object, not a list of them
+            condition: [{ supplierId: { target: {} } }]
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        describe("a list-index path into a nullable list", () => {
+          // A nullable list is declared `Element[] | undefined`. These pin that an
+          // index into one types its element as an index into a list that is not
+          // nullable does, rather than falling back to the stored form
+          it("accepts a whole object element, named as declared, and an IN of them", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann"
+                    },
+                    // @ts-expect-no-error: the element's nullable field may be set
+                    "objectAttribute.history[1]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: "restocked"
+                    },
+                    // @ts-expect-no-error: an IN of whole elements
+                    "objectAttribute.history[2]": [
+                      { at: new Date("2026-01-01"), actor: "ann" },
+                      { at: new Date("2026-02-01"), actor: "bob" }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts a field below the index, in the field's own type and operators", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: actor is a string, so it takes a prefix
+                    "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                    // @ts-expect-no-error: an IN of strings
+                    "objectAttribute.history[1].actor": ["ann", "bob"],
+                    // @ts-expect-no-error: at is a date, compared as a Date
+                    "objectAttribute.history[0].at": {
+                      $gte: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: and ranged as one
+                    "objectAttribute.history[1].at": {
+                      $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                    },
+                    // @ts-expect-no-error: a nullable field below the index takes its type
+                    "objectAttribute.history[2].note": { $contains: "late" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts null on a nullable field below the index, as not set", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                    "objectAttribute.history[0].note": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts an element of a nullable list of scalars in its own type", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: a contactedAt element is a Date
+                    "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                    // @ts-expect-no-error: and is compared as one
+                    "objectAttribute.contactedAt[1]": {
+                      $lt: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: a roles element is one of the enum's members
+                    "objectAttribute.roles[0]": "owner"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a whole element its schema cannot hold", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is declared as a string
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: 1
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: at is declared as a date, so it takes a Date
+                    "objectAttribute.history[0]": {
+                      at: "2026-01-01",
+                      actor: "ann"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      // @ts-expect-error: an element has no mood, so no element can equal this one
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an operator a whole element's stored form cannot carry", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element is stored as a Map, which has no prefix
+                    "objectAttribute.history[0]": { $beginsWith: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a Map has no ordering
+                    "objectAttribute.history[0]": { $gt: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a Map holds no elements to contain
+                    "objectAttribute.history[0]": { $contains: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on the element and on a field below it that is not nullable", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                    "objectAttribute.history[0]": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable
+                    "objectAttribute.history[0].actor": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a contactedAt element is not nullable
+                    "objectAttribute.contactedAt[0]": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a history element declares at, actor and note, not mood
+                    "objectAttribute.history[0].mood": "calm"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is a string
+                    "objectAttribute.history[0].actor": 1
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: at is a date, so it compares against a Date
+                    "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a string has no $between of numbers
+                    "objectAttribute.history[0].actor": { $between: [1, 2] }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                    "objectAttribute.contactedAt[0]": "2026-01-01"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: admin is not a member of the roles enum
+                    "objectAttribute.roles[0]": "admin"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("does not offer an index past the tenth, as for any list", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: indexes 0 to 9 are offered
+                    "objectAttribute.history[10].actor": "ann"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole $contains element with null on a nullable field", () => {
+          // An element is stored without a nulled field, and contains compares an
+          // element whole, so null on a nullable field of the operand means the
+          // element looked for lacks it. These pin that the operand offers null
+          // there at every depth, and nowhere else
+          it("accepts null on a nullable field of the element, at every depth", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at: new Date("2026-01-01"), note: null }]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant
+                    "shelf.promos": {
+                      $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on a field of the element that is not nullable", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), actor: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: null },
+                        restocks: []
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: placement is an object field, which is never nullable
+                    "layout.section.entries": {
+                      $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: restocks is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: a restocks element is never null
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [null]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: a restocks element's at is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [{ at: null }]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null as the whole element", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: $contains looks for an element, and no element is null
+                    "objectAttribute.history": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: nor on a list of union variants
+                    "shelf.promos": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: nor on a list of strings
+                    "objectAttribute.tags": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: nor on a nullable list of dates
+                    "objectAttribute.contactedAt": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), note: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: note is a string when it is set
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: 1
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null,
+                        // @ts-expect-error: mood is not a field a history element declares
+                        mood: "calm"
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    "shelf.promos": {
+                      $contains: {
+                        kind: "discount",
+                        percent: 10,
+                        endsAt: new Date("2026-03-31"),
+                        // @ts-expect-error: label belongs to the bundle variant, not discount
+                        label: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole value compared by equality or IN with null on a nullable field", () => {
+          // An object, or a list element named by an index, is compared whole
+          // by equality and IN, and a nulled field is stored by leaving it out.
+          // So null on a nullable field of the operand means the value compared
+          // lacks it: the expression builder drops the field, as it does in a
+          // $contains element. These pin that equality and IN offer null there
+          // at every depth, and nowhere else
+          it("accepts null on a nullable field of a whole value, at every depth", async () => {
+            const at = new Date("2026-01-01");
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": [
+                      { at, actor: "ann", note: null },
+                      { at, actor: "bo" }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      zip: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [],
+                      category: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: the same in an IN of whole objects
+                    addressAttribute: [
+                      {
+                        street: "1 Main St",
+                        city: "Denver",
+                        zip: null,
+                        geo: { lat: 1, lng: 2, accuracy: "precise" },
+                        scores: [],
+                        category: null
+                      }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      deletedAt: null,
+                      contactedAt: null,
+                      roles: null,
+                      history: [{ at, actor: "ann", note: null }]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                    "layout.section": {
+                      entries: [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: bin is nullable in an object field below an index
+                    "layout.section.entries[0].placement": {
+                      aisle: "A",
+                      bin: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                    "layout.section.entries[0]": [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                    "shelf.promos[0]": {
+                      kind: "bundle",
+                      sku: "KIT-1",
+                      label: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                    "objectAttribute.history": [
+                      [{ at, actor: "ann", note: null }],
+                      []
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                    "layout.section.entries": [
+                      [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists of union variants
+                    "shelf.promos": [
+                      [{ kind: "bundle", sku: "KIT-1", label: null }]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+            const at = new Date("2026-01-01");
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history[0]": { at, actor: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                    "objectAttribute.history[0]": { at, note: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null,
+                      // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an IN element is a whole element, and no element is null
+                    "objectAttribute.history[0]": [null]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: city is not nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: []
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: geo is an object field, which is never nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      geo: null,
+                      scores: []
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element of a list inside the value is never null
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      history: [null]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries[0].placement": { aisle: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.create(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos[0]": { kind: "bundle", sku: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                    "objectAttribute.history": [[{ at, actor: null }]]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element of a list compared whole is never null
+                    "objectAttribute.history": [[null]]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.create(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history": [
+                      // @ts-expect-error: mood is not a field a history element declares
+                      [{ at, actor: "ann", mood: "calm" }]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+      });
+
+      describe("delete", () => {
+        it("takes target on each typed foreign key, against its own entity", async () => {
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-no-error: a ForeignKey<Product> guards its Product
+              productId: { target: { price: { $gte: 5 } } },
+              // @ts-expect-no-error: a ForeignKey<Supplier> guards its Supplier
+              supplierId: { target: { status: ["active", "suspended"] } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await CompatibleAccessory.delete(
+            { accessoryId: "a1", compatibleAccessoryId: "a2" },
+            {
+              condition: {
+                // @ts-expect-no-error: a self-referential join table guards either key
+                accessoryId: { target: {} },
+                // @ts-expect-no-error: both keys reference an Accessory
+                compatibleAccessoryId: { target: { name: "Lamp" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes an empty target and an empty condition", async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-no-error: {} guards only that the entity exists
+            condition: { supplierId: { target: {} } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-no-error: an empty condition guards nothing
+            condition: {}
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes the full vocabulary in a target", async () => {
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              // @ts-expect-no-error: operators per kind, dot paths, enum ranges, null and $or in a guard
+              sourceId: {
+                target: {
+                  stringAttribute: { $between: ["a", "m"] },
+                  numberAttribute: { $gte: 1, $lt: 10 },
+                  dateAttribute: [new Date("2026-01-01")],
+                  boolAttribute: false,
+                  enumAttribute: { $between: ["val-1", "val-2"] },
+                  foreignKeyAttribute: { $beginsWith: "customer-" },
+                  nullableBoolAttribute: null,
+                  "objectAttribute.createdDate": {
+                    $gte: new Date("2026-01-01")
+                  },
+                  "objectAttribute.tags": { $contains: "vip" },
+                  "addressAttribute.geo.accuracy": { $beginsWith: "pre" },
+                  "addressAttribute.scores[0]": { $gt: 1 },
+                  $or: [
+                    { "addressAttribute.zip": null },
+                    { nullableStringAttribute: { $contains: "a" } }
+                  ]
+                }
+              },
+              // @ts-expect-no-error: the other key's target is typed against its own entity
+              customerId: { target: { name: { $beginsWith: "J" } } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("takes condition alone, empty options, or no options", async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-no-error: condition is delete's one option
+            condition: { productId: { target: { name: "Mug" } } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          // @ts-expect-no-error: the options argument may be empty
+          await ProductSupplier.delete(keys, {}).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          // @ts-expect-no-error: the options argument is optional
+          await ProductSupplier.delete(keys).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses target on a bare foreign key (AE18)", async () => {
+          await StudentCourse.delete(
+            { studentId: "st1", courseId: "c1" },
+            {
+              condition: {
+                // @ts-expect-error: courseId needs its target type to guard it
+                courseId: { target: { name: "Algebra" } }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await UserWebsite.delete(
+            { userId: "u1", websiteId: "w1" },
+            {
+              condition: {
+                // @ts-expect-error: even an existence-only guard needs the target type
+                websiteId: { target: {} }
+              }
+            }
+          ).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a value condition on a foreign key", async () => {
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: a join table key takes a target guard only
+              productId: "p1"
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: nor a value condition beside the guard
+              productId: { target: {}, $beginsWith: "p" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a key that is not a foreign key of the join table", async () => {
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: type1 is the join table's own property, not a foreign key
+              type1: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: type2 is the join table's own property, not a foreign key
+              type2: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: storeId is not a key of the join table
+              storeId: { target: {} }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an attribute the referenced entity does not declare", async () => {
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: price is a Product attribute, and supplierId references a Supplier
+              supplierId: { target: { price: 12 } }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: {
+              supplierId: {
+                target: {
+                  // @ts-expect-error: the target's type is fixed by the foreign key's target type
+                  type: "Supplier"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an invalid target condition", async () => {
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: geo declares lat, lng and accuracy, not this
+                  "addressAttribute.geo.nope": 1
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: numberAttribute is a number
+                  numberAttribute: "5"
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a boolean has no ordering
+                  boolAttribute: { $between: [false, true] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a guard's range bounds are typed the same way
+                  "addressAttribute.geo.lat": { $between: [1, "2"] }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              customerId: {
+                target: {
+                  // @ts-expect-error: a Customer's name is not nullable
+                  name: null
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: null is not a value an IN list holds
+                  nullableNumberAttribute: [1, null]
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              customerId: {
+                target: {
+                  // @ts-expect-error: a target names the referenced entity's own attributes, not its relationships
+                  contactInformation: {}
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await SourceCustomer.delete(sourceKeys, {
+            condition: {
+              sourceId: {
+                target: {
+                  // @ts-expect-error: a guard's condition holds no further guard
+                  foreignKeyAttribute: { target: {} }
+                }
+              }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses a malformed guard shape", async () => {
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: a guard wraps its condition in target
+              productId: { name: "Mug" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: {
+              // @ts-expect-error: target holds a condition object, not an id
+              productId: { target: "p1" }
+            }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option delete does not take", async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-error: an unlink writes no foreign keys to check
+            referentialIntegrityCheck: false
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            condition: { supplierId: { target: {} } },
+            // @ts-expect-error: delete has no such option
+            conditions: { supplierId: { target: {} } }
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        it("refuses an option value of the wrong type", async () => {
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-error: condition is an object of guards
+            condition: "x"
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+
+          await ProductSupplier.delete(keys, {
+            // @ts-expect-error: condition is one object, not a list of them
+            condition: [{ productId: { target: {} } }]
+          }).catch(() => {
+            Logger.log("Testing types");
+          });
+        });
+
+        describe("a list-index path into a nullable list", () => {
+          // A nullable list is declared `Element[] | undefined`. These pin that an
+          // index into one types its element as an index into a list that is not
+          // nullable does, rather than falling back to the stored form
+          it("accepts a whole object element, named as declared, and an IN of them", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: history[0] is a history element, and equality takes a whole one, its date as a Date
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann"
+                    },
+                    // @ts-expect-no-error: the element's nullable field may be set
+                    "objectAttribute.history[1]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      note: "restocked"
+                    },
+                    // @ts-expect-no-error: an IN of whole elements
+                    "objectAttribute.history[2]": [
+                      { at: new Date("2026-01-01"), actor: "ann" },
+                      { at: new Date("2026-02-01"), actor: "bob" }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts a field below the index, in the field's own type and operators", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: actor is a string, so it takes a prefix
+                    "objectAttribute.history[0].actor": { $beginsWith: "a" },
+                    // @ts-expect-no-error: an IN of strings
+                    "objectAttribute.history[1].actor": ["ann", "bob"],
+                    // @ts-expect-no-error: at is a date, compared as a Date
+                    "objectAttribute.history[0].at": {
+                      $gte: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: and ranged as one
+                    "objectAttribute.history[1].at": {
+                      $between: [new Date("2026-01-01"), new Date("2026-02-01")]
+                    },
+                    // @ts-expect-no-error: a nullable field below the index takes its type
+                    "objectAttribute.history[2].note": { $contains: "late" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts null on a nullable field below the index, as not set", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so null reads as attribute_not_exists
+                    "objectAttribute.history[0].note": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("accepts an element of a nullable list of scalars in its own type", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: a contactedAt element is a Date
+                    "objectAttribute.contactedAt[0]": new Date("2026-01-01"),
+                    // @ts-expect-no-error: and is compared as one
+                    "objectAttribute.contactedAt[1]": {
+                      $lt: new Date("2026-01-01")
+                    },
+                    // @ts-expect-no-error: a roles element is one of the enum's members
+                    "objectAttribute.roles[0]": "owner"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a whole element its schema cannot hold", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is declared as a string
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: 1
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: at is declared as a date, so it takes a Date
+                    "objectAttribute.history[0]": {
+                      at: "2026-01-01",
+                      actor: "ann"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history[0]": {
+                      at: new Date("2026-01-01"),
+                      actor: "ann",
+                      // @ts-expect-error: an element has no mood, so no element can equal this one
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history[0]": { at: new Date("2026-01-01") }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an operator a whole element's stored form cannot carry", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element is stored as a Map, which has no prefix
+                    "objectAttribute.history[0]": { $beginsWith: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a Map has no ordering
+                    "objectAttribute.history[0]": { $gt: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a Map holds no elements to contain
+                    "objectAttribute.history[0]": { $contains: "a" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on the element and on a field below it that is not nullable", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element is never absent from a list that holds it, so it is not nullable
+                    "objectAttribute.history[0]": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable
+                    "objectAttribute.history[0].actor": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a contactedAt element is not nullable
+                    "objectAttribute.contactedAt[0]": null
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses a field below the index that the element does not declare, or a value it cannot hold", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a history element declares at, actor and note, not mood
+                    "objectAttribute.history[0].mood": "calm"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is a string
+                    "objectAttribute.history[0].actor": 1
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: at is a date, so it compares against a Date
+                    "objectAttribute.history[0].at": { $gte: "2026-01-01" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a string has no $between of numbers
+                    "objectAttribute.history[0].actor": { $between: [1, 2] }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses an element of a nullable list of scalars that is not of its type", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: a contactedAt element is a date, so it takes a Date
+                    "objectAttribute.contactedAt[0]": "2026-01-01"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: admin is not a member of the roles enum
+                    "objectAttribute.roles[0]": "admin"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("does not offer an index past the tenth, as for any list", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: indexes 0 to 9 are offered
+                    "objectAttribute.history[10].actor": "ann"
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole $contains element with null on a nullable field", () => {
+          // An element is stored without a nulled field, and contains compares an
+          // element whole, so null on a nullable field of the operand means the
+          // element looked for lacks it. These pin that the operand offers null
+          // there at every depth, and nowhere else
+          it("accepts null on a nullable field of the element, at every depth", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so the element looked for has no note
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: null on a nullable field of a nested object and of an element of a list within the element
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at: new Date("2026-01-01"), note: null }]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant
+                    "shelf.promos": {
+                      $contains: { kind: "bundle", sku: "KIT-1", label: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null on a field of the element that is not nullable", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), actor: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: null },
+                        restocks: []
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: placement is an object field, which is never nullable
+                    "layout.section.entries": {
+                      $contains: { sku: "MUG-1", placement: null, restocks: [] }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: restocks is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: a restocks element is never null
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [null]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: a restocks element's at is not nullable
+                    "layout.section.entries": {
+                      $contains: {
+                        sku: "MUG-1",
+                        placement: { aisle: "A" },
+                        restocks: [{ at: null }]
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos": { $contains: { kind: "bundle", sku: null } }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos": { $contains: { kind: null, sku: "KIT-1" } }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null as the whole element", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: $contains looks for an element, and no element is null
+                    "objectAttribute.history": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: nor on a list of union variants
+                    "shelf.promos": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: nor on a list of strings
+                    "objectAttribute.tags": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: nor on a nullable list of dates
+                    "objectAttribute.contactedAt": { $contains: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("keeps refusing an element its schema cannot hold beside a nulled field", async () => {
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required, so an element without it is no element
+                    "objectAttribute.history": {
+                      $contains: { at: new Date("2026-01-01"), note: null }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: note is a string when it is set
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: 1
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history": {
+                      $contains: {
+                        at: new Date("2026-01-01"),
+                        actor: "ann",
+                        note: null,
+                        // @ts-expect-error: mood is not a field a history element declares
+                        mood: "calm"
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    "shelf.promos": {
+                      $contains: {
+                        kind: "discount",
+                        percent: 10,
+                        endsAt: new Date("2026-03-31"),
+                        // @ts-expect-error: label belongs to the bundle variant, not discount
+                        label: null
+                      }
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
+
+        describe("a whole value compared by equality or IN with null on a nullable field", () => {
+          // An object, or a list element named by an index, is compared whole
+          // by equality and IN, and a nulled field is stored by leaving it out.
+          // So null on a nullable field of the operand means the value compared
+          // lacks it: the expression builder drops the field, as it does in a
+          // $contains element. These pin that equality and IN offer null there
+          // at every depth, and nowhere else
+          it("accepts null on a nullable field of a whole value, at every depth", async () => {
+            const at = new Date("2026-01-01");
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: note is nullable, so the indexed element compared has no note, as it is stored (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: the same in an IN of indexed elements (previously refused, though the builder already dropped the field)
+                    "objectAttribute.history[0]": [
+                      { at, actor: "ann", note: null },
+                      { at, actor: "bo" }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: zip and category are nullable fields of an object attribute compared whole
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      zip: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: [],
+                      category: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: the same in an IN of whole objects
+                    addressAttribute: [
+                      {
+                        street: "1 Main St",
+                        city: "Denver",
+                        zip: null,
+                        geo: { lat: 1, lng: 2, accuracy: "precise" },
+                        scores: [],
+                        category: null
+                      }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: nullable fields, nullable lists and a nullable field of a list element, inside an object attribute
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      deletedAt: null,
+                      contactedAt: null,
+                      roles: null,
+                      history: [{ at, actor: "ann", note: null }]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an object field reached by a dot path, with null at every depth below it
+                    "layout.section": {
+                      entries: [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: bin is nullable in an object field below an index
+                    "layout.section.entries[0].placement": {
+                      aisle: "A",
+                      bin: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of indexed elements of a list inside an object field
+                    "layout.section.entries[0]": [
+                      {
+                        sku: "MUG-1",
+                        note: null,
+                        placement: { aisle: "A", bin: null },
+                        restocks: [{ at, note: null }]
+                      }
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: label is nullable in the bundle variant of an indexed union element
+                    "shelf.promos[0]": {
+                      kind: "bundle",
+                      sku: "KIT-1",
+                      label: null
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists: each list is converted as written, so its elements omit the nulled field as stored ones do (previously refused, because the lists were bound as written and a nulled field was sent as NULL)
+                    "objectAttribute.history": [
+                      [{ at, actor: "ann", note: null }],
+                      []
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists, with null at every depth of their elements
+                    "layout.section.entries": [
+                      [
+                        {
+                          sku: "MUG-1",
+                          note: null,
+                          placement: { aisle: "A", bin: null },
+                          restocks: [{ at, note: null }]
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-no-error: an IN of whole lists of union variants
+                    "shelf.promos": [
+                      [{ kind: "bundle", sku: "KIT-1", label: null }]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+
+          it("refuses null where the whole value cannot omit it, and every other value it cannot hold", async () => {
+            const at = new Date("2026-01-01");
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable, so every element has one
+                    "objectAttribute.history[0]": { at, actor: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is required: offering null on a nullable field makes no field optional
+                    "objectAttribute.history[0]": { at, note: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history[0]": {
+                      at,
+                      actor: "ann",
+                      note: null,
+                      // @ts-expect-error: mood is not a field a history element declares, beside a nulled field or not
+                      mood: "calm"
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an IN element is a whole element, and no element is null
+                    "objectAttribute.history[0]": [null]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: city is not nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: null,
+                      geo: { lat: 1, lng: 2, accuracy: "precise" },
+                      scores: []
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: geo is an object field, which is never nullable
+                    addressAttribute: {
+                      street: "1 Main St",
+                      city: "Denver",
+                      geo: null,
+                      scores: []
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element of a list inside the value is never null
+                    objectAttribute: {
+                      name: "Ann",
+                      email: "ann@example.com",
+                      tags: [],
+                      status: "active",
+                      createdDate: at,
+                      history: [null]
+                    }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: aisle is not nullable
+                    "layout.section.entries[0].placement": { aisle: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: the discriminator names the variant, so it is never null
+                    "shelf.promos[0]": { kind: null, sku: "KIT-1" }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await ListsCustomer.delete(listsKeys, {
+              condition: {
+                listsId: {
+                  target: {
+                    // @ts-expect-error: sku is not nullable in the bundle variant
+                    "shelf.promos[0]": { kind: "bundle", sku: null }
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: actor is not nullable in an element of a list compared whole
+                    "objectAttribute.history": [[{ at, actor: null }]]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    // @ts-expect-error: an element of a list compared whole is never null
+                    "objectAttribute.history": [[null]]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+
+            await SourceCustomer.delete(sourceKeys, {
+              condition: {
+                sourceId: {
+                  target: {
+                    "objectAttribute.history": [
+                      // @ts-expect-error: mood is not a field a history element declares
+                      [{ at, actor: "ann", mood: "calm" }]
+                    ]
+                  }
+                }
+              }
+            }).catch(() => {
+              Logger.log("Testing types");
+            });
+          });
+        });
       });
     });
   });

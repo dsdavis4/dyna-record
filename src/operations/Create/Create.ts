@@ -10,7 +10,9 @@ import { entityToTableItem, isString, tableItemToEntity } from "../../utils.js";
 import OperationBase from "../OperationBase.js";
 import {
   extractForeignKeyFromEntity,
-  buildBelongsToLinkKey
+  buildBelongsToLinkKey,
+  attachWriteCondition,
+  compileWriteCondition
 } from "../utils/index.js";
 import type { CreateOptions, CreateOperationOptions } from "./types.js";
 import {
@@ -67,22 +69,37 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
    *   a corresponding denormalized "link" record.
    * - If the entity's creation implies that related records must also be denormalized into its own
    *   partition (due to "BelongsTo" links), retrieves and inserts those link records.
+   * - When a write condition is given, creates only if every guard on the rows the entity references holds, in the same transaction.
    *
    * @param attributes - Attributes to initialize the new entity. Must be defined on the model and valid per schema constraints.
-   * @param options - Optional operation options including referentialIntegrityCheck flag.
+   * @param options - Optional operation options: the referentialIntegrityCheck flag and a write condition.
    * @returns A promise that resolves to the newly created entity with all attributes, including automatically set fields.
    * @throws If the entity already exists, a uniqueness violation error is raised.
    * @throws If a required foreign key does not correspond to an existing entity, an error is raised (unless referentialIntegrityCheck is false).
+   * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
    */
   public async run(
     attributes: CreateOptions<T>,
-    options?: CreateOperationOptions
+    options?: CreateOperationOptions<T>
   ): Promise<EntityAttributesOnly<T>> {
     const referentialIntegrityCheck =
       options?.referentialIntegrityCheck ?? true;
 
     const entityAttrs =
       this.entityMetadata.parseRawEntityDefinedAttributes(attributes);
+
+    // Validated and compiled before the parent read and any embedding call, so
+    // an invalid condition costs nothing
+    const writeCondition =
+      options?.condition === undefined
+        ? undefined
+        : compileWriteCondition({
+            EntityClass: this.EntityClass,
+            operation: "create",
+            condition: options.condition,
+            payload: entityAttrs,
+            transactionBuilder: this.#transactionBuilder
+          });
 
     const reservedAttrs = this.buildReservedAttributes(entityAttrs);
     const entityData = { ...reservedAttrs, ...entityAttrs };
@@ -125,6 +142,17 @@ class Create<T extends DynaRecord> extends OperationBase<T> {
     if (searchableWrite !== undefined) {
       tableItem[searchableWrite.vectorAttribute] =
         await searchableWrite.vectorPromise;
+    }
+
+    // Guards merge only once every library item is queued: each lands on its
+    // parent's referential-integrity check, or adds its own check when none is
+    // queued on that row
+    if (writeCondition !== undefined) {
+      attachWriteCondition({
+        compiled: writeCondition,
+        id: reservedAttrs.id,
+        transactionBuilder: this.#transactionBuilder
+      });
     }
 
     await this.#transactionBuilder.executeTransaction();

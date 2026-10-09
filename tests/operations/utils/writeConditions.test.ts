@@ -1,0 +1,2601 @@
+import {
+  TransactionCanceledException,
+  type CancellationReason
+} from "@aws-sdk/client-dynamodb";
+import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { marshall } from "@aws-sdk/util-dynamodb";
+import DynaRecord from "../../../index.js";
+import {
+  BelongsTo,
+  Entity,
+  ForeignKeyAttribute,
+  HasAndBelongsToMany,
+  HasMany,
+  IdAttribute,
+  PartitionKeyAttribute,
+  SortKeyAttribute,
+  StringAttribute,
+  Table
+} from "../../../src/decorators/index.js";
+import DynamoClient from "../../../src/dynamo-utils/DynamoClient.js";
+import TransactWriteBuilder from "../../../src/dynamo-utils/TransactWriteBuilder.js";
+import {
+  TransactionWriteFailedError,
+  WriteConditionFailedError
+} from "../../../src/dynamo-utils/index.js";
+import { FilterError } from "../../../src/errors.js";
+import { FilterExpressionBuilder } from "../../../src/filter-utils/index.js";
+import {
+  attachJoinTableCondition,
+  attachWriteCondition,
+  compileJoinTableCondition,
+  compileWriteCondition,
+  type CompiledWriteCondition,
+  type CompileWriteConditionProps
+} from "../../../src/operations/utils/index.js";
+import { JoinTable } from "../../../src/relationships/index.js";
+import type {
+  ForeignKey,
+  NullableForeignKey,
+  PartitionKey,
+  SortKey
+} from "../../../src/types.js";
+import { tableItemToEntity } from "../../../src/utils.js";
+import {
+  Category,
+  ContactInformation,
+  Customer,
+  DiscriminatedUnionEntity,
+  Employee,
+  Festival,
+  MyClassWithAllAttributeTypes,
+  Order,
+  Organization,
+  Profile,
+  Shipment,
+  StudentCourse,
+  User,
+  Warehouse,
+  Website
+} from "../../integration/mockModels.js";
+
+vi.mock("@aws-sdk/lib-dynamodb", () => {
+  return {
+    TransactWriteCommand: vi.fn().mockImplementation(input => {
+      return { name: "TransactWriteCommand", input };
+    })
+  };
+});
+
+const mockedTransactWriteCommand = vi.mocked(TransactWriteCommand);
+const mockSend = vi.fn();
+
+const cutoff = new Date("2026-01-01T00:00:00.000Z");
+
+@Table({ name: "storefront-table", delimiter: "#" })
+abstract class StorefrontTable extends DynaRecord {
+  @PartitionKeyAttribute({ alias: "PK" })
+  public readonly pk: PartitionKey;
+
+  @SortKeyAttribute({ alias: "SK" })
+  public readonly sk: SortKey;
+}
+
+@Entity
+class Shopper extends StorefrontTable {
+  declare readonly type: "Shopper";
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @HasAndBelongsToMany(() => Shop, {
+    targetKey: "favoritedBy",
+    through: () => ({ joinTable: ShopperFavoriteShop, foreignKey: "shopperId" })
+  })
+  public readonly favoriteShops: Shop[];
+
+  @HasAndBelongsToMany(() => Shop, {
+    targetKey: "visitors",
+    through: () => ({ joinTable: ShopperVisitedShop, foreignKey: "shopperId" })
+  })
+  public readonly visitedShops: Shop[];
+}
+
+@Entity
+class Shop extends StorefrontTable {
+  declare readonly type: "Shop";
+
+  @StringAttribute({ alias: "Status" })
+  public readonly status: string;
+
+  @HasAndBelongsToMany(() => Shopper, {
+    targetKey: "favoriteShops",
+    through: () => ({ joinTable: ShopperFavoriteShop, foreignKey: "shopId" })
+  })
+  public readonly favoritedBy: Shopper[];
+
+  @HasAndBelongsToMany(() => Shopper, {
+    targetKey: "visitedShops",
+    through: () => ({ joinTable: ShopperVisitedShop, foreignKey: "shopId" })
+  })
+  public readonly visitors: Shopper[];
+}
+
+class ShopperFavoriteShop extends JoinTable<Shopper, Shop> {
+  public readonly shopperId: ForeignKey<Shopper>;
+  public readonly shopId: ForeignKey<Shop>;
+}
+
+class ShopperVisitedShop extends JoinTable<Shopper, Shop> {
+  public readonly shopperId: ForeignKey<Shopper>;
+  public readonly shopId: ForeignKey<Shop>;
+}
+
+// A SKU names its own code, and references other SKUs two ways: the SKU it
+// replaces (a standalone foreign key) and the SKU it is a variant of (the
+// child side of a one-way HasMany)
+@Entity
+class Sku extends StorefrontTable {
+  declare readonly type: "Sku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "ReplacesSkuId", nullable: true })
+  public readonly replacesSkuId?: NullableForeignKey<Sku>;
+
+  @ForeignKeyAttribute(() => Sku, { alias: "BaseSkuId", nullable: true })
+  public readonly baseSkuId?: NullableForeignKey<Sku>;
+
+  @HasMany(() => Sku, { foreignKey: "baseSkuId", uniDirectional: true })
+  public readonly variants: Sku[];
+}
+
+// A SKU sold inside a bundle that is itself a SKU of the same type: a
+// BelongsTo to its own type, with its HasMany inverse
+@Entity
+class BundledSku extends StorefrontTable {
+  declare readonly type: "BundledSku";
+
+  @IdAttribute
+  @StringAttribute({ alias: "Code" })
+  public readonly code: string;
+
+  @StringAttribute({ alias: "Name" })
+  public readonly name: string;
+
+  @ForeignKeyAttribute(() => BundledSku, {
+    alias: "BundleSkuId",
+    nullable: true
+  })
+  public readonly bundleSkuId?: NullableForeignKey<BundledSku>;
+
+  @BelongsTo(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundle?: BundledSku;
+
+  @HasMany(() => BundledSku, { foreignKey: "bundleSkuId" })
+  public readonly bundledSkus: BundledSku[];
+}
+
+const newBuilder = (): TransactWriteBuilder =>
+  new TransactWriteBuilder(
+    new DynamoClient({ send: async command => await mockSend(command) })
+  );
+
+type CompileInput = Omit<CompileWriteConditionProps, "transactionBuilder">;
+
+/**
+ * Compiles a condition against a fresh builder, as a plain JavaScript caller
+ * would pass it: untyped
+ */
+const compile = (
+  props: CompileInput,
+  builder: TransactWriteBuilder = newBuilder()
+): CompiledWriteCondition =>
+  compileWriteCondition({ ...props, transactionBuilder: builder });
+
+/**
+ * Asserts that compiling throws a FilterError whose message includes `text`
+ */
+const expectFilterError = (props: CompileInput, text: string): void => {
+  expect(() => compile(props)).toThrow(FilterError);
+  expect(() => compile(props)).toThrow(text);
+};
+
+/**
+ * Returns the TransactionWriteFailedError a call throws, rethrowing anything
+ * else
+ */
+const failureOf = async (
+  run: () => unknown
+): Promise<TransactionWriteFailedError> => {
+  try {
+    await run();
+  } catch (e) {
+    if (e instanceof TransactionWriteFailedError) return e;
+    throw e;
+  }
+  throw new Error("Expected a TransactionWriteFailedError");
+};
+
+/**
+ * Rejects the next send with a cancellation carrying the given reasons
+ */
+const cancelWith = (reasons: CancellationReason[]): void => {
+  mockSend.mockRejectedValueOnce(
+    new TransactionCanceledException({
+      message: "MockMessage",
+      CancellationReasons: reasons,
+      $metadata: {}
+    })
+  );
+};
+
+/**
+ * Sends the builder's transaction and returns the items it sent
+ */
+const sentItems = async (builder: TransactWriteBuilder): Promise<unknown> => {
+  await builder.executeTransaction();
+  expect(mockSend.mock.calls).toHaveLength(1);
+  expect(mockedTransactWriteCommand.mock.calls).toHaveLength(1);
+  return mockSend.mock.calls[0][0];
+};
+
+const transaction = (items: unknown[]): unknown => ({
+  name: "TransactWriteCommand",
+  input: { TransactItems: items }
+});
+
+const orderUpdate = {
+  Update: {
+    TableName: "mock-table",
+    Key: { PK: "Order#o1", SK: "Order" },
+    UpdateExpression: "SET #UpdatedAt = :UpdatedAt",
+    ExpressionAttributeNames: { "#UpdatedAt": "UpdatedAt" },
+    ExpressionAttributeValues: { ":UpdatedAt": "2026-10-05T00:00:00.000Z" },
+    ConditionExpression: "attribute_exists(PK)"
+  }
+};
+
+/**
+ * Queues the library's canonical update of Order o1, as Update would
+ */
+const queueOrderUpdate = (builder: TransactWriteBuilder): void => {
+  builder.addUpdate(
+    structuredClone(orderUpdate.Update),
+    "Order with ID 'o1' does not exist"
+  );
+};
+
+const storedOrder = (attributes: Record<string, unknown>): Order =>
+  tableItemToEntity(Order, {
+    PK: "Order#o1",
+    SK: "Order",
+    Id: "o1",
+    Type: "Order",
+    ...attributes
+  });
+
+describe("writeConditions", () => {
+  beforeEach(() => {
+    mockSend.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockSend.mockReset();
+  });
+
+  describe("compileWriteCondition", () => {
+    it("splits a condition into self, BelongsTo, HasOne, HasMany, HasAndBelongsToMany and foreign-key parts", () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+
+      const customer = compile(
+        {
+          EntityClass: Customer,
+          operation: "update",
+          condition: {
+            name: "Jane",
+            contactInformation: { phone: null },
+            orders: [{ id: "o1", condition: { orderDate: { $lt: cutoff } } }]
+          }
+        },
+        builder
+      );
+      const user = compile(
+        {
+          EntityClass: User,
+          operation: "delete",
+          condition: {
+            org: { name: "Acme" },
+            websites: [{ id: "w1", condition: {} }]
+          }
+        },
+        builder
+      );
+      const employee = compile(
+        {
+          EntityClass: Employee,
+          operation: "update",
+          condition: { organizationId: { target: { name: "Acme" } } },
+          payload: { organizationId: "org2" }
+        },
+        builder
+      );
+
+      expect(customer).toEqual({
+        EntityClass: Customer,
+        self: {
+          ConditionExpression: "#Name = :wc3_Name1",
+          ExpressionAttributeNames: { "#Name": "Name" },
+          ExpressionAttributeValues: { ":wc3_Name1": "Jane" }
+        },
+        guards: [
+          {
+            kind: "hasOne",
+            guard: { kind: "relationship", name: "contactInformation" },
+            target: ContactInformation,
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_not_exists(#Phone))",
+              ExpressionAttributeNames: { "#Phone": "Phone" }
+            }
+          },
+          {
+            kind: "hasMany",
+            guard: { kind: "relationship", name: "orders", id: "o1" },
+            target: Order,
+            id: "o1",
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#OrderDate < :wc2_OrderDate1)",
+              ExpressionAttributeNames: { "#OrderDate": "OrderDate" },
+              ExpressionAttributeValues: {
+                ":wc2_OrderDate1": cutoff.toISOString()
+              }
+            }
+          }
+        ],
+        needsStoredRow: false
+      });
+      expect(user).toEqual({
+        EntityClass: User,
+        guards: [
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "org" },
+            target: Organization,
+            foreignKey: "orgId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name = :wc4_Name1)",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc4_Name1": "Acme" }
+            }
+          },
+          {
+            kind: "hasAndBelongsToMany",
+            guard: { kind: "relationship", name: "websites", id: "w1" },
+            target: Website,
+            id: "w1",
+            condition: { ConditionExpression: "attribute_exists(PK)" }
+          }
+        ],
+        needsStoredRow: true
+      });
+      expect(employee).toEqual({
+        EntityClass: Employee,
+        guards: [
+          {
+            kind: "parent",
+            guard: { kind: "foreignKey", name: "organizationId" },
+            target: Organization,
+            foreignKey: "organizationId",
+            payloadForeignKey: "org2",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name = :wc6_Name1)",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc6_Name1": "Acme" }
+            }
+          }
+        ],
+        needsStoredRow: false
+      });
+    });
+
+    it("guards a standalone foreign key's target by the foreign key property", () => {
+      expect.assertions(1);
+
+      const compiled = compile({
+        EntityClass: Profile,
+        operation: "create",
+        condition: { userId: { target: { name: "Ada" } } },
+        payload: { userId: "s1", lastLogin: new Date() }
+      });
+
+      expect(compiled.guards).toEqual([
+        {
+          kind: "parent",
+          guard: { kind: "foreignKey", name: "userId" },
+          target: expect.any(Function),
+          foreignKey: "userId",
+          payloadForeignKey: "s1",
+          condition: {
+            ConditionExpression:
+              "attribute_exists(myPk) AND (#name = :wc1_name1)",
+            ExpressionAttributeNames: { "#name": "name" },
+            ExpressionAttributeValues: { ":wc1_name1": "Ada" }
+          }
+        }
+      ]);
+    });
+
+    it("compiles a self $or with its own attributes, including a foreign key's own value", () => {
+      expect.assertions(1);
+
+      const compiled = compile({
+        EntityClass: Employee,
+        operation: "update",
+        condition: {
+          $or: [{ organizationId: null }, { name: { $beginsWith: "A" } }]
+        }
+      });
+
+      expect(compiled.self).toEqual({
+        ConditionExpression:
+          "attribute_not_exists(#OrganizationId) OR begins_with(#Name, :wc1_Name1)",
+        ExpressionAttributeNames: {
+          "#OrganizationId": "OrganizationId",
+          "#Name": "Name"
+        },
+        ExpressionAttributeValues: { ":wc1_Name1": "A" }
+      });
+    });
+
+    describe("a $or of one block that binds several values", () => {
+      it("compiles the self fragment as that block's one group", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            $or: [{ orderDate: { $lt: cutoff }, customerId: "c1" }]
+          }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression:
+            "(#OrderDate < :wc1_OrderDate1 AND #CustomerId = :wc1_CustomerId2)",
+          ExpressionAttributeNames: {
+            "#OrderDate": "OrderDate",
+            "#CustomerId": "CustomerId"
+          },
+          ExpressionAttributeValues: {
+            ":wc1_OrderDate1": cutoff.toISOString(),
+            ":wc1_CustomerId2": "c1"
+          }
+        });
+      });
+
+      it("ANDs the block onto the target's existence check without redundant parentheses", () => {
+        expect.assertions(1);
+
+        // `attribute_exists(PK) AND ((#Name = … AND #Address = …))` is rejected
+        // by DynamoDB: "The expression has redundant parentheses"
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            customer: { $or: [{ name: "Jane", address: "1 Main St" }] }
+          }
+        });
+
+        expect(compiled.guards).toEqual([
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "customer" },
+            target: Customer,
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name = :wc1_Name1 AND #Address = :wc1_Address2)",
+              ExpressionAttributeNames: {
+                "#Name": "Name",
+                "#Address": "Address"
+              },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "Jane",
+                ":wc1_Address2": "1 Main St"
+              }
+            }
+          }
+        ]);
+      });
+
+      it("ANDs a block of one condition that binds two values, such as a $between, onto the target the same way", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            customer: { $or: [{ name: { $between: ["A", "M"] } }] }
+          }
+        });
+
+        expect(compiled.guards).toEqual([
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "customer" },
+            target: Customer,
+            foreignKey: "customerId",
+            condition: {
+              ConditionExpression:
+                "attribute_exists(PK) AND (#Name BETWEEN :wc1_Name1 AND :wc1_Name2)",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: {
+                ":wc1_Name1": "A",
+                ":wc1_Name2": "M"
+              }
+            }
+          }
+        ]);
+      });
+    });
+
+    describe("a dot path at the top level of the entity's own row (R4, R23)", () => {
+      it("compiles dot paths and list-index paths into the self fragment, beside a plain attribute", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: MyClassWithAllAttributeTypes,
+          operation: "update",
+          condition: {
+            "objectAttribute.name": "Jane",
+            "addressAttribute.geo.lat": { $between: [1, 2] },
+            "addressAttribute.scores[0]": { $gt: 5 },
+            "objectAttribute.tags[1]": "vip",
+            stringAttribute: "s"
+          }
+        });
+
+        expect(compiled).toEqual({
+          EntityClass: MyClassWithAllAttributeTypes,
+          self: {
+            ConditionExpression:
+              "#objectAttribute.#name = :wc1_objectAttributename1 AND #addressAttribute.#geo.#lat BETWEEN :wc1_addressAttributegeolat2 AND :wc1_addressAttributegeolat3 AND #addressAttribute.#scores[0] > :wc1_addressAttributescores04 AND #objectAttribute.#tags[1] = :wc1_objectAttributetags15 AND #stringAttribute = :wc1_stringAttribute6",
+            ExpressionAttributeNames: {
+              "#objectAttribute": "objectAttribute",
+              "#name": "name",
+              "#addressAttribute": "addressAttribute",
+              "#geo": "geo",
+              "#lat": "lat",
+              "#scores": "scores",
+              "#tags": "tags",
+              "#stringAttribute": "stringAttribute"
+            },
+            ExpressionAttributeValues: {
+              ":wc1_objectAttributename1": "Jane",
+              ":wc1_addressAttributegeolat2": 1,
+              ":wc1_addressAttributegeolat3": 2,
+              ":wc1_addressAttributescores04": 5,
+              ":wc1_objectAttributetags15": "vip",
+              ":wc1_stringAttribute6": "s"
+            }
+          },
+          guards: [],
+          needsStoredRow: false
+        });
+      });
+
+      it("compiles null on a nullable nested field to attribute_not_exists", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: MyClassWithAllAttributeTypes,
+          operation: "delete",
+          condition: { "addressAttribute.zip": null }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression: "attribute_not_exists(#addressAttribute.#zip)",
+          ExpressionAttributeNames: {
+            "#addressAttribute": "addressAttribute",
+            "#zip": "zip"
+          }
+        });
+      });
+
+      it("rejects a field the schema does not declare exactly as a $or branch does, sending nothing", () => {
+        expect.assertions(3);
+
+        const message =
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: street, city, zip, geo, scores, category';
+
+        expectFilterError(
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "update",
+            condition: { "addressAttribute.country": "US" }
+          },
+          message
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it.each([
+        [
+          "null on a non-nullable nested field",
+          { "addressAttribute.city": null },
+          'Invalid filter value for attribute "addressAttribute.city": null means "not set" in write conditions, which only an attribute declared nullable can be'
+        ],
+        [
+          "null on a field the schema does not declare",
+          { "addressAttribute.country": null },
+          'Invalid filter key "addressAttribute.country": "country" is not a field its object declares'
+        ],
+        [
+          "a field undeclared inside a nested object",
+          { "addressAttribute.geo.nope": 1 },
+          'Invalid filter key "addressAttribute.geo.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: lat, lng, accuracy'
+        ],
+        [
+          "a path continuing past a scalar attribute",
+          { "stringAttribute.x": "a" },
+          'Invalid filter key "stringAttribute.x": "stringAttribute" is not an object, so it has no field "x" and the condition can match nothing'
+        ],
+        [
+          "a path continuing past a nested scalar field",
+          { "addressAttribute.zip.nope": 1 },
+          'Invalid filter key "addressAttribute.zip.nope": "zip" is not an object, so it has no field "nope" and the condition can match nothing'
+        ],
+        [
+          "a $contains operand of the wrong type for a list of strings",
+          { "objectAttribute.tags": { $contains: 1 } },
+          'Invalid filter value for attribute "objectAttribute.tags": $contains on a list looks for one of its elements, and this list\'s elements are stored as a string, which this operand is not'
+        ],
+        [
+          "a $contains operand of the wrong type for a list of numbers",
+          { "addressAttribute.scores": { $contains: "5" } },
+          'Invalid filter value for attribute "addressAttribute.scores": $contains on a list looks for one of its elements, and this list\'s elements are stored as a number, which this operand is not'
+        ],
+        [
+          "a value of the wrong type for a nested field",
+          { "addressAttribute.zip": "x" },
+          'Invalid filter value for attribute "addressAttribute.zip": the value does not match the attribute\'s type'
+        ],
+        [
+          "a path through a list without an index",
+          { "addressAttribute.scores.x": 1 },
+          'Invalid filter key "addressAttribute.scores.x"'
+        ],
+        [
+          "a dot path whose first segment is not an attribute",
+          { "colour.shade": "red" },
+          'Invalid write condition key "colour.shade": it is not an attribute, relationship or foreign key of MyClassWithAllAttributeTypes'
+        ]
+      ])(
+        "rejects %s with the filter builder's message",
+        (_, condition, text) => {
+          expect.assertions(2);
+
+          expectFilterError(
+            {
+              EntityClass: MyClassWithAllAttributeTypes,
+              operation: "update",
+              condition
+            },
+            text
+          );
+        }
+      );
+
+      it("rejects an undeclared path on a relationship's target as it does on the entity's own row", () => {
+        expect.assertions(3);
+
+        expectFilterError(
+          {
+            EntityClass: Shipment,
+            operation: "update",
+            condition: { warehouse: { "location.nope": "x" } }
+          },
+          'Invalid filter key "location.nope": "nope" is not a field its object declares, so the condition names nothing a row can hold and can match nothing. The declared fields are: city, state, zip'
+        );
+        expect(mockSend.mock.calls).toEqual([]);
+      });
+
+      it("still compiles a path into a discriminated union variant without judging it", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: DiscriminatedUnionEntity,
+          operation: "update",
+          condition: { "payment.method.nope": "x" }
+        });
+
+        expect(compiled.self).toEqual({
+          ConditionExpression:
+            "#Payment.#method.#nope = :wc1_Paymentmethodnope1",
+          ExpressionAttributeNames: {
+            "#Payment": "Payment",
+            "#method": "method",
+            "#nope": "nope"
+          },
+          ExpressionAttributeValues: { ":wc1_Paymentmethodnope1": "x" }
+        });
+      });
+
+      it("rejects a dot path whose first segment is a relationship as an unknown key", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "update",
+            condition: { "customer.name": "Jane" }
+          },
+          'Invalid write condition key "customer.name": it is not an attribute, relationship or foreign key of Order'
+        );
+      });
+    });
+
+    describe("degenerate shapes (R29)", () => {
+      it("adds nothing for an empty condition or an empty HasMany array", () => {
+        expect.assertions(2);
+
+        expect(
+          compile({ EntityClass: Customer, operation: "delete", condition: {} })
+        ).toEqual({ EntityClass: Customer, guards: [], needsStoredRow: false });
+        expect(
+          compile({
+            EntityClass: Customer,
+            operation: "delete",
+            condition: { orders: [], paymentMethods: [] }
+          })
+        ).toEqual({ EntityClass: Customer, guards: [], needsStoredRow: false });
+      });
+
+      it("compiles an empty relationship condition to an existence-only guard", () => {
+        expect.assertions(1);
+
+        const compiled = compile({
+          EntityClass: Order,
+          operation: "create",
+          condition: { customer: {} },
+          payload: { customerId: "c1" }
+        });
+
+        expect(compiled.guards).toEqual([
+          {
+            kind: "parent",
+            guard: { kind: "relationship", name: "customer" },
+            target: Customer,
+            foreignKey: "customerId",
+            payloadForeignKey: "c1",
+            condition: { ConditionExpression: "attribute_exists(PK)" }
+          }
+        ]);
+      });
+
+      it.each([
+        ["a condition that is not an object", "pending"],
+        ["a null condition", null],
+        ["an array condition", [{ name: "Jane" }]]
+      ])("rejects %s", (_, condition) => {
+        expect.assertions(2);
+
+        expectFilterError(
+          // A plain JavaScript caller can pass anything
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition
+          },
+          "condition"
+        );
+      });
+
+      it.each([
+        ["not an array", { orders: { id: "o1", condition: {} } }],
+        ["an entry that is not an object", { orders: ["o1"] }],
+        ["an entry without an id", { orders: [{ condition: {} }] }],
+        [
+          "an entry with a non-string id",
+          { orders: [{ id: 1, condition: {} }] }
+        ],
+        ["an entry with an empty id", { orders: [{ id: "", condition: {} }] }],
+        ["an entry without a condition", { orders: [{ id: "o1" }] }],
+        [
+          "an entry with an array condition",
+          { orders: [{ id: "o1", condition: [] }] }
+        ],
+        [
+          "an entry with an unknown key",
+          { orders: [{ id: "o1", condition: {}, status: "x" }] }
+        ]
+      ])("rejects a HasMany guard that is %s", (_, condition) => {
+        expect.assertions(2);
+
+        expectFilterError(
+          { EntityClass: Customer, operation: "delete", condition },
+          '"orders"'
+        );
+      });
+
+      it.each([
+        ["an array", []],
+        ["null", null],
+        ["undefined", undefined],
+        ["a string", "Jane"]
+      ])("rejects a BelongsTo or HasOne condition that is %s", (_, value) => {
+        expect.assertions(4);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: value }
+          },
+          '"customer"'
+        );
+        expectFilterError(
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: { contactInformation: value }
+          },
+          '"contactInformation"'
+        );
+      });
+
+      it.each([
+        ["an array", []],
+        ["null", null],
+        ["undefined", undefined],
+        ["a string", "Acme"]
+      ])("rejects a target that is %s", (_, target) => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Employee,
+            operation: "delete",
+            condition: { organizationId: { target } }
+          },
+          '"organizationId"'
+        );
+      });
+
+      it("rejects an empty $or in a relationship condition", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { $or: [] } }
+          },
+          "$or"
+        );
+      });
+    });
+
+    describe("a $or branch that holds no conditions", () => {
+      // An empty branch always holds. Kept, it put `()` in the expression,
+      // which DynamoDB rejects; dropped, it tightened the guard to the other
+      // branches. Either way the guard was not the one written
+      const emptyBranch =
+        "Invalid condition: a $or branch holds no conditions, and write conditions reject an empty branch rather than dropping it — an empty branch always holds, so the whole $or would be vacuous";
+
+      it.each<[string, CompileInput]>([
+        [
+          "alone on the entity's own row",
+          { EntityClass: Order, operation: "update", condition: { $or: [{}] } }
+        ],
+        [
+          "beside a branch that holds conditions on the entity's own row",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { $or: [{}, { orderDate: cutoff }] }
+          }
+        ],
+        [
+          "inside a nested $or on the entity's own row",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { $or: [{ $or: [{}] }] }
+          }
+        ]
+      ])("rejects an empty branch %s", (_, props) => {
+        expect.assertions(1);
+
+        expect(() => compile(props)).toThrow(new FilterError(emptyBranch));
+      });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "in a BelongsTo condition",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { $or: [{}] } }
+          },
+          '"customer"'
+        ],
+        [
+          "in a BelongsTo condition on create",
+          {
+            EntityClass: Order,
+            operation: "create",
+            condition: { customer: { $or: [{}, { name: "Jane" }] } },
+            payload: { customerId: "c1" }
+          },
+          '"customer"'
+        ],
+        [
+          "in a HasOne condition",
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: { contactInformation: { $or: [{}] } }
+          },
+          '"contactInformation"'
+        ],
+        [
+          "in a HasMany entry's condition",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [{ id: "o1", condition: { $or: [{}] } }]
+            }
+          },
+          '"orders" entry "o1"'
+        ],
+        [
+          "in a foreign key's target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: {
+              organizationId: { target: { $or: [{ name: "Acme" }, {}] } }
+            }
+          },
+          '"organizationId" target'
+        ]
+      ])("rejects an empty branch %s", (_, props, location) => {
+        expect.assertions(1);
+
+        expect(() => compile(props)).toThrow(
+          new FilterError(
+            `Invalid write condition for ${location}: ${emptyBranch}`
+          )
+        );
+      });
+
+      it("rejects an empty branch in a join table's target", () => {
+        expect.assertions(1);
+
+        expect(() =>
+          compileJoinTableCondition({
+            joinTableName: StudentCourse.name,
+            condition: { courseId: { target: { $or: [{}] } } },
+            transactionBuilder: newBuilder()
+          })
+        ).toThrow(
+          new FilterError(
+            `Invalid write condition for "courseId" target: ${emptyBranch}`
+          )
+        );
+      });
+    });
+
+    describe("a builder error in a condition on another row names where it came from", () => {
+      const emptyOr =
+        "Invalid condition: $or has no condition blocks, and write conditions reject an empty $or rather than dropping it — dropping it would loosen what the condition checks";
+
+      /**
+       * Returns the FilterError a call throws, rethrowing anything else
+       */
+      const filterErrorOf = (run: () => unknown): FilterError => {
+        try {
+          run();
+        } catch (e) {
+          if (e instanceof FilterError) return e;
+          throw e;
+        }
+        throw new Error("Expected a FilterError");
+      };
+
+      /**
+       * The error a location wraps a builder error in: the location in the
+       * message, the builder's own error as the cause
+       */
+      const wrapped = (location: string, message: string): FilterError =>
+        new FilterError(`Invalid write condition for ${location}: ${message}`, {
+          cause: new FilterError(message)
+        });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "a BelongsTo relationship",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { $or: [] } }
+          },
+          '"customer"'
+        ],
+        [
+          "a BelongsTo relationship on create",
+          {
+            EntityClass: Order,
+            operation: "create",
+            condition: { customer: { $or: [] } },
+            payload: { customerId: "c1" }
+          },
+          '"customer"'
+        ],
+        [
+          "a HasOne relationship",
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: { contactInformation: { $or: [] } }
+          },
+          '"contactInformation"'
+        ],
+        [
+          "a HasMany entry, with its id",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o2", condition: { $or: [] } }
+              ]
+            }
+          },
+          '"orders" entry "o2"'
+        ],
+        [
+          "a HasAndBelongsToMany entry, with its id",
+          {
+            EntityClass: User,
+            operation: "delete",
+            condition: { websites: [{ id: "w1", condition: { $or: [] } }] }
+          },
+          '"websites" entry "w1"'
+        ],
+        [
+          "a foreign key's target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: { organizationId: { target: { $or: [] } } }
+          },
+          '"organizationId" target'
+        ]
+      ])("names %s", (_, props, location) => {
+        expect.assertions(1);
+
+        expect(filterErrorOf(() => compile(props))).toEqual(
+          wrapped(location, emptyOr)
+        );
+      });
+
+      it("names a join table's target", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compileJoinTableCondition({
+              joinTableName: StudentCourse.name,
+              condition: { courseId: { target: { $or: [] } } },
+              transactionBuilder: newBuilder()
+            })
+          )
+        ).toEqual(wrapped('"courseId" target', emptyOr));
+      });
+
+      it("names the key the failing part sits under in a condition guarding several rows", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compile({
+              EntityClass: Customer,
+              operation: "update",
+              condition: {
+                name: "Jane",
+                contactInformation: { email: { $beginsWith: "jane@" } },
+                orders: [
+                  { id: "o1", condition: {} },
+                  { id: "o2", condition: { colour: "red" } }
+                ]
+              }
+            })
+          )
+        ).toEqual(
+          wrapped(
+            '"orders" entry "o2"',
+            'Invalid write condition key "colour": attribute "colour" does not exist on Order. Valid attributes are: id, createdAt, updatedAt, customerId, paymentMethodId, orderDate'
+          )
+        );
+      });
+
+      it("passes an error that is not a FilterError through untouched", () => {
+        expect.assertions(1);
+
+        const error = new TypeError("Unexpected failure");
+        const filterParams = vi
+          .spyOn(FilterExpressionBuilder.prototype, "filterParams")
+          .mockImplementationOnce(() => {
+            throw error;
+          });
+
+        let thrown: unknown;
+        try {
+          compile({
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { name: "Jane" } }
+          });
+        } catch (e) {
+          thrown = e;
+        }
+        filterParams.mockRestore();
+
+        expect(thrown).toBe(error);
+      });
+
+      it("leaves a builder error on the entity's own row as the builder wrote it", () => {
+        expect.assertions(1);
+
+        expect(
+          filterErrorOf(() =>
+            compile({
+              EntityClass: Order,
+              operation: "update",
+              condition: { $or: [] }
+            })
+          )
+        ).toEqual(new FilterError(emptyOr));
+      });
+
+      it.each<[string, CompileInput, string]>([
+        [
+          "a relationship condition that is not an object",
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: "Jane" }
+          },
+          'Invalid write condition for "customer": a guard on a related row takes a condition object on that row (an empty object requires only that it exists)'
+        ],
+        [
+          "an id guarded twice",
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o1", condition: {} }
+              ]
+            }
+          },
+          'Invalid write condition for "orders": id "o1" is guarded twice. Combine its conditions into one entry'
+        ],
+        [
+          "a value condition beside a target",
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: { organizationId: { target: {}, $beginsWith: "org" } }
+          },
+          'Invalid write condition for "organizationId": a foreign key holds either a condition on its own value or a target guard, never both (found $beginsWith beside target). Put the value condition in a $or branch'
+        ]
+      ])(
+        "names the key of %s once, as the message already does",
+        (_, props, message) => {
+          expect.assertions(1);
+
+          expect(filterErrorOf(() => compile(props))).toEqual(
+            new FilterError(message)
+          );
+        }
+      );
+    });
+
+    describe("key validation", () => {
+      it("rejects an unknown key, naming it", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "update",
+            condition: { colour: "red" }
+          },
+          '"colour"'
+        );
+      });
+
+      it.each(["type", "pk", "sk"])(
+        "rejects the key %s on the entity's own row",
+        key => {
+          expect.assertions(2);
+
+          expectFilterError(
+            {
+              EntityClass: Order,
+              operation: "update",
+              condition: { [key]: "x" }
+            },
+            `"${key}"`
+          );
+        }
+      );
+
+      it("rejects an unknown key in a relationship condition, naming it", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { colour: "red" } }
+          },
+          '"colour"'
+        );
+      });
+
+      it("rejects type in a relationship condition", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "delete",
+            condition: { customer: { type: "Customer" } }
+          },
+          '"type"'
+        );
+      });
+
+      it("rejects an undefined operand on the entity's own row", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: { name: undefined }
+          },
+          '"name"'
+        );
+      });
+
+      it("rejects a relationship inside $or, naming it (AE6)", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "update",
+            condition: {
+              $or: [
+                { orderDate: { $lt: cutoff } },
+                { customer: { name: "Jane" } }
+              ]
+            }
+          },
+          '"customer"'
+        );
+      });
+
+      it("rejects a target guard inside $or", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: {
+              $or: [{ organizationId: { target: {} } }, { name: "Ada" }]
+            }
+          },
+          "organizationId"
+        );
+      });
+
+      it("rejects a target on a foreign key that backs a BelongsTo, pointing at the relationship (R32)", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Order,
+            operation: "update",
+            condition: { customerId: { target: { name: "Jane" } } }
+          },
+          '"customer"'
+        );
+      });
+
+      it("rejects a value condition and a target on one key (R33)", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: {
+              organizationId: { target: {}, $beginsWith: "org" }
+            }
+          },
+          '"organizationId"'
+        );
+      });
+
+      it("rejects the same HasMany id twice, and accepts two different ids (AE13)", () => {
+        expect.assertions(3);
+
+        expectFilterError(
+          {
+            EntityClass: Customer,
+            operation: "update",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o1", condition: { orderDate: { $lt: cutoff } } }
+              ]
+            }
+          },
+          '"o1"'
+        );
+        expect(
+          compile({
+            EntityClass: Customer,
+            operation: "update",
+            condition: {
+              orders: [
+                { id: "o1", condition: {} },
+                { id: "o2", condition: {} }
+              ]
+            }
+          }).guards.map(guard => guard.guard)
+        ).toEqual([
+          { kind: "relationship", name: "orders", id: "o1" },
+          { kind: "relationship", name: "orders", id: "o2" }
+        ]);
+      });
+
+      it("rejects the same HasAndBelongsToMany id twice", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: User,
+            operation: "delete",
+            condition: {
+              websites: [
+                { id: "w1", condition: {} },
+                { id: "w1", condition: {} }
+              ]
+            }
+          },
+          '"w1"'
+        );
+      });
+    });
+
+    describe("create", () => {
+      it.each([
+        ["an attribute", { orderDate: { $lt: cutoff } }, '"orderDate"'],
+        ["$or", { $or: [{ orderDate: { $lt: cutoff } }] }, '"$or"']
+      ])(
+        "rejects a condition on the entity's own row: %s",
+        (_, condition, text) => {
+          expect.assertions(2);
+
+          expectFilterError(
+            {
+              EntityClass: Order,
+              operation: "create",
+              condition,
+              payload: { customerId: "c1" }
+            },
+            text
+          );
+        }
+      );
+
+      it("rejects a dot path on the entity's own row as a condition on its own row", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "create",
+            condition: { "objectAttribute.name": "Jane" },
+            payload: {}
+          },
+          'Invalid write condition key "objectAttribute.name": a create takes no condition on the entity\'s own row'
+        );
+      });
+
+      it.each([
+        ["HasMany", { orders: [{ id: "o1", condition: {} }] }, '"orders"'],
+        ["HasOne", { contactInformation: {} }, '"contactInformation"']
+      ])("rejects a %s relationship", (_, condition, text) => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Customer,
+            operation: "create",
+            condition,
+            payload: {}
+          },
+          text
+        );
+      });
+
+      it("rejects a HasAndBelongsToMany relationship", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: User,
+            operation: "create",
+            condition: { websites: [] },
+            payload: {}
+          },
+          '"websites"'
+        );
+      });
+
+      it.each([
+        ["absent from", {}],
+        ["null in", { orgId: null }]
+      ])(
+        "rejects a BelongsTo guard whose foreign key is %s the payload (R28)",
+        (_, payload) => {
+          expect.assertions(2);
+
+          expectFilterError(
+            {
+              EntityClass: User,
+              operation: "create",
+              condition: { org: {} },
+              payload
+            },
+            '"org"'
+          );
+        }
+      );
+
+      it("rejects a target guard whose foreign key is absent from the payload (R28)", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Employee,
+            operation: "create",
+            condition: { organizationId: { target: {} } },
+            payload: { name: "Ada" }
+          },
+          '"organizationId"'
+        );
+      });
+
+      describe("a guard on the entity's own new row (R2)", () => {
+        it.each([
+          [
+            "a BelongsTo to its own type",
+            BundledSku,
+            { bundle: { name: "Widget" } },
+            { bundleSkuId: "sku1" },
+            '"bundle"',
+            '"bundleSkuId"'
+          ],
+          [
+            "a standalone foreign key to its own type",
+            Sku,
+            { replacesSkuId: { target: { name: "Widget" } } },
+            { replacesSkuId: "sku1" },
+            '"replacesSkuId"',
+            '"replacesSkuId"'
+          ],
+          [
+            "the child side of a one-way HasMany to its own type (OwnedBy)",
+            Sku,
+            { baseSkuId: { target: {} } },
+            { baseSkuId: "sku1" },
+            '"baseSkuId"',
+            '"baseSkuId"'
+          ]
+        ])(
+          "rejects %s whose key is the id the create supplies",
+          (_, EntityClass, condition, foreignKeys, key, foreignKey) => {
+            expect.assertions(2);
+
+            expectFilterError(
+              {
+                EntityClass,
+                operation: "create",
+                condition,
+                payload: { code: "sku1", name: "Widget", ...foreignKeys }
+              },
+              `Invalid write condition for ${key}: the create sets ${foreignKey} to the new entity's own id, so the guard would check the entity's own row, which must not exist yet`
+            );
+          }
+        );
+
+        it.each([
+          [
+            "a BelongsTo to its own type",
+            BundledSku,
+            { bundle: { name: "Widget" } },
+            { bundleSkuId: "sku0" },
+            "bundleSkuId",
+            { kind: "relationship", name: "bundle" }
+          ],
+          [
+            "a standalone foreign key to its own type",
+            Sku,
+            { replacesSkuId: { target: { name: "Widget" } } },
+            { replacesSkuId: "sku0" },
+            "replacesSkuId",
+            { kind: "foreignKey", name: "replacesSkuId" }
+          ]
+        ])(
+          "compiles %s whose key is another row of its type",
+          (_, EntityClass, condition, foreignKeys, foreignKey, guard) => {
+            expect.assertions(1);
+
+            expect(
+              compile({
+                EntityClass,
+                operation: "create",
+                condition,
+                payload: { code: "sku1", name: "Widget", ...foreignKeys }
+              })
+            ).toEqual({
+              EntityClass,
+              guards: [
+                {
+                  kind: "parent",
+                  guard,
+                  target: EntityClass,
+                  foreignKey,
+                  payloadForeignKey: "sku0",
+                  condition: {
+                    ConditionExpression:
+                      "attribute_exists(PK) AND (#Name = :wc1_Name1)",
+                    ExpressionAttributeNames: { "#Name": "Name" },
+                    ExpressionAttributeValues: { ":wc1_Name1": "Widget" }
+                  }
+                }
+              ],
+              needsStoredRow: false
+            });
+          }
+        );
+
+        it("compiles a guard on its own type when the id is generated: a new id names no existing row", () => {
+          expect.assertions(1);
+
+          expect(
+            compile({
+              EntityClass: Category,
+              operation: "create",
+              condition: { parentCategoryId: { target: {} } },
+              payload: { name: "Mugs", parentCategoryId: "cat1" }
+            }).guards
+          ).toHaveLength(1);
+        });
+      });
+    });
+
+    describe("payload contradictions on update (R28)", () => {
+      it("rejects a guard on a relationship whose foreign key the update clears (AE16)", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: User,
+            operation: "update",
+            condition: { org: { name: "Acme" } },
+            payload: { orgId: null }
+          },
+          '"org"'
+        );
+      });
+
+      it("rejects a target guard on a foreign key the update clears", () => {
+        expect.assertions(2);
+
+        expectFilterError(
+          {
+            EntityClass: Employee,
+            operation: "update",
+            condition: { organizationId: { target: {} } },
+            payload: { organizationId: null }
+          },
+          '"organizationId"'
+        );
+      });
+
+      it("needs the stored row only for a parent guard whose foreign key the payload does not set", () => {
+        expect.assertions(2);
+
+        expect(
+          compile({
+            EntityClass: User,
+            operation: "update",
+            condition: { org: {} },
+            payload: { orgId: "org2" }
+          }).needsStoredRow
+        ).toBe(false);
+        expect(
+          compile({
+            EntityClass: User,
+            operation: "update",
+            condition: { org: {} },
+            payload: { name: "Ada" }
+          }).needsStoredRow
+        ).toBe(true);
+      });
+    });
+
+    it("draws every fragment's placeholders from the transaction's prefix counter", () => {
+      expect.assertions(1);
+
+      const builder = newBuilder();
+      builder.nextPlaceholderPrefix();
+
+      const compiled = compile(
+        {
+          EntityClass: Customer,
+          operation: "delete",
+          condition: { name: "Jane" }
+        },
+        builder
+      );
+
+      expect(compiled.self?.ExpressionAttributeValues).toEqual({
+        ":wc2_Name1": "Jane"
+      });
+    });
+
+    describe("a whole-value object operand naming a field its schema does not declare (R30, R15)", () => {
+      const address = {
+        street: "1 Main St",
+        city: "Denver",
+        geo: { lat: 39.7, lng: -104.9, accuracy: "precise" },
+        scores: [1]
+      };
+      const location = { city: "Denver", state: "CO" };
+
+      // Converting the operand to its stored form strips the field, and the
+      // stripped guard holds against a row the caller's operand does not
+      // describe — every guard kind compiles through the same builder, and a
+      // guard on another row names where it sits
+      it.each<[string, CompileInput, string, string, string]>([
+        [
+          "the entity's own row",
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "update",
+            condition: { addressAttribute: { ...address, region: "west" } }
+          },
+          "addressAttribute",
+          "region",
+          ""
+        ],
+        [
+          "the entity's own row, inside a nested list element",
+          {
+            EntityClass: MyClassWithAllAttributeTypes,
+            operation: "delete",
+            condition: {
+              objectAttribute: {
+                name: "Jane",
+                email: "jane@example.com",
+                tags: [],
+                status: "active",
+                createdDate: cutoff,
+                history: [{ at: cutoff, actor: "ann", mood: "calm" }]
+              }
+            }
+          },
+          "objectAttribute",
+          "history[0].mood",
+          ""
+        ],
+        [
+          "a BelongsTo guard",
+          {
+            EntityClass: Shipment,
+            operation: "update",
+            condition: {
+              warehouse: { location: { ...location, region: "west" } }
+            }
+          },
+          "location",
+          "region",
+          'Invalid write condition for "warehouse": '
+        ],
+        [
+          "a HasMany entry",
+          {
+            EntityClass: Warehouse,
+            operation: "delete",
+            condition: {
+              shipments: [
+                {
+                  id: "s1",
+                  condition: {
+                    dimensions: { weight: 2, unit: "kg", fragile: true }
+                  }
+                }
+              ]
+            }
+          },
+          "dimensions",
+          "fragile",
+          'Invalid write condition for "shipments" entry "s1": '
+        ],
+        [
+          "a HasAndBelongsToMany entry, in an IN element",
+          {
+            EntityClass: Festival,
+            operation: "update",
+            condition: {
+              sponsors: [
+                {
+                  id: "sp1",
+                  condition: {
+                    inventory: [
+                      { quantity: 3, location: "Bay 4" },
+                      { quantity: 3, location: "Bay 4", reserved: 1 }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "inventory",
+          "reserved",
+          'Invalid write condition for "sponsors" entry "sp1": '
+        ]
+      ])(
+        "rejects one in %s before anything is sent",
+        (_, props, attr, path, location) => {
+          expect.assertions(2);
+
+          expect(() => compile(props)).toThrow(
+            new FilterError(
+              `${location}Invalid filter value for attribute "${attr}": "${path}" is not a field the attribute declares. An object is compared whole, so no stored value can equal this operand`
+            )
+          );
+          expect(mockSend.mock.calls).toEqual([]);
+        }
+      );
+    });
+  });
+
+  describe("attachWriteCondition", () => {
+    it("merges the self guard onto the entity's own queued item", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "update",
+          condition: { orderDate: { $lt: cutoff } }
+        },
+        builder
+      );
+      queueOrderUpdate(builder);
+
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Update: {
+              ...orderUpdate.Update,
+              ConditionExpression:
+                "attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#OrderDate": "OrderDate"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": "2026-10-05T00:00:00.000Z",
+                ":wc1_OrderDate1": cutoff.toISOString()
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("merges a self $or of one block that binds several values without redundant parentheses", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "update",
+          condition: {
+            $or: [{ orderDate: { $lt: cutoff }, customerId: "c1" }]
+          }
+        },
+        builder
+      );
+      queueOrderUpdate(builder);
+
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Update: {
+              ...orderUpdate.Update,
+              ConditionExpression:
+                "attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1 AND #CustomerId = :wc1_CustomerId2)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#OrderDate": "OrderDate",
+                "#CustomerId": "CustomerId"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": "2026-10-05T00:00:00.000Z",
+                ":wc1_OrderDate1": cutoff.toISOString(),
+                ":wc1_CustomerId2": "c1"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("guards the stored parent and pins the foreign key on the entity's own row when the payload leaves it unchanged (R14)", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "update",
+          condition: { customer: { name: "Jane" } },
+          payload: { customerId: "c1" }
+        },
+        builder
+      );
+      queueOrderUpdate(builder);
+
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Update: {
+              ...orderUpdate.Update,
+              ConditionExpression:
+                "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId)",
+              ExpressionAttributeNames: {
+                "#UpdatedAt": "UpdatedAt",
+                "#CustomerId": "CustomerId"
+              },
+              ExpressionAttributeValues: {
+                ":UpdatedAt": "2026-10-05T00:00:00.000Z",
+                ":wc2_CustomerId": "c1"
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Customer#c1", SK: "Customer" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("attributes a failed guard on the stored parent to the pin when the foreign key moved concurrently", async () => {
+      expect.assertions(1);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "delete",
+          condition: { customer: {} }
+        },
+        builder
+      );
+      builder.addDelete({
+        TableName: "mock-table",
+        Key: { PK: "Order#o1", SK: "Order" }
+      });
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+      cancelWith([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: marshall({ PK: "Order#o1", SK: "Order", CustomerId: "c2" })
+        },
+        { Code: "ConditionalCheckFailed" }
+      ]);
+
+      const error = await failureOf(async () => {
+        await builder.executeTransaction();
+      });
+
+      expect(error.errors.map(e => e.message)).toEqual([
+        "ConditionalCheckFailed: Order with ID 'o1' no longer references Customer with ID 'c1': its foreign key 'customerId' was changed by a concurrent write"
+      ]);
+    });
+
+    it("guards the new parent, without a pin, when the payload changes the foreign key (R12)", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "update",
+          condition: { customer: { name: "Jane" } },
+          payload: { customerId: "c2" }
+        },
+        builder
+      );
+      queueOrderUpdate(builder);
+      builder.addConditionCheck(
+        {
+          TableName: "mock-table",
+          Key: { PK: "Customer#c2", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)"
+        },
+        "Customer with ID 'c2' does not exist"
+      );
+
+      attachWriteCondition({
+        compiled,
+        id: "o1",
+        transactionBuilder: builder,
+        stored: storedOrder({ CustomerId: "c1" })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          orderUpdate,
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Customer#c2", SK: "Customer" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc1_Name1": "Jane" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("guards the payload's parent on create, merging onto the integrity check", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "create",
+          condition: { customer: {} },
+          payload: { customerId: "c1" }
+        },
+        builder
+      );
+      builder.addConditionCheck(
+        {
+          TableName: "mock-table",
+          Key: { PK: "Customer#c1", SK: "Customer" },
+          ConditionExpression: "attribute_exists(PK)"
+        },
+        "Customer with ID 'c1' does not exist"
+      );
+
+      attachWriteCondition({ compiled, id: "o1", transactionBuilder: builder });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Customer#c1", SK: "Customer" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK))",
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("guards a uni-directional parent by its foreign key and pins it (R24)", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Employee,
+          operation: "delete",
+          condition: { organizationId: { target: { name: "Acme" } } }
+        },
+        builder
+      );
+      builder.addDelete({
+        TableName: "mock-table",
+        Key: { PK: "Employee#e1", SK: "Employee" }
+      });
+
+      attachWriteCondition({
+        compiled,
+        id: "e1",
+        transactionBuilder: builder,
+        stored: tableItemToEntity(Employee, {
+          Id: "e1",
+          Type: "Employee",
+          OrganizationId: "org1"
+        })
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Delete: {
+              TableName: "mock-table",
+              Key: { PK: "Employee#e1", SK: "Employee" },
+              ConditionExpression: "(#OrganizationId = :wc2_OrganizationId)",
+              ExpressionAttributeNames: { "#OrganizationId": "OrganizationId" },
+              ExpressionAttributeValues: { ":wc2_OrganizationId": "org1" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Organization#org1", SK: "Organization" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc1_Name1": "Acme" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("checks a HasOne child resolved from the earlier read, pinning its foreign key", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Customer,
+          operation: "update",
+          condition: { contactInformation: { phone: null } }
+        },
+        builder
+      );
+
+      attachWriteCondition({
+        compiled,
+        id: "c1",
+        transactionBuilder: builder,
+        stored: tableItemToEntity(Customer, { Id: "c1", Type: "Customer" }),
+        related: [
+          tableItemToEntity(Order, {
+            Id: "o1",
+            Type: "Order",
+            CustomerId: "c1"
+          }),
+          tableItemToEntity(ContactInformation, {
+            Id: "ci1",
+            Type: "ContactInformation",
+            CustomerId: "c1"
+          })
+        ]
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "ContactInformation#ci1", SK: "ContactInformation" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (attribute_not_exists(#Phone)))",
+              ExpressionAttributeNames: {
+                "#CustomerId": "CustomerId",
+                "#Phone": "Phone"
+              },
+              ExpressionAttributeValues: { ":wc2_CustomerId": "c1" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("checks a HasMany child by the consumer's id, pinning its foreign key to this entity (R10)", async () => {
+      expect.assertions(3);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Customer,
+          operation: "update",
+          condition: {
+            orders: [{ id: "o2", condition: { orderDate: { $lt: cutoff } } }]
+          }
+        },
+        builder
+      );
+
+      attachWriteCondition({
+        compiled,
+        id: "c1",
+        transactionBuilder: builder,
+        stored: tableItemToEntity(Customer, { Id: "c1", Type: "Customer" }),
+        related: []
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Order#o2", SK: "Order" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (#CustomerId = :wc2_CustomerId) AND (attribute_exists(PK) AND (#OrderDate < :wc1_OrderDate1))",
+              ExpressionAttributeNames: {
+                "#CustomerId": "CustomerId",
+                "#OrderDate": "OrderDate"
+              },
+              ExpressionAttributeValues: {
+                ":wc2_CustomerId": "c1",
+                ":wc1_OrderDate1": cutoff.toISOString()
+              },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it("checks a HasAndBelongsToMany link row's membership and the partner's own row", async () => {
+      expect.assertions(4);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: User,
+          operation: "delete",
+          condition: { websites: [{ id: "w1", condition: { name: "Shop" } }] }
+        },
+        builder
+      );
+      // Delete removes the link row in the partner's partition
+      builder.addDelete({
+        TableName: "mock-table",
+        Key: { PK: "Website#w1", SK: "User#u1" }
+      });
+
+      attachWriteCondition({
+        compiled,
+        id: "u1",
+        transactionBuilder: builder,
+        stored: tableItemToEntity(User, { Id: "u1", Type: "User" }),
+        related: []
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            Delete: {
+              TableName: "mock-table",
+              Key: { PK: "Website#w1", SK: "User#u1" },
+              ConditionExpression: "(#Id = :wc2_Id)",
+              ExpressionAttributeNames: { "#Id": "Id" },
+              ExpressionAttributeValues: { ":wc2_Id": "u1" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            ConditionCheck: {
+              TableName: "mock-table",
+              Key: { PK: "Website#w1", SK: "Website" },
+              ConditionExpression:
+                "attribute_exists(PK) AND (attribute_exists(PK) AND (#Name = :wc1_Name1))",
+              ExpressionAttributeNames: { "#Name": "Name" },
+              ExpressionAttributeValues: { ":wc1_Name1": "Shop" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+
+      // The membership's failure is reported, not the partner guard's
+      mockSend.mockReset();
+      const failing = newBuilder();
+      failing.addDelete({
+        TableName: "mock-table",
+        Key: { PK: "Website#w1", SK: "User#u1" }
+      });
+      attachWriteCondition({
+        compiled: compile(
+          {
+            EntityClass: User,
+            operation: "delete",
+            condition: { websites: [{ id: "w1", condition: { name: "Shop" } }] }
+          },
+          failing
+        ),
+        id: "u1",
+        transactionBuilder: failing,
+        stored: tableItemToEntity(User, { Id: "u1", Type: "User" })
+      });
+      cancelWith([
+        { Code: "ConditionalCheckFailed" },
+        { Code: "ConditionalCheckFailed" }
+      ]);
+      const error = await failureOf(async () => {
+        await failing.executeTransaction();
+      });
+      expect(error.errors.map(e => e.message)).toEqual([
+        "ConditionalCheckFailed: Website with ID 'w1' is not linked to User with ID 'u1' through 'websites'"
+      ]);
+    });
+
+    it("throws an internal error when a guard on the stored parent is attached without the stored row", () => {
+      expect.assertions(1);
+
+      const builder = newBuilder();
+      const compiled = compile(
+        {
+          EntityClass: Order,
+          operation: "delete",
+          condition: { customer: {} }
+        },
+        builder
+      );
+
+      expect(() => {
+        attachWriteCondition({
+          compiled,
+          id: "o1",
+          transactionBuilder: builder
+        });
+      }).toThrow(
+        "The write condition guard on relationship 'customer' of Order targets its stored parent, but no stored row was given"
+      );
+    });
+
+    describe("a target missing from stored state (R13)", () => {
+      /**
+       * Attaches and returns what it threw, asserting nothing was sent
+       */
+      const attachAndCatch = async (
+        attach: () => void
+      ): Promise<TransactionWriteFailedError> => {
+        const error = await failureOf(attach);
+        expect(mockSend).not.toHaveBeenCalled();
+        return error;
+      };
+
+      it("fails before send with WriteConditionFailedError when the stored BelongsTo foreign key is absent (AE8)", async () => {
+        expect.assertions(3);
+
+        const builder = newBuilder();
+        const compiled = compile(
+          {
+            EntityClass: User,
+            operation: "update",
+            condition: { org: { name: "Acme" } },
+            payload: { name: "Ada" }
+          },
+          builder
+        );
+
+        const error = await attachAndCatch(() => {
+          attachWriteCondition({
+            compiled,
+            id: "u1",
+            transactionBuilder: builder,
+            stored: tableItemToEntity(User, { Id: "u1", Type: "User" })
+          });
+        });
+
+        expect(error.errors).toEqual([
+          new WriteConditionFailedError(
+            "Write condition failed on User with ID 'u1': relationship 'org' references no Organization",
+            {
+              entity: "User",
+              id: "u1",
+              guards: [{ kind: "relationship", name: "org" }]
+            }
+          )
+        ]);
+        expect(error.errors[0]).toBeInstanceOf(WriteConditionFailedError);
+      });
+
+      it("fails before send when there is no HasOne child in the earlier read", async () => {
+        expect.assertions(2);
+
+        const builder = newBuilder();
+        const compiled = compile(
+          {
+            EntityClass: Customer,
+            operation: "delete",
+            condition: { contactInformation: {} }
+          },
+          builder
+        );
+
+        const error = await attachAndCatch(() => {
+          attachWriteCondition({
+            compiled,
+            id: "c1",
+            transactionBuilder: builder,
+            stored: tableItemToEntity(Customer, { Id: "c1", Type: "Customer" }),
+            related: [
+              // Another customer's contact information is not this one's
+              tableItemToEntity(ContactInformation, {
+                Id: "ci2",
+                Type: "ContactInformation",
+                CustomerId: "c2"
+              })
+            ]
+          });
+        });
+
+        expect(error.errors).toEqual([
+          new WriteConditionFailedError(
+            "Write condition failed on Customer with ID 'c1': relationship 'contactInformation' references no ContactInformation",
+            {
+              entity: "Customer",
+              id: "c1",
+              guards: [{ kind: "relationship", name: "contactInformation" }]
+            }
+          )
+        ]);
+      });
+    });
+  });
+
+  describe("join tables", () => {
+    it("maps each foreign key to the entity it references, in both directions", async () => {
+      expect.assertions(4);
+
+      const builder = newBuilder();
+      const compiled = compileJoinTableCondition({
+        joinTableName: StudentCourse.name,
+        condition: {
+          courseId: { target: { name: "Algebra" } },
+          studentId: { target: {} }
+        },
+        transactionBuilder: builder
+      });
+
+      expect(
+        compiled.guards.map(({ foreignKey, target }) => [
+          foreignKey,
+          target.name
+        ])
+      ).toEqual([
+        ["courseId", "Course"],
+        ["studentId", "Student"]
+      ]);
+
+      attachJoinTableCondition({
+        compiled,
+        keys: { studentId: "s1", courseId: "c1" },
+        transactionBuilder: builder
+      });
+
+      expect(await sentItems(builder)).toEqual(
+        transaction([
+          {
+            ConditionCheck: {
+              TableName: "other-table",
+              Key: { myPk: "Course|c1", mySk: "Course" },
+              ConditionExpression:
+                "attribute_exists(myPk) AND (attribute_exists(myPk) AND (#name = :wc1_name1))",
+              ExpressionAttributeNames: { "#name": "name" },
+              ExpressionAttributeValues: { ":wc1_name1": "Algebra" },
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          },
+          {
+            ConditionCheck: {
+              TableName: "other-table",
+              Key: { myPk: "Student|s1", mySk: "Student" },
+              ConditionExpression:
+                "attribute_exists(myPk) AND (attribute_exists(myPk))",
+              ReturnValuesOnConditionCheckFailure: "ALL_OLD"
+            }
+          }
+        ])
+      );
+    });
+
+    it.each([ShopperFavoriteShop, ShopperVisitedShop])(
+      "maps the foreign keys of %o, one of two join tables over the same entities",
+      JoinTableClass => {
+        expect.assertions(1);
+
+        const compiled = compileJoinTableCondition({
+          joinTableName: JoinTableClass.name,
+          condition: {
+            shopperId: { target: {} },
+            shopId: { target: { status: "open" } }
+          },
+          transactionBuilder: newBuilder()
+        });
+
+        expect(
+          compiled.guards.map(({ foreignKey, target, guard }) => [
+            foreignKey,
+            target,
+            guard
+          ])
+        ).toEqual([
+          ["shopperId", Shopper, { kind: "foreignKey", name: "shopperId" }],
+          ["shopId", Shop, { kind: "foreignKey", name: "shopId" }]
+        ]);
+      }
+    );
+
+    it("names the join table and its keys as the write a failed guard belongs to", async () => {
+      expect.assertions(1);
+
+      const builder = newBuilder();
+      attachJoinTableCondition({
+        compiled: compileJoinTableCondition({
+          joinTableName: StudentCourse.name,
+          condition: { courseId: { target: { name: "Algebra" } } },
+          transactionBuilder: builder
+        }),
+        keys: { studentId: "s1", courseId: "c1" },
+        transactionBuilder: builder
+      });
+      cancelWith([
+        {
+          Code: "ConditionalCheckFailed",
+          Item: marshall({ myPk: "Course|c1", mySk: "Course", name: "Art" })
+        }
+      ]);
+
+      const error = await failureOf(async () => {
+        await builder.executeTransaction();
+      });
+
+      expect(error.errors).toEqual([
+        new WriteConditionFailedError(
+          "ConditionalCheckFailed: Write condition failed on StudentCourse with ID 'courseId=c1, studentId=s1': foreign key 'courseId'",
+          {
+            entity: "StudentCourse",
+            id: "courseId=c1, studentId=s1",
+            guards: [{ kind: "foreignKey", name: "courseId" }]
+          }
+        )
+      ]);
+    });
+
+    it("rejects a join-table key without an id to guard", () => {
+      expect.assertions(2);
+
+      const builder = newBuilder();
+      const attach = (): void => {
+        attachJoinTableCondition({
+          compiled: compileJoinTableCondition({
+            joinTableName: StudentCourse.name,
+            condition: { courseId: { target: {} } },
+            transactionBuilder: builder
+          }),
+          keys: { studentId: "s1" },
+          transactionBuilder: builder
+        });
+      };
+
+      expect(attach).toThrow(FilterError);
+      expect(attach).toThrow('"courseId"');
+    });
+
+    it.each([
+      ["an unknown key", { teacherId: { target: {} } }, '"teacherId"'],
+      ["a value without target", { courseId: "c1" }, '"courseId"'],
+      [
+        "a value condition beside target",
+        { courseId: { target: {}, $beginsWith: "c" } },
+        '"courseId"'
+      ],
+      [
+        "a target that is not an object",
+        { courseId: { target: "open" } },
+        '"courseId"'
+      ],
+      ["an undefined guard", { courseId: undefined }, '"courseId"'],
+      ["a condition that is not an object", "open", "condition"],
+      [
+        "an unknown key in the target",
+        { courseId: { target: { colour: "red" } } },
+        '"colour"'
+      ]
+    ])("rejects %s", (_, condition, text) => {
+      expect.assertions(2);
+
+      const compileCondition = (): unknown =>
+        compileJoinTableCondition({
+          joinTableName: StudentCourse.name,
+          condition,
+          transactionBuilder: newBuilder()
+        });
+
+      expect(compileCondition).toThrow(FilterError);
+      expect(compileCondition).toThrow(text);
+    });
+  });
+});

@@ -20,7 +20,12 @@ import {
   type UpdateExpression,
   type UpdateExpressionClauses,
   type DocumentPathOperation,
+  type CompiledWriteCondition,
+  type RowPin,
+  attachWriteCondition,
   buildBelongsToLinkKey,
+  compileWriteCondition,
+  existingEntityRow,
   expressionBuilder,
   renderUpdateExpression,
   extractForeignKeyFromEntity,
@@ -138,6 +143,18 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    */
   #canonicalClauses: UpdateExpressionClauses = { set: [], remove: [] };
 
+  /**
+   * The caller's compiled write condition, when the update carries one. Its
+   * presence decides how the searchable-value pin is attached
+   */
+  #writeCondition?: CompiledWriteCondition;
+
+  /**
+   * The searchable-value pin of an update carrying a write condition, merged
+   * with the condition's guards once every library item is queued
+   */
+  #searchableValuePin?: RowPin;
+
   constructor(
     Entity: EntityClass<T>,
     transactionBuilder?: TransactWriteBuilder
@@ -159,14 +176,15 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    *
    * @param id - The unique identifier of the entity being updated.
    * @param attributes - Partial set of entity attributes to update. Must be defined on the entity's model.
-   * @param options - Optional operation options including referentialIntegrityCheck flag.
+   * @param options - Optional operation options: the referentialIntegrityCheck flag, forceEmbed and a write condition.
    * @returns A promise that resolves to the set of updated attributes as applied to the entity.
    * @throws If the entity does not exist, an error is thrown.
+   * @throws {FilterError} Before anything is read or written, when the write condition is invalid.
    */
   public async run(
     id: string,
     attributes: UpdateOptions<DynaRecord>,
-    options?: UpdateOperationOptions
+    options?: UpdateOperationOptions<T>
   ): Promise<UpdatedAttributes<T>> {
     const referentialIntegrityCheck =
       options?.referentialIntegrityCheck ?? true;
@@ -175,6 +193,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
     const entityMeta = Metadata.getEntity(this.EntityClass.name);
     const entityAttrs =
       entityMeta.parseRawEntityDefinedAttributesPartial(attributes);
+
+    // Validated and compiled before any read or embedding call, so an invalid
+    // condition costs nothing
+    this.#writeCondition =
+      options?.condition === undefined
+        ? undefined
+        : compileWriteCondition({
+            EntityClass: this.EntityClass,
+            operation: "update",
+            condition: options.condition,
+            payload: entityAttrs,
+            transactionBuilder: this.transactionBuilder
+          });
 
     const { updatedAttrs, expression, clauses } =
       this.buildUpdateMetadata(entityAttrs);
@@ -185,13 +216,19 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       referentialIntegrityCheck
     );
 
-    // Only need to prefetch if the entity has relationships
-    if (entityMeta.allRelationships.length > 0) {
+    let preFetch: PreFetchData | undefined;
+
+    // Only need to prefetch if the entity has relationships, or if a write
+    // condition guards the parent its stored foreign key references
+    if (
+      entityMeta.allRelationships.length > 0 ||
+      this.#writeCondition?.needsStoredRow === true
+    ) {
       const belongsToRelMetaBeingUpdated =
         this.getBelongsToRelMetaAndKeyForUpdatedKeys(entityAttrs);
 
       const entities = await this.preFetch(id, belongsToRelMetaBeingUpdated);
-      const preFetch = this.preProcessFetchedData(
+      preFetch = this.preProcessFetchedData(
         id,
         entities,
         belongsToRelMetaBeingUpdated
@@ -234,6 +271,21 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
         undefined,
         forceEmbed
       );
+    }
+
+    // Guards and pins merge only once every library item is queued
+    if (this.#writeCondition !== undefined) {
+      if (this.#searchableValuePin !== undefined) {
+        const { row, pin } = this.#searchableValuePin;
+        this.transactionBuilder.addPin(row, pin);
+      }
+      attachWriteCondition({
+        compiled: this.#writeCondition,
+        id,
+        transactionBuilder: this.transactionBuilder,
+        stored: preFetch?.entityPreUpdate,
+        related: preFetch?.relatedEntities
+      });
     }
 
     await this.commitTransaction();
@@ -600,6 +652,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
       this.pinSearchableValueCondition(
         canonicalUpdate,
         searchableMeta.alias,
+        value,
         entityPreUpdate.id
       );
       return;
@@ -629,16 +682,37 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
    * value the skip matched against, so the condition reuses that expression
    * name and value — the pin adds no request bytes.
    *
+   * An update carrying a write condition registers the pin with the
+   * transaction instead, merged with the condition's guards, so a cancellation whose returned row holds another
+   * searchable value is reported with this pin's message rather than as a
+   * failed write condition. An unconditioned update's command is unchanged.
+   *
    * @param canonicalUpdate - The canonical row's queued update item.
    * @param alias - The searchable attribute's table alias.
+   * @param value - The searchable value the skip matched against.
    * @param id - The entity id, for the condition failure message.
    * @private
    */
   private pinSearchableValueCondition(
     canonicalUpdate: CanonicalUpdateItem,
     alias: string,
+    value: string,
     id: string
   ): void {
+    const failureMessage = `${this.EntityClass.name} with ID '${id}' does not exist or its searchable value was changed by a concurrent write — retry the update`;
+
+    if (this.#writeCondition !== undefined) {
+      this.#searchableValuePin = {
+        row: existingEntityRow(this.EntityClass, id),
+        pin: { attribute: alias, value, failureMessage }
+      };
+      this.transactionBuilder.overrideConditionFailedMsg(
+        canonicalUpdate,
+        failureMessage
+      );
+      return;
+    }
+
     const attrName = `#${alias}`;
     const attrValue = `:${alias}`;
 
@@ -649,7 +723,7 @@ class Update<T extends DynaRecord> extends OperationBase<T> {
 
     this.transactionBuilder.overrideConditionFailedMsg(
       canonicalUpdate,
-      `${this.EntityClass.name} with ID '${id}' does not exist or its searchable value was changed by a concurrent write — retry the update`
+      failureMessage
     );
   }
 

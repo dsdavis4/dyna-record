@@ -3,3 +3,4 @@ export * from "./flattenObjectForUpdate.js";
 export * from "./mergePartialObjectAttributes.js";
 export * from "./types.js";
 export * from "./utils.js";
+export * from "./writeConditions.js";

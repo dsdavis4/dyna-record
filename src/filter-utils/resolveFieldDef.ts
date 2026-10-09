@@ -48,31 +48,38 @@ export const parseSegment = (raw: string): PathSegment => {
 /**
  * What walking a dot path through a schema found.
  *
- * Three outcomes rather than a field-or-undefined, because the two ways of
+ * Several outcomes rather than a field-or-undefined, because the ways of
  * failing call for different answers. `unknown` means dyna-record cannot see
- * what the path names — a discriminated union variant, or a segment naming no
- * declared field — and every guard abstains on it. `listWithoutIndex` means the
- * path is definitely wrong: it descends *through* a list without saying which
- * element, which DynamoDB answers with no rows and no error.
+ * what the path names — a discriminated union variant, whose fields the walk
+ * does not follow — and every guard abstains on it. The rest mean the path is
+ * definitely wrong, each in a way DynamoDB answers with no rows and no error:
+ * `listWithoutIndex` descends *through* a list without saying which element,
+ * `indexOnNonList` indexes a field that holds no list, `undeclaredField` names
+ * a field a declared object does not have, and `pathPastScalar` continues below
+ * a value that has no fields at all.
  */
 export type FieldResolution =
   | { outcome: "resolved"; fieldDef: FieldDef }
   | { outcome: "unknown" }
   | { outcome: "listWithoutIndex"; segment: string }
-  | { outcome: "indexOnNonList"; segment: string };
+  | { outcome: "indexOnNonList"; segment: string }
+  | { outcome: "undeclaredField"; field: string; declared: string[] }
+  | { outcome: "pathPastScalar"; segment: string; field: string };
 
 /**
  * Walks an `@ObjectAttribute`'s schema to the field a dot path names.
  *
  * A path ending *at* an array resolves: the field exists and its stored form is
- * a List, which is what decides whether a fragment operator applies to it. What
- * its schema cannot do is validate a condition value, because the schema
- * describes the list while a condition carries an element — that judgement
- * belongs to the caller, which has the condition in hand.
+ * a List, which is what decides whether a fragment operator applies to it. Its
+ * schema validates a whole list, which is what an `IN` element on it is; a
+ * `$contains` operand is one element, which the caller judges against the
+ * element's schema instead.
  *
  * A path continuing *through* an array needs an index to say which element it
  * means. Without one it names nothing DynamoDB can reach, so it is reported
- * rather than left to return no rows.
+ * rather than left to return no rows — as is a segment a declared object does
+ * not have, and one continuing below a scalar. Only a discriminated union stops
+ * the walk short of a judgement: its variants' fields are not followed.
  * @param schema - The object schema of the attribute the path starts at
  * @param segments - The parsed path segments below that attribute
  * @returns What the walk found
@@ -83,13 +90,39 @@ export const resolveFieldDef = (
 ): FieldResolution => {
   let fields: Optional<ObjectSchema> = schema;
   let fieldDef: Optional<FieldDef>;
+  let previous: Optional<PathSegment>;
 
   for (const [position, segment] of segments.entries()) {
-    if (fields === undefined) return { outcome: "unknown" };
+    if (fields === undefined) {
+      // No schema to walk, or a union whose variant the path does not say:
+      // the field may exist, so the walk cannot judge it
+      if (
+        previous === undefined ||
+        fieldDef === undefined ||
+        fieldDef.type === "discriminatedUnion"
+      ) {
+        return { outcome: "unknown" };
+      }
+
+      // Anything else without fields is a scalar — an object has fields, and a
+      // list with the path continuing was reported below — so nothing lies
+      // under it for the segment to name
+      return {
+        outcome: "pathPastScalar",
+        segment: previous.raw,
+        field: segment.name
+      };
+    }
 
     // Presence rather than an undefined check: ObjectSchema's index signature
     // types every key as present, so the compiler treats the miss as impossible
-    if (!Object.hasOwn(fields, segment.name)) return { outcome: "unknown" };
+    if (!Object.hasOwn(fields, segment.name)) {
+      return {
+        outcome: "undeclaredField",
+        field: segment.name,
+        declared: Object.keys(fields)
+      };
+    }
 
     fieldDef = fields[segment.name];
 
@@ -112,6 +145,7 @@ export const resolveFieldDef = (
     }
 
     fields = fieldDef.type === "object" ? fieldDef.fields : undefined;
+    previous = segment;
   }
 
   return fieldDef === undefined
@@ -120,37 +154,85 @@ export const resolveFieldDef = (
 };
 
 /**
- * Whether a field's own schema can validate a condition value on it.
- *
- * Exhaustive over `FieldDef`, so a new field type fails compilation here until
- * it declares a stance — the standard the stored-form map sets, applied to the
- * other per-field question a condition has to ask.
- *
- * An array is the one that cannot: its schema describes the list, while a
- * condition on it carries an element — an `IN` element, or a `$contains`
- * operand — so validating against it would reject every one. A discriminated
- * union can: a path ending at one names the whole field, and a condition on it
- * carries a whole variant.
+ * Joins a field to the path of an undeclared field found below it, so a list
+ * index reads as one (`entries[0].sku`) and a field as one (`source.by`).
+ * @param head - The field or index the walk descended through
+ * @param rest - The path found below it
+ * @returns The joined path
  */
-const VALIDATES_CONDITION_VALUE: Record<FieldDef["type"], boolean> = {
-  string: true,
-  number: true,
-  boolean: true,
-  date: true,
-  enum: true,
-  object: true,
-  discriminatedUnion: true,
-  array: false
-};
+const joinPath = (head: string, rest: string): string =>
+  rest.startsWith("[") ? `${head}${rest}` : `${head}.${rest}`;
 
 /**
- * Whether a condition value on this field can be validated against the field's
- * own schema.
- * @param fieldDef - The field a dot path names
- * @returns Whether the schema describes the value a condition carries
+ * The first field a value carries that its definition does not declare, as a
+ * path from the value's top.
+ *
+ * Zod's object schemas strip an undeclared key rather than rejecting it, which
+ * is right for a value about to be written — the write stores only what the
+ * schema declares — and wrong for a value that is compared whole, because the
+ * stripped value is not the one the caller described. Walks objects at any
+ * depth, each element of a list, and the variant a discriminated union's
+ * discriminator names; the discriminator itself is declared by the union.
+ *
+ * Expects a value its definition's zod schema has accepted, so a shape this
+ * walk does not follow — a variant the union does not declare — has already
+ * been rejected and is not judged again here
+ * @param fieldDef - The definition the value was validated against
+ * @param value - The value, in the form the entity declares it
+ * @returns The undeclared field's path, or undefined when every field is declared
  */
-export const fieldValidatesConditionValue = (fieldDef: FieldDef): boolean =>
-  VALIDATES_CONDITION_VALUE[fieldDef.type];
+export const undeclaredFieldIn = (
+  fieldDef: FieldDef,
+  value: unknown
+): Optional<string> => {
+  if (fieldDef.type === "array") {
+    if (!Array.isArray(value)) return undefined;
+
+    for (const [index, item] of value.entries()) {
+      const found = undeclaredFieldIn(fieldDef.items, item);
+      if (found !== undefined) return joinPath(`[${String(index)}]`, found);
+    }
+    return undefined;
+  }
+
+  if (fieldDef.type !== "object" && fieldDef.type !== "discriminatedUnion") {
+    return undefined;
+  }
+
+  if (typeof value !== "object" || value === null) return undefined;
+
+  // Annotated rather than inferred: `Object.entries` on an `object` types each
+  // value as `any`, and the walk only ever hands a value on as `unknown`
+  const entries: Array<[string, unknown]> = Object.entries(value);
+  let fields: Optional<ObjectSchema>;
+
+  if (fieldDef.type === "object") {
+    fields = fieldDef.fields;
+  } else {
+    const variant = entries.find(([key]) => key === fieldDef.discriminator);
+    const name = variant?.[1];
+    fields =
+      typeof name === "string" && Object.hasOwn(fieldDef.variants, name)
+        ? fieldDef.variants[name]
+        : undefined;
+  }
+
+  if (fields === undefined) return undefined;
+
+  for (const [key, field] of entries) {
+    // The union declares its discriminator, not the variant
+    const isDiscriminator =
+      fieldDef.type === "discriminatedUnion" && key === fieldDef.discriminator;
+    if (isDiscriminator) continue;
+
+    if (!Object.hasOwn(fields, key)) return key;
+
+    const found = undeclaredFieldIn(fields[key], field);
+    if (found !== undefined) return joinPath(key, found);
+  }
+
+  return undefined;
+};
 
 /**
  * Converts a nested field's condition value to the form the table stores.

@@ -25,7 +25,7 @@ interface HasOneProps<T extends DynaRecord> {
  *
  * class Profile extends TableClass {
  *   @ForeignKeyProperty()
- *   public readonly userId: ForeignKey;
+ *   public readonly userId: ForeignKey<User>;
  *
  *   @BelongsTo(() => User, { foreignKey: "userId" })
  *   public readonly user: User;
