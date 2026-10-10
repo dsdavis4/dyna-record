@@ -1,6 +1,6 @@
 {
   "name": "dyna-record",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Typescript Data Modeler and ORM for Dynamo",
   "type": "module",
   "types": "./dist/index.d.ts",

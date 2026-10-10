@@ -1,3 +1,13 @@
+## 3.5.1 - 2026-10-09
+
+### Fixed
+
+- **An `IN` list written inline stopped narrowing a query's results by `type`.** `filter: { type: "PaymentMethod", lastFour: ["1234"] }` typed its results as every entity in the partition rather than `PaymentMethod`, and a `readonly` array such as `["1234"] as const` was rejected with "No overload matches this call". Both worked through 3.2.0 and regressed in 3.3.0, when the filter value types stopped using the SDK's `any`: the query overloads infer their filter as a `const` generic, which reads an inline array literal as a readonly tuple, and the `IN` list was typed as a mutable array that a readonly tuple is not assignable to. The 3.3.0 to 3.5.0 entries did not list this, and 3.5.0 describes narrowing as unchanged; it was not intended.
+
+  An `IN` list now accepts a `readonly` array, so an inline literal of one or more elements, a readonly tuple and a mutable array all compile and narrow by `type`. This covers every surface that takes filter conditions: a query filter, a filter beside `skCondition`, the key-conditions overload, and write conditions. The excess-property check on filter keys is unchanged, and `$between` and `$or` were not affected. A scalar value, an operator object and a `type`-only filter always narrowed.
+
+  The fix is type-level only; the expressions sent to DynamoDB are unchanged. It widens what compiles, so no existing code needs an edit.
+
 ## 3.5.0 - 2026-10-08
 
 > **Versioning policy.** From this release on, runtime behavior and the public API follow semantic versioning under a written policy. Type-level changes ship in minor releases, listed under "Breaking (type-level only)", when they only reject code that could not behave as written at runtime (it was silently ignored, matched nothing, or failed, in dyna-record or at DynamoDB), or when they widen a type so that only code assigning it to a narrower annotation needs an edit. A change that makes correct code stop compiling for any other reason ships in a major, as 2.0.0 did. Both type-level items in this release are of those kinds. See [Versioning](README.md#versioning).
