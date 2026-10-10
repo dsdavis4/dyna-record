@@ -39,6 +39,7 @@ import type {
   ComparisonConditionFor,
   ComparisonFilter,
   FilterValue,
+  InConditionFor,
   OrderedFilterValue,
   AndOrFilter,
   BeginsWithFilter,
@@ -564,7 +565,7 @@ class FilterExpressionBuilder {
     let condition;
 
     const values: Record<string, DynamoNativeValue> = {};
-    if (Array.isArray(value)) {
+    if (this.isInCondition(value)) {
       if (!capabilities.in) {
         throw new FilterError(
           `IN conditions (array values) are not supported in ${capabilities.context}. Attribute "${attr}" has an array value`
@@ -1827,6 +1828,23 @@ class FilterExpressionBuilder {
         `Invalid filter value for attribute "${attr}": ${operator} was given no value`
       );
     }
+  }
+
+  /**
+   * Type guard for an `IN` list.
+   *
+   * `Array.isArray` narrows to a mutable array and so leaves a `readonly` one
+   * in the false branch, where it is not a {@link FilterValue}. The list is
+   * written `readonly` so an inline literal, which `const` inference reads as a
+   * readonly tuple, is accepted. `AndFilter[]` is the `$or` list, which this
+   * guard also excludes from the other branches.
+   * @param value - The condition value
+   * @returns Whether it is an `IN` list
+   */
+  private isInCondition(
+    value: FilterParams[string]
+  ): value is InConditionFor<FilterValue> | AndFilter[] {
+    return Array.isArray(value);
   }
 
   /**

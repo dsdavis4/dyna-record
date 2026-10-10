@@ -7474,6 +7474,154 @@ describe("Query", () => {
         Logger.log(_match, _excluded);
       });
 
+      describe("an IN list beside type", () => {
+        // `const` inference reads an inline array literal as a readonly tuple,
+        // so each form of the list has to be accepted and still narrow
+        const mutable: string[] = ["1234"];
+        const tuple = ["1234", "5678"] as const;
+
+        // The undeclared-attribute case also rejects at runtime; what is under
+        // test is the type
+        const swallow = async (promise: Promise<unknown>): Promise<void> => {
+          await promise.catch(() => {});
+        };
+
+        it("narrows by type beside an inline single-element list", async () => {
+          const result = await Customer.query("123", {
+            filter: { type: "PaymentMethod", lastFour: ["1234"] }
+          });
+
+          // @ts-expect-no-error: type narrows the results to PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by the type filter
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside an inline multi-element list", async () => {
+          const result = await Customer.query("123", {
+            filter: { type: "PaymentMethod", lastFour: ["1234", "5678"] }
+          });
+
+          // @ts-expect-no-error: type narrows the results to PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by the type filter
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside a readonly tuple", async () => {
+          const result = await Customer.query("123", {
+            filter: { type: "PaymentMethod", lastFour: tuple }
+          });
+
+          // @ts-expect-no-error: type narrows the results to PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by the type filter
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside a mutable array", async () => {
+          const result = await Customer.query("123", {
+            filter: { type: "PaymentMethod", lastFour: mutable }
+          });
+
+          // @ts-expect-no-error: type narrows the results to PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by the type filter
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside an inline list through the key-conditions overload", async () => {
+          const result = await Customer.query(
+            { pk: "Customer#123" },
+            { filter: { type: "PaymentMethod", lastFour: ["1234"] } }
+          );
+
+          // @ts-expect-no-error: type narrows the results to PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by the type filter
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside an inline list when skCondition is given", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "PaymentMethod" },
+            filter: { type: "PaymentMethod", lastFour: ["1234", "5678"] }
+          });
+
+          // @ts-expect-no-error: skCondition and type agree on PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by both
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("narrows by type beside a readonly tuple when skCondition is given", async () => {
+          const result = await Customer.query("123", {
+            skCondition: { $beginsWith: "PaymentMethod" },
+            filter: { type: "PaymentMethod", lastFour: tuple }
+          });
+
+          // @ts-expect-no-error: skCondition and type agree on PaymentMethod
+          const _match: Array<EntityAttributesInstance<PaymentMethod>> = result;
+
+          // @ts-expect-error: Order excluded by both
+          const _excluded: Array<EntityAttributesInstance<Order>> = result;
+
+          // @ts-expect-error: Customer, the partition's own entity, is excluded too
+          const _customer: Array<EntityAttributesInstance<Customer>> = result;
+
+          Logger.log(_match, _excluded, _customer);
+        });
+
+        it("still rejects an undeclared attribute beside an inline list", async () => {
+          await swallow(
+            // @ts-expect-error: notAnAttribute is not declared by PaymentMethod
+            Customer.query("123", {
+              filter: {
+                type: "PaymentMethod",
+                lastFour: ["1234"],
+                notAnAttribute: "x"
+              }
+            })
+          );
+        });
+      });
+
       it("skCondition + $or blocks: rejects attributes outside SK scope", async () => {
         // @ts-expect-error: SK scopes to Order — lastFour (PaymentMethod) not valid
         await Customer.query("123", {

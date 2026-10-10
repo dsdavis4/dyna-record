@@ -488,7 +488,7 @@ export type EqualityConditionFor<V> = V extends readonly unknown[]
  * }
  * ```
  */
-export type InConditionFor<V> = Array<AllowNullInWholeValue<V>>;
+export type InConditionFor<V> = ReadonlyArray<AllowNullInWholeValue<V>>;
 
 /**
  * Every condition a filter key accepts, over the values a caller may write.
