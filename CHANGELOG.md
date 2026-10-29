@@ -1,3 +1,17 @@
+## 3.5.3 - 2026-10-28
+
+### Fixed
+
+- **Every read on a wide vector-indexed table failed.** On a table with a vector index, `findById`, `query` and internal pre-fetches send a `ProjectionExpression` listing every attribute alias of every entity on the table, so the vector is never read back. Each alias was written as `#Alias`, so the projection grew with alias length, and once it passed DynamoDB's 4,096-character expression limit every read on the table was rejected with `ValidationException: Invalid ProjectionExpression: Expression size has exceeded the maximum allowed size`. Each alias is now referenced by a positional placeholder (`#_p0`, `#_p1`, ...), which fits about 690 aliases per table whatever their length.
+
+  A table with more aliases than that now fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing on every read.
+
+- **Every read on a vector-indexed table failed when an alias held a character an expression placeholder cannot,** such as `shipped-at`. The projection wrote it as `#shipped-at`, which DynamoDB rejects. The positional placeholders fix this too.
+
+Read results are unchanged. The requests are not: on a vector-indexed table, `ProjectionExpression` now reads `#_p0,#_p1,...`, and `ExpressionAttributeNames` maps those placeholders to the aliases. Key condition and filter names that used to coincide with projection entries, such as `#PK`, now appear as entries of their own. Tests that assert the exact command sent need updating.
+
+A filter or key condition on an attribute or object field whose name has the projection's placeholder form (`_p` followed by lowercase letters or digits, such as `_p1`) now references it by a suffixed placeholder such as `#_p1_3771d1`, so it cannot collide with the projection. The results are unchanged.
+
 ## 3.5.2 - 2026-10-28
 
 ### Fixed
