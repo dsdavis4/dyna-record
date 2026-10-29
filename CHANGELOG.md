@@ -1,3 +1,9 @@
+## 3.5.2 - 2026-10-28
+
+### Fixed
+
+- **Dependency vulnerabilities.** `npm audit fix` updated the lockfile: `vite` 7.3.6 to 7.3.7 and `markdown-it` 14.3.2 to 14.3.3 (both dev-only), and `zod` 4.3.6 to 4.6.7. The `zod` range in `package.json` (`^4.3.6`) is unchanged, so consumers resolve it as before. No library code changed, and runtime behavior and the public API are the same.
+
 ## 3.5.1 - 2026-10-09
 
 ### Fixed
