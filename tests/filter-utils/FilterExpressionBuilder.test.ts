@@ -8,6 +8,7 @@ import {
   type FilterAttributeResolver,
   type FilterExpressionBuilderProps
 } from "../../src/filter-utils/index.js";
+import { isReadProjectionToken } from "../../src/dynamo-utils/readProjectionToken.js";
 import { FilterError } from "../../src/errors.js";
 import {
   createObjectSerializer,
@@ -18,6 +19,7 @@ import type { Serializers } from "../../src/metadata/types.js";
 import type { ObjectSchema } from "../../src/decorators/attributes/types.js";
 import type { AttributeKind } from "../../src/metadata/types.js";
 import type {
+  FilterAttribute,
   FilterCapabilities,
   FilterParams,
   FilterTypes,
@@ -4192,6 +4194,122 @@ describe("FilterExpressionBuilder", () => {
       });
 
       expect(spaced.expression).not.toEqual(hyphen.expression);
+    });
+
+    describe("names of the read projection's token form", () => {
+      // A vector-indexed table's read projection references its attributes
+      // as #_p0, #_p1, ... and shares one ExpressionAttributeNames map with the
+      // query's key conditions and filter. The projection's names are merged
+      // last, so a filter token equal to one of them would be silently
+      // retargeted at a different attribute
+      const reservedAttributes: Record<string, FilterAttribute> = {
+        pOne: { alias: "_p1" },
+        pTwo: { alias: "_p2" },
+        pk: { alias: "_pk" },
+        upper: { alias: "_P1" },
+        bare: { alias: "_p" },
+        noUnderscore: { alias: "p1" },
+        trailing: { alias: "_p1x_" },
+        compound: { alias: "_pk_id" },
+        details: {
+          alias: "Details",
+          kind: "object",
+          objectSchema: { _p0: { type: "string" } }
+        }
+      };
+
+      const reservedBuilder = (): FilterExpressionBuilder =>
+        new FilterExpressionBuilder({
+          capabilities: queryFilterCapabilities,
+          resolveAttribute: (attributeKey, filterKey) => {
+            if (!(attributeKey in reservedAttributes)) {
+              throw new FilterError(`Invalid filter key "${filterKey}"`);
+            }
+            return reservedAttributes[attributeKey];
+          }
+        });
+
+      it("gives an attribute aliased like a projection token a token of its own", () => {
+        expect.assertions(1);
+
+        expect(
+          reservedBuilder().expressionAttributeNames([], { pOne: "x" })
+        ).toEqual({ "#_p1_3771d1": "_p1" });
+      });
+
+      it("compiles a filter on that attribute against the escaped token", () => {
+        expect.assertions(1);
+
+        expect(reservedBuilder().filterParams({ pOne: "x" })).toEqual({
+          expression: "#_p1_3771d1 = :_p1_3771d11",
+          values: { _p1_3771d11: "x" }
+        });
+      });
+
+      it("escapes a nested field named like a projection token", () => {
+        expect.assertions(2);
+
+        expect(reservedBuilder().filterParams({ "details._p0": "x" })).toEqual({
+          expression: "#Details.#_p0_3771d0 = :Details_p0_3771d01",
+          values: { Details_p0_3771d01: "x" }
+        });
+        expect(
+          reservedBuilder().expressionAttributeNames([], {
+            "details._p0": "x"
+          })
+        ).toEqual({ "#Details": "Details", "#_p0_3771d0": "_p0" });
+      });
+
+      it("escapes a key condition on an attribute aliased like a projection token", () => {
+        expect.assertions(2);
+
+        expect(reservedBuilder().keyConditions({ pTwo: "x" })).toEqual({
+          expression: "#_p2_3771d2 = :_p2_3771d21",
+          values: { _p2_3771d21: "x" }
+        });
+        expect(reservedBuilder().expressionAttributeNames(["pTwo"])).toEqual({
+          "#_p2_3771d2": "_p2"
+        });
+      });
+
+      it("leaves names that only resemble the token form untouched", () => {
+        expect.assertions(1);
+
+        expect(
+          reservedBuilder().expressionAttributeNames([], {
+            upper: "x",
+            bare: "x",
+            noUnderscore: "x",
+            trailing: "x",
+            compound: "x"
+          })
+        ).toEqual({
+          "#_P1": "_P1",
+          "#_p": "_p",
+          "#p1": "p1",
+          "#_p1x_": "_p1x_",
+          "#_pk_id": "_pk_id"
+        });
+      });
+
+      it("never emits a token of the projection's form", () => {
+        expect.assertions(1);
+
+        // Every name the projection's form matches, and every name that needs
+        // sanitizing anyway, has to come out as something the projection can
+        // never emit
+        const names = reservedBuilder().expressionAttributeNames(["pTwo"], {
+          pOne: "x",
+          pk: "x",
+          "details._p0": "x"
+        });
+
+        expect(
+          Object.keys(names).filter(name =>
+            isReadProjectionToken(name.slice(1))
+          )
+        ).toEqual([]);
+      });
     });
 
     it("leaves an ordinary segment untouched", () => {

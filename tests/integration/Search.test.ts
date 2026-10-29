@@ -1017,26 +1017,28 @@ describe("Search", () => {
   });
 
   describe("ordinary reads exclude the vector through the union-of-aliases projection", () => {
+    // Each alias is referenced by a positional token rather than by its own
+    // name, so the projection's length depends on the attribute count alone
     const expectedProjectionNames = {
-      "#Body": "Body",
-      "#Category": "Category",
-      "#Content": "Content",
-      "#CreatedAt": "CreatedAt",
-      "#Description": "Description",
-      "#Id": "Id",
-      "#Name": "Name",
-      "#PK": "PK",
-      "#Rating": "Rating",
-      "#SK": "SK",
-      "#StoreId": "StoreId",
-      "#Tier": "Tier",
-      "#Title": "Title",
-      "#Type": "Type",
-      "#UpdatedAt": "UpdatedAt"
+      "#_p0": "Body",
+      "#_p1": "Category",
+      "#_p2": "Content",
+      "#_p3": "CreatedAt",
+      "#_p4": "Description",
+      "#_p5": "Id",
+      "#_p6": "Name",
+      "#_p7": "PK",
+      "#_p8": "Rating",
+      "#_p9": "SK",
+      "#_pa": "StoreId",
+      "#_pb": "Tier",
+      "#_pc": "Title",
+      "#_pd": "Type",
+      "#_pe": "UpdatedAt"
     };
 
     const expectedProjectionExpression =
-      "#Body, #Category, #Content, #CreatedAt, #Description, #Id, #Name, #PK, #Rating, #SK, #StoreId, #Tier, #Title, #Type, #UpdatedAt";
+      "#_p0,#_p1,#_p2,#_p3,#_p4,#_p5,#_p6,#_p7,#_p8,#_p9,#_pa,#_pb,#_pc,#_pd,#_pe";
 
     it("findById on a vector-indexed table projects every alias except the vector", async () => {
       expect.assertions(1);
@@ -1081,10 +1083,43 @@ describe("Search", () => {
             TableName: "search-table",
             KeyConditionExpression: "#PK = :PK1",
             ExpressionAttributeNames: {
+              "#PK": "PK",
               ...expectedProjectionNames
             },
             ExpressionAttributeValues: { ":PK1": "Listing#456" },
             ProjectionExpression: expectedProjectionExpression,
+            ConsistentRead: false
+          }
+        ]
+      ]);
+    });
+
+    it("a query filtering on a projected attribute names it under both its filter token and its projection token", async () => {
+      expect.assertions(1);
+
+      mockQuery.mockResolvedValueOnce({ Items: [] });
+
+      await Listing.query("456", { filter: { category: "Mugs" } });
+
+      // The filter's #Category and the projection's #_p1 are two tokens for
+      // the same attribute, which DynamoDB accepts; neither displaces the other
+      expect(mockedQueryCommand.mock.calls).toEqual([
+        [
+          {
+            TableName: "search-table",
+            KeyConditionExpression: "#PK = :PK2",
+            FilterExpression: "#Category = :Category1",
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Category": "Category",
+              ...expectedProjectionNames
+            },
+            ExpressionAttributeValues: {
+              ":PK2": "Listing#456",
+              ":Category1": "Mugs"
+            },
+            ProjectionExpression: expectedProjectionExpression,
+            ExclusiveStartKey: undefined,
             ConsistentRead: false
           }
         ]
@@ -1123,7 +1158,11 @@ describe("Search", () => {
             TableName: "search-table",
             KeyConditionExpression: "#PK = :PK2",
             FilterExpression: "#Type IN (:Type1)",
-            ExpressionAttributeNames: { ...expectedProjectionNames },
+            ExpressionAttributeNames: {
+              "#PK": "PK",
+              "#Type": "Type",
+              ...expectedProjectionNames
+            },
             ExpressionAttributeValues: {
               ":PK2": "Listing#456",
               ":Type1": "Listing"

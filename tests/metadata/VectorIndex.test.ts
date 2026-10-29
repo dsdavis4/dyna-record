@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import {
   MockTable,
   SearchTable,
@@ -1667,6 +1668,108 @@ describe("VectorIndex", () => {
       expect(() => FreshTable.metadata()).toThrow(
         "Table FreshTable defines 6 vector indexes. DynamoDB supports at most 5 vector indexes per table"
       );
+    });
+
+    describe("the read projection's size", () => {
+      /**
+       * A fresh vector-indexed table whose one entity carries `extra` aliases
+       * on top of the seven every such table has (PK, SK, the four default
+       * fields and the searchable Body)
+       * @param extra - How many more aliases to register
+       * @returns The fresh registry and the table class
+       */
+      const freshTableWithAliases = async (extra: number) => {
+        const {
+          default: DynaRecord,
+          Table,
+          Entity,
+          PartitionKeyAttribute,
+          SortKeyAttribute,
+          StringAttribute,
+          Searchable,
+          Metadata
+        } = await loadFresh();
+
+        @Table({ name: "fresh-table" })
+        abstract class FreshTable extends DynaRecord {
+          @PartitionKeyAttribute({ alias: "PK" })
+          public readonly pk: PartitionKey;
+
+          @SortKeyAttribute({ alias: "SK" })
+          public readonly sk: SortKey;
+        }
+
+        @Entity
+        class Doc extends FreshTable {
+          declare readonly type: "Doc";
+
+          @Searchable()
+          @StringAttribute({ alias: "Body" })
+          public readonly body: SearchableText;
+        }
+
+        // Registered the way the attribute decorators register them, since a
+        // class declaring hundreds of fields by hand would bury the point
+        for (let i = 0; i < extra; i++) {
+          Metadata.addEntityAttribute(Doc.name, {
+            attributeName: `field${String(i)}`,
+            alias: `F${String(i)}`,
+            kind: "string",
+            type: z.string()
+          });
+        }
+
+        FreshTable.vectorIndexes({
+          freshIndex: {
+            name: "fresh-index",
+            vectorAttribute: "__dyna_vector",
+            model: TitanTextEmbedV2,
+            provider: testProvider,
+            members: [() => Doc]
+          }
+        });
+
+        return { FreshTable, Metadata };
+      };
+
+      it("resolves a table whose projection fills the 4,096 character limit", async () => {
+        expect.assertions(1);
+
+        // 688 aliases: 36 four-character tokens, 652 five-character ones and
+        // 687 commas make 4,091 characters
+        const { FreshTable, Metadata } = await freshTableWithAliases(681);
+
+        expect(
+          Metadata.getTable(FreshTable.name).readProjection?.expression.length
+        ).toBe(4091);
+      });
+
+      it("rejects a table whose projection would exceed the 4,096 character limit", async () => {
+        expect.assertions(1);
+
+        // One more alias than the case above adds a five-character token and
+        // a comma: 4,097 characters
+        const { FreshTable } = await freshTableWithAliases(682);
+
+        expect(() => FreshTable.metadata()).toThrow(
+          new Error(
+            "Table FreshTable has a vector index, so its reads project every attribute alias of every entity on the table except the vector. Its 689 aliases make that projection 4097 characters long, and DynamoDB allows at most 4096 characters in an expression"
+          )
+        );
+      });
+
+      it("builds the same projection from the same declaration", async () => {
+        expect.assertions(1);
+
+        const first = await freshTableWithAliases(40);
+        const second = await freshTableWithAliases(40);
+
+        expect(
+          first.Metadata.getTable(first.FreshTable.name).readProjection
+        ).toEqual(
+          second.Metadata.getTable(second.FreshTable.name).readProjection
+        );
+      });
     });
 
     it("rejects a scoped index whose members store the scope foreign key under different aliases", async () => {

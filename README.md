@@ -2460,6 +2460,12 @@ Notes on the contract:
 - **Your embedding provider needs its own permissions** — for the Bedrock example above, `bedrock:InvokeModel` on the model, with model access enabled in your account and region. dyna-record never touches these credentials; the provider function owns them.
 - **`SearchVectors` resolves to separate endpoints** (`<account-id>.search-ddb.<region>.amazonaws.com`, or the dual-stack `search-dynamodb.<region>.api.aws` — not the standard DynamoDB endpoint; the AWS SDKs route automatically). If your network restricts egress through a VPC endpoint, proxy, or allowlist, permit the search hostname too — otherwise writes succeed and only searches fail, with a connection error that does not indicate the cause.
 
+### Reads on a vector-indexed table
+
+A vector is never read back by ordinary reads. On a table that declares a vector index, `findById`, `query`, and the pre-fetches internal operations run send an inclusion `ProjectionExpression`, since DynamoDB has no way to exclude an attribute. It lists every attribute alias of every entity on the table, so one projection serves adjacency-list queries whose results span entity types. Tables without a vector index send no projection.
+
+The projection references each alias by a short positional placeholder (`#_p0`, `#_p1`, ...), so alias length and characters do not matter, but DynamoDB caps any expression at 4,096 characters. That fits about 690 aliases per table, counted across all of its entities, including the keys and default fields. A table with more fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing every read. Metadata resolves once for every table, so until that table is narrowed every operation fails, on every table.
+
 ### Cost model
 
 Vector search changes the write and read economics of searchable rows — dyna-record's design choices here exist to manage that, so it's worth understanding what they can and cannot save you:

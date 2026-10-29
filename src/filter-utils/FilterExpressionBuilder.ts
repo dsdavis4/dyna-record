@@ -2,6 +2,7 @@ import { type ZodType } from "zod";
 import { FilterError } from "../errors.js";
 import { keyConditionCapabilities } from "./capabilities.js";
 import { parenthesize } from "../dynamo-utils/conditionExpression.js";
+import { isReadProjectionToken } from "../dynamo-utils/readProjectionToken.js";
 import type {
   DynamoNativeValue,
   DynamoScalarValue,
@@ -166,12 +167,17 @@ const digest = (value: string): string => {
  * ordinary expression byte-for-byte what it was. Anything else is sanitized and
  * suffixed with a digest of the original, so `"a b"` and `"a-b"` cannot collide
  * on `a_b`. Deterministic, because the condition pass and the attribute-name
- * pass each derive it independently
+ * pass each derive it independently.
+ *
+ * A segment of the read projection's token form (`_p1`) is treated as unsafe
+ * too. Those tokens share a query's names map, and the suffixed form can never
+ * have that shape, so a filter on an attribute named `_p1` cannot be retargeted
+ * by the projection's `#_p1` — see `isReadProjectionToken`
  * @param segment - The attribute or field name as declared
  * @returns A token safe to place after `#` in an expression
  */
 const nameToken = (segment: string): string =>
-  SAFE_TOKEN.test(segment)
+  SAFE_TOKEN.test(segment) && !isReadProjectionToken(segment)
     ? segment
     : `${segment.replace(/[^A-Za-z0-9_]/g, "_")}_${digest(segment)}`;
 
