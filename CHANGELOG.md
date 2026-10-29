@@ -4,7 +4,7 @@
 
 - **Every read on a wide vector-indexed table failed.** On a table with a vector index, `findById`, `query` and internal pre-fetches send a `ProjectionExpression` listing every attribute alias of every entity on the table, so the vector is never read back. Each alias was written as `#Alias`, so the projection grew with alias length, and once it passed DynamoDB's 4,096-character expression limit every read on the table was rejected with `ValidationException: Invalid ProjectionExpression: Expression size has exceeded the maximum allowed size`. Each alias is now referenced by a positional placeholder (`#_p0`, `#_p1`, ...), which fits about 690 aliases per table whatever their length.
 
-  A table with more aliases than that now fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing on every read.
+  A table with more aliases than that now fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing on every read. Metadata resolves once for every table, so until that table is narrowed every operation fails, on every table, as with the other vector index validation errors.
 
 - **Every read on a vector-indexed table failed when an alias held a character an expression placeholder cannot,** such as `shipped-at`. The projection wrote it as `#shipped-at`, which DynamoDB rejects. The positional placeholders fix this too.
 

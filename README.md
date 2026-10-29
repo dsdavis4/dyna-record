@@ -2464,7 +2464,7 @@ Notes on the contract:
 
 A vector is never read back by ordinary reads. On a table that declares a vector index, `findById`, `query`, and the pre-fetches internal operations run send an inclusion `ProjectionExpression`, since DynamoDB has no way to exclude an attribute. It lists every attribute alias of every entity on the table, so one projection serves adjacency-list queries whose results span entity types. Tables without a vector index send no projection.
 
-The projection references each alias by a short positional placeholder (`#_p0`, `#_p1`, ...), so alias length and characters do not matter, but DynamoDB caps any expression at 4,096 characters. That fits about 690 aliases per table, counted across all of its entities, including the keys and default fields. A table with more fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing every read.
+The projection references each alias by a short positional placeholder (`#_p0`, `#_p1`, ...), so alias length and characters do not matter, but DynamoDB caps any expression at 4,096 characters. That fits about 690 aliases per table, counted across all of its entities, including the keys and default fields. A table with more fails when its metadata resolves, with an error naming the table, the projection's length and the limit, instead of failing every read. Metadata resolves once for every table, so until that table is narrowed every operation fails, on every table.
 
 ### Cost model
 
