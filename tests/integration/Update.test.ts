@@ -20742,7 +20742,9 @@ describe("Update", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["payment", "method", "type"],
-            message: "Invalid input"
+            message:
+              "Invalid discriminator value. Expected 'creditCard' | 'bankTransfer' | 'crypto'",
+            options: ["creditCard", "bankTransfer", "crypto"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);
@@ -20814,7 +20816,9 @@ describe("Update", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["payment", "method", "type"],
-            message: "Invalid input"
+            message:
+              "Invalid discriminator value. Expected 'creditCard' | 'bankTransfer' | 'crypto'",
+            options: ["creditCard", "bankTransfer", "crypto"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);
@@ -21088,7 +21092,9 @@ describe("Update", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["dashboard", "widgets", 0, "type"],
-            message: "Invalid input"
+            message:
+              "Invalid discriminator value. Expected 'metric-card' | 'narrative-block' | 'date-marker'",
+            options: ["metric-card", "narrative-block", "date-marker"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);
@@ -21115,7 +21121,9 @@ describe("Update", () => {
             note: "No matching discriminator",
             discriminator: "type",
             path: ["dashboard", "widgets", 0, "type"],
-            message: "Invalid input"
+            message:
+              "Invalid discriminator value. Expected 'metric-card' | 'narrative-block' | 'date-marker'",
+            options: ["metric-card", "narrative-block", "date-marker"]
           }
         ]);
         expect(mockSend.mock.calls).toEqual([]);

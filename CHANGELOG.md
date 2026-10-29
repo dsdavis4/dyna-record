@@ -1,3 +1,27 @@
+## 3.5.2 - 2026-10-28
+
+### Fixed
+
+- **`zod` now requires 4.6.7 or later.** `zod` below 4.6.6 can exhaust memory while validating oversized constrained collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), high severity). `zod` is a runtime dependency, and the old range, `^4.3.6`, still allowed a vulnerable version, so the range is now `^4.6.7`. No library code changed.
+
+  One difference is visible through `ValidationError`. Its `cause` holds `zod`'s issues unchanged, and since 4.6 an `invalid_union` issue for a discriminator value that matches no option has a descriptive `message` and an `options` field listing the valid values. Before, the `message` was `"Invalid input"`:
+
+  ```typescript
+  {
+    code: "invalid_union",
+    discriminator: "type",
+    note: "No matching discriminator",
+    path: ["payment", "method", "type"],
+    message: "Invalid discriminator value. Expected 'creditCard' | 'bankTransfer' | 'crypto'",
+    options: ["creditCard", "bankTransfer", "crypto"],
+    errors: []
+  }
+  ```
+
+  The `code`, `path` and `note` are unchanged. Projects that already resolved `zod` 4.6 or later already saw this shape. Code that compares an issue's `message` to `"Invalid input"` needs an update.
+
+- **Dev dependency vulnerabilities.** `vite` 7.3.6 to 7.3.7 and `markdown-it` 14.3.2 to 14.3.3. Both are used only to build, test and document dyna-record and are not installed with it.
+
 ## 3.5.1 - 2026-10-09
 
 ### Fixed
