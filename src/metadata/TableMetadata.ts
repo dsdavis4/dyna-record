@@ -36,11 +36,13 @@ export const defaultTableKeys = { partitionKey: "PK", sortKey: "SK" } as const;
  */
 export interface ReadProjection {
   /**
-   * The `ProjectionExpression` string of `#`-aliased attribute names
+   * The `ProjectionExpression` string, referencing each attribute by a
+   * positional token (`#_p0,#_p1,...`) rather than by its name
    */
   expression: string;
   /**
-   * The `ExpressionAttributeNames` entries backing the expression
+   * The `ExpressionAttributeNames` entries mapping each positional token to
+   * its attribute alias
    */
   attributeNames: Record<string, string>;
 }

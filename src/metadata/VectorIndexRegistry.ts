@@ -2,6 +2,7 @@ import type DynaRecord from "../DynaRecord.js";
 import type { EntityClass, Optional } from "../types.js";
 import type EntityMetadata from "./EntityMetadata.js";
 import { filterScalarTypeForKind } from "./filterScalarTypes.js";
+import { readProjectionToken } from "../dynamo-utils/readProjectionToken.js";
 import type TableMetadata from "./TableMetadata.js";
 import VectorIndexMetadata, {
   isValidVectorAttributeName,
@@ -17,6 +18,9 @@ import type {
 
 // https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/ServiceQuotas.html
 const MAX_VECTOR_INDEXES_PER_TABLE = 5;
+
+// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html
+const MAX_EXPRESSION_LENGTH = 4096;
 
 /**
  * DynamoDB allows at most 18 inline filters per vector index. dyna-record's
@@ -378,7 +382,13 @@ class VectorIndexRegistry {
    * list: the union of table aliases across every entity mapped to the table
    * (plus the table's key and default attributes), minus the vector
    * attributes. The union is what makes it safe on adjacency-list queries
-   * whose results span entity types
+   * whose results span entity types.
+   *
+   * Each alias is referenced by a positional token (`#_p0`, `#_p1`, ...) rather
+   * than by its own name, so the expression's length depends on how many
+   * attributes the table has, not on how long their names are or which
+   * characters they use. A union too wide to fit DynamoDB's expression limit
+   * even so fails here, at resolution, rather than on every read
    * @param tableClassName - Name of the table class
    * @param tableMetadata - The table's metadata
    * @param context - {@link ResolutionContext}
@@ -412,11 +422,25 @@ class VectorIndexRegistry {
     }
 
     const sortedAliases = [...aliases].sort((a, b) => a.localeCompare(b));
+    const tokens = sortedAliases.map((_, i) => `#${readProjectionToken(i)}`);
+    const expression = tokens.join(",");
+
+    if (expression.length > MAX_EXPRESSION_LENGTH) {
+      throw new Error(
+        `Table ${tableClassName} has a vector index, so its reads project every attribute alias of every entity on the table except the vector. Its ${String(
+          sortedAliases.length
+        )} aliases make that projection ${String(
+          expression.length
+        )} characters long, and DynamoDB allows at most ${String(
+          MAX_EXPRESSION_LENGTH
+        )} characters in an expression`
+      );
+    }
 
     tableMetadata.readProjection = {
-      expression: sortedAliases.map(alias => `#${alias}`).join(", "),
+      expression,
       attributeNames: Object.fromEntries(
-        sortedAliases.map(alias => [`#${alias}`, alias])
+        sortedAliases.map((alias, i) => [tokens[i], alias])
       )
     };
   }
